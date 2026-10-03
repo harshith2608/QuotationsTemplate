@@ -49,6 +49,20 @@
   .ki-logo-box img { max-height: 60px; max-width: 100%; }
 
   .ki-unsaved { position: sticky; bottom: 44px; z-index: 950; }
+  .ki-guide summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .ki-guide summary::-webkit-details-marker { display: none; }
+  .ki-guide summary .when-open { display: none; }
+  .ki-guide[open] summary .when-open { display: inline; }
+  .ki-guide[open] summary .when-closed { display: none; }
+  .ki-steps { counter-reset: step; list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 1rem; }
+  .ki-steps > li { counter-increment: step; position: relative; padding-left: 2.6rem; font-size: .9rem; }
+  .ki-steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: -2px; width: 1.85rem; height: 1.85rem; border-radius: 50%;
+    background: var(--ki-primary); color: var(--ki-on-primary); font-weight: 700; font-size: .85rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ki-steps h6 { font-weight: 700; margin-bottom: .25rem; font-size: .92rem; }
+  .ki-steps p { margin-bottom: .35rem; color: #4b5563; }
 </style>
 {% endblock %}
 
@@ -366,40 +380,99 @@
 
 {# ───────────────────────────── EMAIL ───────────────────────────── #}
 {% if tab == 'email' %}
+{% set email_ready = saved.smtp_host and saved.smtp_user and saved.smtp_pass %}
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-envelope-check me-2"></i>Email Notifications</div>
+  <div class="card-body">
+    <p class="small text-muted mb-3">
+      When a customer pays through a Razorpay payment link, the app emails a receipt to the customer (if their email is on the quotation)
+      and an alert to you. Emails are sent from your own email account.
+    </p>
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+      <span class="small d-flex align-items-center gap-2">
+        {% if email_ready %}<i class="bi bi-check-circle-fill text-success fs-5"></i>Email is set up
+        {% else %}<i class="bi bi-exclamation-circle text-warning fs-5"></i>Not set up yet{% endif %}
+      </span>
+      <form method="POST" action="{{ url_for('admin.test_email') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-primary btn-sm" {{ 'disabled' if not email_ready }}>
+          <i class="bi bi-send me-1"></i>Send test email{% if saved.admin_email or saved.smtp_user %} to {{ saved.admin_email or saved.smtp_user }}{% endif %}
+        </button>
+      </form>
+    </div>
+
+    <details class="ki-guide border-top pt-3" {{ 'open' if not email_ready }}>
+      <summary>
+        <span><i class="bi bi-signpost-2 me-2 text-primary"></i>Set up with Gmail <span class="text-muted fw-normal small">(about 5 minutes)</span></span>
+        <span class="small text-primary"><span class="when-closed">Show</span><span class="when-open">Hide</span></span>
+      </summary>
+      <ol class="ki-steps">
+        <li>
+          <h6>Turn on 2-Step Verification</h6>
+          <p>Open <a href="https://myaccount.google.com/security" target="_blank" rel="noopener">myaccount.google.com/security</a> with the Gmail
+             account you want to send from, and turn on <strong>2-Step Verification</strong>. Google requires this before you can create an App Password.</p>
+        </li>
+        <li>
+          <h6>Create an App Password</h6>
+          <p>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>,
+             type a name such as <em>Quotation app</em> and click <strong>Create</strong>. Copy the 16-letter password Google shows.
+             Use this, not your normal Gmail password.</p>
+        </li>
+        <li>
+          <h6>Fill in the form below</h6>
+          <p>Click <strong>Use Gmail settings</strong> to fill in the server details, then enter your Gmail address as the username,
+             paste the App Password, and enter the email where you want payment alerts.</p>
+        </li>
+        <li>
+          <h6>Save and send a test</h6>
+          <p>Click <strong>Save Email Settings</strong>, then <strong>Send test email</strong> above. If it doesn't arrive in a minute, check the spam folder.
+             If there's a problem, the message at the top of the page tells you what to fix.</p>
+        </li>
+      </ol>
+      <div class="small text-muted mt-3">
+        <strong>Using another provider?</strong> Choose it below, or ask your email provider for its SMTP details.
+        Use port <strong>587</strong> (or <strong>465</strong> if your provider says SSL).
+      </div>
+    </details>
+  </div>
+</div>
+
 <form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="email">
   <div class="card shadow-sm border-0">
-    <div class="card-header ki-card-header"><i class="bi bi-envelope me-2"></i>Email Notifications</div>
+    <div class="card-header ki-card-header"><i class="bi bi-gear me-2"></i>Email Server (SMTP)</div>
     <div class="card-body">
-      <p class="small text-muted mb-3">
-        Used to email the customer and admin when a payment is received through Razorpay.
-        Works with Gmail or any SMTP server. For Gmail, use an
-        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">App Password</a>, not your regular password.
-      </p>
+      <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <span class="small text-muted me-1">Quick fill:</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-smtp="smtp.gmail.com" data-port="587">Use Gmail settings</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-smtp="smtp.zoho.in" data-port="587">Zoho Mail (India)</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-smtp="smtp.office365.com" data-port="587">Outlook / Microsoft 365</button>
+      </div>
       <div class="row g-3">
         <div class="col-12 col-sm-6">
-          <label class="form-label fw-medium small">Admin Email <span class="text-muted">(receives payment alerts)</span></label>
-          <input type="email" name="admin_email" class="form-control" placeholder="admin@example.com" value="{{ saved.admin_email }}">
+          <label class="form-label fw-medium small" for="smtp_host">SMTP Host</label>
+          <input type="text" id="smtp_host" name="smtp_host" class="form-control" placeholder="smtp.gmail.com" value="{{ saved.smtp_host }}" spellcheck="false">
         </div>
         <div class="col-12 col-sm-6">
-          <label class="form-label fw-medium small">SMTP Host</label>
-          <input type="text" name="smtp_host" class="form-control" placeholder="smtp.gmail.com" value="{{ saved.smtp_host }}">
+          <label class="form-label fw-medium small" for="smtp_port">SMTP Port</label>
+          <input type="number" id="smtp_port" name="smtp_port" class="form-control" placeholder="587" value="{{ saved.smtp_port or '587' }}">
         </div>
         <div class="col-12 col-sm-6">
-          <label class="form-label fw-medium small">SMTP Port</label>
-          <input type="number" name="smtp_port" class="form-control" placeholder="587" value="{{ saved.smtp_port or '587' }}">
+          <label class="form-label fw-medium small" for="smtp_user">Username <span class="text-muted">(your full email address)</span></label>
+          <input type="email" id="smtp_user" name="smtp_user" class="form-control" placeholder="you@gmail.com" value="{{ saved.smtp_user }}">
         </div>
         <div class="col-12 col-sm-6">
-          <label class="form-label fw-medium small">SMTP Username <span class="text-muted">(usually your email)</span></label>
-          <input type="email" name="smtp_user" class="form-control" placeholder="you@gmail.com" value="{{ saved.smtp_user }}">
-        </div>
-        <div class="col-12 col-sm-6">
-          <label class="form-label fw-medium small">SMTP Password / App Password</label>
-          <input type="password" name="smtp_pass" class="form-control" placeholder="••••••••••••••••" value="" autocomplete="off">
-          <div class="form-text text-muted">Leave blank to keep the existing password.
-            {% if saved.smtp_pass %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+          <label class="form-label fw-medium small" for="smtp_pass">Password <span class="text-muted">(Gmail: the App Password)</span></label>
+          <input type="password" id="smtp_pass" name="smtp_pass" class="form-control" placeholder="••••••••••••••••" value="" autocomplete="off">
+          <div class="form-text text-muted">Leave blank to keep the saved password.
+            {% if saved.smtp_pass %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Saved</span>{% endif %}
           </div>
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label fw-medium small" for="admin_email">Send payment alerts to</label>
+          <input type="email" id="admin_email" name="admin_email" class="form-control" placeholder="owner@yourcompany.com" value="{{ saved.admin_email }}">
+          <div class="form-text text-muted">Usually your own email. Gmail sends from the account above whatever you enter here.</div>
         </div>
       </div>
     </div>
@@ -412,6 +485,15 @@
 {% endblock %}
 
 {% block scripts %}
+{% if tab == 'email' %}
+<script>
+  document.querySelectorAll('[data-smtp]').forEach(btn => btn.addEventListener('click', () => {
+    document.getElementById('smtp_host').value = btn.dataset.smtp;
+    document.getElementById('smtp_port').value = btn.dataset.port;
+    document.getElementById('smtp_user').focus();
+  }));
+</script>
+{% endif %}
 {% if tab == 'appearance' %}
 <script>
 (function () {

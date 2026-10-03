@@ -233,8 +233,77 @@ def payment_settings():
         return redirect(url_for('admin.payment_settings'))
     settings = AppSetting.get_many(PAYMENT_KEYS)
     webhook_url = url_for('projects.razorpay_webhook', _external=True)
+    status = {
+        'has_keys': bool(settings['razorpay_key_id'] and settings['razorpay_key_secret']),
+        'has_secret': bool(settings['webhook_secret']),
+        'mode': razorpay_mode(settings['razorpay_key_id']),
+    }
     return render_template('admin/payment_settings.html', title='Payment Settings',
-                           settings=settings, webhook_url=webhook_url)
+                           settings=settings, webhook_url=webhook_url, status=status)
+
+
+def razorpay_mode(key_id):
+    """'test', 'live' or None, from the Razorpay key prefix."""
+    key_id = (key_id or '').strip()
+    if key_id.startswith('rzp_test_'):
+        return 'test'
+    if key_id.startswith('rzp_live_'):
+        return 'live'
+    return None
+
+
+@admin_bp.route('/payment-settings/test', methods=['POST'])
+def test_razorpay():
+    """Check the saved Razorpay keys by making a harmless read-only API call."""
+    import base64
+    import urllib.error
+    import urllib.request
+    key_id = AppSetting.get('razorpay_key_id', '').strip()
+    secret = AppSetting.get('razorpay_key_secret', '').strip()
+    if not key_id or not secret:
+        flash('Save your Razorpay Key ID and Key Secret first, then test the connection.', 'warning')
+        return redirect(url_for('admin.payment_settings'))
+    token = base64.b64encode(f'{key_id}:{secret}'.encode()).decode()
+    req = urllib.request.Request('https://api.razorpay.com/v1/payment_links?count=1',
+                                 headers={'Authorization': f'Basic {token}'})
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+        mode = razorpay_mode(key_id)
+        flash(f'Connected to Razorpay{" in " + mode.upper() + " mode" if mode else ""}. Your keys work.', 'success')
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            flash('Razorpay rejected these keys. Check the Key ID and Key Secret, and that they belong to the same mode (test or live).', 'danger')
+        else:
+            flash(f'Razorpay answered with error {exc.code}. Make sure Payment Links are enabled on your Razorpay account.', 'danger')
+    except Exception:
+        flash('Could not reach Razorpay. Please try again in a minute.', 'danger')
+    return redirect(url_for('admin.payment_settings'))
+
+
+@admin_bp.route('/settings/test-email', methods=['POST'])
+def test_email():
+    """Send a test message to the admin email using the saved SMTP settings."""
+    import smtplib
+    import socket
+    from .projects import _send_email, EmailNotConfigured
+    to = AppSetting.get('admin_email', '').strip() or AppSetting.get('smtp_user', '').strip()
+    try:
+        _send_email(to, f'Test email from {branding.get_brand()["name"]}',
+                    'Your email settings work. Payment notifications will be sent from this account.',
+                    raise_errors=True)
+        flash(f'Test email sent to {to}. Check the inbox (and spam folder).', 'success')
+    except EmailNotConfigured as exc:
+        flash(str(exc), 'warning')
+    except smtplib.SMTPAuthenticationError:
+        flash('The email server rejected the username or password. For Gmail, use an App Password, not your normal password.', 'danger')
+    except (socket.gaierror, ConnectionRefusedError):
+        flash('Could not find or connect to that SMTP host. Check the host name and port.', 'danger')
+    except (socket.timeout, TimeoutError):
+        flash('The connection timed out. Check the SMTP host and port (587 or 465).', 'danger')
+    except Exception as exc:
+        flash(f'Email could not be sent: {exc}', 'danger')
+    return redirect(url_for('admin.settings', tab='email'))
 
 
 def _save_brand_fields(brand_keys):

@@ -28,6 +28,7 @@ BLOCKED_ENDPOINTS = {
     'admin.settings', 'admin.payment_settings', 'admin.rates',
     'admin.create_user', 'admin.delete_user', 'admin.rename_user', 'admin.change_user_password',
     'admin.clear_notifications',
+    'admin.test_razorpay', 'admin.test_email',
     'projects.delete_project', 'projects.delete_payment',
     'projects.generate_payment_link', 'projects.set_project_access',
     'projects.razorpay_webhook',
@@ -55,7 +56,7 @@ def block_demo_writes():
             request.endpoint in ('projects.generate_payment_link', 'projects.set_project_access'):
         return jsonify({'error': message}), 403
     flash(message, 'warning')
-    return redirect(request.referrer or request.path)
+    return redirect(request.referrer or url_for('projects.list_projects'))
 
 
 @demo_bp.route('/demo')

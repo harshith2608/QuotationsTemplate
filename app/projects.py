@@ -22,8 +22,17 @@ def _get_item_rates():
     return {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in ItemRate.query.all()}
 
 
-def _send_email(to_address, subject, body):
-    """Send a plain-text email via configured SMTP. Returns True on success."""
+class EmailNotConfigured(Exception):
+    pass
+
+
+def _send_email(to_address, subject, body, raise_errors=False):
+    """
+    Send a plain-text email via the SMTP settings in Admin → Settings → Email.
+    Returns True on success. With raise_errors=True (used by "Send test email"),
+    failures raise instead of returning False so the admin sees the reason.
+    Port 465 uses SSL; any other port (normally 587) uses STARTTLS.
+    """
     import smtplib
     from email.mime.text import MIMEText
     from email.utils import formataddr
@@ -33,19 +42,28 @@ def _send_email(to_address, subject, body):
     smtp_pass = AppSetting.get('smtp_pass', '').strip()
     from_addr = AppSetting.get('admin_email', '').strip() or smtp_user
     if not all([smtp_host, smtp_user, smtp_pass, to_address]):
+        if raise_errors:
+            raise EmailNotConfigured('Fill in SMTP host, username, password and admin email first.')
         return False
     try:
         msg = MIMEText(body, 'plain', 'utf-8')
         msg['Subject'] = subject
         msg['From']    = formataddr((get_brand()['name'], from_addr))
         msg['To']      = to_address
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-            s.ehlo()
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as s:
+                s.login(smtp_user, smtp_pass)
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+                s.ehlo()
+                s.starttls()
+                s.login(smtp_user, smtp_pass)
+                s.send_message(msg)
         return True
     except Exception as exc:
+        if raise_errors:
+            raise
         current_app.logger.warning(f'Email send failed: {exc}')
         return False
 

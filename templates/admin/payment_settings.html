@@ -1,8 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Payment Settings{% endblock %}
 
+{% block head %}
+<style>
+  .ki-check { display: flex; align-items: center; gap: .5rem; font-size: .9rem; }
+  .ki-check .bi { font-size: 1.1rem; }
+  .ki-guide summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .ki-guide summary::-webkit-details-marker { display: none; }
+  .ki-guide summary .when-open { display: none; }
+  .ki-guide[open] summary .when-open { display: inline; }
+  .ki-guide[open] summary .when-closed { display: none; }
+  .ki-steps { counter-reset: step; list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 1rem; }
+  .ki-steps > li { counter-increment: step; position: relative; padding-left: 2.6rem; font-size: .9rem; }
+  .ki-steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: -2px; width: 1.85rem; height: 1.85rem; border-radius: 50%;
+    background: var(--ki-primary); color: var(--ki-on-primary); font-weight: 700; font-size: .85rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ki-steps h6 { font-weight: 700; margin-bottom: .25rem; font-size: .92rem; }
+  .ki-steps p, .ki-steps ul { margin-bottom: .35rem; color: #4b5563; }
+  .ki-steps ul { padding-left: 1.1rem; }
+  .ki-copy-row { display: flex; gap: .5rem; align-items: stretch; flex-wrap: wrap; }
+  .ki-copy-row code { flex: 1 1 260px; min-width: 0; background: #f3f4f6; border-radius: var(--ki-radius); padding: .45rem .65rem; word-break: break-all; color: #111827; }
+  .ki-path { font-weight: 600; color: #111827; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+<div class="d-flex align-items-center justify-content-between mt-3 mb-3 flex-wrap gap-2">
   <h4 class="mb-0 fw-bold ki-page-title">
     <i class="bi bi-credit-card me-2 text-primary"></i>Payment Settings
   </h4>
@@ -11,35 +36,130 @@
   </a>
 </div>
 
+{% set ready = status.has_keys and status.has_secret %}
+
+<!-- Status + guide -->
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-lightning-charge me-2"></i>Online Payments with Razorpay</span>
+    {% if status.mode == 'live' %}<span class="badge bg-success">LIVE mode</span>
+    {% elif status.mode == 'test' %}<span class="badge bg-warning text-dark">TEST mode</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <p class="small text-muted mb-3">
+      Send customers a payment link for the balance due. When they pay, the payment is recorded on the quotation
+      automatically and you get a notification (and an email, if email is set up).
+    </p>
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-md-4 ki-check">
+        <i class="bi {{ 'bi-check-circle-fill text-success' if status.has_keys else 'bi-circle text-muted' }}"></i>API keys saved
+      </div>
+      <div class="col-12 col-md-4 ki-check">
+        <i class="bi {{ 'bi-check-circle-fill text-success' if status.has_secret else 'bi-circle text-muted' }}"></i>Webhook secret saved
+      </div>
+      <div class="col-12 col-md-4 ki-check">
+        {% if ready %}<i class="bi bi-check-circle-fill text-success"></i>Ready to take payments
+        {% else %}<i class="bi bi-exclamation-circle text-warning"></i>Setup incomplete{% endif %}
+      </div>
+    </div>
+    <form method="POST" action="{{ url_for('admin.test_razorpay') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-primary btn-sm" {{ 'disabled' if not status.has_keys }}>
+        <i class="bi bi-plug me-1"></i>Test connection
+      </button>
+    </form>
+
+    <details class="ki-guide mt-3 border-top pt-3" {{ 'open' if not ready }}>
+      <summary>
+        <span><i class="bi bi-signpost-2 me-2 text-primary"></i>Step-by-step setup guide <span class="text-muted fw-normal small">(about 10 minutes)</span></span>
+        <span class="small text-primary"><span class="when-closed">Show</span><span class="when-open">Hide</span></span>
+      </summary>
+      <ol class="ki-steps">
+        <li>
+          <h6>Create your Razorpay account</h6>
+          <p>Sign up at <a href="https://razorpay.com" target="_blank" rel="noopener">razorpay.com</a>. Test mode works immediately.
+             To accept real money, complete your business verification (KYC) in the Razorpay Dashboard. This usually takes 1–3 working days.</p>
+        </li>
+        <li>
+          <h6>Start in Test mode</h6>
+          <p>In the Razorpay Dashboard, switch the toggle at the top to <span class="ki-path">Test Mode</span>. Test mode uses fake money, so you can try everything safely.</p>
+        </li>
+        <li>
+          <h6>Generate your API keys</h6>
+          <p>Go to <span class="ki-path">Account &amp; Settings → API Keys → Generate Key</span>. Copy the <strong>Key ID</strong> and <strong>Key Secret</strong>.
+             The secret is shown only once, so paste it somewhere safe.</p>
+        </li>
+        <li>
+          <h6>Paste the keys below and save</h6>
+          <p>Fill in <strong>API Key ID</strong> and <strong>API Key Secret</strong> in the form below, click <strong>Save Payment Settings</strong>,
+             then click <strong>Test connection</strong> above. You should see "Your keys work".</p>
+        </li>
+        <li>
+          <h6>Add a webhook in Razorpay</h6>
+          <p>This is how Razorpay tells this app that a customer has paid. Go to <span class="ki-path">Account &amp; Settings → Webhooks → Add New Webhook</span> and fill in:</p>
+          <ul>
+            <li><strong>Webhook URL</strong>: copy this exactly:
+              <div class="ki-copy-row mt-1 mb-1">
+                <code id="webhookUrl">{{ webhook_url }}</code>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-copy="#webhookUrl"><i class="bi bi-clipboard me-1"></i>Copy</button>
+              </div>
+            </li>
+            <li><strong>Secret</strong>: click below to create a strong secret, copy it into Razorpay. It's also filled into the form below for you.
+              <div class="ki-copy-row mt-1 mb-1">
+                <code id="newSecret" class="text-muted">Click "Generate" to create a secret</code>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="genSecret"><i class="bi bi-magic me-1"></i>Generate</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-copy="#newSecret" id="copySecret" disabled><i class="bi bi-clipboard me-1"></i>Copy</button>
+              </div>
+            </li>
+            <li><strong>Active Events</strong>: tick only <code>payment_link.paid</code>, then save the webhook.</li>
+          </ul>
+        </li>
+        <li>
+          <h6>Save the same secret here</h6>
+          <p>Make sure the <strong>Webhook Secret</strong> field below has exactly the secret you entered in Razorpay, then click <strong>Save Payment Settings</strong>.</p>
+        </li>
+        <li>
+          <h6>Make a test payment</h6>
+          <p>Open any quotation with a balance due and click <strong>Generate Payment Link</strong>. Open the link and pay using
+             Razorpay's test UPI ID <code>success@razorpay</code>. Within a few seconds the payment should appear on the quotation as
+             <span class="badge bg-success">Razorpay Auto</span>.</p>
+        </li>
+        <li>
+          <h6>Go live</h6>
+          <p>Once your KYC is approved, switch Razorpay to <span class="ki-path">Live Mode</span> and repeat steps 3–6: live mode has its own
+             API keys and its own webhook. Save the live keys and secret here, then click <strong>Test connection</strong>. The badge at the top will say <strong>LIVE mode</strong>.</p>
+        </li>
+      </ol>
+      <p class="small text-muted mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Razorpay sometimes renames menu items. If you can't find one, search for it in the Razorpay Dashboard.</p>
+    </details>
+  </div>
+</div>
+
 <form method="POST" action="{{ url_for('admin.payment_settings') }}" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="row g-3">
 
-    <!-- Razorpay -->
+    <!-- Razorpay keys -->
     <div class="col-12 col-lg-6">
-      <div class="card shadow-sm border-0">
+      <div class="card shadow-sm border-0 h-100">
         <div class="card-header ki-card-header">
-          <i class="bi bi-link-45deg me-2"></i>Razorpay Payment Link
+          <i class="bi bi-key me-2"></i>Razorpay API Keys
         </div>
         <div class="card-body">
-          <p class="small text-muted mb-3">
-            Enter your Razorpay API credentials to generate instant payment links for customers.
-            Get them from <a href="https://dashboard.razorpay.com/app/keys" target="_blank">Razorpay Dashboard → API Keys</a>.
-          </p>
+          <p class="small text-muted mb-3">From Razorpay Dashboard → Account &amp; Settings → API Keys (steps 3–4).</p>
           <div class="mb-3">
-            <label class="form-label fw-medium small">API Key ID</label>
-            <input type="text" name="razorpay_key_id" class="form-control"
-                   placeholder="rzp_live_xxxxxxxxxxxx"
-                   value="{{ settings.razorpay_key_id }}" autocomplete="off">
+            <label class="form-label fw-medium small" for="razorpay_key_id">API Key ID</label>
+            <input type="text" id="razorpay_key_id" name="razorpay_key_id" class="form-control"
+                   placeholder="rzp_test_xxxxxxxxxxxx or rzp_live_xxxxxxxxxxxx"
+                   value="{{ settings.razorpay_key_id }}" autocomplete="off" spellcheck="false">
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-medium small">API Key Secret</label>
-            <input type="password" name="razorpay_key_secret" class="form-control"
-                   placeholder="••••••••••••••••••••"
-                   value="" autocomplete="off">
-            <div class="form-text text-muted">Leave blank to keep existing secret.
-              {% if settings.razorpay_key_secret %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+          <div class="mb-1">
+            <label class="form-label fw-medium small" for="razorpay_key_secret">API Key Secret</label>
+            <input type="password" id="razorpay_key_secret" name="razorpay_key_secret" class="form-control"
+                   placeholder="••••••••••••••••••••" value="" autocomplete="off">
+            <div class="form-text text-muted">Leave blank to keep the saved secret.
+              {% if settings.razorpay_key_secret %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Saved</span>{% endif %}
             </div>
           </div>
         </div>
@@ -48,27 +168,22 @@
 
     <!-- Webhook -->
     <div class="col-12 col-lg-6">
-      <div class="card shadow-sm border-0">
+      <div class="card shadow-sm border-0 h-100">
         <div class="card-header ki-card-header">
-          <i class="bi bi-broadcast me-2"></i>Razorpay Webhook (Auto Payments)
+          <i class="bi bi-broadcast me-2"></i>Razorpay Webhook (Automatic Payments)
         </div>
         <div class="card-body">
-          <p class="small text-muted mb-2">
-            Webhooks let Razorpay notify your app instantly when a customer pays — payments are recorded automatically.
-          </p>
-          <div class="alert alert-info py-2 small mb-3">
-            <strong>Webhook URL to enter in Razorpay Dashboard:</strong><br>
-            <code class="user-select-all">{{ webhook_url }}</code><br>
-            <span class="text-muted">Razorpay Dashboard → Webhooks → Add New Webhook → Event: <strong>payment_link.paid</strong>.
-            Type any strong secret there and paste the same secret below. Without it, payments aren't recorded automatically.</span>
+          <p class="small text-muted mb-2">Webhook URL to enter in Razorpay (step 5):</p>
+          <div class="ki-copy-row mb-3">
+            <code id="webhookUrl2">{{ webhook_url }}</code>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-copy="#webhookUrl2"><i class="bi bi-clipboard me-1"></i>Copy</button>
           </div>
           <div class="mb-1">
-            <label class="form-label fw-medium small">Webhook Secret <span class="text-danger">(required for automatic payments)</span></label>
-            <input type="password" name="webhook_secret" class="form-control"
-                   placeholder="••••••••••••••••••••"
-                   value="" autocomplete="off">
-            <div class="form-text text-muted">Leave blank to keep existing secret.
-              {% if settings.webhook_secret %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+            <label class="form-label fw-medium small" for="webhook_secret">Webhook Secret <span class="text-danger">(required for automatic payments)</span></label>
+            <input type="password" id="webhook_secret" name="webhook_secret" class="form-control"
+                   placeholder="••••••••••••••••••••" value="" autocomplete="off">
+            <div class="form-text text-muted">Must match the secret in your Razorpay webhook. Leave blank to keep the saved one.
+              {% if settings.webhook_secret %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Saved</span>{% endif %}
             </div>
           </div>
         </div>
@@ -77,54 +192,45 @@
 
     <!-- UPI -->
     <div class="col-12 col-lg-6">
-      <div class="card shadow-sm border-0">
+      <div class="card shadow-sm border-0 h-100">
         <div class="card-header ki-card-header">
           <i class="bi bi-phone me-2"></i>UPI Details
         </div>
         <div class="card-body">
-          <p class="small text-muted mb-3">
-            Shown in quotations and PDF so customers can pay directly via UPI.
-          </p>
-          <div class="mb-3">
-            <label class="form-label fw-medium small">UPI ID</label>
-            <input type="text" name="upi_id" class="form-control"
-                   placeholder="yourname@upi"
-                   value="{{ settings.upi_id }}">
-          </div>
+          <p class="small text-muted mb-3">Printed on quotations and PDFs so customers can pay you directly. No Razorpay needed.</p>
+          <label class="form-label fw-medium small" for="upi_id">UPI ID</label>
+          <input type="text" id="upi_id" name="upi_id" class="form-control" placeholder="yourname@okhdfcbank"
+                 value="{{ settings.upi_id }}">
         </div>
       </div>
     </div>
 
     <!-- Bank Account -->
     <div class="col-12 col-lg-6">
-      <div class="card shadow-sm border-0">
+      <div class="card shadow-sm border-0 h-100">
         <div class="card-header ki-card-header">
           <i class="bi bi-bank me-2"></i>Bank Account Details
         </div>
         <div class="card-body">
           <div class="row g-3">
             <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">Bank Name</label>
-              <input type="text" name="bank_name" class="form-control"
-                     placeholder="e.g. State Bank of India"
+              <label class="form-label fw-medium small" for="bank_name">Bank Name</label>
+              <input type="text" id="bank_name" name="bank_name" class="form-control" placeholder="e.g. State Bank of India"
                      value="{{ settings.bank_name }}">
             </div>
             <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">Account Holder Name</label>
-              <input type="text" name="account_name" class="form-control"
-                     placeholder="e.g. Acme Interiors"
+              <label class="form-label fw-medium small" for="account_name">Account Holder Name</label>
+              <input type="text" id="account_name" name="account_name" class="form-control" placeholder="e.g. Acme Interiors"
                      value="{{ settings.account_name }}">
             </div>
             <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">Account Number</label>
-              <input type="text" name="account_number" class="form-control"
-                     placeholder="e.g. 1234567890"
+              <label class="form-label fw-medium small" for="account_number">Account Number</label>
+              <input type="text" id="account_number" name="account_number" class="form-control" placeholder="e.g. 1234567890"
                      value="{{ settings.account_number }}">
             </div>
             <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">IFSC Code</label>
-              <input type="text" name="ifsc_code" class="form-control"
-                     placeholder="e.g. SBIN0001234"
+              <label class="form-label fw-medium small" for="ifsc_code">IFSC Code</label>
+              <input type="text" id="ifsc_code" name="ifsc_code" class="form-control text-uppercase" placeholder="e.g. SBIN0001234"
                      value="{{ settings.ifsc_code }}">
             </div>
           </div>
@@ -140,4 +246,33 @@
     </button>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  function select(el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  function copyText(el, btn) {
+    const text = el.textContent.trim();
+    const done = () => { const o = btn.innerHTML; btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied'; setTimeout(() => (btn.innerHTML = o), 1500); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(() => select(el));
+    } else { select(el); }
+  }
+  document.querySelectorAll('[data-copy]').forEach(btn =>
+    btn.addEventListener('click', () => copyText(document.querySelector(btn.dataset.copy), btn)));
+
+  // Generate a strong webhook secret, show it for copying into Razorpay, and fill the form field
+  document.getElementById('genSecret').addEventListener('click', () => {
+    const bytes = new Uint8Array(24); crypto.getRandomValues(bytes);
+    const secret = Array.from(bytes, b => ('0' + b.toString(16)).slice(-2)).join('');
+    const out = document.getElementById('newSecret');
+    out.textContent = secret; out.classList.remove('text-muted');
+    const field = document.getElementById('webhook_secret');
+    field.value = secret; field.type = 'text';
+    document.getElementById('copySecret').disabled = false;
+  });
+})();
+</script>
 {% endblock %}
