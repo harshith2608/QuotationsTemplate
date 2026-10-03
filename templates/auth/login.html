@@ -58,6 +58,14 @@
             </button>
           </div>
         </form>
+        {% if demo_mode %}
+        <div class="text-center my-3 small text-muted">or</div>
+        <div class="d-grid">
+          <a href="{{ url_for('demo.start') }}" class="btn btn-outline-primary btn-lg fw-semibold">
+            <i class="bi bi-play-circle me-2"></i>Explore the demo — no signup
+          </a>
+        </div>
+        {% endif %}
       </div>
     </div>
 

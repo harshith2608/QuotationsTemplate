@@ -40,6 +40,8 @@ def create_app(config_name='default'):
     from .admin_bp import admin_bp
     from .api import api_bp
     from .marketing import marketing_bp
+    from .demo import demo_bp, block_demo_writes, demo_enabled
+    from .marketing import marketing_enabled
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -47,6 +49,8 @@ def create_app(config_name='default'):
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(marketing_bp)
+    app.register_blueprint(demo_bp)
+    app.before_request(block_demo_writes)
 
     # Serve static files efficiently in production (Gunicorn doesn't serve them)
     # autorefresh=True in development so edited JS/CSS is served without restart
@@ -101,7 +105,8 @@ def create_app(config_name='default'):
         from . import catalog
         from .branding import get_brand
         return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count,
-                'brand': get_brand(), 'catalog': catalog}
+                'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
+                'marketing_mode': marketing_enabled()}
 
     from .cli import register_cli
     register_cli(app)

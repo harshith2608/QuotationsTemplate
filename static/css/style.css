@@ -438,6 +438,13 @@ main { padding-bottom: 60px; }
 .dropdown-menu { --bs-dropdown-link-active-bg: var(--ki-primary); --bs-dropdown-link-active-color: var(--ki-on-primary); }
 .progress, .progress-stacked { --bs-progress-bar-bg: var(--ki-primary); }
 
+/* ---- Demo mode banner ---- */
+.ki-demo-banner {
+  background: #fff7d6; color: #5c4400; border-bottom: 1px solid #f1d98a;
+  font-size: .82rem; text-align: center; padding: 6px 12px; line-height: 1.4;
+}
+.ki-demo-banner a { color: #5c4400; }
+
 /* ---- Quotation stages ---- */
 .ki-stage-badge { font-weight: 600; font-size: .75rem; padding: .35em .65em; white-space: nowrap; }
 .ki-stage-badge-sm { font-size: .7rem; }

@@ -11,5 +11,11 @@
       "src": "/(.*)",
       "dest": "run.py"
     }
+  ],
+  "crons": [
+    {
+      "path": "/demo/reset",
+      "schedule": "30 20 * * *"
+    }
   ]
 }

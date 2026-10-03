@@ -94,6 +94,15 @@ Clients customise their portal themselves in **Admin → Settings**; the env var
 
 The product's own sales page (pricing, features, a working sample quote) plus `/privacy` and `/terms`. Because every client deployment runs the same code, these are **off by default** and return 404. With `MARKETING_SITE=1`, signed-out visitors to `/` see the landing page (signed-in users still go to their quotations), so your domain root is the sales page; it's also at `/landingpage`. The legal pages read `MARKETING_LEGAL_NAME`, `MARKETING_CONTACT_EMAIL`, `MARKETING_ADDRESS` and `MARKETING_JURISDICTION`. Enable it only on your own demo/marketing deployment with `MARKETING_SITE=1`, and set `MARKETING_WHATSAPP` (all buttons open a WhatsApp chat), `MARKETING_PRODUCT_NAME`, and optionally `META_PIXEL_ID`, `GOOGLE_ADS_ID` / `GOOGLE_ADS_CONVERSION` (a WhatsApp-button click is tracked as a lead) and `MARKETING_PRIVACY_URL` / `MARKETING_TERMS_URL`. The "Try the live demo" button goes to that deployment's login page.
 
+### Public demo mode
+
+For your own demo deployment, set `DEMO_MODE=1`:
+
+- **One-click entry:** `/demo` signs visitors into the `DEMO_USER` account (default `demo-admin`); the login page and landing page link to it. No password is shown, so set `DEMO_PASSWORD` to something random.
+- **Can't be vandalised or used for fakes:** saving Settings/branding, Payment Settings, Rates and Users is blocked, as are deleting quotations or payments, Razorpay links and access changes. Creating and editing quotations, stages and recording payments still work.
+- **Watermarked output:** every PDF is stamped "DEMO — NOT A VALID QUOTATION", and WhatsApp summaries are labelled as demo.
+- **Nightly reset:** `vercel.json` schedules `/demo/reset` daily at 02:00 IST. It only runs when `DEMO_MODE=1` and the request carries `CRON_SECRET` (Vercel sends it automatically), and it **wipes and reloads the whole database** with demo data. On other hosts, run `flask seed-demo --reset --force` from a scheduler.
+
 ---
 
 ## Local Development

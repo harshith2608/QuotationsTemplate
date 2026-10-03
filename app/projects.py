@@ -776,6 +776,9 @@ def whatsapp_share(project_id):
         "We look forward to transforming your space."
     ]
 
+    from .demo import demo_enabled
+    if demo_enabled():
+        lines = ['*DEMO — NOT A VALID QUOTATION*', ''] + lines
     message = '\n'.join(lines)
     mobile = project.mobile.lstrip('+').replace(' ', '').replace('-', '')
     if not mobile.startswith('91') and len(mobile) == 10:

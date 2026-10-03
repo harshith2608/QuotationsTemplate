@@ -41,6 +41,12 @@
 </head>
 <body class="ki-header-{{ brand.header_style }}">
 
+{% if demo_mode %}
+<div class="ki-demo-banner">
+  <i class="bi bi-stars me-1"></i>You're exploring the demo. Saving settings is turned off and everything resets every night.
+  {% if marketing_mode %}<a href="{{ url_for('marketing.landing') }}#pricing" class="fw-semibold ms-1">Get your own app →</a>{% endif %}
+</div>
+{% endif %}
 {% if current_user.is_authenticated %}
 <!-- ===== NAVBAR ===== -->
 <nav class="navbar navbar-expand-lg {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar sticky-top" id="ki-navbar">

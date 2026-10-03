@@ -49,6 +49,15 @@ def ft_in(decimal_ft):
 GREY_BG = colors.HexColor('#f5f5f5')
 
 
+def _build(doc, elements):
+    """Build the PDF, adding the demo watermark on every page when DEMO_MODE is on."""
+    from .demo import demo_enabled, watermark_canvas_class
+    if demo_enabled():
+        doc.build(elements, canvasmaker=watermark_canvas_class())
+    else:
+        doc.build(elements)
+
+
 def _ink(hex_color):
     """Darken a colour until it reads well as text on white paper (WCAG ≥ 4.5:1)."""
     amount = 0.0
@@ -553,7 +562,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     ]))
     elements.append(sig_table)
 
-    doc.build(elements)
+    _build(doc, elements)
     buffer.seek(0)
     return buffer
 
@@ -861,6 +870,6 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     ]))
     elements.append(sig_table2)
 
-    doc.build(elements)
+    _build(doc, elements)
     buffer.seek(0)
     return buffer
