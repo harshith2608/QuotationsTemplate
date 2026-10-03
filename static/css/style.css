@@ -62,7 +62,15 @@ body {
   --bs-navbar-brand-color: var(--ki-primary);
   --bs-navbar-brand-hover-color: var(--ki-primary);
 }
-.ki-navbar .nav-link.active { box-shadow: inset 0 -2px 0 var(--ki-accent); }
+@media (min-width: 992px) {
+  .ki-navbar .nav-link.active { box-shadow: inset 0 -2px 0 var(--ki-accent); }
+}
+@media (max-width: 991.98px) {
+  /* Collapsed menu: active item gets an accent bar on the left; dropdown toggles align with links */
+  .ki-navbar .nav-link.active { box-shadow: inset 3px 0 0 var(--ki-accent); padding-left: .6rem; }
+  .ki-navbar .navbar-nav .btn-link.nav-link { padding-left: 0; padding-right: 0; }
+  .ki-navbar .navbar-nav .btn-link.nav-link.active { padding-left: .6rem; }
+}
 .ki-navbar .navbar-brand {
   font-size: 1.1rem;
   letter-spacing: 0.3px;

@@ -1,6 +1,7 @@
+import hashlib
 import os
 from datetime import datetime
-from flask import Flask
+from flask import Flask, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -12,6 +13,7 @@ db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+_asset_versions = {}
 
 login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Please log in to access this page.'
@@ -53,6 +55,20 @@ def create_app(config_name='default'):
     # Razorpay webhook is called by Razorpay servers — exempt from CSRF
     from .projects import razorpay_webhook
     csrf.exempt(razorpay_webhook)
+
+    @app.template_global()
+    def asset_url(filename):
+        """Static URL with a content-hash query string, so browsers refetch CSS/JS after each deploy."""
+        if filename not in _asset_versions:
+            try:
+                with open(os.path.join(app.static_folder, filename), 'rb') as fh:
+                    _asset_versions[filename] = hashlib.sha1(fh.read()).hexdigest()[:10]
+            except OSError:
+                _asset_versions[filename] = ''
+            if is_dev:
+                version = _asset_versions.pop(filename)  # re-hash on every request while developing
+                return url_for('static', filename=filename, v=version)
+        return url_for('static', filename=filename, v=_asset_versions[filename])
 
     @app.template_filter('ft_in')
     def ft_in_filter(decimal_ft):
