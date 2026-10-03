@@ -22,34 +22,16 @@
        class="btn btn-warning btn-sm fw-semibold">
       <i class="bi bi-pencil me-1"></i>Edit
     </a>
-    <!-- Detailed PDF (internal) -->
+    <!-- Full Quotation: internal PDF with every room, item and measurement -->
     <a href="{{ url_for('projects.download_pdf', project_id=project.id, download=1) }}"
-       class="btn btn-secondary btn-sm fw-semibold">
-      <i class="bi bi-download me-1"></i>Download PDF
+       class="btn btn-primary btn-sm fw-semibold">
+      <i class="bi bi-file-earmark-text me-1"></i>Full Quotation
     </a>
-    <!-- Share detailed PDF -->
-    <button class="btn btn-success btn-sm fw-semibold"
-            onclick="downloadOrSharePDF(this,
-              '{{ url_for('projects.download_pdf', project_id=project.id) }}',
-              '{{ project.customer_name | e }}',
-              {{ project.id }},
-              '{{ project.mobile | e }}')">
-      <i class="bi bi-whatsapp me-1"></i>Share as PDF
-    </button>
-    <!-- Customer Quotation PDF (no measurements) -->
+    <!-- Initial Quotation: summary PDF without measurements -->
     <a href="{{ url_for('projects.download_customer_pdf', project_id=project.id, download=1) }}"
        class="btn btn-outline-primary btn-sm fw-semibold">
-      <i class="bi bi-file-earmark-person me-1"></i>Customer Quotation
+      <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
     </a>
-    <!-- Share customer PDF -->
-    <button class="btn btn-primary btn-sm fw-semibold"
-            onclick="downloadOrSharePDF(this,
-              '{{ url_for('projects.download_customer_pdf', project_id=project.id) }}',
-              '{{ project.customer_name | e }}',
-              {{ project.id }},
-              '{{ project.mobile | e }}')">
-      <i class="bi bi-share me-1"></i>Share Customer PDF
-    </button>
     {% if current_user.is_admin %}
     <button type="button" class="btn btn-danger btn-sm fw-semibold"
             data-bs-toggle="modal" data-bs-target="#deleteModal">
@@ -473,17 +455,6 @@
   </div>
 </div>
 {% endif %}
-
-<!-- Share info banner -->
-<div class="alert alert-info d-flex align-items-start mt-3 py-2" role="alert">
-  <i class="bi bi-info-circle fs-5 me-2 flex-shrink-0 mt-1"></i>
-  <div class="small">
-    <strong>Tip:</strong>
-    Tap <em>Share as PDF</em> — the PDF will be saved to your device and
-    <strong>{{ project.customer_name }}'s WhatsApp chat will open automatically</strong>.
-    Just tap the <strong>📎 attachment icon</strong> → pick the PDF from your Downloads → send.
-  </div>
-</div>
 
 <!-- Delete Modal -->
 {% if current_user.is_admin %}
