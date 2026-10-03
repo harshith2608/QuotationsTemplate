@@ -59,10 +59,11 @@
           <div class="alert alert-info py-2 small mb-3">
             <strong>Webhook URL to enter in Razorpay Dashboard:</strong><br>
             <code class="user-select-all">{{ webhook_url }}</code><br>
-            <span class="text-muted">Razorpay Dashboard → Webhooks → Add New Webhook → Event: <strong>payment_link.paid</strong></span>
+            <span class="text-muted">Razorpay Dashboard → Webhooks → Add New Webhook → Event: <strong>payment_link.paid</strong>.
+            Type any strong secret there and paste the same secret below. Without it, payments aren't recorded automatically.</span>
           </div>
           <div class="mb-1">
-            <label class="form-label fw-medium small">Webhook Secret</label>
+            <label class="form-label fw-medium small">Webhook Secret <span class="text-danger">(required for automatic payments)</span></label>
             <input type="password" name="webhook_secret" class="form-control"
                    placeholder="••••••••••••••••••••"
                    value="" autocomplete="off">

@@ -805,20 +805,14 @@ def razorpay_webhook():
     signature = request.headers.get('X-Razorpay-Signature', '')
     webhook_secret = AppSetting.get('webhook_secret', '').strip()
 
-    if webhook_secret:
-        expected = _hmac.new(
-            webhook_secret.encode('utf-8'),
-            raw_body,
-            _hmac.new.__class__  # placeholder — use hashlib directly below
-        )
-        expected = _hmac.new(
-            webhook_secret.encode('utf-8'),
-            raw_body,
-            _hashlib.sha256
-        ).hexdigest()
-        if not _hmac.compare_digest(expected, signature):
-            current_app.logger.warning('Razorpay webhook: invalid signature')
-            return jsonify({'error': 'Invalid signature'}), 400
+    # Without a secret we can't tell Razorpay from a forger, so refuse rather than record fake payments
+    if not webhook_secret:
+        current_app.logger.warning('Razorpay webhook rejected: no webhook secret configured in Payment Settings')
+        return jsonify({'error': 'Webhook secret not configured'}), 400
+    expected = _hmac.new(webhook_secret.encode('utf-8'), raw_body, _hashlib.sha256).hexdigest()
+    if not _hmac.compare_digest(expected, signature):
+        current_app.logger.warning('Razorpay webhook: invalid signature')
+        return jsonify({'error': 'Invalid signature'}), 400
 
     try:
         payload = _json.loads(raw_body)
