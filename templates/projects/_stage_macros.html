@@ -1,0 +1,38 @@
+{# Stage badge + quick-change menu. Stage definitions live in app/catalog.py (STAGES). #}
+
+{% macro stage_badge(key, small=False) -%}
+  {%- set s = catalog.STAGES.get(key, catalog.STAGES[catalog.DEFAULT_STAGE]) -%}
+  <span class="badge ki-stage-badge{% if small %} ki-stage-badge-sm{% endif %}" style="color:{{ s[2] }};background:{{ s[3] }}">
+    <i class="bi bi-{{ s[1] }} me-1"></i>{{ s[0] }}
+  </span>
+{%- endmacro %}
+
+{# Badge that opens a dropdown to move the quotation to another stage (one click, no JS). #}
+{% macro stage_menu(project, next_url, can_change=True) -%}
+  {% if project.status == 'draft' %}
+    <span class="badge bg-warning text-dark"><i class="bi bi-pencil-square me-1"></i>Draft</span>
+  {% elif not can_change %}
+    {{ stage_badge(project.stage) }}
+  {% else %}
+  <div class="dropdown d-inline-block">
+    <button type="button" class="btn p-0 border-0 bg-transparent dropdown-toggle ki-stage-toggle"
+            data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
+            title="Change stage">
+      {{ stage_badge(project.stage) }}
+    </button>
+    <form method="POST" action="{{ url_for('projects.update_stage', project_id=project.id) }}" class="dropdown-menu shadow-sm p-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <h6 class="dropdown-header">Move to…</h6>
+      {% for key, s in catalog.STAGES.items() %}
+      <button type="submit" name="stage" value="{{ key }}"
+              class="dropdown-item d-flex align-items-center rounded {% if key == project.stage %}active{% endif %}"
+              {% if key == project.stage %}disabled aria-current="true"{% endif %}>
+        <span class="ki-stage-dot me-2" style="background:{{ s[2] }}"></span>{{ s[0] }}
+        {% if key == project.stage %}<i class="bi bi-check2 ms-auto"></i>{% endif %}
+      </button>
+      {% endfor %}
+    </form>
+  </div>
+  {% endif %}
+{%- endmacro %}

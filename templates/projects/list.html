@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'projects/_stage_macros.html' import stage_menu with context %}
 {% block title %}Quotations{% endblock %}
 
 {% block content %}
@@ -21,14 +22,28 @@
     <span class="input-group-text"><i class="bi bi-search"></i></span>
     <input type="text" name="q" class="form-control" placeholder="Search by customer name or mobile…"
            value="{{ search }}">
+    {% if stage %}<input type="hidden" name="stage" value="{{ stage }}">{% endif %}
     <button class="btn btn-outline-secondary" type="submit">Search</button>
     {% if search %}
-      <a href="{{ url_for('projects.list_projects') }}" class="btn btn-outline-danger">
+      <a href="{{ url_for('projects.list_projects', stage=stage or None) }}" class="btn btn-outline-danger">
         <i class="bi bi-x-lg"></i>
       </a>
     {% endif %}
   </div>
 </form>
+
+<!-- Stage filter -->
+<nav class="ki-stage-filter mb-3" aria-label="Filter by stage">
+  <a href="{{ url_for('projects.list_projects', q=search or None) }}" class="{{ 'active' if not stage }}">
+    All <span class="count">{{ all_count }}</span>
+  </a>
+  {% for key, s in catalog.STAGES.items() %}
+  <a href="{{ url_for('projects.list_projects', stage=key, q=search or None) }}" class="{{ 'active' if stage == key }}">
+    <span class="ki-stage-dot" style="background:{{ s[2] }}"></span>{{ s[0] }}
+    <span class="count">{{ stage_counts.get(key, 0) }}</span>
+  </a>
+  {% endfor %}
+</nav>
 
 {% if projects.items %}
 <!-- Desktop Table -->
@@ -41,6 +56,7 @@
           <th>Customer</th>
           <th>Mobile</th>
           {% if current_user.is_admin %}<th>Employee</th>{% endif %}
+          <th>Stage</th>
           <th class="text-end">Grand Total</th>
           <th class="text-center">Date</th>
           <th class="text-center">Actions</th>
@@ -54,7 +70,7 @@
             <a href="{{ url_for('projects.view_project', project_id=project.id) }}"
                class="fw-semibold text-decoration-none ki-link">
               {% if project.status == 'draft' %}
-              <i class="bi bi-clock text-warning me-1" title="In Progress"></i>
+              <i class="bi bi-pencil-square text-warning me-1" title="Draft"></i>
               {% endif %}
               {{ project.customer_name }}
             </a>
@@ -69,11 +85,10 @@
             <span class="badge bg-secondary">{{ project.creator.username }}</span>
           </td>
           {% endif %}
+          <td>{{ stage_menu(project, request.full_path) }}</td>
           <td class="text-end fw-semibold">
             {% if project.status == 'draft' %}
-            <span class="badge bg-warning text-dark">
-              <i class="bi bi-clock me-1"></i>In Progress
-            </span>
+            <span class="text-muted">—</span>
             {% else %}
             <span class="text-success">&#8377;{{ "{:,.2f}".format(project.final_total) }}</span>
             {% endif %}
@@ -129,7 +144,7 @@
             <a href="{{ url_for('projects.view_project', project_id=project.id) }}"
                class="text-decoration-none ki-link">
               {% if project.status == 'draft' %}
-              <i class="bi bi-clock text-warning me-1" title="In Progress"></i>
+              <i class="bi bi-pencil-square text-warning me-1" title="Draft"></i>
               {% endif %}
               {{ project.customer_name }}
             </a>
@@ -142,11 +157,12 @@
             <i class="bi bi-person me-1"></i>{{ project.creator.username }}
           </small>
           {% endif %}
+          <div class="mt-1">{{ stage_menu(project, request.full_path) }}</div>
         </div>
         <div class="text-end">
           <div class="fw-bold fs-6">
             {% if project.status == 'draft' %}
-            <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>In Progress</span>
+            <span class="text-muted">—</span>
             {% else %}
             <span class="text-success">&#8377;{{ "{:,.0f}".format(project.final_total) }}</span>
             {% endif %}
@@ -188,14 +204,14 @@
 <nav class="mt-3 d-flex justify-content-center">
   <ul class="pagination pagination-sm">
     <li class="page-item {% if not projects.has_prev %}disabled{% endif %}">
-      <a class="page-link" href="{{ url_for('projects.list_projects', page=projects.prev_num, q=search) }}">
+      <a class="page-link" href="{{ url_for('projects.list_projects', page=projects.prev_num, q=search, stage=stage or None) }}">
         <i class="bi bi-chevron-left"></i>
       </a>
     </li>
     {% for page_num in projects.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
       {% if page_num %}
         <li class="page-item {% if page_num == projects.page %}active{% endif %}">
-          <a class="page-link" href="{{ url_for('projects.list_projects', page=page_num, q=search) }}">
+          <a class="page-link" href="{{ url_for('projects.list_projects', page=page_num, q=search, stage=stage or None) }}">
             {{ page_num }}
           </a>
         </li>
@@ -204,7 +220,7 @@
       {% endif %}
     {% endfor %}
     <li class="page-item {% if not projects.has_next %}disabled{% endif %}">
-      <a class="page-link" href="{{ url_for('projects.list_projects', page=projects.next_num, q=search) }}">
+      <a class="page-link" href="{{ url_for('projects.list_projects', page=projects.next_num, q=search, stage=stage or None) }}">
         <i class="bi bi-chevron-right"></i>
       </a>
     </li>
@@ -218,10 +234,11 @@
     <i class="bi bi-clipboard-x display-1 text-muted"></i>
     <h5 class="mt-3 text-muted">No quotations found</h5>
     <p class="text-muted">
-      {% if search %}No results for "{{ search }}". Try a different search.
+      {% if search %}No results for "{{ search }}"{% if stage %} in "{{ catalog.STAGES[stage][0] }}"{% endif %}. Try a different search.
+      {% elif stage %}No quotations are "{{ catalog.STAGES[stage][0] }}" right now.
       {% else %}Start by creating your first quotation.{% endif %}
     </p>
-    {% if not search %}
+    {% if not search and not stage %}
     <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary ki-btn-primary mt-2">
       <i class="bi bi-plus-circle me-1"></i>Create Quotation
     </a>

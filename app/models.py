@@ -2,6 +2,7 @@ from datetime import datetime
 from flask_login import UserMixin
 from sqlalchemy import case, func
 from . import db, login_manager
+from .catalog import STAGES, DEFAULT_STAGE
 
 
 @login_manager.user_loader
@@ -44,13 +45,37 @@ class Project(db.Model):
     grand_total    = db.Column(db.Float, default=0.0)
     discount_type  = db.Column(db.String(20), default='none')   # 'none', 'percentage', 'fixed'
     discount_value = db.Column(db.Float, default=0.0)
-    status = db.Column(db.String(20), default='complete', nullable=False)
+    status = db.Column(db.String(20), default='complete', nullable=False)   # 'complete' or 'draft' (form auto-save)
+    # Workflow stage, see catalog.STAGES (pending → confirmed → ongoing → completed, plus on_hold / cancelled)
+    stage = db.Column(db.String(20), nullable=False, default=DEFAULT_STAGE,
+                      server_default=DEFAULT_STAGE, index=True)
+    stage_changed_at = db.Column(db.DateTime, nullable=True)
     plywood_thickness = db.Column(db.Text, nullable=True, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     rooms     = db.relationship('Room',           backref='project', lazy='dynamic', cascade='all, delete-orphan')
     payments  = db.relationship('Payment',        backref='project', lazy='dynamic', cascade='all, delete-orphan')
     edit_logs = db.relationship('ProjectEditLog', backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    stage_changes = db.relationship('ProjectStageChange', backref='project', lazy='dynamic',
+                                    cascade='all, delete-orphan',
+                                    order_by='ProjectStageChange.changed_at.desc()')
+
+    @property
+    def stage_info(self):
+        """(label, icon, text colour, background colour) for the current stage."""
+        return STAGES.get(self.stage, STAGES[DEFAULT_STAGE])
+
+    def set_stage(self, new_stage, user, note=None):
+        """Move to a new stage and record it in the history. Returns False if unchanged/invalid."""
+        if new_stage not in STAGES or new_stage == self.stage:
+            return False
+        now = datetime.utcnow()
+        db.session.add(ProjectStageChange(project_id=self.id, from_stage=self.stage, to_stage=new_stage,
+                                          changed_by=user.id if user else None, changed_at=now,
+                                          note=(note or '').strip()[:200] or None))
+        self.stage = new_stage
+        self.stage_changed_at = now
+        return True
 
     def rooms_with_items(self):
         """
@@ -303,3 +328,20 @@ class ProjectEditLog(db.Model):
 
     def __repr__(self):
         return f'<EditLog project={self.project_id} by={self.edited_by}>'
+
+
+class ProjectStageChange(db.Model):
+    """History of a quotation's workflow stage changes."""
+    __tablename__ = 'project_stage_changes'
+    id         = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    from_stage = db.Column(db.String(20), nullable=True)
+    to_stage   = db.Column(db.String(20), nullable=False)
+    changed_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    note       = db.Column(db.String(200), nullable=True)
+
+    user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<StageChange project={self.project_id} {self.from_stage}→{self.to_stage}>'

@@ -32,3 +32,17 @@ DEFAULT_ITEMS = [
     'Base Cabinet', 'Island Counter', 'Display Unit', 'Pooja Unit',
     'Vanity Cabinet', 'Wall Paneling', 'Headboard', 'Side Table',
 ]
+
+# Quotation workflow stages, in pipeline order.
+# key: (label, Bootstrap icon, text colour, background colour)
+STAGES = {
+    'pending':   ('Awaiting confirmation', 'hourglass-split', '#92400e', '#fef3c7'),
+    'confirmed': ('Confirmed',             'check2-circle',   '#1e40af', '#dbeafe'),
+    'ongoing':   ('Ongoing',               'hammer',          '#5b21b6', '#ede9fe'),
+    'on_hold':   ('On hold',               'pause-circle',    '#334155', '#e2e8f0'),
+    'completed': ('Completed',             'patch-check',     '#166534', '#dcfce7'),
+    'cancelled': ('Cancelled',             'x-circle',        '#991b1b', '#fee2e2'),
+}
+DEFAULT_STAGE = 'pending'
+# The main path shown as a progress stepper; on_hold / cancelled are side states
+STAGE_PATH = ['pending', 'confirmed', 'ongoing', 'completed']

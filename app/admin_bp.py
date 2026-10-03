@@ -7,7 +7,7 @@ from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate,
 from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
 from .pdf_utils import DEFAULT_TERMS
-from .catalog import WOOD_TYPES, WORK_TYPES
+from .catalog import WOOD_TYPES, WORK_TYPES, STAGES
 from . import branding
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -62,6 +62,19 @@ def dashboard():
     total_customers = db.session.query(func.count(func.distinct(Project.mobile))).scalar()
     total_employees = User.query.filter_by(role='employee').count()
 
+    # Pipeline: count and value per workflow stage (excluding unfinished drafts)
+    stage_rows = (
+        db.session.query(Project.stage, func.count(Project.id),
+                         func.coalesce(func.sum(Project.final_total_sql()), 0))
+        .filter(Project.status != 'draft')
+        .group_by(Project.stage).all()
+    )
+    by_stage = {key: (count, value) for key, count, value in stage_rows}
+    pipeline = [{'key': key, 'label': st[0], 'icon': st[1], 'color': st[2], 'bg': st[3],
+                 'count': by_stage.get(key, (0, 0))[0], 'value': by_stage.get(key, (0, 0))[1]}
+                for key, st in STAGES.items()]
+    pipeline_max = max([p['count'] for p in pipeline] + [1])
+
     return render_template(
         'admin/dashboard.html',
         title='Admin Dashboard',
@@ -73,7 +86,9 @@ def dashboard():
         total_projects=total_projects,
         total_value=total_value,
         total_customers=total_customers,
-        total_employees=total_employees
+        total_employees=total_employees,
+        pipeline=pipeline,
+        pipeline_max=pipeline_max
     )
 
 

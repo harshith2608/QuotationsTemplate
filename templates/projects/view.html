@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'projects/_stage_macros.html' import stage_badge, stage_menu with context %}
 {% block title %}{{ project.customer_name }} – Quotation #{{ project.id }}{% endblock %}
 
 {% block content %}
@@ -15,6 +16,7 @@
     <h4 class="mb-0 fw-bold ki-page-title">
       <i class="bi bi-file-earmark-text me-2 text-primary"></i>
       {{ project.customer_name }}
+      <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>
     </h4>
   </div>
   <div class="d-flex gap-2 flex-wrap">
@@ -37,6 +39,85 @@
             data-bs-toggle="modal" data-bs-target="#deleteModal">
       <i class="bi bi-trash me-1"></i>Delete
     </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Project Stage -->
+{% set off_path = project.stage not in catalog.STAGE_PATH %}
+{% set ns = namespace(anchor=project.stage) %}
+{% if off_path %}
+  {# On hold / cancelled: show the stepper where the job was before leaving the main path #}
+  {% set ns.anchor = catalog.DEFAULT_STAGE %}
+  {% for ch in stage_history %}{% if ch.from_stage in catalog.STAGE_PATH and ns.anchor == catalog.DEFAULT_STAGE and loop.first %}{% set ns.anchor = ch.from_stage %}{% endif %}{% endfor %}
+{% endif %}
+{% set cur_idx = catalog.STAGE_PATH.index(ns.anchor) %}
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-signpost-split me-2"></i>Project Stage</span>
+    {% if project.stage_changed_at %}
+    <small class="fw-normal" style="opacity:.8">updated {{ project.stage_changed_at.strftime('%d %b %Y') }}</small>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="row g-3 align-items-center">
+      <div class="col-12 col-lg-7">
+        <div class="ki-stepper {{ 'is-off' if off_path }}">
+          {% for key in catalog.STAGE_PATH %}
+          {% set st = catalog.STAGES[key] %}
+          <div class="ki-step {{ 'done' if loop.index0 < cur_idx else ('current' if loop.index0 == cur_idx else '') }}">
+            <div class="ki-step-dot"><i class="bi bi-{{ 'check-lg' if loop.index0 < cur_idx else st[1] }}"></i></div>
+            {{ st[0] }}
+          </div>
+          {% endfor %}
+        </div>
+        {% if off_path %}
+        <div class="text-center mt-2 small">
+          {{ stage_badge(project.stage) }}
+          <span class="text-muted ms-1">{{ 'Work is paused.' if project.stage == 'on_hold' else 'This quotation was cancelled.' }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% if can_change_stage %}
+      <div class="col-12 col-lg-5">
+        <form method="POST" action="{{ url_for('projects.update_stage', project_id=project.id) }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-12 col-sm-5">
+            <label class="form-label small fw-medium mb-1" for="stageSelect">Move to</label>
+            <select class="form-select form-select-sm" name="stage" id="stageSelect">
+              {% for key, st in catalog.STAGES.items() %}
+              <option value="{{ key }}" {{ 'selected' if key == project.stage }}>{{ st[0] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-sm-7">
+            <label class="form-label small fw-medium mb-1" for="stageNote">Note <span class="text-muted">(optional)</span></label>
+            <input type="text" class="form-control form-control-sm" name="note" id="stageNote" maxlength="200"
+                   placeholder="e.g. Advance received, work starts Monday">
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-arrow-right-circle me-1"></i>Update stage</button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if stage_history %}
+    <hr class="my-3">
+    <div class="small fw-bold text-uppercase text-muted mb-2" style="letter-spacing:.4px">History</div>
+    <ul class="ki-stage-history">
+      {% for ch in stage_history %}
+      {% set st = catalog.STAGES.get(ch.to_stage, catalog.STAGES[catalog.DEFAULT_STAGE]) %}
+      <li>
+        <span class="dot" style="background:{{ st[2] }}"></span>
+        <strong>{{ st[0] }}</strong>
+        {% if ch.from_stage %}<span class="text-muted">from {{ catalog.STAGES.get(ch.from_stage, ['?'])[0] }}</span>{% endif %}
+        <span class="text-muted">· {{ ch.user.display_name if ch.user else 'Unknown' }} · {{ ch.changed_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+        {% if ch.note %}<div class="text-body-secondary fst-italic">“{{ ch.note }}”</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
     {% endif %}
   </div>
 </div>

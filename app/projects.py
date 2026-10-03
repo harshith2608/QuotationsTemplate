@@ -9,7 +9,7 @@ from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, Work
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
                      PaymentLink, Notification)
 from .decorators import admin_required
-from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WOOD, DEFAULT_WORK
+from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WOOD, DEFAULT_WORK, STAGES
 from .branding import get_brand
 
 projects_bp = Blueprint('projects', __name__)
@@ -145,6 +145,8 @@ def list_projects():
 
     page = request.args.get('page', 1, type=int)
     search = request.args.get('q', '').strip()
+    stage = request.args.get('stage', '').strip()
+    stage = stage if stage in STAGES else ''
     if current_user.is_admin:
         query = Project.query
     else:
@@ -159,6 +161,15 @@ def list_projects():
                 Project.mobile.ilike(f'%{search}%')
             )
         )
+    # Stage counts for the filter pills (drafts are unfinished forms, so they have no real stage)
+    stage_counts = dict(
+        query.filter(Project.status != 'draft')
+             .with_entities(Project.stage, db.func.count(Project.id))
+             .group_by(Project.stage).all()
+    )
+    all_count = query.count()
+    if stage:
+        query = query.filter(Project.stage == stage, Project.status != 'draft')
     projects = query.order_by(Project.created_at.desc()).paginate(
         page=page, per_page=15, error_out=False
     )
@@ -179,6 +190,7 @@ def list_projects():
 
     employees_json = [{'id': e.id, 'username': e.username} for e in employees]
     return render_template('projects/list.html', projects=projects, search=search,
+                           stage=stage, stage_counts=stage_counts, all_count=all_count,
                            title='Quotations', employees=employees,
                            employees_json=employees_json,
                            access_map=access_map,
@@ -346,7 +358,39 @@ def view_project(project_id):
                            total_paid=total_paid,
                            balance=balance,
                            settings=settings,
+                           stage_history=project.stage_changes.all(),
+                           can_change_stage=_can_change_stage(project),
                            title=f'Quotation – {project.customer_name}')
+
+
+def _can_change_stage(project):
+    """Admins, and employees who can see the quotation, may move it through the workflow."""
+    if project.status == 'draft':
+        return False
+    if current_user.is_admin:
+        return True
+    return ProjectAccess.query.filter_by(project_id=project.id, user_id=current_user.id).first() is not None
+
+
+def _safe_next(default):
+    """Only allow redirects back to a path on this site."""
+    nxt = request.form.get('next', '')
+    return nxt if nxt.startswith('/') and not nxt.startswith('//') else default
+
+
+@projects_bp.route('/projects/<int:project_id>/stage', methods=['POST'])
+@login_required
+def update_stage(project_id):
+    project = Project.query.get_or_404(project_id)
+    if not _can_change_stage(project):
+        abort(403)
+    new_stage = request.form.get('stage', '')
+    if new_stage not in STAGES:
+        flash('Unknown stage.', 'danger')
+    elif project.set_stage(new_stage, current_user, request.form.get('note')):
+        db.session.commit()
+        flash(f'Quotation #{project.id} moved to "{STAGES[new_stage][0]}".', 'success')
+    return redirect(_safe_next(url_for('projects.view_project', project_id=project.id)))
 
 
 @projects_bp.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])

@@ -16,7 +16,7 @@ from werkzeug.security import generate_password_hash
 
 from . import db, catalog
 from .models import (User, Project, ProjectAccess, Payment, AppSetting, WoodRate,
-                     WorkTypeRate, ItemRate, MasterRoom, MasterItem)
+                     WorkTypeRate, ItemRate, MasterRoom, MasterItem, ProjectStageChange)
 
 
 class SeedError(Exception):
@@ -139,6 +139,15 @@ DEMO_PROJECTS = [
 
 PLYWOOD_BY_PROJECT = ['18mm 8*4,12mm 8*4', '18mm 8*4,25mm Blackboard', '18mm 8*4', '', '12mm 8*4,6mm 8*4']
 
+# Stage history per demo project: (stage, days after the quotation was created, note)
+STAGE_FLOW_BY_PROJECT = [
+    [('confirmed', 1, 'Advance received')],
+    [('confirmed', 1, None), ('ongoing', 3, 'Site work started')],
+    [],
+    [('confirmed', 2, 'Token advance paid'), ('on_hold', 10, 'Customer travelling, resume next month')],
+    [('confirmed', 1, None), ('ongoing', 5, None), ('completed', 30, 'Handed over to customer')],
+]
+
 
 def _clear_all_tables():
     """Delete every row from every app table (keeps the schema and alembic_version)."""
@@ -192,12 +201,19 @@ def seed_demo(reset=False, password=None):
         if not users[creator].is_admin:
             db.session.add(ProjectAccess(project_id=project.id, user_id=users[creator].id,
                                          granted_by=users[creator].id))
+        current = project.stage
+        for to_stage, days_after, note in STAGE_FLOW_BY_PROJECT[idx]:
+            when = created + timedelta(days=days_after)
+            db.session.add(ProjectStageChange(project_id=project.id, from_stage=current, to_stage=to_stage,
+                                              changed_by=users['demo-admin'].id, changed_at=when, note=note))
+            current = to_stage
+            project.stage, project.stage_changed_at = to_stage, when
         for p_idx, (amount, note) in enumerate(payments):
             db.session.add(Payment(project_id=project.id, amount=amount, note=note,
                                    recorded_by=users['demo-admin'].id, source='manual',
                                    recorded_at=created + timedelta(days=p_idx + 1)))
 
     db.session.commit()
-    log.append(f'Projects: {len(DEMO_PROJECTS)} quotations with rooms, items and payments.')
+    log.append(f'Projects: {len(DEMO_PROJECTS)} quotations with rooms, items, payments and stage history.')
     log.append('Company settings: Demo Interiors (fictional address, GSTIN, UPI and bank details).')
     return log

@@ -437,3 +437,48 @@ main { padding-bottom: 60px; }
 .nav { --bs-nav-link-color: var(--ki-primary); --bs-nav-link-hover-color: color-mix(in srgb, var(--ki-primary) 80%, black); }
 .dropdown-menu { --bs-dropdown-link-active-bg: var(--ki-primary); --bs-dropdown-link-active-color: var(--ki-on-primary); }
 .progress, .progress-stacked { --bs-progress-bar-bg: var(--ki-primary); }
+
+/* ---- Quotation stages ---- */
+.ki-stage-badge { font-weight: 600; font-size: .75rem; padding: .35em .65em; white-space: nowrap; }
+.ki-stage-badge-sm { font-size: .7rem; }
+.ki-stage-toggle::after { display: none; }   /* the badge itself is the toggle */
+.ki-stage-toggle:hover .ki-stage-badge { filter: brightness(.96); box-shadow: 0 0 0 2px rgba(0,0,0,.06); }
+.ki-stage-toggle .ki-stage-badge::after {
+  content: "\F282"; font-family: bootstrap-icons; font-size: .6rem; margin-left: .35rem; vertical-align: middle;
+}
+.ki-stage-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dropdown-item.active .ki-stage-dot { box-shadow: 0 0 0 2px #fff; }
+
+/* Stage filter pills on the quotations list */
+.ki-stage-filter { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.ki-stage-filter a {
+  display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; text-decoration: none;
+  font-size: .8rem; font-weight: 600; color: #374151; background: #fff; border: 1px solid var(--ki-border);
+  border-radius: 50rem; padding: .3rem .75rem;
+}
+.ki-stage-filter a:hover { border-color: #c4c4c4; }
+.ki-stage-filter a.active { background: var(--ki-primary); border-color: var(--ki-primary); color: var(--ki-on-primary); }
+.ki-stage-filter .count { font-weight: 700; opacity: .75; }
+
+/* Stage stepper on the quotation page */
+.ki-stepper { display: flex; align-items: flex-start; }
+.ki-step { flex: 1; text-align: center; position: relative; font-size: .72rem; font-weight: 600; color: #9ca3af; }
+.ki-step::before {
+  content: ""; position: absolute; top: 14px; left: -50%; width: 100%; height: 3px; background: #e5e7eb; z-index: 0;
+}
+.ki-step:first-child::before { display: none; }
+.ki-step .ki-step-dot {
+  position: relative; z-index: 1; width: 30px; height: 30px; border-radius: 50%; margin: 0 auto 4px;
+  display: flex; align-items: center; justify-content: center; background: #e5e7eb; color: #fff; font-size: .85rem;
+}
+.ki-step.done, .ki-step.current { color: #374151; }
+.ki-step.done::before, .ki-step.current::before { background: var(--ki-primary); }
+.ki-step.done .ki-step-dot { background: var(--ki-primary); color: var(--ki-on-primary); }
+.ki-step.current .ki-step-dot { background: var(--ki-primary); color: var(--ki-on-primary); box-shadow: 0 0 0 4px rgba(var(--ki-primary-rgb), .2); }
+.ki-stepper.is-off .ki-step.current .ki-step-dot { background: #9ca3af; box-shadow: none; }
+
+.ki-stage-history { list-style: none; padding: 0; margin: 0; }
+.ki-stage-history li { position: relative; padding: 0 0 .75rem 1.25rem; font-size: .8rem; }
+.ki-stage-history li::before { content: ""; position: absolute; left: 4px; top: 6px; bottom: -2px; width: 2px; background: #e5e7eb; }
+.ki-stage-history li:last-child::before { display: none; }
+.ki-stage-history .dot { position: absolute; left: 0; top: 3px; width: 10px; height: 10px; border-radius: 50%; }
