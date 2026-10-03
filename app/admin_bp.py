@@ -7,11 +7,10 @@ from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate,
 from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
 from .pdf_utils import DEFAULT_TERMS
+from .catalog import WOOD_TYPES, WORK_TYPES
+from .branding import EDITABLE_FIELDS, env_default
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
-
-WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
-WORK_TYPES = ['Box Work', 'Frame Work']
 
 
 @admin_bp.before_request
@@ -194,6 +193,9 @@ def rates():
                            wood_types=WOOD_TYPES, work_types=WORK_TYPES)
 
 
+COMPANY_KEYS = [app_key for app_key, _, _ in EDITABLE_FIELDS.values()]
+
+
 @admin_bp.route('/payment-settings', methods=['GET', 'POST'])
 def payment_settings():
     KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
@@ -209,22 +211,21 @@ def payment_settings():
         # Multi-line fields — preserve newlines, allow blanking
         AppSetting.set('material_specs',    request.form.get('material_specs',    '').strip())
         AppSetting.set('terms_conditions',  request.form.get('terms_conditions',  '').strip())
-        AppSetting.set('company_name',      request.form.get('company_name',      '').strip())
-        AppSetting.set('company_address',   request.form.get('company_address',   '').strip())
-        AppSetting.set('company_mobile',    request.form.get('company_mobile',    '').strip())
-        AppSetting.set('company_email',     request.form.get('company_email',     '').strip())
+        # Company details — blank means "use the deployment's env default"
+        for key in COMPANY_KEYS:
+            AppSetting.set(key, request.form.get(key, '').strip())
         db.session.commit()
         flash('Settings updated successfully.', 'success')
         return redirect(url_for('admin.payment_settings'))
     settings = {k: AppSetting.get(k, '') for k in KEYS}
     settings['material_specs']    = AppSetting.get('material_specs',   '')
     settings['terms_conditions']  = AppSetting.get('terms_conditions', '') or DEFAULT_TERMS
-    settings['company_name']      = AppSetting.get('company_name',     '')
-    settings['company_address']   = AppSetting.get('company_address',  '')
-    settings['company_mobile']    = AppSetting.get('company_mobile',   '')
-    settings['company_email']     = AppSetting.get('company_email',    '')
+    for key in COMPANY_KEYS:
+        settings[key] = AppSetting.get(key, '')
+    env_defaults = {key: env_default(key) for key in COMPANY_KEYS}
     return render_template('admin/payment_settings.html',
-                           title='Payment Settings', settings=settings)
+                           title='Payment Settings', settings=settings,
+                           env_defaults=env_defaults)
 
 
 @admin_bp.route('/notifications')

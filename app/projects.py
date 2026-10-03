@@ -9,11 +9,10 @@ from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, Work
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
                      PaymentLink, Notification)
 from .decorators import admin_required
+from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WOOD, DEFAULT_WORK
+from .branding import get_brand
 
 projects_bp = Blueprint('projects', __name__)
-
-WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
-WORK_TYPES = ['Box Work', 'Frame Work']
 
 def _get_work_type_rates():
     return {r.work_type: r.rate_per_sqft for r in WorkTypeRate.query.all()}
@@ -27,6 +26,7 @@ def _send_email(to_address, subject, body):
     """Send a plain-text email via configured SMTP. Returns True on success."""
     import smtplib
     from email.mime.text import MIMEText
+    from email.utils import formataddr
     smtp_host = AppSetting.get('smtp_host', '').strip()
     smtp_port = int(AppSetting.get('smtp_port', '587') or 587)
     smtp_user = AppSetting.get('smtp_user', '').strip()
@@ -37,7 +37,7 @@ def _send_email(to_address, subject, body):
     try:
         msg = MIMEText(body, 'plain', 'utf-8')
         msg['Subject'] = subject
-        msg['From']    = f"Kundann Interiors <{from_addr}>"
+        msg['From']    = formataddr((get_brand()['name'], from_addr))
         msg['To']      = to_address
         with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
             s.ehlo()
@@ -103,12 +103,12 @@ def _save_project_data(project, rooms_data):
             if length <= 0 or width <= 0:
                 continue
             area = round(length * width, 4)
-            wood_type = id_.get('wood_type', 'Laminates')
+            wood_type = id_.get('wood_type', DEFAULT_WOOD)
             if wood_type not in WOOD_TYPES:
-                wood_type = 'Laminates'
-            work_type = id_.get('work_type', 'Box Work')
+                wood_type = DEFAULT_WOOD
+            work_type = id_.get('work_type', DEFAULT_WORK)
             if work_type not in WORK_TYPES:
-                work_type = 'Box Work'
+                work_type = DEFAULT_WORK
 
             item = Item(
                 room_id=room.id,
@@ -574,7 +574,7 @@ def generate_payment_link(project_id):
         'amount': int(remaining * 100),
         'currency': 'INR',
         'accept_partial': True,
-        'description': f"Kundann Interiors – Quotation #{project.id} for {project.customer_name}",
+        'description': f"{get_brand()['name']} – Quotation #{project.id} for {project.customer_name}",
         'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean,
                      'email': project.email or ''},
         'notify': {'sms': True, 'email': bool(project.email)},
@@ -674,7 +674,7 @@ def whatsapp_share(project_id):
     lines = [
         f"Hello {project.customer_name}! 👋",
         f"",
-        f"Thank you for considering *Kundann Interiors* for your home.",
+        f"Thank you for considering *{get_brand()['name']}* for your home.",
         f"Here is your interior design quotation summary:",
         f"",
         f"📋 *Quotation #{project.id}*",
@@ -728,7 +728,7 @@ def whatsapp_share(project_id):
         "",
         "_Please find the detailed PDF quotation attached._",
         "",
-        "Thank you for choosing Kundann Interiors! 🏡",
+        f"Thank you for choosing {get_brand()['name']}! 🏡",
         "We look forward to transforming your space."
     ]
 
@@ -853,12 +853,12 @@ def razorpay_webhook():
             f"Total Paid : ₹{total_paid:,.2f}\n"
             f"Balance Due: ₹{balance:,.2f}\n\n"
             f"{'Thank you — your account is fully settled!' if balance == 0 else 'Please clear the remaining balance at your earliest convenience.'}\n\n"
-            f"Thank you for choosing Kundann Interiors!\n"
+            f"Thank you for choosing {get_brand()['name']}!\n"
             f"We look forward to transforming your space."
         )
         _send_email(
             project.email,
-            f"Payment Received – Quotation #{project.id} | Kundann Interiors",
+            f"Payment Received – Quotation #{project.id} | {get_brand()['name']}",
             customer_body
         )
 
@@ -878,7 +878,7 @@ def razorpay_webhook():
         )
         _send_email(
             admin_email,
-            f"[Kundann Interiors] Payment ₹{amount_rupees:,.2f} – {project.customer_name}",
+            f"[{get_brand()['name']}] Payment ₹{amount_rupees:,.2f} – {project.customer_name}",
             admin_body
         )
 

@@ -2,7 +2,12 @@ import os
 import secrets
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+# Load .env for local development; real env vars always take precedence.
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 
 class Config:
@@ -10,8 +15,10 @@ class Config:
 
     # Force psycopg2 dialect — SQLAlchemy 2.x defaults to psycopg3 for postgresql:// URLs
     # but only psycopg2-binary is installed.
+    # Each deployment points DATABASE_URL at its own Postgres database.
+    # The SQLite fallback is for local development only (production refuses to start without it).
     _db_url = os.environ.get('DATABASE_URL') or \
-        'sqlite:///' + os.path.join(BASE_DIR, 'kundans_interiors.db')
+        'sqlite:///' + os.path.join(BASE_DIR, 'app.db')
     if _db_url.startswith('postgres://'):
         _db_url = _db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
     elif _db_url.startswith('postgresql://'):
@@ -42,6 +49,7 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
+    REQUIRED_ENV = ('SECRET_KEY', 'DATABASE_URL')
     SESSION_COOKIE_SECURE   = True   # HTTPS only
     SESSION_COOKIE_HTTPONLY = True   # no JS access
     SESSION_COOKIE_SAMESITE = 'Lax'

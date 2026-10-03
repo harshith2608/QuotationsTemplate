@@ -1,5 +1,7 @@
 /* =====================================================
-   Kundann Interiors – Custom Stylesheet
+   Quotation App – Custom Stylesheet
+   Brand colours below are defaults; base.html overrides
+   --ki-primary/secondary/accent/light from BRAND_* env vars.
    ===================================================== */
 
 :root {
@@ -49,6 +51,8 @@ body {
 
 /* ---- Brand / Login ---- */
 .ki-brand-text { color: var(--ki-primary); }
+.ki-navbar-logo { height: 28px; width: auto; vertical-align: middle; }
+.ki-login-logo  { max-height: 72px; max-width: 220px; width: auto; }
 .ki-login-icon {
   font-size: 3.5rem;
   color: var(--ki-primary);
@@ -56,7 +60,7 @@ body {
 }
 .ki-login-card {
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(26,35,126,0.12) !important;
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--ki-primary) 12%, transparent) !important;
 }
 .min-vh-85 { min-height: 85vh; }
 
@@ -67,9 +71,9 @@ body {
   color: #fff;
 }
 .ki-btn-primary:hover {
-  background: linear-gradient(135deg, #283593, #1a237e);
+  background: linear-gradient(135deg, var(--ki-secondary), var(--ki-primary));
   color: #fff;
-  box-shadow: 0 4px 12px rgba(26,35,126,0.25);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ki-primary) 25%, transparent);
 }
 
 /* ---- Cards & Headers ---- */
@@ -94,7 +98,7 @@ body {
   border: none;
   white-space: nowrap;
 }
-.table-hover tbody tr:hover { background: rgba(26,35,126,0.04); }
+.table-hover tbody tr:hover { background: color-mix(in srgb, var(--ki-primary) 4%, transparent); }
 
 /* ---- Page Titles ---- */
 .ki-page-title { color: var(--ki-primary); font-size: 1.2rem; }
@@ -135,7 +139,7 @@ body {
 /* ---- Room Blocks (View page) ---- */
 .ki-room-block { border-radius: 8px; overflow: hidden; border: 1px solid var(--ki-border); }
 .ki-room-title {
-  background: linear-gradient(135deg, #3949ab, #5c6bc0);
+  background: linear-gradient(135deg, var(--ki-secondary), color-mix(in srgb, var(--ki-secondary) 70%, white));
   color: #fff;
   font-weight: 600;
   font-size: 0.875rem;

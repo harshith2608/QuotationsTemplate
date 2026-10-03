@@ -1,5 +1,5 @@
 /**
- * Kundann Interiors – Dynamic Project Form
+ * Dynamic Project Form
  * Measurements are entered as Feet + Inches and converted to decimal feet for calculation.
  */
 
@@ -11,6 +11,10 @@ let roomCounter = 0;
 const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type, work_type } } } }
 let masterRooms = [];
 let masterItems = [];
+
+// Material catalogue — injected by templates/projects/form.html from app/catalog.py
+const CATALOG = window.KI_CATALOG || { woodTypes: [], workTypes: [], defaultWood: '', defaultWork: '' };
+const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 
 // ─── Draft Auto-Save ──────────────────────────────────────────────────────────
 // Only active on the New Quotation form (IS_DRAFT_FORM = true, set by template).
@@ -351,7 +355,7 @@ function openItemModal(rk) {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const comboEl = document.getElementById('modal_item_combo');
-  if (comboEl) comboEl.value = 'Laminates|Box Work';
+  if (comboEl) comboEl.value = DEFAULT_COMBO;
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
   const modal = new bootstrap.Modal(document.getElementById('itemModal'));
@@ -382,9 +386,9 @@ function saveItemFromModal() {
   const lIn  = parseFloat(document.getElementById('modal_item_lin')?.value) || 0;
   const wFt  = parseFloat(document.getElementById('modal_item_wft')?.value) || 0;
   const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
-  const combo = (document.getElementById('modal_item_combo')?.value || 'Laminates|Box Work').split('|');
-  const wood = combo[0] || 'Laminates';
-  const work = combo[1] || 'Box Work';
+  const combo = (document.getElementById('modal_item_combo')?.value || DEFAULT_COMBO).split('|');
+  const wood = combo[0] || CATALOG.defaultWood;
+  const work = combo[1] || CATALOG.defaultWork;
 
   _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work);
 
@@ -404,8 +408,8 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const lIn  = presetLIn  !== undefined ? presetLIn  : '';
   const wFt  = presetWFt  !== undefined ? presetWFt  : '';
   const wIn  = presetWIn  !== undefined ? presetWIn  : '';
-  const wood = presetWood || 'Laminates';
-  const work = presetWork || 'Box Work';
+  const wood = presetWood || CATALOG.defaultWood;
+  const work = presetWork || CATALOG.defaultWork;
   const name = presetName || '';
 
   const lDec = ftInToDecimal(lFt, lIn);
@@ -520,13 +524,13 @@ function onItemField(rk, ik) {
   const wDec = ftInToDecimal(wFt, wIn);
   const area  = parseFloat((lDec * wDec).toFixed(4));
 
-  const comboParts = (comboEl?.value || 'Laminates|Box Work').split('|');
+  const comboParts = (comboEl?.value || DEFAULT_COMBO).split('|');
   rooms[rk].items[ik] = {
     name:      nameEl?.value.trim() || '',
     lengthFt:  lFt, lengthIn: lIn,
     widthFt:   wFt, widthIn:  wIn,
-    wood_type: comboParts[0] || 'Laminates',
-    work_type: comboParts[1] || 'Box Work',
+    wood_type: comboParts[0] || CATALOG.defaultWood,
+    work_type: comboParts[1] || CATALOG.defaultWork,
     area
   };
 
@@ -725,14 +729,7 @@ function validateAndSubmit() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function buildComboOptions(wood, work) {
-  const combos = [
-    ['Acrylic',   'Box Work'],
-    ['Acrylic',   'Frame Work'],
-    ['Laminates', 'Box Work'],
-    ['Laminates', 'Frame Work'],
-    ['Veneer',    'Box Work'],
-    ['Veneer',    'Frame Work'],
-  ];
+  const combos = CATALOG.woodTypes.flatMap(w => CATALOG.workTypes.map(wk => [w, wk]));
   return combos.map(([w, wk]) => {
     const val = `${w}|${wk}`;
     const sel = (w === wood && wk === work) ? 'selected' : '';

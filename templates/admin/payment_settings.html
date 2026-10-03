@@ -108,7 +108,7 @@
             <div class="col-12 col-sm-6">
               <label class="form-label fw-medium small">Account Holder Name</label>
               <input type="text" name="account_name" class="form-control"
-                     placeholder="e.g. Kundan Interiors"
+                     placeholder="e.g. Acme Interiors"
                      value="{{ settings.account_name }}">
             </div>
             <div class="col-12 col-sm-6">
@@ -188,31 +188,39 @@
         </div>
         <div class="card-body">
           <p class="small text-muted mb-3">
-            These details appear in the header of every PDF quotation. Leave blank to use the default app name.
+            These details appear in the header of every PDF quotation, in emails and in WhatsApp messages.
+            Leave a field blank to use this deployment's default (shown as the placeholder).
           </p>
           <div class="row g-3">
             <div class="col-12 col-md-6">
               <label class="form-label fw-medium small">Company Name</label>
               <input type="text" name="company_name" class="form-control"
-                     placeholder="e.g. Kundann Interiors"
+                     placeholder="{{ env_defaults.company_name or 'e.g. Acme Interiors' }}"
                      value="{{ settings.company_name }}">
             </div>
             <div class="col-12 col-md-6">
               <label class="form-label fw-medium small">Mobile Number</label>
               <input type="text" name="company_mobile" class="form-control"
-                     placeholder="e.g. +91 98765 43210"
+                     placeholder="{{ env_defaults.company_mobile or 'e.g. +91 90000 00000' }}"
                      value="{{ settings.company_mobile }}">
             </div>
             <div class="col-12 col-md-6">
               <label class="form-label fw-medium small">Email</label>
               <input type="email" name="company_email" class="form-control"
-                     placeholder="e.g. info@kundanninteriors.com"
+                     placeholder="{{ env_defaults.company_email or 'e.g. hello@yourcompany.com' }}"
                      value="{{ settings.company_email }}">
             </div>
             <div class="col-12 col-md-6">
+              <label class="form-label fw-medium small">GSTIN <span class="text-muted">(optional)</span></label>
+              <input type="text" name="company_gstin" class="form-control text-uppercase"
+                     maxlength="15"
+                     placeholder="{{ env_defaults.company_gstin or 'e.g. 29ABCDE1234F1Z5' }}"
+                     value="{{ settings.company_gstin }}">
+            </div>
+            <div class="col-12">
               <label class="form-label fw-medium small">Address</label>
               <textarea name="company_address" class="form-control" rows="2"
-                        placeholder="e.g. 123, Main Street, Hyderabad - 500001">{{ settings.company_address }}</textarea>
+                        placeholder="{{ env_defaults.company_address or 'e.g. 12, Main Road, Your City - 000000' }}">{{ settings.company_address }}</textarea>
             </div>
           </div>
         </div>

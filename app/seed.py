@@ -1,0 +1,203 @@
+"""
+Database seeding.
+
+bootstrap()  — idempotent setup for a fresh deployment: first admin user
+               (from ADMIN_USERNAME / ADMIN_PASSWORD) and reference data
+               (rates, room names, item names). Safe to run on every deploy.
+
+seed_demo()  — fills the database with fictional "Demo Interiors" data for
+               demos and local development. All names, numbers and addresses
+               are made up.
+"""
+import os
+from datetime import datetime, timedelta
+
+from werkzeug.security import generate_password_hash
+
+from . import db, catalog
+from .models import (User, Project, ProjectAccess, Payment, AppSetting, WoodRate,
+                     WorkTypeRate, ItemRate, MasterRoom, MasterItem)
+
+
+class SeedError(Exception):
+    pass
+
+
+def _hash(password):
+    return generate_password_hash(password, method='pbkdf2:sha256')
+
+
+# ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+def seed_reference_data():
+    """Insert default rates, rooms and items into empty tables. Returns list of what was seeded."""
+    seeded = []
+    if not WoodRate.query.first():
+        db.session.add_all(WoodRate(wood_type=w, rate_per_sqft=r)
+                           for w, r in catalog.DEFAULT_WOOD_RATES.items())
+        seeded.append('wood rates')
+    if not WorkTypeRate.query.first():
+        db.session.add_all(WorkTypeRate(work_type=w, rate_per_sqft=r)
+                           for w, r in catalog.DEFAULT_WORK_TYPE_RATES.items())
+        seeded.append('work type rates')
+    if not ItemRate.query.first():
+        db.session.add_all(ItemRate(wood_type=wood, work_type=work,
+                                    rate_per_sqft=catalog.DEFAULT_ITEM_RATES.get(wood, 0.0))
+                           for wood in catalog.WOOD_TYPES for work in catalog.WORK_TYPES)
+        seeded.append('item rates')
+    if not MasterRoom.query.first():
+        db.session.add_all(MasterRoom(name=n) for n in catalog.DEFAULT_ROOMS)
+        seeded.append('room names')
+    if not MasterItem.query.first():
+        db.session.add_all(MasterItem(name=n) for n in catalog.DEFAULT_ITEMS)
+        seeded.append('item names')
+    db.session.commit()
+    return seeded
+
+
+def bootstrap():
+    """Create the first admin (if none) and seed reference data. Returns a list of log lines."""
+    log = []
+    if not User.query.filter_by(role='admin').first():
+        username = (os.environ.get('ADMIN_USERNAME') or 'admin').strip()
+        password = os.environ.get('ADMIN_PASSWORD') or ''
+        if len(password) < 8:
+            raise SeedError('No admin user exists. Set ADMIN_PASSWORD (min 8 characters) '
+                            'and optionally ADMIN_USERNAME, then run this again.')
+        db.session.add(User(username=username, password_hash=_hash(password), role='admin'))
+        db.session.commit()
+        log.append(f'Created admin user "{username}".')
+    else:
+        log.append('Admin user already exists — skipped.')
+
+    seeded = seed_reference_data()
+    log.append(f'Seeded: {", ".join(seeded)}.' if seeded else 'Reference data already present — skipped.')
+    return log
+
+
+# ── Demo data ─────────────────────────────────────────────────────────────────
+
+DEMO_SETTINGS = {
+    'company_name':    'Demo Interiors',
+    'company_address': '42, Sample Street, Demo Nagar\nBengaluru - 560001',
+    'company_mobile':  '+91 90000 00000',
+    'company_email':   'hello@demo-interiors.example',
+    'company_gstin':   '29ABCDE1234F1Z5',
+    'upi_id':          'demo-interiors@example',
+    'bank_name':       'Example Bank',
+    'account_name':    'Demo Interiors',
+    'account_number':  '000012345678',
+    'ifsc_code':       'EXMP0000001',
+    'material_specs':  '● Plywood: BWR grade, 18mm carcass\n'
+                       '● Hardware: soft-close hinges and telescopic channels\n'
+                       '● Edge banding: 2mm PVC, matched to laminate',
+}
+
+DEMO_USERS = [
+    # username, full name, role
+    ('demo-admin', 'Asha Demo',   'admin'),
+    ('demo-staff', 'Ravi Sample', 'employee'),
+]
+
+# customer, mobile, email, address, created_by, days_ago, discount, rooms, payments
+# rooms: [(room_name, [(item, length_ft, width_ft, wood, work), ...]), ...]
+DEMO_PROJECTS = [
+    ('Priya Example', '9000000001', 'priya@example.com', 'Flat 101, Example Residency, Bengaluru',
+     'demo-staff', 2, ('percentage', 5),
+     [('Master Bedroom', [('Wardrobe', 8, 7, 'Laminates', 'Box Work'),
+                          ('Loft', 8, 2, 'Laminates', 'Box Work'),
+                          ('Dressing Table', 3, 6, 'Acrylic', 'Frame Work')]),
+      ('Kitchen', [('Base Cabinet', 10, 2.75, 'Acrylic', 'Box Work'),
+                   ('Overhead Cabinet', 10, 2.5, 'Acrylic', 'Box Work')])],
+     [(50000, 'Advance payment')]),
+    ('Rahul Sample', '9000000002', 'rahul@example.com', 'Villa 7, Placeholder Gardens, Bengaluru',
+     'demo-admin', 9, ('none', 0),
+     [('Living Room', [('TV Unit', 9, 7, 'Veneer', 'Frame Work'),
+                       ('Wall Paneling', 12, 9, 'Veneer', 'Frame Work')]),
+      ('Pooja Room', [('Pooja Unit', 4, 6, 'Veneer', 'Box Work')])],
+     [(75000, 'Advance via UPI'), (40000, 'Second instalment')]),
+    ('Meera Test', '9000000003', 'meera@example.com', '',
+     'demo-staff', 15, ('fixed', 10000),
+     [('Kids Room', [('Study Table', 4, 2.5, 'Laminates', 'Frame Work'),
+                     ('Wardrobe', 6, 7, 'Laminates', 'Box Work'),
+                     ('Bed Box', 6.5, 5, 'Laminates', 'Box Work')])],
+     []),
+    ('Arjun Placeholder', '9000000004', 'arjun@example.com', 'House 12, Test Layout, Mysuru',
+     'demo-staff', 24, ('none', 0),
+     [('Entrance Foyer', [('Shoe Rack', 4, 3.5, 'Laminates', 'Box Work')]),
+      ('Dining Room', [('Crockery Unit', 5, 7, 'Acrylic', 'Frame Work')]),
+      ('Guest Bedroom', [('Wardrobe', 6, 7, 'Laminates', 'Box Work'),
+                         ('Headboard', 6, 3.5, 'Veneer', 'Frame Work')])],
+     [(30000, 'Token advance')]),
+    ('Kavya Demo', '9000000005', None, 'Apt 5B, Mock Towers, Bengaluru',
+     'demo-admin', 40, ('none', 0),
+     [('Study Room', [('Study Table', 5, 2.5, 'Veneer', 'Box Work'),
+                      ('Display Unit', 4, 6, 'Acrylic', 'Frame Work')]),
+      ('Bathroom', [('Vanity Cabinet', 3, 2.5, 'Acrylic', 'Box Work')])],
+     [(20000, 'Advance'), (29050, 'Balance — fully settled')]),
+]
+
+PLYWOOD_BY_PROJECT = ['18mm 8*4,12mm 8*4', '18mm 8*4,25mm Blackboard', '18mm 8*4', '', '12mm 8*4,6mm 8*4']
+
+
+def _clear_all_tables():
+    """Delete every row from every app table (keeps the schema and alembic_version)."""
+    for table in reversed(db.metadata.sorted_tables):
+        db.session.execute(table.delete())
+    db.session.commit()
+
+
+def seed_demo(reset=False, password=None):
+    """Populate the database with Demo Interiors data. Returns a list of log lines."""
+    from .projects import _save_project_data  # imported here to avoid a circular import
+
+    if Project.query.first() or User.query.first():
+        if not reset:
+            raise SeedError('Database already has data. Re-run with --reset to wipe it '
+                            'and load the demo data (this deletes everything).')
+        _clear_all_tables()
+
+    password = password or os.environ.get('DEMO_PASSWORD') or 'demo1234'
+    log = []
+
+    seed_reference_data()
+    for key, value in DEMO_SETTINGS.items():
+        AppSetting.set(key, value)
+
+    users = {}
+    for username, full_name, role in DEMO_USERS:
+        u = User(username=username, full_name=full_name, role=role, password_hash=_hash(password))
+        db.session.add(u)
+        users[username] = u
+    db.session.flush()
+    log.append(f'Users: {", ".join(users)} (password: {password})')
+
+    now = datetime.utcnow()
+    for idx, (customer, mobile, email, address, creator, days_ago,
+              (disc_type, disc_value), rooms, payments) in enumerate(DEMO_PROJECTS):
+        created = now - timedelta(days=days_ago)
+        project = Project(customer_name=customer, mobile=mobile, email=email,
+                          address=address or None, created_by=users[creator].id,
+                          discount_type=disc_type, discount_value=disc_value,
+                          plywood_thickness=PLYWOOD_BY_PROJECT[idx],
+                          status='complete', created_at=created, updated_at=created)
+        db.session.add(project)
+        db.session.flush()
+
+        rooms_data = [{'name': room, 'items': [
+            {'name': n, 'length': l, 'width': w, 'wood_type': wood, 'work_type': work}
+            for n, l, w, wood, work in items]} for room, items in rooms]
+        project.grand_total = _save_project_data(project, rooms_data)
+
+        if not users[creator].is_admin:
+            db.session.add(ProjectAccess(project_id=project.id, user_id=users[creator].id,
+                                         granted_by=users[creator].id))
+        for p_idx, (amount, note) in enumerate(payments):
+            db.session.add(Payment(project_id=project.id, amount=amount, note=note,
+                                   recorded_by=users['demo-admin'].id, source='manual',
+                                   recorded_at=created + timedelta(days=p_idx + 1)))
+
+    db.session.commit()
+    log.append(f'Projects: {len(DEMO_PROJECTS)} quotations with rooms, items and payments.')
+    log.append('Company settings: Demo Interiors (fictional address, GSTIN, UPI and bank details).')
+    return log

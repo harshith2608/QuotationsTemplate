@@ -3,8 +3,8 @@
 
 {% block head %}
 <style>
-  .room-card { border-left: 4px solid #3949ab; }
-  .room-card .card-header { background: #e8eaf6; color: #1a237e; font-weight: 600; }
+  .room-card { border-left: 4px solid var(--ki-secondary); }
+  .room-card .card-header { background: var(--ki-light); color: var(--ki-primary); font-weight: 600; }
   .item-row td { vertical-align: middle; }
   @media (min-width: 992px) {
     .summary-panel { position: sticky; top: 70px; }
@@ -155,8 +155,7 @@
         </div>
         <div class="card-body py-2">
           <p class="small text-muted mb-2">Select all plywood types used in this project.</p>
-          {% set ply_options = ['18mm 8*4', '12mm 8*4', '6mm 8*4', '25mm Blackboard', '18mm Blackboard'] %}
-          {% for opt in ply_options %}
+          {% for opt in catalog.PLYWOOD_OPTIONS %}
           {% set opt_id = 'ply_' ~ loop.index %}
           <div class="form-check mb-1">
             <input class="form-check-input" type="checkbox" name="plywood_thickness"
@@ -309,12 +308,9 @@
         <div class="mb-3">
           <label class="form-label fw-medium small mb-1">Material &amp; Work Type</label>
           <select class="form-select" id="modal_item_combo">
-            <option value="Acrylic|Box Work">Acrylic – Box Work</option>
-            <option value="Acrylic|Frame Work">Acrylic – Frame Work</option>
-            <option value="Laminates|Box Work" selected>Laminates – Box Work</option>
-            <option value="Laminates|Frame Work">Laminates – Frame Work</option>
-            <option value="Veneer|Box Work">Veneer – Box Work</option>
-            <option value="Veneer|Frame Work">Veneer – Frame Work</option>
+            {% for wood in catalog.WOOD_TYPES %}{% for work in catalog.WORK_TYPES %}
+            <option value="{{ wood }}|{{ work }}"{% if wood == catalog.DEFAULT_WOOD and work == catalog.DEFAULT_WORK %} selected{% endif %}>{{ wood }} – {{ work }}</option>
+            {% endfor %}{% endfor %}
           </select>
         </div>
         <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
@@ -334,5 +330,13 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  window.KI_CATALOG = {
+    woodTypes:   {{ catalog.WOOD_TYPES|tojson }},
+    workTypes:   {{ catalog.WORK_TYPES|tojson }},
+    defaultWood: {{ catalog.DEFAULT_WOOD|tojson }},
+    defaultWork: {{ catalog.DEFAULT_WORK|tojson }}
+  };
+</script>
 <script src="{{ url_for('static', filename='js/project_form.js') }}"></script>
 {% endblock %}

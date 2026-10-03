@@ -1,15 +1,19 @@
+import os
 from io import BytesIO
+from xml.sax.saxutils import escape
+from flask import current_app
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, HRFlowable)
+                                 TableStyle, HRFlowable, Image)
+from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from .models import AppSetting
+from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WORK
+from .branding import get_brand, STATIC_BRAND, tint
 
-WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
-WORK_TYPES = ['Box Work', 'Frame Work']
 
 DEFAULT_TERMS = (
     "1. This is a preliminary estimate. Final price may vary based on site conditions and material selection.\n"
@@ -42,15 +46,60 @@ def ft_in(decimal_ft):
         return f"{feet} ft"
     return f"{feet} ft {inches} in"
 
-# Brand colors
-BRAND_DARK = colors.HexColor('#1a237e')
-BRAND_ACCENT = colors.HexColor('#f57f17')
-BRAND_LIGHT = colors.HexColor('#e8eaf6')
+# Brand colors (from BRAND_PRIMARY / BRAND_ACCENT env vars)
+_PRIMARY = STATIC_BRAND['primary']
+BRAND_DARK = colors.HexColor(_PRIMARY)
+BRAND_ACCENT = colors.HexColor(STATIC_BRAND['accent'])
+BRAND_LIGHT = colors.HexColor(tint(_PRIMARY, 0.9))
 GREY_BG = colors.HexColor('#f5f5f5')
-TABLE_HEADER_BG = colors.HexColor('#dde3f5')
-ROOM_HEADER_BG  = colors.HexColor('#c5cef0')
-TABLE_HEADER_FG = colors.HexColor('#1a237e')
-TOTAL_ROW_BG    = colors.HexColor('#c5cef0')
+TABLE_HEADER_BG = colors.HexColor(tint(_PRIMARY, 0.85))
+ROOM_HEADER_BG  = colors.HexColor(tint(_PRIMARY, 0.75))
+TABLE_HEADER_FG = BRAND_DARK
+TOTAL_ROW_BG    = ROOM_HEADER_BG
+
+
+def _logo_flowable(brand, max_height=1.6 * cm, max_width=6 * cm):
+    """Return a reportlab Image for LOGO_FILE (PNG/JPG under static/), or None."""
+    if not brand.get('logo_file'):
+        return None
+    path = os.path.join(current_app.static_folder, brand['logo_file'])
+    try:
+        w, h = ImageReader(path).getSize()
+    except Exception:
+        current_app.logger.warning(f'LOGO_FILE could not be loaded for PDF: {path}')
+        return None
+    scale = min(max_height / h, max_width / w)
+    return Image(path, width=w * scale, height=h * scale)
+
+
+def _header_elements(title_style, subtitle_style):
+    """Logo, company name, contact line and accent rule shared by both PDFs."""
+    brand = get_brand()
+    elements = []
+    logo = _logo_flowable(brand)
+    if logo:
+        elements += [logo, Spacer(1, 4)]
+    elements.append(Paragraph(escape(brand['name']), title_style))
+    parts = []
+    if brand['address']: parts.append(brand['address'].replace('\n', ', '))
+    if brand['phone']:   parts.append(f"Ph: {brand['phone']}")
+    if brand['email']:   parts.append(brand['email'])
+    subtitle = '  |  '.join(parts) if parts else brand['tagline']
+    elements.append(Paragraph(escape(subtitle), subtitle_style))
+    if brand['gstin']:
+        elements.append(Paragraph(f"GSTIN: {escape(brand['gstin'])}", subtitle_style))
+    elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
+    return elements
+
+
+def _thank_you_text():
+    return (f"Thank you for choosing <b>{escape(get_brand()['name'])}</b>. "
+            "We look forward to transforming your space!")
+
+
+def _signatory():
+    brand = get_brand()
+    return escape(brand['signatory_name']), escape(brand['signatory_title'])
 
 
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
@@ -105,18 +154,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # -------  HEADER -------
-    _co_name    = AppSetting.get('company_name',    '') or 'Kundann Interiors'
-    _co_address = AppSetting.get('company_address', '')
-    _co_mobile  = AppSetting.get('company_mobile',  '')
-    _co_email   = AppSetting.get('company_email',   '')
-    elements.append(Paragraph(_co_name, title_style))
-    _subtitle_parts = []
-    if _co_address: _subtitle_parts.append(_co_address.replace('\n', ', '))
-    if _co_mobile:  _subtitle_parts.append(f'Ph: {_co_mobile}')
-    if _co_email:   _subtitle_parts.append(_co_email)
-    _subtitle_text = '  |  '.join(_subtitle_parts) if _subtitle_parts else 'Premium Interior Design &amp; Furnishing Solutions'
-    elements.append(Paragraph(_subtitle_text, subtitle_style))
-    elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
+    elements += _header_elements(title_style, subtitle_style)
 
     # QUOTATION LABEL
     quot_header = Table(
@@ -204,7 +242,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         room_total_area = 0.0
         room_total_cost = 0.0
         for item in room.items.all():
-            work_type  = getattr(item, 'work_type', 'Box Work')
+            work_type  = getattr(item, 'work_type', DEFAULT_WORK)
             rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
             subtotal   = item.area * rate
             room_total_area += item.area
@@ -287,7 +325,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8eaf6')),
+        ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('TEXTCOLOR', (2, -1), (-1, -1), BRAND_DARK),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
@@ -386,7 +424,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        f"Thank you for choosing <b>{AppSetting.get('company_name','') or 'Kundann Interiors'}</b>. We look forward to transforming your space!",
+        _thank_you_text(),
         ParagraphStyle('Footer', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
     ))
@@ -455,13 +493,14 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                                      fontSize=8, textColor=colors.HexColor('#757575'))
     sig_col = page_width * 0.42
     sig_gap = page_width * 0.16
+    _sig_name, _sig_title = _signatory()
     sig_table = Table(
         [
             ['', '', ''],
             [Paragraph(project.customer_name, _sig_name_style), '',
-             Paragraph('Kundan Interior', _sig_name_style)],
+             Paragraph(_sig_name, _sig_name_style)],
             [Paragraph('Customer', _sig_role_style), '',
-             Paragraph('Proprietor', _sig_role_style)],
+             Paragraph(_sig_title, _sig_role_style)],
         ],
         colWidths=[sig_col, sig_gap, sig_col]
     )
@@ -527,18 +566,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # ------- HEADER -------
-    _co_name2    = AppSetting.get('company_name',    '') or 'Kundann Interiors'
-    _co_address2 = AppSetting.get('company_address', '')
-    _co_mobile2  = AppSetting.get('company_mobile',  '')
-    _co_email2   = AppSetting.get('company_email',   '')
-    elements.append(Paragraph(_co_name2, title_style))
-    _subtitle_parts2 = []
-    if _co_address2: _subtitle_parts2.append(_co_address2.replace('\n', ', '))
-    if _co_mobile2:  _subtitle_parts2.append(f'Ph: {_co_mobile2}')
-    if _co_email2:   _subtitle_parts2.append(_co_email2)
-    _subtitle_text2 = '  |  '.join(_subtitle_parts2) if _subtitle_parts2 else 'Premium Interior Design &amp; Furnishing Solutions'
-    elements.append(Paragraph(_subtitle_text2, subtitle_style))
-    elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
+    elements += _header_elements(title_style, subtitle_style)
 
     # QUOTATION LABEL
     quot_header = Table(
@@ -627,7 +655,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8eaf6')),
+        ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
@@ -721,7 +749,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        f"Thank you for choosing <b>{AppSetting.get('company_name','') or 'Kundann Interiors'}</b>. We look forward to transforming your space!",
+        _thank_you_text(),
         ParagraphStyle('Footer2', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
     ))
@@ -771,13 +799,14 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                                       fontSize=8, textColor=colors.HexColor('#757575'))
     sig_col2 = page_width * 0.42
     sig_gap2 = page_width * 0.16
+    _sig_name2, _sig_title2 = _signatory()
     sig_table2 = Table(
         [
             ['', '', ''],
             [Paragraph(project.customer_name, _sig_name_style2), '',
-             Paragraph('Kundan Interior', _sig_name_style2)],
+             Paragraph(_sig_name2, _sig_name_style2)],
             [Paragraph('Customer', _sig_role_style2), '',
-             Paragraph('Proprietor', _sig_role_style2)],
+             Paragraph(_sig_title2, _sig_role_style2)],
         ],
         colWidths=[sig_col2, sig_gap2, sig_col2]
     )

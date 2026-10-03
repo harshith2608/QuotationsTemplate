@@ -1,8 +1,8 @@
-# Kundann Interiors — Quotation & Project Management System
+# Interior Quotation App — White-Label Template
 
-A full-stack web application built for **Kundann Interiors**, an interior design business. It allows admin and employee users to create detailed wood-work quotations, track payments, generate PDF documents, and share them with customers via WhatsApp.
+A Flask application for interior design businesses to create wood-work quotations, track payments, generate branded PDF quotations and share them with customers on WhatsApp.
 
-Live deployment: [Vercel](https://vercel.com) · Database: [Neon PostgreSQL](https://neon.tech)
+This repository is a **template**: each client gets their own deployment with their own branding (set by environment variables) and their own Postgres database (`DATABASE_URL`). Nothing business-specific is hardcoded.
 
 ---
 
@@ -10,54 +10,28 @@ Live deployment: [Vercel](https://vercel.com) · Database: [Neon PostgreSQL](htt
 
 ### Quotation Management
 - Create quotations with customer details, rooms, and items (length × width → sqft)
-- Material types: **Acrylic**, **Laminates**, **Veneer**
-- Work types: **Box Work**, **Frame Work**
+- Material types: **Acrylic**, **Laminates**, **Veneer** · Work types: **Box Work**, **Frame Work** (defined once in `app/catalog.py`)
 - Auto-calculates area and cost per item using admin-configured rates
 - Discount support — percentage or fixed amount
-- Live cost summary updates as rooms/items are added
-- **Plywood thickness selection** (18mm 8×4, 12mm 8×4, 6mm 8×4, 25mm Blackboard, 18mm Blackboard)
-- **Live plywood board estimate** — calculates approximate number of 8×4 ft boards needed based on total project area (32 sqft per board)
-- Auto-save draft while editing; promoted to complete on final save
-- Search, paginate, and filter quotations
+- Live cost summary and plywood board estimate (8×4 ft boards) as rooms/items are added
+- Auto-save draft while editing; search, paginate, and filter quotations
 
 ### PDF Generation
 Two PDF formats via **ReportLab Platypus**:
 
 | PDF Type | Contents |
 |---|---|
-| **Internal PDF** | Full room-by-room breakdown with rates, combo cost summary, total area, plywood used, material specs, T&C, signature section, payment details |
-| **Customer PDF** | Simplified view without per-item rates, shows final total, plywood used, material specs, T&C, signature section |
+| **Internal PDF** | Full room-by-room breakdown with rates, cost summary, total area, plywood used, material specs, T&C, signature section, payment details |
+| **Customer PDF** | Simplified view without per-item rates: final total, plywood used, material specs, T&C, signature section |
 
-Both PDFs include:
-- Company header (name, address, mobile, email — configurable from admin)
-- Total area (sqft) alongside final total
-- **Signature section** — customer name (left) and Kundan Interior / Proprietor (right)
-- Plywood Used section (if selected)
-- Material Specifications (if configured)
-- Terms & Conditions (admin-editable)
+Both PDFs carry the client's logo, company name, address, phone, email, GSTIN, brand colours and signatory.
 
-### Payment Tracking
-- Record manual payments with notes
-- **Razorpay Payment Links** — generate and send payment links to customers
-- **Razorpay Webhook** — auto-records payments on `payment_link.paid` event with HMAC-SHA256 signature verification
-- Payment status bar showing amount paid vs. balance due
+### Payments, Sharing, Admin
+- Manual payments, **Razorpay Payment Links** and a signed **Razorpay webhook** that auto-records payments
 - Email notifications (SMTP) to admin and customer on auto-payment
-
-### WhatsApp Sharing
-- One-click WhatsApp share with pre-formatted project summary including customer details, room breakdown, total, and payment link
-
-### Admin Panel
-- **Dashboard** — employee performance stats, wood type distribution chart, room type distribution, overall KPIs
-- **User Management** — create/rename/delete employees and admins, change passwords
-- **Rates** — configure per-sqft rates for each wood × work type combination
-- **App Settings** — Razorpay API keys, webhook secret, UPI ID, bank account details, SMTP email, company details, material specifications, terms & conditions
-- **Employee Access Control** — grant/revoke employee access to specific quotations
-- **Notifications** — in-app alerts for auto-payments received
-
-### Access Control
-- Role-based: `admin` and `employee`
-- Employees see only their own quotations (unless access is granted by admin)
-- Admin-only actions: delete quotation, add/delete payments, generate payment links, manage users, access settings
+- One-click WhatsApp share with a formatted quotation summary
+- Admin dashboard, user management, rates, payment/company settings, per-quotation employee access, notifications
+- Role-based access: `admin` and `employee`
 
 ---
 
@@ -65,199 +39,152 @@ Both PDFs include:
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3 · Flask 3.0 (Application Factory + Blueprints) |
-| ORM | SQLAlchemy 3 (Flask-SQLAlchemy) |
-| Database | SQLite (development) · PostgreSQL via Neon (production) |
-| Auth | Flask-Login · PBKDF2-SHA256 password hashing · Flask-WTF CSRF |
-| PDF | ReportLab Platypus (SimpleDocTemplate, Flowables, TableStyle) |
-| Payments | Razorpay Payment Links API + Webhook |
-| Static Files | WhiteNoise (serves static files through WSGI — no separate CDN needed) |
-| Frontend | Bootstrap 5 · Bootstrap Icons · Vanilla JS |
-| Deployment | Vercel (`@vercel/python` serverless) |
+| Backend | Python 3.12 · Flask 3.0 (application factory + blueprints) |
+| ORM / migrations | Flask-SQLAlchemy · Flask-Migrate (Alembic) |
+| Database | PostgreSQL per deployment (Neon / Supabase / Render) · SQLite for local dev |
+| Auth | Flask-Login · PBKDF2-SHA256 · Flask-WTF CSRF |
+| PDF | ReportLab Platypus |
+| Payments | Razorpay Payment Links API + webhook |
+| Frontend | Bootstrap 5 · Bootstrap Icons · vanilla JS |
+| Hosting | Vercel, Render or any Procfile host (Gunicorn + WhiteNoise) |
+
+---
+
+## Configuration
+
+All configuration is via environment variables. Copy `.env.example` to `.env` for local development (it is loaded automatically); set them in your host's dashboard in production.
+
+### Core
+
+| Variable | Required | Description |
+|---|---|---|
+| `SECRET_KEY` | production | Long random string. `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `DATABASE_URL` | production | This deployment's Postgres URL. Unset locally → SQLite `app.db` |
+| `FLASK_ENV` | | `production` when deployed (default `development`) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | first deploy | First admin, created by `flask bootstrap` if no admin exists (password ≥ 8 chars) |
+
+The app refuses to start with `FLASK_ENV=production` unless `SECRET_KEY` and `DATABASE_URL` are set.
+
+### Branding
+
+| Variable | Default | Used in |
+|---|---|---|
+| `COMPANY_NAME` | `Your Company Name` | Navbar, page titles, login, PDFs, emails, WhatsApp, Razorpay link description |
+| `COMPANY_ADDRESS` | — | PDF header |
+| `COMPANY_PHONE` | — | PDF header |
+| `COMPANY_EMAIL` | — | PDF header |
+| `COMPANY_GSTIN` | — | PDF header (shown only when set) |
+| `COMPANY_TAGLINE` | `Interior Design & Furnishing Solutions` | Footer; PDF subtitle when no contact details are set |
+| `SIGNATORY_NAME` | `COMPANY_NAME` | PDF signature block |
+| `SIGNATORY_TITLE` | `Proprietor` | PDF signature block |
+| `BRAND_PRIMARY` | `#1a237e` | Navbar, buttons, headings, PDF tables, favicon |
+| `BRAND_SECONDARY` | `#283593` | Gradients, room headers |
+| `BRAND_ACCENT` | `#f57f17` | PDF accent rules |
+| `LOGO_FILE` | — | Path under `static/`, e.g. `brand/logo.png`. PNG/JPG for PDF support |
+
+**Company details can also be edited by an admin** in *Admin → Payment Settings*. A value saved there overrides the env var; clearing the field falls back to the env var (shown as the placeholder). Colours, logo, tagline and signatory are env-only.
+
+Razorpay keys, UPI/bank details, SMTP, material specifications and T&C are entered by the admin in *Admin → Payment Settings* and stored in the database.
+
+---
+
+## Local Development
+
+```bash
+python3 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env              # then edit; leave DATABASE_URL unset to use SQLite
+
+flask db upgrade                  # create tables
+flask seed-demo                   # load fictional "Demo Interiors" data
+python run.py                     # http://localhost:5000
+```
+
+Log in as `demo-admin` or `demo-staff` with password `demo1234` (or `$DEMO_PASSWORD`).
+
+To start with an empty database instead of demo data, run `flask bootstrap` (with `ADMIN_PASSWORD` set) instead of `flask seed-demo`.
+
+### CLI commands
+
+| Command | What it does |
+|---|---|
+| `flask db upgrade` | Apply database migrations (safe to run repeatedly) |
+| `flask bootstrap` | Create the first admin from `ADMIN_USERNAME`/`ADMIN_PASSWORD` if none exists; seed default rates, room and item names into empty tables. Idempotent |
+| `flask seed-demo` | Load Demo Interiors users, 5 quotations, payments and company settings. Refuses if the DB already has data |
+| `flask seed-demo --reset` | Wipe **all** data, then load demo data (asks for confirmation) |
+| `flask seed-demo --force` | Allow running with `FLASK_ENV=production` |
+
+All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictional.
+
+---
+
+## Deploying for a New Client
+
+1. **Create a Postgres database** for the client (Neon, Supabase or Render Postgres) and copy its connection URL.
+2. **Add branding** — set the branding env vars; optionally commit the client's logo to `static/brand/` and set `LOGO_FILE`.
+3. **Set core env vars** — `FLASK_ENV=production`, `SECRET_KEY`, `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
+4. **Initialise the database** — `flask db upgrade && flask bootstrap`.
+   - **Render**: `render.yaml` runs both on every start. Rename the service and database first.
+   - **Heroku-style hosts**: the `release:` line in `Procfile` runs both on each deploy.
+   - **Vercel** (no release hook): run once from your machine against the client DB:
+     ```bash
+     DATABASE_URL="postgresql://..." ADMIN_PASSWORD="..." flask db upgrade
+     DATABASE_URL="postgresql://..." ADMIN_PASSWORD="..." flask bootstrap
+     ```
+5. **Log in as the admin** and fill in *Payment Settings* (UPI/bank, Razorpay, SMTP, T&C) and *Rates*.
+
+---
+
+## Database Migrations
+
+The schema is managed by Flask-Migrate (Alembic) in `migrations/`. When you change `app/models.py`:
+
+```bash
+flask db migrate -m "describe the change"   # generates migrations/versions/xxxx.py — review it
+flask db upgrade                            # apply locally
+```
+
+Commit the new migration file. Every deployment picks it up on its next `flask db upgrade`. No manual `ALTER TABLE` needed.
+
+**Adopting an existing database** that was created before migrations existed (tables already present): run `flask db stamp head` once against it to mark it as up to date, then use `flask db upgrade` from then on.
 
 ---
 
 ## Project Structure
 
 ```
-kundanns-interiors/
 ├── app/
-│   ├── __init__.py          # Application factory, blueprint registration, seed DB
-│   ├── models.py            # SQLAlchemy models (User, Project, Room, Item, Payment, ...)
-│   ├── auth.py              # Login / logout routes
-│   ├── main.py              # Root redirect, error handlers (403, 404, 500)
-│   ├── projects.py          # Quotation CRUD, PDF download, WhatsApp, payments, webhook
-│   ├── admin_bp.py          # Admin dashboard, users, rates, app settings
-│   ├── api.py               # Internal JSON API (master rooms/items, wood rates, draft save)
-│   ├── pdf_utils.py         # ReportLab PDF generation (internal + customer PDF)
-│   ├── forms.py             # WTForms definitions
-│   └── decorators.py        # @admin_required decorator
-├── templates/
-│   ├── base.html            # Shared layout, navbar, flash messages
-│   ├── auth/                # Login page
-│   ├── projects/            # list, form (create/edit), view
-│   ├── admin/               # dashboard, users, rates, payment_settings, notifications
-│   └── errors/              # 403, 404, 500 pages
+│   ├── __init__.py      # Application factory, extensions, template globals
+│   ├── branding.py      # Env-driven branding + admin overrides (get_brand)
+│   ├── catalog.py       # Materials, work types, plywood options, default reference data
+│   ├── seed.py          # bootstrap() and seed_demo()
+│   ├── cli.py           # flask bootstrap / flask seed-demo
+│   ├── models.py        # SQLAlchemy models
+│   ├── auth.py          # Login / logout
+│   ├── main.py          # Root redirect, favicon, error handlers
+│   ├── projects.py      # Quotation CRUD, PDFs, WhatsApp, payments, Razorpay webhook
+│   ├── admin_bp.py      # Admin dashboard, users, rates, settings
+│   ├── api.py           # Internal JSON API
+│   ├── pdf_utils.py     # ReportLab PDF generation
+│   ├── forms.py         # WTForms
+│   └── decorators.py    # @admin_required
+├── migrations/          # Alembic migration scripts
+├── templates/           # Jinja templates (base, auth, projects, admin, errors)
 ├── static/
-│   ├── css/style.css        # Custom styles, brand colours
-│   └── js/project_form.js   # Live cost summary, room/item management, auto-save draft
-├── config.py                # Dev/Prod config classes (SECRET_KEY, DB URL, cookies)
-├── run.py                   # App entry point
-├── requirements.txt         # Python dependencies
-├── vercel.json              # Vercel deployment config
-├── render.yaml              # Render deployment config (alternative)
-└── Procfile                 # Gunicorn entry (Render/Heroku)
+│   ├── brand/           # Put client logos here
+│   ├── css/style.css
+│   └── js/project_form.js
+├── config.py            # Config classes, .env loading
+├── run.py               # Entry point
+├── .env.example         # All supported env vars
+├── render.yaml · vercel.json · Procfile
+└── requirements.txt
 ```
 
----
+### Data model
 
-## Database Schema
-
-### `users`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| username | String(80) | unique |
-| full_name | String(120) | optional display name |
-| password_hash | String(256) | PBKDF2-SHA256 |
-| role | String(20) | `admin` or `employee` |
-| created_at | DateTime | |
-
-### `projects`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| customer_name | String(100) | |
-| mobile | String(20) | |
-| email | String(100) | optional |
-| address | Text | optional |
-| created_by | FK → users.id | |
-| grand_total | Float | sum of all item costs |
-| discount_type | String(20) | `none`, `percentage`, `fixed` |
-| discount_value | Float | |
-| status | String(20) | `complete` or `draft` |
-| plywood_thickness | Text | comma-separated selected options |
-| created_at | DateTime | |
-| updated_at | DateTime | auto-updated on save |
-
-### `rooms`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | FK → projects.id | CASCADE delete |
-| name | String(100) | e.g. "Master Bedroom" |
-
-### `items`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| room_id | FK → rooms.id | CASCADE delete |
-| name | String(100) | e.g. "Wardrobe" |
-| length | Float | decimal feet |
-| width | Float | decimal feet |
-| area | Float | length × width (sqft) |
-| wood_type | String(50) | Acrylic / Laminates / Veneer |
-| work_type | String(50) | Box Work / Frame Work |
-
-### `item_rates`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| wood_type | String(50) | |
-| work_type | String(50) | |
-| rate_per_sqft | Float | unique per (wood_type, work_type) |
-
-### `payments`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | FK → projects.id | CASCADE delete |
-| amount | Float | |
-| note | String(200) | optional |
-| recorded_by | FK → users.id | |
-| recorded_at | DateTime | |
-| source | String(20) | `manual` or `razorpay` |
-| razorpay_payment_id | String(100) | unique, from webhook |
-
-### `payment_links`
-| Column | Type | Notes |
-|---|---|---|
-| id | Integer PK | |
-| project_id | FK → projects.id | CASCADE delete |
-| razorpay_link_id | String(100) | unique |
-| amount | Float | |
-| created_at | DateTime | |
-
-### `app_settings`
-| Column | Type | Notes |
-|---|---|---|
-| key | String(100) PK | setting name |
-| value | Text | setting value |
-
-Key settings: `razorpay_key_id`, `razorpay_key_secret`, `webhook_secret`, `upi_id`, `bank_name`, `account_name`, `account_number`, `ifsc_code`, `admin_email`, `smtp_*`, `company_*`, `material_specs`, `terms_conditions`
-
-### Other tables
-- **`master_rooms`** / **`master_items`** — autocomplete suggestions for room/item names
-- **`project_access`** — grants employee access to quotations they didn't create
-- **`project_edit_logs`** — tracks who last edited a quotation
-- **`notifications`** — in-app alerts for admin (e.g. auto-payment received)
-
----
-
-## Local Development Setup
-
-### 1. Clone the repo
-```bash
-git clone https://github.com/harshith2608/Kundan-interiors.git
-cd Kundan-interiors
-```
-
-### 2. Create a virtual environment
-```bash
-python3 -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Run the app
-```bash
-python run.py
-```
-
-The app starts at `http://localhost:5000`. On first run it:
-- Creates `kundans_interiors.db` (SQLite)
-- Seeds a default admin user: **username** `admin` / **password** `admin123`
-- Seeds default room names, item names, and item rates
-
-### 4. Environment variables (optional for local)
-```env
-FLASK_ENV=development
-SECRET_KEY=your-secret-key
-DATABASE_URL=sqlite:///kundans_interiors.db
-```
-
----
-
-## Production Deployment (Vercel + Neon)
-
-### 1. Set environment variables in Vercel dashboard
-```env
-FLASK_ENV=production
-SECRET_KEY=<strong-random-secret>
-DATABASE_URL=postgresql://user:pass@host/dbname?sslmode=require
-```
-
-### 2. Deploy
-Push to GitHub — Vercel auto-deploys on every push to `main`.
-
-### 3. Database migrations
-Since there is no migration tool, new columns must be added manually on Neon:
-```sql
--- Example: adding a new column
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS plywood_thickness TEXT DEFAULT '';
-```
-
-Run SQL from the [Neon console](https://console.neon.tech) → your project → SQL Editor.
+`users`, `projects`, `rooms`, `items`, `item_rates` (rate per material × work type), `payments`, `payment_links`, `notifications`, `project_access`, `project_edit_logs`, `master_rooms` / `master_items` (autocomplete), `app_settings` (key-value store for admin settings), plus legacy `wood_rates` / `work_type_rates`. See `app/models.py`.
 
 ---
 
@@ -265,9 +192,9 @@ Run SQL from the [Neon console](https://console.neon.tech) → your project → 
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/master-rooms` | JSON list of room name suggestions |
-| GET | `/api/master-items` | JSON list of item name suggestions |
-| GET | `/api/wood-rates` | JSON map of `wood_type: rate` |
+| GET | `/api/master-rooms` | Room name suggestions |
+| GET | `/api/master-items` | Item name suggestions |
+| GET | `/api/wood-rates` | Map of `wood_type: rate` |
 | POST | `/api/draft` | Auto-save project as draft |
 | POST | `/webhook/razorpay` | Razorpay payment webhook |
 
@@ -275,15 +202,17 @@ Run SQL from the [Neon console](https://console.neon.tech) → your project → 
 
 ## Security
 
-- **CSRF protection** on all forms via Flask-WTF
-- **PBKDF2-SHA256** password hashing (Werkzeug)
-- **HMAC-SHA256** webhook signature verification for Razorpay
-- **Role-based access control** — admin-only routes guarded by `@admin_required`
-- **Session cookies** — `Secure`, `HttpOnly`, `SameSite=Lax` in production
-- **WhiteNoise** serves static files directly — no separate static server needed
+- CSRF protection on all forms (Flask-WTF)
+- PBKDF2-SHA256 password hashing; no default admin password — the first admin comes from `ADMIN_PASSWORD`
+- HMAC-SHA256 verification of Razorpay webhooks
+- Role-based access control; admin routes guarded by `@admin_required`
+- Secure, HttpOnly, SameSite=Lax session cookies in production
+- Brand colours are validated as `#rrggbb` before being injected into CSS
+
+Note: Razorpay secrets and the SMTP password entered in Payment Settings are stored unencrypted in the `app_settings` table — restrict database access accordingly.
 
 ---
 
 ## License
 
-This project is proprietary software built for Kundann Interiors. All rights reserved.
+Add your license here.

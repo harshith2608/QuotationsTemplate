@@ -1,12 +1,15 @@
+import os
 from datetime import datetime
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from whitenoise import WhiteNoise
 from config import config
 
 db = SQLAlchemy()
+migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 
@@ -16,10 +19,16 @@ login_manager.login_message_category = 'warning'
 
 
 def create_app(config_name='default'):
+    cfg = config[config_name]
+    missing = [k for k in getattr(cfg, 'REQUIRED_ENV', ()) if not os.environ.get(k)]
+    if missing:
+        raise RuntimeError(f"Missing required environment variable(s): {', '.join(missing)}")
+
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
-    app.config.from_object(config[config_name])
+    app.config.from_object(cfg)
 
     db.init_app(app)
+    migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
 
@@ -71,90 +80,12 @@ def create_app(config_name='default'):
                 unread_count = Notification.query.filter_by(is_read=False).count()
             except Exception:
                 pass
-        return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count}
+        from . import catalog
+        from .branding import get_brand
+        return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count,
+                'brand': get_brand(), 'catalog': catalog}
 
-    with app.app_context():
-        try:
-            db.create_all()
-            # Only seed on first-run / dev — skip in production where data already exists
-            if config_name in ('development', 'default'):
-                _seed_database()
-            else:
-                # In production, try to seed but don't crash the app if DB is slow
-                try:
-                    _seed_database()
-                except Exception:
-                    pass
-        except Exception:
-            # DB may be paused/unreachable at cold start; app will still boot
-            pass
+    from .cli import register_cli
+    register_cli(app)
 
     return app
-
-
-def _seed_database():
-    from .models import User, WoodRate, WorkTypeRate, MasterRoom, MasterItem, ItemRate
-    from werkzeug.security import generate_password_hash
-
-    # Create default admin if none exists
-    if not User.query.filter_by(role='admin').first():
-        admin = User(
-            username='admin',
-            password_hash=generate_password_hash('admin123', method='pbkdf2:sha256'),
-            role='admin'
-        )
-        db.session.add(admin)
-        db.session.commit()
-
-    # Seed wood rates if empty
-    if not WoodRate.query.first():
-        rates = [
-            WoodRate(wood_type='Acrylic', rate_per_sqft=1200.0),
-            WoodRate(wood_type='Laminates', rate_per_sqft=800.0),
-            WoodRate(wood_type='Veneer', rate_per_sqft=1500.0),
-        ]
-        db.session.bulk_save_objects(rates)
-        db.session.commit()
-
-    # Seed work type rates if empty
-    if not WorkTypeRate.query.first():
-        work_rates = [
-            WorkTypeRate(work_type='Box Work',   rate_per_sqft=500.0),
-            WorkTypeRate(work_type='Frame Work', rate_per_sqft=300.0),
-        ]
-        db.session.bulk_save_objects(work_rates)
-        db.session.commit()
-
-    # Seed item rates (combined wood+work) if empty
-    WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
-    WORK_TYPES = ['Box Work', 'Frame Work']
-    if not ItemRate.query.first():
-        wood_rate_map = {r.wood_type: r.rate_per_sqft for r in WoodRate.query.all()}
-        defaults = {'Acrylic': 1200.0, 'Laminates': 850.0, 'Veneer': 900.0}
-        for wt in WOOD_TYPES:
-            rate = wood_rate_map.get(wt, defaults.get(wt, 0.0))
-            for wk in WORK_TYPES:
-                db.session.add(ItemRate(wood_type=wt, work_type=wk, rate_per_sqft=rate))
-        db.session.commit()
-
-    # Seed master rooms if empty
-    if not MasterRoom.query.first():
-        rooms = [
-            'Living Room', 'Master Bedroom', 'Bedroom', 'Guest Bedroom',
-            'Kitchen', 'Dining Room', 'Study Room', 'Pooja Room',
-            'Bathroom', 'Balcony', 'Entrance Foyer', 'Kids Room',
-        ]
-        db.session.bulk_save_objects([MasterRoom(name=r) for r in rooms])
-        db.session.commit()
-
-    # Seed master items if empty
-    if not MasterItem.query.first():
-        items = [
-            'Wardrobe', 'TV Unit', 'Kitchen Cabinet', 'Study Table',
-            'Shoe Rack', 'Crockery Unit', 'False Ceiling', 'Partition',
-            'Bed Box', 'Dressing Table', 'Loft', 'Overhead Cabinet',
-            'Base Cabinet', 'Island Counter', 'Display Unit', 'Pooja Unit',
-            'Vanity Cabinet', 'Wall Paneling', 'Headboard', 'Side Table',
-        ]
-        db.session.bulk_save_objects([MasterItem(name=i) for i in items])
-        db.session.commit()
