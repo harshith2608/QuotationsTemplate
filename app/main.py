@@ -1,14 +1,19 @@
-from flask import Blueprint, redirect, url_for, render_template, Response, abort, request
-from flask_login import login_required
+from flask import Blueprint, redirect, url_for, render_template, Response, abort, request, current_app
+from flask_login import current_user
 from .branding import get_brand, load_logo_png
+from .marketing import marketing_enabled, render_landing
 
 main_bp = Blueprint('main', __name__)
 
 
 @main_bp.route('/')
-@login_required
 def index():
-    return redirect(url_for('projects.list_projects'))
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.list_projects'))
+    # On the product's own marketing deployment the domain root is the sales page
+    if marketing_enabled():
+        return render_landing()
+    return current_app.login_manager.unauthorized()
 
 
 _FAVICON_SVG = (

@@ -1,0 +1,87 @@
+{% extends "marketing/_base.html" %}
+{% block title %}Terms of Service – {{ product }}{% endblock %}
+{% block description %}The terms for using {{ product }}, provided by {{ legal_name }}.{% endblock %}
+{% block canonical %}{{ url_for('marketing.terms', _external=True) }}{% endblock %}
+
+{% block content %}
+<article class="wrap legal">
+  <h1>Terms of Service</h1>
+  <p class="updated">Last updated: {{ legal_updated }}</p>
+
+  <div class="summary">
+    <p><strong>In short:</strong> you pay a monthly or yearly subscription for your own {{ product }} app. Your quotation data belongs to you. You can cancel anytime; there's a 7-day money-back guarantee on your first payment. You're responsible for the prices, taxes and promises in the quotations you send.</p>
+  </div>
+
+  <h2>1. About these terms</h2>
+  <p>These terms are an agreement between you (the business subscribing to {{ product }}) and {{ legal_name }} ("we", "us"). By subscribing or using the app you agree to them. If you're accepting on behalf of a business, you confirm you're authorised to do so.</p>
+
+  <h2>2. The service</h2>
+  <p>{{ product }} is a web app for creating room-by-room quotations, generating PDF quotations, recording payments and tracking job stages. We set up a separate app and database for your business, with your logo, colours, company details and rates. Features may improve over time; we won't remove a core feature you're paying for without notice.</p>
+
+  <h2>3. Accounts and staff</h2>
+  <ul>
+    <li>You'll receive an admin login and can create logins for your staff. Keep passwords private; you're responsible for activity under your logins.</li>
+    <li>Tell us promptly if you suspect unauthorised access.</li>
+  </ul>
+
+  <h2>4. Plans, payment and taxes</h2>
+  <ul>
+    <li>Prices are as shown on our pricing page or agreed with you in writing, and exclude GST, which is added where applicable.</li>
+    <li><strong>Monthly plans</strong> are billed in advance each month. A one-time setup fee applies unless your plan includes free setup.</li>
+    <li><strong>Yearly plans</strong> are billed in advance for 12 months.</li>
+    <li><strong>Founder pricing</strong> stays at the agreed rate for as long as your subscription continues without a break.</li>
+    <li>We may change prices for future billing periods with at least 30 days' notice. Changes don't affect a period you've already paid for.</li>
+    <li>If a payment is overdue by more than 15 days, we may pause your app until it's paid. Your data is kept safe during a pause.</li>
+  </ul>
+
+  <h2>5. Cancellation and refunds</h2>
+  <ul>
+    <li>You can cancel anytime. Monthly plans stop at the end of the current month; yearly plans run to the end of the paid year.</li>
+    <li><strong>7-day money-back guarantee:</strong> if you cancel within 7 days of your first payment, we refund that payment in full, including any setup fee.</li>
+    <li>After 7 days, payments for the current period aren't refundable, except where the law requires otherwise.</li>
+  </ul>
+
+  <h2>6. Your data</h2>
+  <ul>
+    <li>Everything you enter, including your customers' details, quotations, rates and payments, belongs to you. You give us permission to store and process it only to provide the service.</li>
+    <li>You're responsible for having the right to collect your customers' details and for using them lawfully, including under India's Digital Personal Data Protection Act, 2023. Our <a href="{{ privacy_url }}">Privacy Policy</a> explains how we handle data.</li>
+    <li>When you leave, you can request an export of your data within 30 days, after which we delete it.</li>
+  </ul>
+
+  <h2>7. Acceptable use</h2>
+  <p>You agree not to use {{ product }} to:</p>
+  <ul>
+    <li>create fake, misleading or fraudulent quotations, or pretend to be another business;</li>
+    <li>break any law, including tax, consumer protection or data protection law;</li>
+    <li>upload content you don't have the right to use, such as another company's logo; or</li>
+    <li>attempt to access other customers' data, disrupt the service, or copy or resell the software.</li>
+  </ul>
+  <p>We may suspend accounts that break these rules, and will tell you why unless the law prevents us.</p>
+
+  <h2>8. Your quotations are your responsibility</h2>
+  <p>{{ product }} calculates areas and totals from the measurements and rates you enter. You're responsible for checking every quotation before you send it, and for the prices, discounts, GST treatment, terms and commitments you make to your customers. We aren't a party to any agreement between you and your customers, and we don't give tax or legal advice.</p>
+
+  <h2>9. Availability and support</h2>
+  <p>We work to keep {{ product }} available and secure, and we provide support on WhatsApp during business hours. The service depends on third-party hosting providers and may occasionally be unavailable for maintenance or reasons outside our control. We don't guarantee uninterrupted or error-free operation.</p>
+
+  <h2>10. Liability</h2>
+  <p>To the extent the law allows, we aren't liable for indirect or consequential losses, such as lost profits, lost business or lost data. Our total liability for any claim relating to the service is limited to the fees you paid us in the 12 months before the claim. Nothing in these terms limits liability that can't be limited by law.</p>
+
+  <h2>11. Ending the service</h2>
+  <p>You can stop using {{ product }} at any time by cancelling. We may end the service with 30 days' notice. We may end it immediately if you seriously breach these terms. If we end the service for reasons other than your breach, we'll refund any unused prepaid fees.</p>
+
+  <h2>12. Changes to these terms</h2>
+  <p>We may update these terms. For significant changes, we'll give active customers at least 15 days' notice by WhatsApp or email. Continuing to use {{ product }} after the change means you accept the new terms.</p>
+
+  <h2>13. Governing law</h2>
+  <p>These terms are governed by the laws of India. Any dispute will be handled by the courts of {{ jurisdiction if jurisdiction else 'India' }}{% if jurisdiction %}, India{% endif %}. Before going to court, we'll both try to resolve it by talking first.</p>
+
+  <h2>14. Contact</h2>
+  <div class="contact">
+    <p><strong>{{ legal_name }}</strong></p>
+    {% if business_address %}<p>{{ business_address }}</p>{% endif %}
+    {% if contact_email %}<p>Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>{% endif %}
+    <p>WhatsApp: <a href="https://wa.me/{{ wa_number }}" target="_blank" rel="noopener">{{ wa_display }}</a></p>
+  </div>
+</article>
+{% endblock %}

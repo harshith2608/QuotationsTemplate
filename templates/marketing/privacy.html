@@ -1,0 +1,87 @@
+{% extends "marketing/_base.html" %}
+{% block title %}Privacy Policy – {{ product }}{% endblock %}
+{% block description %}How {{ legal_name }} collects, uses and protects personal data on the {{ product }} website and app.{% endblock %}
+{% block canonical %}{{ url_for('marketing.privacy', _external=True) }}{% endblock %}
+
+{% macro contact_block() -%}
+<div class="contact">
+  <p><strong>{{ legal_name }}</strong></p>
+  {% if business_address %}<p>{{ business_address }}</p>{% endif %}
+  {% if contact_email %}<p>Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>{% endif %}
+  <p>WhatsApp: <a href="https://wa.me/{{ wa_number }}" target="_blank" rel="noopener">{{ wa_display }}</a></p>
+</div>
+{%- endmacro %}
+
+{% block content %}
+<article class="wrap legal">
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: {{ legal_updated }}</p>
+
+  <div class="summary">
+    <p><strong>In short:</strong> we collect only what we need to run {{ product }} and talk to you about it. Each business's quotation data lives in its own separate database. We never sell personal data, and you can ask us to see, correct or delete yours at any time.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>{{ legal_name }} ("we", "us") provides {{ product }}, a quotation and project management app for interior design and furniture businesses. This policy covers our website and the {{ product }} app we set up for each customer business. It is written to meet India's Digital Personal Data Protection Act, 2023 ("DPDP Act").</p>
+
+  <h2>Two kinds of data, two roles</h2>
+  <ul>
+    <li><strong>Your data as our customer</strong> (the business owner and your staff): we decide how this is used, so we are the <em>Data Fiduciary</em> for it.</li>
+    <li><strong>Data you enter about your own customers</strong> (their names, mobile numbers, addresses, quotations and payments): you decide how this is used. Your business is the Data Fiduciary and we act only as your <em>Data Processor</em>, handling it on your instructions to provide the service.</li>
+  </ul>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><strong>When you contact us:</strong> your name, phone number, business name and anything you tell us on WhatsApp, phone or email.</li>
+    <li><strong>When you subscribe:</strong> business details for setup and invoicing (company name, address, GSTIN, logo, contact person) and payment records. We do not store card or bank login details.</li>
+    <li><strong>When you and your staff use the app:</strong> usernames, display names, an encrypted (hashed) password, and records of who created or edited a quotation and when.</li>
+    <li><strong>On our website:</strong> standard technical data such as browser type and pages visited. If you arrive from an ad, Meta Pixel and Google Ads tags may set cookies so we can measure which ads lead to enquiries.</li>
+  </ul>
+
+  <h2>How we use it</h2>
+  <ul>
+    <li>To set up, run, secure and support your {{ product }} app.</li>
+    <li>To reply to enquiries, arrange demos and send service messages, such as setup and renewal reminders.</li>
+    <li>To bill you and keep records required by tax law.</li>
+    <li>To measure and improve our website and advertising.</li>
+  </ul>
+  <p>We process your personal data with your consent or for these legitimate uses permitted under the DPDP Act. You can withdraw consent for marketing at any time by telling us; it won't affect the service you've paid for.</p>
+
+  <h2>Who we share it with</h2>
+  <p>We never sell personal data. We share it only with service providers who help us run {{ product }}, under their own security and privacy commitments:</p>
+  <ul>
+    <li>Hosting and database providers, such as Vercel and Neon, which store and serve the app. Data may be stored on servers outside India, for example in Singapore.</li>
+    <li>Email delivery providers used by your app's notification settings.</li>
+    <li>Payment providers you choose to connect (for example Razorpay). Customer payments go directly to your own account; we don't handle that money.</li>
+    <li>Advertising and analytics providers (Meta and Google) for website visitors only, as described above.</li>
+  </ul>
+  <p>We may also disclose data if required by law or a valid order from an Indian authority.</p>
+
+  <h2>How long we keep it</h2>
+  <p>We keep your account and app data while your subscription is active. If you cancel, you can ask for an export of your data within 30 days; after that, we delete your app's database. Copies in backups are removed as those backups expire. We keep invoices and payment records for as long as tax law requires.</p>
+
+  <h2>How we protect it</h2>
+  <p>Each business gets its own app and its own database. Passwords are stored as one-way hashes, connections are encrypted (HTTPS), and access to production systems is restricted. No system is perfectly secure; if a breach affects your personal data, we will notify you and the Data Protection Board of India as the law requires.</p>
+
+  <h2>Your rights</h2>
+  <p>Under the DPDP Act you can:</p>
+  <ul>
+    <li>ask for a summary of the personal data we hold about you and how it's used;</li>
+    <li>ask us to correct, complete, update or delete it;</li>
+    <li>withdraw consent you've given;</li>
+    <li>nominate someone to exercise these rights for you; and</li>
+    <li>raise a grievance with us, and if unresolved, with the Data Protection Board of India.</li>
+  </ul>
+  <p>If you're a customer of a business that uses {{ product }}, please contact that business first. They control your data, and we'll help them respond.</p>
+
+  <h2>Children</h2>
+  <p>{{ product }} is a business tool and isn't meant for anyone under 18. We don't knowingly collect children's personal data.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If we make significant changes, we'll update the date at the top and tell active customers by WhatsApp or email.</p>
+
+  <h2>Contact and grievances</h2>
+  <p>For privacy questions, data requests or grievances, contact us:</p>
+  {{ contact_block() }}
+</article>
+{% endblock %}

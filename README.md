@@ -92,7 +92,7 @@ Clients customise their portal themselves in **Admin → Settings**; the env var
 
 ### Marketing page
 
-`/landingpage` is the product's own sales page (pricing, features, a working sample quote). Because every client deployment runs the same code, it is **off by default** and returns 404. Enable it only on your own demo/marketing deployment with `MARKETING_SITE=1`, and set `MARKETING_WHATSAPP` (all buttons open a WhatsApp chat), `MARKETING_PRODUCT_NAME`, and optionally `META_PIXEL_ID`, `GOOGLE_ADS_ID` / `GOOGLE_ADS_CONVERSION` (a WhatsApp-button click is tracked as a lead) and `MARKETING_PRIVACY_URL` / `MARKETING_TERMS_URL`. The "Try the live demo" button goes to that deployment's login page.
+The product's own sales page (pricing, features, a working sample quote) plus `/privacy` and `/terms`. Because every client deployment runs the same code, these are **off by default** and return 404. With `MARKETING_SITE=1`, signed-out visitors to `/` see the landing page (signed-in users still go to their quotations), so your domain root is the sales page; it's also at `/landingpage`. The legal pages read `MARKETING_LEGAL_NAME`, `MARKETING_CONTACT_EMAIL`, `MARKETING_ADDRESS` and `MARKETING_JURISDICTION`. Enable it only on your own demo/marketing deployment with `MARKETING_SITE=1`, and set `MARKETING_WHATSAPP` (all buttons open a WhatsApp chat), `MARKETING_PRODUCT_NAME`, and optionally `META_PIXEL_ID`, `GOOGLE_ADS_ID` / `GOOGLE_ADS_CONVERSION` (a WhatsApp-button click is tracked as a lead) and `MARKETING_PRIVACY_URL` / `MARKETING_TERMS_URL`. The "Try the live demo" button goes to that deployment's login page.
 
 ---
 
