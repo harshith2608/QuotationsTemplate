@@ -90,6 +90,10 @@ Clients customise their portal themselves in **Admin → Settings**; the env var
 
 **Admin → Payment Settings** holds Razorpay keys, the webhook secret, UPI and bank details. **Admin → Settings** also has *Quotation PDFs* (material specifications, T&C) and *Email* (SMTP for payment notifications).
 
+### Marketing page
+
+`/landingpage` is the product's own sales page (pricing, features, a working sample quote). Because every client deployment runs the same code, it is **off by default** and returns 404. Enable it only on your own demo/marketing deployment with `MARKETING_SITE=1`, and set `MARKETING_WHATSAPP` (all buttons open a WhatsApp chat), `MARKETING_PRODUCT_NAME`, and optionally `META_PIXEL_ID`, `GOOGLE_ADS_ID` / `GOOGLE_ADS_CONVERSION` (a WhatsApp-button click is tracked as a lead) and `MARKETING_PRIVACY_URL` / `MARKETING_TERMS_URL`. The "Try the live demo" button goes to that deployment's login page.
+
 ---
 
 ## Local Development

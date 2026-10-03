@@ -39,12 +39,14 @@ def create_app(config_name='default'):
     from .projects import projects_bp
     from .admin_bp import admin_bp
     from .api import api_bp
+    from .marketing import marketing_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(marketing_bp)
 
     # Serve static files efficiently in production (Gunicorn doesn't serve them)
     # autorefresh=True in development so edited JS/CSS is served without restart
