@@ -28,7 +28,7 @@ def dashboard():
             User.id,
             User.username,
             func.count(Project.id).label('project_count'),
-            func.coalesce(func.sum(Project.grand_total), 0).label('total_value')
+            func.coalesce(func.sum(Project.final_total_sql()), 0).label('total_value')
         )
         .outerjoin(Project, Project.created_by == User.id)
         .filter(User.role == 'employee')
@@ -58,7 +58,7 @@ def dashboard():
 
     # Overall stats
     total_projects = Project.query.count()
-    total_value = db.session.query(func.coalesce(func.sum(Project.grand_total), 0)).scalar()
+    total_value = db.session.query(func.coalesce(func.sum(Project.final_total_sql()), 0)).scalar()
     total_customers = db.session.query(func.count(func.distinct(Project.mobile))).scalar()
     total_employees = User.query.filter_by(role='employee').count()
 

@@ -75,7 +75,7 @@
               <i class="bi bi-clock me-1"></i>In Progress
             </span>
             {% else %}
-            <span class="text-success">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</span>
+            <span class="text-success">&#8377;{{ "{:,.2f}".format(project.final_total) }}</span>
             {% endif %}
           </td>
           <td class="text-center text-muted small">
@@ -148,7 +148,7 @@
             {% if project.status == 'draft' %}
             <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>In Progress</span>
             {% else %}
-            <span class="text-success">&#8377;{{ "{:,.0f}".format(project.grand_total) }}</span>
+            <span class="text-success">&#8377;{{ "{:,.0f}".format(project.final_total) }}</span>
             {% endif %}
           </div>
           <small class="text-muted">{{ project.created_at.strftime('%d %b %Y') }}</small>

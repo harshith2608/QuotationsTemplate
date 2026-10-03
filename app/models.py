@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask_login import UserMixin
+from sqlalchemy import case, func
 from . import db, login_manager
 
 
@@ -87,6 +88,18 @@ class Project(db.Model):
     @property
     def final_total(self):
         return round(max(self.grand_total - self.discount_amount, 0), 2)
+
+    @classmethod
+    def final_total_sql(cls):
+        """SQL expression equivalent of final_total, for aggregate queries."""
+        gt = func.coalesce(cls.grand_total, 0.0)
+        dv = func.coalesce(cls.discount_value, 0.0)
+        discount = case(
+            (cls.discount_type == 'percentage', gt * dv / 100.0),
+            (cls.discount_type == 'fixed', case((dv < gt, dv), else_=gt)),
+            else_=0.0,
+        )
+        return case((gt - discount > 0, gt - discount), else_=0.0)
 
     def __repr__(self):
         return f'<Project {self.id}: {self.customer_name}>'
