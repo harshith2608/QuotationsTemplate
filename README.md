@@ -65,26 +65,30 @@ All configuration is via environment variables. Copy `.env.example` to `.env` fo
 
 The app refuses to start with `FLASK_ENV=production` unless `SECRET_KEY` and `DATABASE_URL` are set.
 
-### Branding
+### Branding & theme
 
-| Variable | Default | Used in |
-|---|---|---|
-| `COMPANY_NAME` | `Your Company Name` | Navbar, page titles, login, PDFs, emails, WhatsApp, Razorpay link description |
-| `COMPANY_ADDRESS` | — | PDF header |
-| `COMPANY_PHONE` | — | PDF header |
-| `COMPANY_EMAIL` | — | PDF header |
-| `COMPANY_GSTIN` | — | PDF header (shown only when set) |
-| `COMPANY_TAGLINE` | `Interior Design & Furnishing Solutions` | Footer; PDF subtitle when no contact details are set |
-| `SIGNATORY_NAME` | `COMPANY_NAME` | PDF signature block |
-| `SIGNATORY_TITLE` | `Proprietor` | PDF signature block |
-| `BRAND_PRIMARY` | `#1a237e` | Navbar, buttons, headings, PDF tables, favicon |
-| `BRAND_SECONDARY` | `#283593` | Gradients, room headers |
-| `BRAND_ACCENT` | `#f57f17` | PDF accent rules |
-| `LOGO_FILE` | — | Path under `static/`, e.g. `brand/logo.png`. PNG/JPG for PDF support |
+Clients customise their portal themselves in **Admin → Settings**; the env vars below only set the starting values for a new deployment. Every value resolves as: *saved in Settings* → *env var* → *built-in default*. Clearing a field in Settings falls back to the env var (shown as the placeholder).
 
-**Company details can also be edited by an admin** in *Admin → Payment Settings*. A value saved there overrides the env var; clearing the field falls back to the env var (shown as the placeholder). Colours, logo, tagline and signatory are env-only.
+| Variable | Default | Settings tab | Used in |
+|---|---|---|---|
+| `COMPANY_NAME` | `Your Company Name` | Company | Navbar, titles, login, PDFs, emails, WhatsApp, Razorpay links |
+| `COMPANY_ADDRESS` / `COMPANY_PHONE` / `COMPANY_EMAIL` | — | Company | PDF header |
+| `COMPANY_GSTIN` | — | Company | PDF header (only when set) |
+| `COMPANY_TAGLINE` | `Interior Design & Furnishing Solutions` | Company | Footer; PDF subtitle when no contact details are set |
+| `SIGNATORY_NAME` / `SIGNATORY_TITLE` | company name / `Proprietor` | Company | PDF signature block |
+| `BRAND_PRIMARY` | `#1a237e` | Appearance | Header, buttons, links, headings, form focus, PDF tables, favicon |
+| `BRAND_SECONDARY` | `#283593` | Appearance | Gradients, room headers |
+| `BRAND_ACCENT` | `#f57f17` | Appearance | Active menu, light-header underline, PDF divider rules |
+| `BRAND_BACKGROUND` | `#f5f6fa` | Appearance | Page background (must be light) |
+| `BRAND_HEADER` | `gradient` | Appearance | `gradient` \| `solid` \| `light` — top bar and section headers |
+| `BRAND_CORNERS` | `rounded` | Appearance | `sharp` \| `rounded` \| `soft` — cards, inputs, badges |
+| `BRAND_BUTTONS` | `standard` | Appearance | `standard` (match corners) \| `pill` |
+| `BRAND_FONT` | `system` | Appearance | `system`, `inter`, `poppins`, `montserrat`, `lato`, `nunito`, `dm-sans`, `lora` (Google Fonts) |
+| `LOGO_FILE` | — | Appearance (upload) | PNG/JPG under `static/`; an uploaded logo takes precedence |
 
-Razorpay keys, UPI/bank details, SMTP, material specifications and T&C are entered by the admin in *Admin → Payment Settings* and stored in the database.
+**Admin → Settings → Appearance** offers 10 preset palettes, colour pickers, header/corner/button/font choices and a logo upload, with a live preview applied to the whole page before saving. Text on coloured headers and buttons automatically switches between white and dark for readability, and PDFs darken a too-light primary colour so printed text stays legible. Uploaded logos are validated, resized to ≤600 px and re-encoded as PNG, then stored in the database (Vercel's filesystem is read-only), so they survive redeploys.
+
+**Admin → Payment Settings** holds Razorpay keys, the webhook secret, UPI and bank details. **Admin → Settings** also has *Quotation PDFs* (material specifications, T&C) and *Email* (SMTP for payment notifications).
 
 ---
 
@@ -133,7 +137,7 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
      DATABASE_URL="postgresql://..." ADMIN_PASSWORD="..." flask bootstrap
      ```
 5. **Put the app next to its database.** Every page makes several database queries, so the app server and Postgres must be in the same region. On Vercel set *Project Settings → Functions → Function Region* to match the database (e.g. Neon `ap-southeast-1` → `sin1` Singapore), then redeploy. Vercel's default is Washington, D.C. (`iad1`).
-6. **Log in as the admin** and fill in *Payment Settings* (UPI/bank, Razorpay, SMTP, T&C) and *Rates*.
+6. **Log in as the admin** and fill in *Settings* (company details, appearance, PDFs, email), *Payment Settings* (UPI/bank, Razorpay) and *Rates*.
 
 ---
 
@@ -208,9 +212,9 @@ Commit the new migration file. Every deployment picks it up on its next `flask d
 - HMAC-SHA256 verification of Razorpay webhooks
 - Role-based access control; admin routes guarded by `@admin_required`
 - Secure, HttpOnly, SameSite=Lax session cookies in production
-- Brand colours are validated as `#rrggbb` before being injected into CSS
+- Theme values are validated (`#rrggbb` colours, whitelisted choices) before being injected into CSS; logo uploads are re-encoded through Pillow and SVG is rejected
 
-Note: Razorpay secrets and the SMTP password entered in Payment Settings are stored unencrypted in the `app_settings` table — restrict database access accordingly.
+Note: Razorpay secrets and the SMTP password entered in the admin settings are stored unencrypted in the `app_settings` table — restrict database access accordingly.
 
 ---
 

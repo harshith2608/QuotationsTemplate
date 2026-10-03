@@ -7,8 +7,8 @@
     <!-- Brand header outside card -->
     <div class="text-center mb-4">
       <div class="ki-login-icon mb-3">
-        {% if brand.logo_file %}
-        <img src="{{ url_for('static', filename=brand.logo_file) }}" alt="{{ brand.name }}" class="ki-login-logo">
+        {% if brand.logo_url %}
+        <img src="{{ brand.logo_url }}" alt="{{ brand.name }}" class="ki-login-logo">
         {% else %}
         <i class="bi bi-house-heart-fill"></i>
         {% endif %}

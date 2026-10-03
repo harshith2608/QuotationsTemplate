@@ -1,0 +1,579 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block head %}
+<style>
+  .ki-settings-nav .nav-link { font-weight: 600; font-size: .875rem; }
+  .ki-section-title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--ki-muted); margin-bottom: .5rem; }
+
+  /* Presets */
+  .ki-preset {
+    border: 2px solid var(--ki-border); background: #fff; border-radius: var(--ki-radius-lg);
+    padding: 8px 10px; text-align: left; width: 100%; transition: border-color .15s, transform .15s;
+  }
+  .ki-preset:hover { transform: translateY(-1px); border-color: #c4c4c4; }
+  .ki-preset.active { border-color: var(--ki-primary); box-shadow: 0 0 0 3px rgba(var(--ki-primary-rgb), .15); }
+  .ki-preset-swatches { display: flex; gap: 4px; margin-bottom: 4px; }
+  .ki-preset-swatches span { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,.08); }
+  .ki-preset-name { font-size: .75rem; font-weight: 600; color: #374151; }
+
+  /* Colour rows */
+  .ki-color-row { display: flex; align-items: center; gap: 10px; }
+  .ki-color-row input[type=color] { width: 46px; height: 38px; padding: 2px; border-radius: var(--ki-radius); cursor: pointer; flex-shrink: 0; }
+  .ki-color-row .form-control { max-width: 110px; font-family: ui-monospace, monospace; text-transform: lowercase; }
+
+  /* Choice cards */
+  .ki-choice input { position: absolute; opacity: 0; pointer-events: none; }
+  .ki-choice label {
+    display: block; cursor: pointer; border: 2px solid var(--ki-border); border-radius: var(--ki-radius-lg);
+    padding: 8px; background: #fff; text-align: center; font-size: .78rem; font-weight: 600; height: 100%;
+  }
+  .ki-choice input:checked + label { border-color: var(--ki-primary); box-shadow: 0 0 0 3px rgba(var(--ki-primary-rgb), .15); }
+  .ki-choice input:focus-visible + label { outline: 2px solid var(--ki-primary); outline-offset: 2px; }
+  .ki-mini-header { height: 26px; border-radius: 4px; margin-bottom: 6px; }
+  .ki-shape-demo { display: inline-block; width: 46px; height: 18px; background: var(--ki-primary); margin-bottom: 6px; }
+  .ki-corner-demo { display: inline-block; width: 34px; height: 34px; border: 3px solid var(--ki-primary); border-right: 0; border-bottom: 0; margin-bottom: 4px; }
+
+  /* Live preview */
+  .ki-preview-wrap { position: sticky; top: 70px; }
+  .ki-preview { background: var(--ki-bg); border: 1px solid var(--ki-border); border-radius: var(--ki-card-radius); overflow: hidden; }
+  .ki-preview .ki-navbar { min-height: 44px; padding: 6px 12px; position: static; }
+  .ki-preview .ki-navbar .navbar-brand { font-size: .95rem; }
+  .ki-pdf-mock { background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; font-size: .7rem; }
+  .ki-pdf-mock .co { font-weight: 700; font-size: .95rem; text-align: center; }
+  .ki-pdf-mock .rule { height: 2px; margin: 6px 0; }
+  .ki-pdf-mock .label { color: #fff; font-weight: 700; padding: 4px 8px; display: inline-block; }
+
+  .ki-logo-box { width: 100%; min-height: 70px; border: 2px dashed var(--ki-border); border-radius: var(--ki-radius-lg);
+                 display: flex; align-items: center; justify-content: center; background: #fff; padding: 8px; }
+  .ki-logo-box img { max-height: 60px; max-width: 100%; }
+
+  .ki-unsaved { position: sticky; bottom: 44px; z-index: 950; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mt-3 mb-3 flex-wrap gap-2">
+  <h4 class="mb-0 fw-bold ki-page-title">
+    <i class="bi bi-sliders me-2 text-primary"></i>Settings
+  </h4>
+  <a href="{{ url_for('admin.payment_settings') }}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-credit-card me-1"></i>Payment Settings
+  </a>
+</div>
+
+<ul class="nav nav-pills ki-settings-nav mb-3 flex-nowrap overflow-auto">
+  {% for key, icon, label in [('company','building','Company'), ('appearance','palette','Appearance'),
+                               ('documents','file-earmark-text','Quotation PDFs'), ('email','envelope','Email')] %}
+  <li class="nav-item">
+    <a class="nav-link text-nowrap {% if tab == key %}active{% endif %}" href="{{ url_for('admin.settings', tab=key) }}">
+      <i class="bi bi-{{ icon }} me-1"></i>{{ label }}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{# ───────────────────────────── COMPANY ───────────────────────────── #}
+{% if tab == 'company' %}
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="company">
+  <div class="card shadow-sm border-0">
+    <div class="card-header ki-card-header"><i class="bi bi-building me-2"></i>Company Details</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">
+        Shown in the app header, on every PDF quotation, in emails and WhatsApp messages.
+        Leave a field blank to use this deployment's default (shown in grey).
+      </p>
+      <div class="row g-3">
+        {% set fields = [
+          ('company_name', 'Company Name', 'text', 'col-md-6'),
+          ('company_tagline', 'Tagline', 'text', 'col-md-6'),
+          ('company_mobile', 'Phone', 'text', 'col-md-4'),
+          ('company_email', 'Email', 'email', 'col-md-4'),
+          ('company_gstin', 'GSTIN (optional)', 'text', 'col-md-4'),
+        ] %}
+        {% for name, label, type, col in fields %}
+        <div class="col-12 {{ col }}">
+          <label class="form-label fw-medium small" for="{{ name }}">{{ label }}</label>
+          <input type="{{ type }}" id="{{ name }}" name="{{ name }}" class="form-control{% if name == 'company_gstin' %} text-uppercase{% endif %}"
+                 {% if name == 'company_gstin' %}maxlength="15"{% endif %}
+                 placeholder="{{ defaults[name] }}" value="{{ saved[name] }}">
+        </div>
+        {% endfor %}
+        <div class="col-12">
+          <label class="form-label fw-medium small" for="company_address">Address</label>
+          <textarea id="company_address" name="company_address" class="form-control" rows="2"
+                    placeholder="{{ defaults.company_address or 'e.g. 12, Main Road, Your City - 000000' }}">{{ saved.company_address }}</textarea>
+        </div>
+      </div>
+
+      <hr class="my-4">
+      <div class="ki-section-title"><i class="bi bi-pen me-1"></i>PDF signature</div>
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-medium small" for="signatory_name">Signatory name</label>
+          <input type="text" id="signatory_name" name="signatory_name" class="form-control"
+                 placeholder="{{ defaults.signatory_name or 'Defaults to the company name' }}" value="{{ saved.signatory_name }}">
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-medium small" for="signatory_title">Signatory title</label>
+          <input type="text" id="signatory_title" name="signatory_title" class="form-control"
+                 placeholder="{{ defaults.signatory_title }}" value="{{ saved.signatory_title }}">
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mt-3 mb-5">
+    <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Company Details</button>
+  </div>
+</form>
+{% endif %}
+
+{# ───────────────────────────── APPEARANCE ───────────────────────────── #}
+{% if tab == 'appearance' %}
+{% set cur = {} %}
+{% for k in ['theme_primary','theme_secondary','theme_accent','theme_background','theme_header','theme_corners','theme_buttons','theme_font'] %}
+  {% set _ = cur.update({k: saved[k] or defaults[k]}) %}
+{% endfor %}
+<form method="POST" action="{{ url_for('admin.settings') }}" enctype="multipart/form-data" id="themeForm" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="appearance">
+  <div class="row g-3">
+
+    <!-- Controls -->
+    <div class="col-12 col-lg-7">
+
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header ki-card-header"><i class="bi bi-stars me-2"></i>Theme Presets</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Start from a ready-made palette, then fine-tune anything below.</p>
+          <div class="row g-2" id="presetGrid">
+            {% for name, p in options.presets.items() %}
+            <div class="col-6 col-sm-4 col-xl-3">
+              <button type="button" class="ki-preset" data-preset="{{ name }}">
+                <div class="ki-preset-swatches">
+                  <span style="background:{{ p.primary }}"></span><span style="background:{{ p.secondary }}"></span>
+                  <span style="background:{{ p.accent }}"></span><span style="background:{{ p.background }}"></span>
+                </div>
+                <div class="ki-preset-name">{{ name }}</div>
+              </button>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header ki-card-header"><i class="bi bi-palette me-2"></i>Colours</div>
+        <div class="card-body">
+          <div class="row g-3">
+            {% for key, label, hint in [
+              ('theme_primary', 'Primary', 'Header, buttons, links, headings, PDF tables'),
+              ('theme_secondary', 'Secondary', 'Gradients and room headers'),
+              ('theme_accent', 'Accent', 'Highlights, active menu, PDF divider lines'),
+              ('theme_background', 'Page background', 'Behind all cards — keep it light'),
+            ] %}
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small mb-1" for="{{ key }}">{{ label }}</label>
+              <div class="ki-color-row">
+                <input type="color" id="{{ key }}" name="{{ key }}" value="{{ cur[key] }}" data-theme-input>
+                <input type="text" class="form-control form-control-sm" value="{{ cur[key] }}" maxlength="7"
+                       data-hex-for="{{ key }}" aria-label="{{ label }} hex value" spellcheck="false">
+              </div>
+              <div class="form-text">{{ hint }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="alert alert-warning small py-2 mt-3 mb-0 d-none" id="bgWarning">
+            <i class="bi bi-exclamation-triangle me-1"></i>This background is too dark for text to stay readable. Pick a lighter shade.
+          </div>
+          <div class="small text-muted mt-3" id="contrastInfo"></div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header ki-card-header"><i class="bi bi-layout-text-window me-2"></i>Style</div>
+        <div class="card-body">
+          <div class="ki-section-title">Header style <span class="fw-normal text-lowercase">(top bar &amp; section headers)</span></div>
+          <div class="row g-2 mb-3">
+            {% for key, label in options.header_styles.items() %}
+            <div class="col-4 ki-choice">
+              <input type="radio" name="theme_header" id="hdr_{{ key }}" value="{{ key }}" {{ 'checked' if cur.theme_header == key }} data-theme-input>
+              <label for="hdr_{{ key }}">
+                <div class="ki-mini-header" data-mini-header="{{ key }}"></div>{{ label }}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <div class="ki-section-title">Corners</div>
+              <div class="row g-2">
+                {% for key, label in options.corners.items() %}
+                <div class="col-4 ki-choice">
+                  <input type="radio" name="theme_corners" id="cor_{{ key }}" value="{{ key }}" {{ 'checked' if cur.theme_corners == key }} data-theme-input>
+                  <label for="cor_{{ key }}">
+                    <span class="ki-corner-demo" style="border-top-left-radius:{{ options.corner_values[key].card }}"></span><br>{{ label }}
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="ki-section-title">Buttons</div>
+              <div class="row g-2">
+                {% for key, label in options.buttons.items() %}
+                <div class="col-6 ki-choice">
+                  <input type="radio" name="theme_buttons" id="btn_{{ key }}" value="{{ key }}" {{ 'checked' if cur.theme_buttons == key }} data-theme-input>
+                  <label for="btn_{{ key }}">
+                    <span class="ki-shape-demo" data-btn-demo="{{ key }}"></span><br>{{ label }}
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="ki-section-title mt-3">Font</div>
+          <select class="form-select" name="theme_font" id="theme_font" data-theme-input>
+            {% for key, f in options.fonts.items() %}
+            <option value="{{ key }}" {{ 'selected' if cur.theme_font == key }}>{{ f.label }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Applies to the web app. PDFs always use a standard print font.</div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header ki-card-header"><i class="bi bi-image me-2"></i>Logo</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-center">
+            <div class="col-12 col-sm-5">
+              <div class="ki-logo-box" id="logoBox">
+                {% if brand.logo_url %}
+                <img src="{{ brand.logo_url }}" alt="Current logo" id="logoPreviewImg">
+                {% else %}
+                <span class="text-muted small" id="logoEmpty"><i class="bi bi-image me-1"></i>No logo</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-12 col-sm-7">
+              <input type="file" class="form-control form-control-sm" name="logo" id="logoInput" accept="image/png,image/jpeg,image/webp">
+              <div class="form-text">PNG, JPG or WebP up to 2 MB. A transparent PNG looks best. Shown in the top bar, login page and on PDFs.</div>
+              {% if brand.logo_version %}
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="remove_logo" value="1" id="removeLogo">
+                <label class="form-check-label small" for="removeLogo">Remove current logo</label>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 mb-5">
+        <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Appearance</button>
+        <a href="{{ url_for('admin.settings', tab='appearance') }}" class="btn btn-outline-secondary" data-discard>Discard changes</a>
+        <button type="submit" name="reset_theme" value="1" class="btn btn-outline-danger ms-auto"
+                onclick="return confirm('Reset colours, header, corners, buttons and font to the defaults? (The logo is kept.)')">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to defaults
+        </button>
+      </div>
+    </div>
+
+    <!-- Live preview -->
+    <div class="col-12 col-lg-5">
+      <div class="ki-preview-wrap">
+        <div class="ki-section-title"><i class="bi bi-eye me-1"></i>Live preview</div>
+        <div class="ki-preview shadow-sm">
+          <nav class="navbar {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar" data-preview-navbar>
+            <span class="navbar-brand fw-bold d-flex align-items-center mb-0">
+              <img src="{{ brand.logo_url }}" alt="" class="ki-navbar-logo me-2 {{ '' if brand.logo_url else 'd-none' }}" data-preview-logo>
+              <i class="bi bi-house-heart-fill me-2 {{ 'd-none' if brand.logo_url }}" data-preview-icon></i>{{ brand.name }}
+            </span>
+            <span class="nav-link active small px-2" style="color:var(--bs-navbar-active-color)">Quotations</span>
+          </nav>
+          <div class="p-3">
+            <div class="card shadow-sm border-0 mb-3">
+              <div class="card-header ki-card-header"><i class="bi bi-calculator me-2"></i>Cost Summary</div>
+              <div class="card-body py-2">
+                <div class="d-flex justify-content-between small py-1"><span class="badge ki-badge-laminates">Laminates – Box Work</span><span>₹61,200.00</span></div>
+                <div class="d-flex justify-content-between small py-1 border-top"><span class="fw-semibold">Final Total</span><span class="fw-bold text-primary">₹1,38,510.00</span></div>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-primary btn-sm"><i class="bi bi-file-earmark-text me-1"></i>Full Quotation</button>
+              <button type="button" class="btn btn-outline-primary btn-sm">Initial Quotation</button>
+              <button type="button" class="btn btn-primary btn-sm ki-btn-primary">Save</button>
+            </div>
+            <input class="form-control form-control-sm mb-2" placeholder="Search by customer name…" tabindex="-1">
+            <div class="small mb-3">A <a href="#" onclick="return false">sample link</a> and <span class="badge bg-primary">badge</span></div>
+            <div class="ki-section-title mb-1">PDF header</div>
+            <div class="ki-pdf-mock">
+              <div class="co" data-pdf-ink>{{ brand.name }}</div>
+              <div class="text-center text-muted">{{ brand.address.replace('\n', ', ') if brand.address else brand.tagline }}</div>
+              <div class="rule" data-pdf-rule></div>
+              <span class="label" data-pdf-label>INTERIOR DESIGN QUOTATION</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ki-unsaved d-none" id="unsavedBar">
+    <div class="alert alert-primary shadow d-flex align-items-center justify-content-between py-2 mb-0">
+      <span class="small"><i class="bi bi-eye me-1"></i>You're previewing unsaved changes across the whole page.</span>
+      <span class="d-flex gap-2">
+        <a href="{{ url_for('admin.settings', tab='appearance') }}" class="btn btn-sm btn-outline-secondary" data-discard>Discard</a>
+        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+      </span>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+{# ───────────────────────────── DOCUMENTS ───────────────────────────── #}
+{% if tab == 'documents' %}
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="documents">
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-header ki-card-header"><i class="bi bi-card-checklist me-2"></i>Material Specifications</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">
+        Appears in every quotation PDF just before the Terms &amp; Conditions. Leave blank to omit the section.
+      </p>
+      <textarea name="material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6"
+                placeholder="e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...">{{ saved.material_specs }}</textarea>
+    </div>
+  </div>
+  <div class="card shadow-sm border-0">
+    <div class="card-header ki-card-header"><i class="bi bi-file-text me-2"></i>Terms &amp; Conditions</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">Printed at the bottom of every quotation PDF. One term per line.</p>
+      <textarea name="terms_conditions" class="form-control font-monospace" rows="8" style="font-size:0.82rem; line-height:1.6"
+                placeholder="1. This is a preliminary estimate...">{{ saved.terms_conditions }}</textarea>
+    </div>
+  </div>
+  <div class="mt-3 mb-5">
+    <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Quotation Settings</button>
+  </div>
+</form>
+{% endif %}
+
+{# ───────────────────────────── EMAIL ───────────────────────────── #}
+{% if tab == 'email' %}
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="email">
+  <div class="card shadow-sm border-0">
+    <div class="card-header ki-card-header"><i class="bi bi-envelope me-2"></i>Email Notifications</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">
+        Used to email the customer and admin when a payment is received through Razorpay.
+        Works with Gmail or any SMTP server. For Gmail, use an
+        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">App Password</a>, not your regular password.
+      </p>
+      <div class="row g-3">
+        <div class="col-12 col-sm-6">
+          <label class="form-label fw-medium small">Admin Email <span class="text-muted">(receives payment alerts)</span></label>
+          <input type="email" name="admin_email" class="form-control" placeholder="admin@example.com" value="{{ saved.admin_email }}">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label fw-medium small">SMTP Host</label>
+          <input type="text" name="smtp_host" class="form-control" placeholder="smtp.gmail.com" value="{{ saved.smtp_host }}">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label fw-medium small">SMTP Port</label>
+          <input type="number" name="smtp_port" class="form-control" placeholder="587" value="{{ saved.smtp_port or '587' }}">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label fw-medium small">SMTP Username <span class="text-muted">(usually your email)</span></label>
+          <input type="email" name="smtp_user" class="form-control" placeholder="you@gmail.com" value="{{ saved.smtp_user }}">
+        </div>
+        <div class="col-12 col-sm-6">
+          <label class="form-label fw-medium small">SMTP Password / App Password</label>
+          <input type="password" name="smtp_pass" class="form-control" placeholder="••••••••••••••••" value="" autocomplete="off">
+          <div class="form-text text-muted">Leave blank to keep the existing password.
+            {% if saved.smtp_pass %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mt-3 mb-5">
+    <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Email Settings</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if tab == 'appearance' %}
+<script>
+(function () {
+  'use strict';
+  const OPTIONS = {{ options|tojson }};
+  const form = document.getElementById('themeForm');
+  const root = document.documentElement;
+  const MIN_BG_LUMINANCE = 0.6;
+
+  // ── Colour maths (mirrors app/branding.py) ──────────────────────────────
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const lum = h => {
+    const [r, g, b] = rgb(h).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const readableOn = h => {
+    const L = lum(h), dark = '#111827';
+    return 1.05 / (L + 0.05) >= (L + 0.05) / (lum(dark) + 0.05) ? '#ffffff' : dark;
+  };
+  const tint = (h, a) => '#' + rgb(h).map(c => Math.round(c + (255 - c) * a).toString(16).padStart(2, '0')).join('');
+  const ink = h => {  // darkened for legible PDF text on white
+    let a = 0, s = h;
+    while (1.05 / (lum(s) + 0.05) < 4.5 && a < 1) {
+      a += 0.1; s = '#' + rgb(h).map(c => Math.round(c * (1 - a)).toString(16).padStart(2, '0')).join('');
+    }
+    return s;
+  };
+  const isHex = v => /^#[0-9a-fA-F]{6}$/.test(v);
+
+  // ── Read current form state ─────────────────────────────────────────────
+  const val = name => {
+    const el = form.querySelector(`[name="${name}"]:checked`) || form.querySelector(`[name="${name}"]`);
+    return el ? el.value : '';
+  };
+  const state = () => ({
+    primary: val('theme_primary'), secondary: val('theme_secondary'),
+    accent: val('theme_accent'), background: val('theme_background'),
+    header: val('theme_header'), corners: val('theme_corners'),
+    buttons: val('theme_buttons'), font: val('theme_font'),
+  });
+
+  // ── Apply theme to the whole page ───────────────────────────────────────
+  function loadFont(key) {
+    const f = OPTIONS.fonts[key];
+    let link = document.getElementById('ki-font-link');
+    if (!f.family) return;
+    const href = `https://fonts.googleapis.com/css2?family=${f.family}:wght@400;500;600;700&display=swap`;
+    if (!link) { link = document.createElement('link'); link.rel = 'stylesheet'; link.id = 'ki-font-link'; document.head.appendChild(link); }
+    if (link.href !== href) link.href = href;
+  }
+
+  function apply(t) {
+    const set = (k, v) => root.style.setProperty(k, v);
+    const onPrimary = readableOn(t.primary);
+    const c = OPTIONS.corner_values[t.corners];
+    const pill = t.buttons === 'pill';
+    set('--ki-primary', t.primary);
+    set('--ki-primary-rgb', rgb(t.primary).join(', '));
+    set('--ki-secondary', t.secondary);
+    set('--ki-accent', t.accent);
+    set('--ki-light', tint(t.primary, 0.9));
+    set('--ki-bg', t.background);
+    set('--ki-on-primary', onPrimary);
+    set('--ki-on-secondary', readableOn(t.secondary));
+    set('--ki-radius', c.r); set('--ki-radius-sm', c.sm); set('--ki-radius-lg', c.lg); set('--ki-card-radius', c.card);
+    set('--ki-btn-radius', pill ? '50rem' : c.r); set('--ki-btn-radius-sm', pill ? '50rem' : c.sm);
+    loadFont(t.font); set('--ki-font', OPTIONS.fonts[t.font].stack);
+
+    document.body.classList.remove('ki-header-gradient', 'ki-header-solid', 'ki-header-light');
+    document.body.classList.add('ki-header-' + t.header);
+    const headerDark = t.header !== 'light' && onPrimary === '#ffffff';
+    document.querySelectorAll('.ki-navbar').forEach(n => {
+      n.classList.toggle('navbar-dark', headerDark);
+      n.classList.toggle('navbar-light', !headerDark);
+    });
+
+    // Mini illustrations
+    document.querySelectorAll('[data-mini-header]').forEach(el => {
+      const k = el.dataset.miniHeader;
+      el.style.background = k === 'gradient' ? `linear-gradient(135deg, ${t.primary}, ${t.secondary})`
+                          : k === 'solid' ? t.primary : '#fff';
+      el.style.border = k === 'light' ? '1px solid #e5e7eb' : 'none';
+      el.style.borderBottom = k === 'light' ? `3px solid ${t.accent}` : 'none';
+    });
+    document.querySelectorAll('[data-btn-demo]').forEach(el => {
+      el.style.borderRadius = el.dataset.btnDemo === 'pill' ? '50rem' : c.r;
+    });
+
+    // PDF mock (PDF uses a darkened "ink" if the primary is too light for paper)
+    const pdfInk = ink(t.primary);
+    document.querySelector('[data-pdf-ink]').style.color = pdfInk;
+    document.querySelector('[data-pdf-rule]').style.background = t.accent;
+    const label = document.querySelector('[data-pdf-label]');
+    label.style.background = pdfInk; label.style.color = readableOn(pdfInk);
+
+    // Feedback
+    document.getElementById('bgWarning').classList.toggle('d-none', lum(t.background) >= MIN_BG_LUMINANCE);
+    document.getElementById('contrastInfo').innerHTML =
+      `<i class="bi bi-magic me-1"></i>Text on the header is set automatically to <strong>${onPrimary === '#ffffff' ? 'white' : 'dark'}</strong> for readability.`;
+    document.querySelectorAll('[data-preset]').forEach(b => {
+      const p = OPTIONS.presets[b.dataset.preset];
+      b.classList.toggle('active', ['primary', 'secondary', 'accent', 'background']
+        .every(k => p[k].toLowerCase() === t[k].toLowerCase()));
+    });
+  }
+
+  // ── Wiring ──────────────────────────────────────────────────────────────
+  const initial = JSON.stringify(state());
+  function refresh() {
+    const t = state();
+    apply(t);
+    document.getElementById('unsavedBar').classList.toggle('d-none', JSON.stringify(t) === initial
+      && !document.getElementById('logoInput').files.length);
+  }
+
+  form.querySelectorAll('[data-theme-input]').forEach(el => el.addEventListener('input', () => {
+    if (el.type === 'color') form.querySelector(`[data-hex-for="${el.id}"]`).value = el.value;
+    refresh();
+  }));
+  form.querySelectorAll('[data-hex-for]').forEach(txt => txt.addEventListener('input', () => {
+    let v = txt.value.trim();
+    if (v && v[0] !== '#') v = '#' + v;
+    txt.classList.toggle('is-invalid', !isHex(v));
+    if (isHex(v)) { document.getElementById(txt.dataset.hexFor).value = v.toLowerCase(); refresh(); }
+  }));
+  document.querySelectorAll('[data-preset]').forEach(btn => btn.addEventListener('click', () => {
+    const p = OPTIONS.presets[btn.dataset.preset];
+    for (const k of ['primary', 'secondary', 'accent', 'background']) {
+      document.getElementById('theme_' + k).value = p[k];
+      form.querySelector(`[data-hex-for="theme_${k}"]`).value = p[k];
+    }
+    refresh();
+  }));
+
+  // Logo: preview the chosen file before uploading
+  const logoInput = document.getElementById('logoInput');
+  logoInput.addEventListener('change', () => {
+    const file = logoInput.files[0];
+    if (!file) return refresh();
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Logo must be 2 MB or smaller.'); logoInput.value = ''; return refresh();
+    }
+    const url = URL.createObjectURL(file);
+    const box = document.getElementById('logoBox');
+    box.innerHTML = '';
+    const img = document.createElement('img'); img.src = url; img.alt = 'New logo preview'; box.appendChild(img);
+    const pl = document.querySelector('[data-preview-logo]');
+    pl.src = url; pl.classList.remove('d-none');
+    document.querySelector('[data-preview-icon]').classList.add('d-none');
+    refresh();
+  });
+
+  // Unsaved preview → warn before leaving
+  let submitting = false;
+  form.addEventListener('submit', () => { submitting = true; });
+  document.querySelectorAll('[data-discard]').forEach(a => a.addEventListener('click', () => { submitting = true; }));
+  window.addEventListener('beforeunload', e => {
+    if (!submitting && !document.getElementById('unsavedBar').classList.contains('d-none')) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  refresh();
+})();
+</script>
+{% endif %}
+{% endblock %}

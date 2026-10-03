@@ -12,7 +12,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from .models import AppSetting
 from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WORK
-from .branding import get_brand, STATIC_BRAND, tint
+from .branding import get_brand, tint, luminance, readable_text_on, load_logo_png
 
 
 DEFAULT_TERMS = (
@@ -46,33 +46,63 @@ def ft_in(decimal_ft):
         return f"{feet} ft"
     return f"{feet} ft {inches} in"
 
-# Brand colors (from BRAND_PRIMARY / BRAND_ACCENT env vars)
-_PRIMARY = STATIC_BRAND['primary']
-BRAND_DARK = colors.HexColor(_PRIMARY)
-BRAND_ACCENT = colors.HexColor(STATIC_BRAND['accent'])
-BRAND_LIGHT = colors.HexColor(tint(_PRIMARY, 0.9))
 GREY_BG = colors.HexColor('#f5f5f5')
-TABLE_HEADER_BG = colors.HexColor(tint(_PRIMARY, 0.85))
-ROOM_HEADER_BG  = colors.HexColor(tint(_PRIMARY, 0.75))
-TABLE_HEADER_FG = BRAND_DARK
-TOTAL_ROW_BG    = ROOM_HEADER_BG
+
+
+def _ink(hex_color):
+    """Darken a colour until it reads well as text on white paper (WCAG ≥ 4.5:1)."""
+    amount = 0.0
+    shade = hex_color
+    while 1.05 / (luminance(shade) + 0.05) < 4.5 and amount < 1:
+        amount += 0.1
+        r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+        shade = '#{:02x}{:02x}{:02x}'.format(*(round(c * (1 - amount)) for c in (r, g, b)))
+    return shade
+
+
+def _palette():
+    """
+    PDF colours from the current theme (Admin → Settings → Appearance):
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND)
+    BRAND_DARK is the primary colour, darkened if needed so text stays legible.
+    """
+    brand = get_brand()
+    primary = brand['primary']
+    dark = colors.HexColor(_ink(primary))
+    room_bg = colors.HexColor(tint(primary, 0.75))
+    return (dark,
+            colors.HexColor(brand['accent']),
+            colors.HexColor(tint(primary, 0.9)),
+            colors.HexColor(tint(primary, 0.85)),
+            room_bg,
+            dark,
+            room_bg,
+            colors.HexColor(readable_text_on(_ink(primary))))
 
 
 def _logo_flowable(brand, max_height=1.6 * cm, max_width=6 * cm):
-    """Return a reportlab Image for LOGO_FILE (PNG/JPG under static/), or None."""
-    if not brand.get('logo_file'):
+    """Logo uploaded in Settings (stored in the DB), else LOGO_FILE under static/, else None."""
+    source = None
+    if brand.get('logo_version'):
+        png = load_logo_png()
+        source = BytesIO(png) if png else None
+    elif brand.get('logo_file'):
+        source = os.path.join(current_app.static_folder, brand['logo_file'])
+    if source is None:
         return None
-    path = os.path.join(current_app.static_folder, brand['logo_file'])
     try:
-        w, h = ImageReader(path).getSize()
+        w, h = ImageReader(source).getSize()
+        if isinstance(source, BytesIO):
+            source.seek(0)
     except Exception:
-        current_app.logger.warning(f'LOGO_FILE could not be loaded for PDF: {path}')
+        current_app.logger.warning('Logo could not be loaded for PDF.')
         return None
     scale = min(max_height / h, max_width / w)
-    return Image(path, width=w * scale, height=h * scale)
+    return Image(source, width=w * scale, height=h * scale)
 
 
-def _header_elements(title_style, subtitle_style):
+def _header_elements(title_style, subtitle_style, accent):
     """Logo, company name, contact line and accent rule shared by both PDFs."""
     brand = get_brand()
     elements = []
@@ -88,7 +118,7 @@ def _header_elements(title_style, subtitle_style):
     elements.append(Paragraph(escape(subtitle), subtitle_style))
     if brand['gstin']:
         elements.append(Paragraph(f"GSTIN: {escape(brand['gstin'])}", subtitle_style))
-    elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
+    elements.append(HRFlowable(width='100%', thickness=2, color=accent, spaceAfter=8))
     return elements
 
 
@@ -110,6 +140,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     total_paid: float – amount already received (optional)
     """
     """Generate a professional PDF quotation and return a BytesIO buffer."""
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = _palette()
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -154,7 +186,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # -------  HEADER -------
-    elements += _header_elements(title_style, subtitle_style)
+    elements += _header_elements(title_style, subtitle_style, BRAND_ACCENT)
 
     # QUOTATION LABEL
     quot_header = Table(
@@ -165,7 +197,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     quot_header.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), BRAND_DARK),
         ('BACKGROUND', (1, 0), (1, 0), BRAND_LIGHT),
-        ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
+        ('TEXTCOLOR', (0, 0), (0, 0), ON_BRAND),
         ('TEXTCOLOR', (1, 0), (1, 0), BRAND_DARK),
         ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
         ('FONTNAME', (1, 0), (1, 0), 'Helvetica'),
@@ -531,6 +563,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     Generate a customer-facing PDF: total costs only, no measurements.
     Shows material type → amount, final total, material specs, and T&C.
     """
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = _palette()
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -567,7 +601,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # ------- HEADER -------
-    elements += _header_elements(title_style, subtitle_style)
+    elements += _header_elements(title_style, subtitle_style, BRAND_ACCENT)
 
     # QUOTATION LABEL
     quot_header = Table(
@@ -578,7 +612,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     quot_header.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), BRAND_DARK),
         ('BACKGROUND', (1, 0), (1, 0), BRAND_LIGHT),
-        ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
+        ('TEXTCOLOR', (0, 0), (0, 0), ON_BRAND),
         ('TEXTCOLOR', (1, 0), (1, 0), BRAND_DARK),
         ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
         ('FONTNAME', (1, 0), (1, 0), 'Helvetica'),

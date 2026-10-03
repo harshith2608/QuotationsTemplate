@@ -9,28 +9,45 @@
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('main.favicon') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('main.favicon', v=brand.theme_version) }}">
+  {% if brand.font_url %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="{{ brand.font_url }}" id="ki-font-link">
+  {% endif %}
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <style>
+  {# Theme from Admin → Settings → Appearance (values are validated in app/branding.py) #}
+  <style id="ki-theme">
     :root {
-      --ki-primary:   {{ brand.primary }};
-      --ki-secondary: {{ brand.secondary }};
-      --ki-accent:    {{ brand.accent }};
-      --ki-light:     {{ brand.light }};
+      --ki-primary:       {{ brand.primary }};
+      --ki-primary-rgb:   {{ brand.primary_rgb }};
+      --ki-secondary:     {{ brand.secondary }};
+      --ki-accent:        {{ brand.accent }};
+      --ki-light:         {{ brand.light }};
+      --ki-bg:            {{ brand.background }};
+      --ki-on-primary:    {{ brand.on_primary }};
+      --ki-on-secondary:  {{ brand.on_secondary }};
+      --ki-radius:        {{ brand.radius }};
+      --ki-radius-sm:     {{ brand.radius_sm }};
+      --ki-radius-lg:     {{ brand.radius_lg }};
+      --ki-card-radius:   {{ brand.radius_card }};
+      --ki-btn-radius:    {{ brand.btn_radius }};
+      --ki-btn-radius-sm: {{ brand.btn_radius_sm }};
+      --ki-font:          {{ brand.font_stack|safe }};
     }
   </style>
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="ki-header-{{ brand.header_style }}">
 
 {% if current_user.is_authenticated %}
 <!-- ===== NAVBAR ===== -->
-<nav class="navbar navbar-expand-lg navbar-dark ki-navbar sticky-top">
+<nav class="navbar navbar-expand-lg {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar sticky-top" id="ki-navbar">
   <div class="container-fluid px-3">
     <a class="navbar-brand fw-bold" href="{{ url_for('projects.list_projects') }}">
-      {% if brand.logo_file %}
-      <img src="{{ url_for('static', filename=brand.logo_file) }}" alt="" class="ki-navbar-logo me-2">
+      {% if brand.logo_url %}
+      <img src="{{ brand.logo_url }}" alt="" class="ki-navbar-logo me-2">
       {% else %}
       <i class="bi bi-house-heart-fill me-2"></i>
       {% endif %}{{ brand.name }}
@@ -77,6 +94,11 @@
             <li>
               <a class="dropdown-item" href="{{ url_for('admin.payment_settings') }}">
                 <i class="bi bi-credit-card me-2"></i>Payment Settings
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('admin.settings') }}">
+                <i class="bi bi-sliders me-2"></i>Settings
               </a>
             </li>
             <li>

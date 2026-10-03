@@ -1,14 +1,24 @@
 /* =====================================================
    Quotation App – Custom Stylesheet
-   Brand colours below are defaults; base.html overrides
-   --ki-primary/secondary/accent/light from BRAND_* env vars.
+   Theme values below are fallbacks; base.html overrides them
+   from Admin → Settings → Appearance (see app/branding.py).
    ===================================================== */
 
 :root {
   --ki-primary:   #1a237e;
+  --ki-primary-rgb: 26, 35, 126;
   --ki-secondary: #283593;
   --ki-accent:    #f57f17;
   --ki-light:     #e8eaf6;
+  --ki-on-primary:   #ffffff;
+  --ki-on-secondary: #ffffff;
+  --ki-radius:    .375rem;
+  --ki-radius-sm: .25rem;
+  --ki-radius-lg: .5rem;
+  --ki-card-radius: 10px;
+  --ki-btn-radius:    var(--ki-radius);
+  --ki-btn-radius-sm: var(--ki-radius-sm);
+  --ki-font: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --ki-success:   #2e7d32;
   --ki-text:      #212121;
   --ki-muted:     #757575;
@@ -20,16 +30,39 @@
 body {
   background-color: var(--ki-bg);
   color: var(--ki-text);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: var(--ki-font);
   font-size: 0.925rem;
 }
 
-/* ---- Navbar ---- */
+/* ---- Navbar (header style: gradient / solid / light) ---- */
 .ki-navbar {
   background: linear-gradient(135deg, var(--ki-primary) 0%, var(--ki-secondary) 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   min-height: 54px;
 }
+.ki-header-solid .ki-navbar { background: var(--ki-primary); }
+.ki-header-light .ki-navbar {
+  background: #fff;
+  border-bottom: 3px solid var(--ki-accent);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+}
+.ki-header-light .ki-navbar .navbar-brand { color: var(--ki-primary); }
+/* Light-coloured primary on a gradient/solid header → dark text (navbar-light) */
+.ki-navbar.navbar-light {
+  --bs-navbar-color: color-mix(in srgb, var(--ki-on-primary) 75%, transparent);
+  --bs-navbar-hover-color: var(--ki-on-primary);
+  --bs-navbar-active-color: var(--ki-on-primary);
+  --bs-navbar-brand-color: var(--ki-on-primary);
+  --bs-navbar-brand-hover-color: var(--ki-on-primary);
+}
+.ki-header-light .ki-navbar.navbar-light {
+  --bs-navbar-color: #4b5563;
+  --bs-navbar-hover-color: var(--ki-primary);
+  --bs-navbar-active-color: var(--ki-primary);
+  --bs-navbar-brand-color: var(--ki-primary);
+  --bs-navbar-brand-hover-color: var(--ki-primary);
+}
+.ki-navbar .nav-link.active { box-shadow: inset 0 -2px 0 var(--ki-accent); }
 .ki-navbar .navbar-brand {
   font-size: 1.1rem;
   letter-spacing: 0.3px;
@@ -38,7 +71,7 @@ body {
 .ki-navbar .nav-link.active { font-weight: 700; }
 /* Dropdown toggle buttons in navbar — match nav-link appearance */
 .ki-navbar .btn-link.nav-link {
-  color: rgba(255,255,255,.85);
+  color: var(--bs-navbar-color);
   text-decoration: none;
   padding: 0.5rem 1rem;
   background: none;
@@ -46,8 +79,8 @@ body {
   box-shadow: none;
 }
 .ki-navbar .btn-link.nav-link:hover,
-.ki-navbar .btn-link.nav-link:focus { color: #fff; outline: none; box-shadow: none; }
-.ki-navbar .btn-link.nav-link.active { color: #fff; font-weight: 700; }
+.ki-navbar .btn-link.nav-link:focus { color: var(--bs-navbar-hover-color); outline: none; box-shadow: none; }
+.ki-navbar .btn-link.nav-link.active { color: var(--bs-navbar-active-color); font-weight: 700; }
 
 /* ---- Brand / Login ---- */
 .ki-brand-text { color: var(--ki-primary); }
@@ -68,29 +101,35 @@ body {
 .ki-btn-primary {
   background: linear-gradient(135deg, var(--ki-primary), var(--ki-secondary));
   border: none;
-  color: #fff;
+  color: var(--ki-on-primary);
 }
 .ki-btn-primary:hover {
   background: linear-gradient(135deg, var(--ki-secondary), var(--ki-primary));
-  color: #fff;
+  color: var(--ki-on-primary);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--ki-primary) 25%, transparent);
 }
 
 /* ---- Cards & Headers ---- */
-.card { border-radius: 10px; }
+.card { --bs-card-border-radius: var(--ki-card-radius); border-radius: var(--ki-card-radius); }
 .ki-card-header {
   background: linear-gradient(135deg, var(--ki-primary), var(--ki-secondary));
-  color: #fff;
+  color: var(--ki-on-primary);
   font-weight: 600;
   font-size: 0.875rem;
   padding: 0.6rem 1rem;
-  border-radius: 10px 10px 0 0 !important;
+  border-radius: var(--ki-card-radius) var(--ki-card-radius) 0 0 !important;
+}
+.ki-header-solid .ki-card-header { background: var(--ki-primary); }
+.ki-header-light .ki-card-header {
+  background: var(--ki-light);
+  color: var(--ki-primary);
+  border-bottom: 2px solid var(--ki-accent);
 }
 
 /* ---- Tables ---- */
 .ki-table-head th {
   background: var(--ki-primary);
-  color: #fff;
+  color: var(--ki-on-primary);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -98,6 +137,7 @@ body {
   border: none;
   white-space: nowrap;
 }
+.ki-header-light .ki-table-head th { background: var(--ki-light); color: var(--ki-primary); }
 .table-hover tbody tr:hover { background: color-mix(in srgb, var(--ki-primary) 4%, transparent); }
 
 /* ---- Page Titles ---- */
@@ -140,7 +180,7 @@ body {
 .ki-room-block { border-radius: 8px; overflow: hidden; border: 1px solid var(--ki-border); }
 .ki-room-title {
   background: linear-gradient(135deg, var(--ki-secondary), color-mix(in srgb, var(--ki-secondary) 70%, white));
-  color: #fff;
+  color: var(--ki-on-secondary);
   font-weight: 600;
   font-size: 0.875rem;
   padding: 8px 14px;
@@ -175,7 +215,7 @@ body {
 .item-table .form-control:focus,
 .item-table .form-select:focus {
   border-color: var(--ki-secondary);
-  box-shadow: 0 0 0 0.15rem rgba(57,73,171,0.2);
+  box-shadow: 0 0 0 0.15rem rgba(var(--ki-primary-rgb), 0.2);
 }
 .area-display {
   font-weight: 700;
@@ -303,3 +343,89 @@ main { padding-bottom: 60px; }
 .fs-7 { font-size: 0.8rem; }
 .text-ki { color: var(--ki-primary) !important; }
 .bg-ki { background-color: var(--ki-light) !important; }
+
+
+/* =====================================================
+   Bootstrap → theme bridge
+   Makes Bootstrap's "primary" colour, links, form controls
+   and corner radii follow the admin-selected theme.
+   ===================================================== */
+:root {
+  --bs-primary: var(--ki-primary);
+  --bs-primary-rgb: var(--ki-primary-rgb);
+  --bs-primary-text-emphasis: color-mix(in srgb, var(--ki-primary) 70%, black);
+  --bs-primary-bg-subtle: var(--ki-light);
+  --bs-primary-border-subtle: color-mix(in srgb, var(--ki-primary) 30%, white);
+  --bs-link-color: var(--ki-primary);
+  --bs-link-color-rgb: var(--ki-primary-rgb);
+  --bs-link-hover-color: color-mix(in srgb, var(--ki-primary) 80%, black);
+  --bs-link-hover-color-rgb: var(--ki-primary-rgb);
+  --bs-focus-ring-color: rgba(var(--ki-primary-rgb), .25);
+  --bs-border-radius: var(--ki-radius);
+  --bs-border-radius-sm: var(--ki-radius-sm);
+  --bs-border-radius-lg: var(--ki-radius-lg);
+  --bs-border-radius-xl: var(--ki-radius-lg);
+  --bs-border-radius-xxl: var(--ki-radius-lg);
+}
+
+.btn { --bs-btn-border-radius: var(--ki-btn-radius); }
+.btn-sm, .btn-group-sm > .btn { --bs-btn-border-radius: var(--ki-btn-radius-sm); }
+
+.btn-primary {
+  --bs-btn-color: var(--ki-on-primary);
+  --bs-btn-bg: var(--ki-primary);
+  --bs-btn-border-color: var(--ki-primary);
+  --bs-btn-hover-color: var(--ki-on-primary);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--ki-primary) 85%, black);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--ki-primary) 85%, black);
+  --bs-btn-active-color: var(--ki-on-primary);
+  --bs-btn-active-bg: color-mix(in srgb, var(--ki-primary) 75%, black);
+  --bs-btn-active-border-color: color-mix(in srgb, var(--ki-primary) 75%, black);
+  --bs-btn-disabled-color: var(--ki-on-primary);
+  --bs-btn-disabled-bg: var(--ki-primary);
+  --bs-btn-disabled-border-color: var(--ki-primary);
+  --bs-btn-focus-shadow-rgb: var(--ki-primary-rgb);
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--ki-primary);
+  --bs-btn-border-color: var(--ki-primary);
+  --bs-btn-hover-color: var(--ki-on-primary);
+  --bs-btn-hover-bg: var(--ki-primary);
+  --bs-btn-hover-border-color: var(--ki-primary);
+  --bs-btn-active-color: var(--ki-on-primary);
+  --bs-btn-active-bg: var(--ki-primary);
+  --bs-btn-active-border-color: var(--ki-primary);
+  --bs-btn-disabled-color: var(--ki-primary);
+  --bs-btn-disabled-border-color: var(--ki-primary);
+  --bs-btn-focus-shadow-rgb: var(--ki-primary-rgb);
+}
+.badge.bg-primary, .text-bg-primary { color: var(--ki-on-primary) !important; }
+
+.form-control:focus, .form-select:focus {
+  border-color: color-mix(in srgb, var(--ki-primary) 50%, white);
+  box-shadow: 0 0 0 .25rem rgba(var(--ki-primary-rgb), .2);
+}
+.form-check-input:checked { background-color: var(--ki-primary); border-color: var(--ki-primary); }
+.form-check-input:focus {
+  border-color: color-mix(in srgb, var(--ki-primary) 50%, white);
+  box-shadow: 0 0 0 .25rem rgba(var(--ki-primary-rgb), .2);
+}
+.form-range::-webkit-slider-thumb { background-color: var(--ki-primary); }
+.form-range::-moz-range-thumb { background-color: var(--ki-primary); }
+
+.pagination {
+  --bs-pagination-color: var(--ki-primary);
+  --bs-pagination-hover-color: var(--ki-primary);
+  --bs-pagination-focus-color: var(--ki-primary);
+  --bs-pagination-focus-box-shadow: 0 0 0 .25rem rgba(var(--ki-primary-rgb), .25);
+  --bs-pagination-active-bg: var(--ki-primary);
+  --bs-pagination-active-border-color: var(--ki-primary);
+  --bs-pagination-active-color: var(--ki-on-primary);
+}
+.nav-pills {
+  --bs-nav-pills-link-active-bg: var(--ki-primary);
+  --bs-nav-pills-link-active-color: var(--ki-on-primary);
+}
+.nav { --bs-nav-link-color: var(--ki-primary); --bs-nav-link-hover-color: color-mix(in srgb, var(--ki-primary) 80%, black); }
+.dropdown-menu { --bs-dropdown-link-active-bg: var(--ki-primary); --bs-dropdown-link-active-color: var(--ki-on-primary); }
+.progress, .progress-stacked { --bs-progress-bar-bg: var(--ki-primary); }

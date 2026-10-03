@@ -1,6 +1,6 @@
-from flask import Blueprint, redirect, url_for, render_template, Response
+from flask import Blueprint, redirect, url_for, render_template, Response, abort, request
 from flask_login import login_required
-from .branding import STATIC_BRAND
+from .branding import get_brand, load_logo_png
 
 main_bp = Blueprint('main', __name__)
 
@@ -22,10 +22,20 @@ _FAVICON_SVG = (
 
 @main_bp.route('/favicon.svg')
 def favicon():
-    """Favicon drawn in the deployment's primary brand colour."""
-    svg = _FAVICON_SVG.format(color=STATIC_BRAND['primary'])
+    """Favicon drawn in the current primary brand colour (URL is versioned by base.html)."""
+    svg = _FAVICON_SVG.format(color=get_brand()['primary'])
     return Response(svg, mimetype='image/svg+xml',
                     headers={'Cache-Control': 'public, max-age=86400'})
+
+
+@main_bp.route('/brand/logo.png')
+def brand_logo():
+    """Logo uploaded in Admin → Settings. The ?v= version changes on every upload, so cache hard."""
+    png = load_logo_png()
+    if not png:
+        abort(404)
+    cache = 'public, max-age=31536000, immutable' if request.args.get('v') else 'no-cache'
+    return Response(png, mimetype='image/png', headers={'Cache-Control': cache})
 
 
 @main_bp.app_errorhandler(403)

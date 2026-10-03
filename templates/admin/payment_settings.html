@@ -4,8 +4,11 @@
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mt-3 mb-3">
   <h4 class="mb-0 fw-bold ki-page-title">
-    <i class="bi bi-gear me-2 text-primary"></i>App Settings
+    <i class="bi bi-credit-card me-2 text-primary"></i>Payment Settings
   </h4>
+  <a href="{{ url_for('admin.settings') }}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-sliders me-1"></i>Company, appearance &amp; email
+  </a>
 </div>
 
 <form method="POST" action="{{ url_for('admin.payment_settings') }}" novalidate>
@@ -55,7 +58,7 @@
           </p>
           <div class="alert alert-info py-2 small mb-3">
             <strong>Webhook URL to enter in Razorpay Dashboard:</strong><br>
-            <code>https://&lt;your-domain&gt;/webhook/razorpay</code><br>
+            <code class="user-select-all">{{ webhook_url }}</code><br>
             <span class="text-muted">Razorpay Dashboard → Webhooks → Add New Webhook → Event: <strong>payment_link.paid</strong></span>
           </div>
           <div class="mb-1">
@@ -128,146 +131,11 @@
       </div>
     </div>
 
-    <!-- Email Notifications -->
-    <div class="col-12">
-      <div class="card shadow-sm border-0">
-        <div class="card-header ki-card-header">
-          <i class="bi bi-envelope me-2"></i>Email Notifications
-        </div>
-        <div class="card-body">
-          <p class="small text-muted mb-3">
-            When a payment is received automatically via Razorpay, an email is sent to both the customer and admin.
-            Uses Gmail or any SMTP server. For Gmail, use an
-            <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>
-            (not your regular Gmail password).
-          </p>
-          <div class="row g-3">
-            <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">Admin Email <span class="text-muted">(receives payment alerts)</span></label>
-              <input type="email" name="admin_email" class="form-control"
-                     placeholder="admin@example.com"
-                     value="{{ settings.admin_email }}">
-            </div>
-            <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">SMTP Host</label>
-              <input type="text" name="smtp_host" class="form-control"
-                     placeholder="smtp.gmail.com"
-                     value="{{ settings.smtp_host }}">
-            </div>
-            <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">SMTP Port</label>
-              <input type="number" name="smtp_port" class="form-control"
-                     placeholder="587"
-                     value="{{ settings.smtp_port or '587' }}">
-            </div>
-            <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">SMTP Username <span class="text-muted">(usually your email)</span></label>
-              <input type="email" name="smtp_user" class="form-control"
-                     placeholder="you@gmail.com"
-                     value="{{ settings.smtp_user }}">
-            </div>
-            <div class="col-12 col-sm-6">
-              <label class="form-label fw-medium small">SMTP Password / App Password</label>
-              <input type="password" name="smtp_pass" class="form-control"
-                     placeholder="••••••••••••••••"
-                     value="" autocomplete="off">
-              <div class="form-text text-muted">Leave blank to keep existing password.
-                {% if settings.smtp_pass %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Company Details -->
-    <div class="col-12">
-      <div class="card shadow-sm border-0">
-        <div class="card-header ki-card-header">
-          <i class="bi bi-building me-2"></i>Company Details (PDF Header)
-        </div>
-        <div class="card-body">
-          <p class="small text-muted mb-3">
-            These details appear in the header of every PDF quotation, in emails and in WhatsApp messages.
-            Leave a field blank to use this deployment's default (shown as the placeholder).
-          </p>
-          <div class="row g-3">
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-medium small">Company Name</label>
-              <input type="text" name="company_name" class="form-control"
-                     placeholder="{{ env_defaults.company_name or 'e.g. Acme Interiors' }}"
-                     value="{{ settings.company_name }}">
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-medium small">Mobile Number</label>
-              <input type="text" name="company_mobile" class="form-control"
-                     placeholder="{{ env_defaults.company_mobile or 'e.g. +91 90000 00000' }}"
-                     value="{{ settings.company_mobile }}">
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-medium small">Email</label>
-              <input type="email" name="company_email" class="form-control"
-                     placeholder="{{ env_defaults.company_email or 'e.g. hello@yourcompany.com' }}"
-                     value="{{ settings.company_email }}">
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-medium small">GSTIN <span class="text-muted">(optional)</span></label>
-              <input type="text" name="company_gstin" class="form-control text-uppercase"
-                     maxlength="15"
-                     placeholder="{{ env_defaults.company_gstin or 'e.g. 29ABCDE1234F1Z5' }}"
-                     value="{{ settings.company_gstin }}">
-            </div>
-            <div class="col-12">
-              <label class="form-label fw-medium small">Address</label>
-              <textarea name="company_address" class="form-control" rows="2"
-                        placeholder="{{ env_defaults.company_address or 'e.g. 12, Main Road, Your City - 000000' }}">{{ settings.company_address }}</textarea>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Material Specifications -->
-    <div class="col-12">
-      <div class="card shadow-sm border-0">
-        <div class="card-header ki-card-header">
-          <i class="bi bi-card-checklist me-2"></i>Material Specifications (PDF)
-        </div>
-        <div class="card-body">
-          <p class="small text-muted mb-3">
-            This text appears in every quotation PDF just before the Terms &amp; Conditions.
-            Edit here once and it applies to all future PDFs. Leave blank to omit the section.
-          </p>
-          <textarea name="material_specs" class="form-control font-monospace"
-                    rows="12" style="font-size:0.82rem; line-height:1.6"
-                    placeholder="e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...">{{ settings.material_specs }}</textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- Terms & Conditions -->
-    <div class="col-12">
-      <div class="card shadow-sm border-0">
-        <div class="card-header ki-card-header">
-          <i class="bi bi-file-text me-2"></i>Terms &amp; Conditions (PDF)
-        </div>
-        <div class="card-body">
-          <p class="small text-muted mb-3">
-            These terms appear at the bottom of every quotation PDF. One term per line.
-            Edit here once and it applies to all future PDFs.
-          </p>
-          <textarea name="terms_conditions" class="form-control font-monospace"
-                    rows="8" style="font-size:0.82rem; line-height:1.6"
-                    placeholder="1. This is a preliminary estimate...">{{ settings.terms_conditions }}</textarea>
-        </div>
-      </div>
-    </div>
-
   </div>
 
   <div class="mt-3 mb-5">
     <button type="submit" class="btn btn-primary ki-btn-primary">
-      <i class="bi bi-check-circle me-1"></i>Save Settings
+      <i class="bi bi-check-circle me-1"></i>Save Payment Settings
     </button>
   </div>
 </form>

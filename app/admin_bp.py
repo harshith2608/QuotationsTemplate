@@ -8,7 +8,7 @@ from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
 from .pdf_utils import DEFAULT_TERMS
 from .catalog import WOOD_TYPES, WORK_TYPES
-from .branding import EDITABLE_FIELDS, env_default
+from . import branding
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -193,39 +193,98 @@ def rates():
                            wood_types=WOOD_TYPES, work_types=WORK_TYPES)
 
 
-COMPANY_KEYS = [app_key for app_key, _, _ in EDITABLE_FIELDS.values()]
+PAYMENT_KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
+                'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']
+EMAIL_KEYS = ['admin_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']
+SECRET_KEYS = {'razorpay_key_secret', 'webhook_secret', 'smtp_pass'}
+SETTINGS_TABS = ('company', 'appearance', 'documents', 'email')
+
+
+def _save_plain_settings(keys):
+    for key in keys:
+        val = request.form.get(key, '').strip()
+        # Don't blank out secrets if the field was left empty
+        if key in SECRET_KEYS and not val:
+            continue
+        AppSetting.set(key, val)
 
 
 @admin_bp.route('/payment-settings', methods=['GET', 'POST'])
 def payment_settings():
-    KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
-            'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code',
-            'admin_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']
     if request.method == 'POST':
-        for key in KEYS:
-            val = request.form.get(key, '').strip()
-            # Don't blank out secrets if field left empty
-            if key in ('razorpay_key_secret', 'webhook_secret', 'smtp_pass') and not val:
-                continue
-            AppSetting.set(key, val)
-        # Multi-line fields — preserve newlines, allow blanking
-        AppSetting.set('material_specs',    request.form.get('material_specs',    '').strip())
-        AppSetting.set('terms_conditions',  request.form.get('terms_conditions',  '').strip())
-        # Company details — blank means "use the deployment's env default"
-        for key in COMPANY_KEYS:
-            AppSetting.set(key, request.form.get(key, '').strip())
+        _save_plain_settings(PAYMENT_KEYS)
         db.session.commit()
-        flash('Settings updated successfully.', 'success')
+        flash('Payment settings updated.', 'success')
         return redirect(url_for('admin.payment_settings'))
-    settings = {k: AppSetting.get(k, '') for k in KEYS}
-    settings['material_specs']    = AppSetting.get('material_specs',   '')
-    settings['terms_conditions']  = AppSetting.get('terms_conditions', '') or DEFAULT_TERMS
-    for key in COMPANY_KEYS:
-        settings[key] = AppSetting.get(key, '')
-    env_defaults = {key: env_default(key) for key in COMPANY_KEYS}
-    return render_template('admin/payment_settings.html',
-                           title='Payment Settings', settings=settings,
-                           env_defaults=env_defaults)
+    settings = AppSetting.get_many(PAYMENT_KEYS)
+    webhook_url = url_for('projects.razorpay_webhook', _external=True)
+    return render_template('admin/payment_settings.html', title='Payment Settings',
+                           settings=settings, webhook_url=webhook_url)
+
+
+def _save_brand_fields(brand_keys):
+    """Save validated brand fields. Blank = fall back to env/default. Returns list of error messages."""
+    errors = []
+    for key in brand_keys:
+        app_key = branding.FIELDS[key][0]
+        raw = request.form.get(app_key, '').strip()
+        value = branding.clean_value(key, raw)
+        if value is None:
+            errors.append(f'Invalid value for {key.replace("_", " ")}: "{raw}".')
+            continue
+        if key == 'background' and value and branding.luminance(value) < branding.MIN_BACKGROUND_LUMINANCE:
+            errors.append('Page background is too dark for text to stay readable — pick a lighter shade.')
+            continue
+        # Store blank when it equals the deployment default, so env changes still apply
+        AppSetting.set(app_key, '' if value == branding.env_default(key) and key in branding.THEME_KEYS else value)
+    return errors
+
+
+@admin_bp.route('/settings', methods=['GET', 'POST'])
+def settings():
+    tab = request.args.get('tab') or request.form.get('section') or 'company'
+    tab = tab if tab in SETTINGS_TABS else 'company'
+
+    if request.method == 'POST':
+        errors = []
+        if tab == 'company':
+            errors = _save_brand_fields(branding.COMPANY_KEYS)
+        elif tab == 'appearance':
+            if request.form.get('reset_theme'):
+                for key in branding.THEME_KEYS:
+                    AppSetting.set(branding.FIELDS[key][0], '')
+            else:
+                errors = _save_brand_fields(branding.THEME_KEYS)
+            if request.form.get('remove_logo'):
+                branding.remove_logo()
+            elif request.files.get('logo') and request.files['logo'].filename:
+                try:
+                    png, version = branding.process_logo_upload(request.files['logo'].read())
+                    branding.save_logo_png(png, version)
+                except branding.LogoError as exc:
+                    errors.append(str(exc))
+        elif tab == 'documents':
+            # Multi-line fields — preserve newlines, allow blanking
+            AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
+            AppSetting.set('terms_conditions', request.form.get('terms_conditions', '').strip())
+        elif tab == 'email':
+            _save_plain_settings(EMAIL_KEYS)
+
+        db.session.commit()
+        for err in errors:
+            flash(err, 'danger')
+        if not errors:
+            flash('Theme reset to defaults.' if request.form.get('reset_theme') else 'Settings saved.', 'success')
+        return redirect(url_for('admin.settings', tab=tab))
+
+    saved_keys = ([branding.FIELDS[k][0] for k in branding.COMPANY_KEYS + branding.THEME_KEYS]
+                  + EMAIL_KEYS + ['material_specs', 'terms_conditions'])
+    saved = AppSetting.get_many(saved_keys)
+    saved['terms_conditions'] = saved['terms_conditions'] or DEFAULT_TERMS
+    defaults = {branding.FIELDS[k][0]: branding.env_default(k)
+                for k in branding.COMPANY_KEYS + branding.THEME_KEYS}
+    return render_template('admin/settings.html', title='Settings', tab=tab,
+                           saved=saved, defaults=defaults, options=branding.ui_options())
 
 
 @admin_bp.route('/notifications')
