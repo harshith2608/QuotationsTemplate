@@ -132,7 +132,8 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
      DATABASE_URL="postgresql://..." ADMIN_PASSWORD="..." flask db upgrade
      DATABASE_URL="postgresql://..." ADMIN_PASSWORD="..." flask bootstrap
      ```
-5. **Log in as the admin** and fill in *Payment Settings* (UPI/bank, Razorpay, SMTP, T&C) and *Rates*.
+5. **Put the app next to its database.** Every page makes several database queries, so the app server and Postgres must be in the same region. On Vercel set *Project Settings → Functions → Function Region* to match the database (e.g. Neon `ap-southeast-1` → `sin1` Singapore), then redeploy. Vercel's default is Washington, D.C. (`iad1`).
+6. **Log in as the admin** and fill in *Payment Settings* (UPI/bank, Razorpay, SMTP, T&C) and *Rates*.
 
 ---
 

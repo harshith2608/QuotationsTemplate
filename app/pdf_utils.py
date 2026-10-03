@@ -220,7 +220,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     from .models import ItemRate as _ItemRate
     _item_rates_map = {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in _ItemRate.query.all()}
 
-    for room in project.rooms.all():
+    rooms = project.rooms_with_items()
+    for room in rooms:
         # Room header row
         room_header = Table(
             [[f'  {room.name.upper()}']],
@@ -241,7 +242,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         item_rows = [['Item Name', 'Length', 'Width', 'Material & Work', 'Area (sqft)', 'Subtotal (Rs.)']]
         room_total_area = 0.0
         room_total_cost = 0.0
-        for item in room.items.all():
+        for item in room.item_list:
             work_type  = getattr(item, 'work_type', DEFAULT_WORK)
             rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
             subtotal   = item.area * rate
@@ -296,7 +297,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Cost Summary", section_style))
     elements.append(Spacer(1, 6))
 
-    item_totals = project.get_item_totals()  # { 'wood|work': area }
+    item_totals = project.get_item_totals(rooms)  # { 'wood|work': area }
     summary_cw = [page_width * p for p in [0.35, 0.22, 0.22, 0.21]]
 
     # Combined material + work cost table

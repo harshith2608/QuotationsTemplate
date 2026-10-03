@@ -177,7 +177,7 @@
         </table>
         </div>
         {% if item_summary %}
-        {% set total_area_all = project.rooms.all() | sum(attribute='total_area') %}
+        {% set total_area_all = rooms | sum(attribute='total_area') %}
         {% if total_area_all > 0 %}
         <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
           <div>
@@ -205,11 +205,11 @@
     <div class="card-header ki-card-header">
       <i class="bi bi-layout-three-columns me-2"></i>Room-by-Room Breakdown
       <span class="badge bg-white text-primary ms-2">
-        {{ project.rooms.count() }} room{{ 's' if project.rooms.count() != 1 }}
+        {{ rooms|length }} room{{ 's' if rooms|length != 1 }}
       </span>
     </div>
     <div class="card-body p-2 p-md-3">
-      {% for room in project.rooms.all() %}
+      {% for room in rooms %}
       <div class="ki-room-block mb-3">
         <div class="ki-room-title d-flex justify-content-between align-items-center">
           <span><i class="bi bi-door-open me-2"></i>{{ room.name }}</span>
@@ -230,7 +230,7 @@
               </tr>
             </thead>
             <tbody>
-              {% for item in room.items.all() %}
+              {% for item in room.item_list %}
               {% set item_subtotal = item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
               <tr>
                 <td class="fw-medium">{{ item.name }}</td>
@@ -255,7 +255,7 @@
                 <td class="text-center fw-semibold">{{ "%.2f"|format(room.total_area) }} sqft</td>
                 <td></td>
                 {% set room_cost = namespace(val=0) %}
-                {% for item in room.items.all() %}
+                {% for item in room.item_list %}
                   {% set room_cost.val = room_cost.val + item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
                 {% endfor %}
                 <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>

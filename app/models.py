@@ -52,30 +52,40 @@ class Project(db.Model):
     payments  = db.relationship('Payment',        backref='project', lazy='dynamic', cascade='all, delete-orphan')
     edit_logs = db.relationship('ProjectEditLog', backref='project', lazy='dynamic', cascade='all, delete-orphan')
 
-    def get_wood_totals(self):
-        """Returns dict of {wood_type: total_area}"""
-        totals = {}
-        for room in self.rooms:
-            for item in room.items:
-                totals[item.wood_type] = totals.get(item.wood_type, 0.0) + item.area
-        return totals
+    def rooms_with_items(self):
+        """
+        Load this project's rooms and all their items in two queries (instead of
+        one query per room). Each room gets an .item_list attribute, which
+        Room.total_area also uses, so callers can loop without re-querying.
+        """
+        rooms = self.rooms.order_by(Room.id).all()
+        items_by_room = {r.id: [] for r in rooms}
+        if rooms:
+            for item in Item.query.filter(Item.room_id.in_(items_by_room)).order_by(Item.id):
+                items_by_room[item.room_id].append(item)
+        for room in rooms:
+            room.item_list = items_by_room[room.id]
+        return rooms
 
-    def get_item_totals(self):
-        """Returns dict of {'wood_type|work_type': total_area}"""
+    def _area_totals(self, key_fn, rooms=None):
         totals = {}
-        for room in self.rooms:
-            for item in room.items:
-                key = f'{item.wood_type}|{item.work_type}'
+        for room in (rooms if rooms is not None else self.rooms_with_items()):
+            for item in room.item_list:
+                key = key_fn(item)
                 totals[key] = totals.get(key, 0.0) + item.area
         return totals
 
-    def get_work_totals(self):
-        """Returns dict of {work_type: total_area}"""
-        totals = {}
-        for room in self.rooms:
-            for item in room.items:
-                totals[item.work_type] = totals.get(item.work_type, 0.0) + item.area
-        return totals
+    def get_wood_totals(self, rooms=None):
+        """Returns dict of {wood_type: total_area}. Pass preloaded rooms to avoid re-querying."""
+        return self._area_totals(lambda i: i.wood_type, rooms)
+
+    def get_item_totals(self, rooms=None):
+        """Returns dict of {'wood_type|work_type': total_area}. Pass preloaded rooms to avoid re-querying."""
+        return self._area_totals(lambda i: f'{i.wood_type}|{i.work_type}', rooms)
+
+    def get_work_totals(self, rooms=None):
+        """Returns dict of {work_type: total_area}. Pass preloaded rooms to avoid re-querying."""
+        return self._area_totals(lambda i: i.work_type, rooms)
 
     @property
     def discount_amount(self):
@@ -115,7 +125,9 @@ class Room(db.Model):
 
     @property
     def total_area(self):
-        return sum(item.area for item in self.items)
+        # Use items preloaded by Project.rooms_with_items() when available
+        items = getattr(self, 'item_list', None)
+        return sum(item.area for item in (self.items if items is None else items))
 
     def __repr__(self):
         return f'<Room {self.name}>'
@@ -212,6 +224,12 @@ class AppSetting(db.Model):
     def get(cls, key, default=None):
         row = cls.query.get(key)
         return row.value if row else default
+
+    @classmethod
+    def get_many(cls, keys, default=''):
+        """Fetch several settings in one query: {key: value or default}."""
+        rows = {r.key: r.value for r in cls.query.filter(cls.key.in_(keys)).all()}
+        return {k: rows.get(k) or default for k in keys}
 
     @classmethod
     def set(cls, key, value):

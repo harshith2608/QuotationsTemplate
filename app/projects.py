@@ -311,7 +311,8 @@ def view_project(project_id):
         flash('This quotation is still in progress. Complete and save it.', 'warning')
         return redirect(url_for('projects.edit_project', project_id=project.id))
     item_rates_flat = _get_item_rates()
-    item_totals = project.get_item_totals()  # { 'wood|work': area }
+    rooms = project.rooms_with_items()
+    item_totals = project.get_item_totals(rooms)  # { 'wood|work': area }
     item_summary = []
     for key in [f'{w}|{wk}' for w in WOOD_TYPES for wk in WORK_TYPES]:
         area = item_totals.get(key, 0.0)
@@ -333,11 +334,11 @@ def view_project(project_id):
                 .all())
     total_paid = sum(p.amount for p in payments)
     balance    = max(project.final_total - total_paid, 0)
-    settings   = {k: AppSetting.get(k, '')
-                  for k in ['upi_id', 'bank_name', 'account_name',
-                             'account_number', 'ifsc_code', 'razorpay_key_id']}
+    settings   = AppSetting.get_many(['upi_id', 'bank_name', 'account_name',
+                                      'account_number', 'ifsc_code', 'razorpay_key_id'])
     return render_template('projects/view.html',
                            project=project,
+                           rooms=rooms,
                            item_summary=item_summary,
                            item_rates=item_rates_flat,
                            edit_logs=edit_logs,
@@ -453,7 +454,7 @@ def edit_project(project_id):
 
 def _build_rooms_json(project):
     rooms_data = []
-    for room in project.rooms.all():
+    for room in project.rooms_with_items():
         room_dict = {
             'name': room.name,
             'items': [
@@ -465,7 +466,7 @@ def _build_rooms_json(project):
                     'work_type': item.work_type,
                     'area': item.area
                 }
-                for item in room.items.all()
+                for item in room.item_list
             ]
         }
         rooms_data.append(room_dict)
@@ -620,8 +621,7 @@ def download_pdf(project_id):
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
     from .pdf_utils import generate_pdf
-    pay_settings = {k: AppSetting.get(k, '')
-                    for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
+    pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
     pdf_buffer = generate_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
@@ -641,8 +641,7 @@ def download_customer_pdf(project_id):
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
     from .pdf_utils import generate_customer_pdf
-    pay_settings = {k: AppSetting.get(k, '')
-                    for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
+    pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
     pdf_buffer = generate_customer_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
@@ -662,11 +661,11 @@ def whatsapp_share(project_id):
             abort(403)
 
     rates = _get_wood_rates()
-    wood_totals = project.get_wood_totals()
+    rooms = project.rooms_with_items()
+    wood_totals = project.get_wood_totals(rooms)
 
     # Payment info for WhatsApp
-    pay_settings = {k: AppSetting.get(k, '')
-                    for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
+    pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
     balance = max(project.final_total - total_paid, 0)
@@ -688,9 +687,9 @@ def whatsapp_share(project_id):
         if inch == 12: feet += 1; inch = 0
         return f"{feet}ft" if inch == 0 else f"{feet}ft {inch}in"
 
-    for room in project.rooms.all():
+    for room in rooms:
         lines.append(f"\n🏠 *{room.name}*")
-        for item in room.items.all():
+        for item in room.item_list:
             lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {item.area:.2f} sqft ({item.wood_type})")
 
     lines += ["", "*Material Summary:*"]
