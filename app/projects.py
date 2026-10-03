@@ -332,7 +332,7 @@ def view_project(project_id):
                 .order_by(Payment.recorded_at.desc())
                 .all())
     total_paid = sum(p.amount for p in payments)
-    balance    = max(project.grand_total - total_paid, 0)
+    balance    = max(project.final_total - total_paid, 0)
     settings   = {k: AppSetting.get(k, '')
                   for k in ['upi_id', 'bank_name', 'account_name',
                              'account_number', 'ifsc_code', 'razorpay_key_id']}
@@ -562,7 +562,7 @@ def generate_payment_link(project_id):
 
     payments   = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments)
-    remaining  = max(project.grand_total - total_paid, 0)
+    remaining  = max(project.final_total - total_paid, 0)
     if remaining <= 0:
         return jsonify({'error': 'This quotation is fully paid — no outstanding balance.'}), 400
 
@@ -669,7 +669,7 @@ def whatsapp_share(project_id):
                     for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
-    balance = max(project.grand_total - total_paid, 0)
+    balance = max(project.final_total - total_paid, 0)
 
     lines = [
         f"Hello {project.customer_name}! 👋",
@@ -701,10 +701,11 @@ def whatsapp_share(project_id):
             subtotal = area * rate
             lines.append(f"  • {wt}: {area:.2f} sqft × Rs.{rate:,.0f} = Rs.{subtotal:,.0f}")
 
-    lines += [
-        "",
-        f"💰 *Grand Total: Rs.{project.grand_total:,.2f}*",
-    ]
+    lines.append("")
+    if project.discount_amount > 0:
+        lines.append(f"Subtotal: Rs.{project.grand_total:,.2f}")
+        lines.append(f"Discount: - Rs.{project.discount_amount:,.2f}")
+    lines.append(f"💰 *Grand Total: Rs.{project.final_total:,.2f}*")
 
     if total_paid > 0:
         lines.append(f"✅ Amount Paid: Rs.{total_paid:,.2f}")
@@ -829,7 +830,7 @@ def razorpay_webhook():
     # ── 6. Compute updated balance
     all_payments = Payment.query.filter_by(project_id=project.id).all()
     total_paid   = sum(p.amount for p in all_payments) + amount_rupees
-    balance      = max(project.grand_total - total_paid, 0)
+    balance      = max(project.final_total - total_paid, 0)
 
     # ── 7. In-app notification for admin
     notif_msg = (

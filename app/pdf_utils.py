@@ -444,7 +444,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         pay_rows = []
 
         # Payment status row
-        balance = max(project.grand_total - total_paid, 0)
+        balance = max(project.final_total - total_paid, 0)
         if total_paid > 0:
             pay_rows.append(['Amount Paid', f'Rs. {total_paid:,.2f}',
                              'Balance Due', f'Rs. {balance:,.2f}'])
@@ -763,7 +763,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph("Payment Details", section_style))
         elements.append(Spacer(1, 6))
         pay_rows = []
-        balance = max(project.grand_total - total_paid, 0)
+        balance = max(project.final_total - total_paid, 0)
         if total_paid > 0:
             pay_rows.append(['Amount Paid', f'Rs. {total_paid:,.2f}', 'Balance Due', f'Rs. {balance:,.2f}'])
         if ps.get('upi_id'):
