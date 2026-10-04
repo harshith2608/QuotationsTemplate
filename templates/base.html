@@ -183,7 +183,7 @@
 </main>
 
 <!-- ===== FOOTER ===== -->
-<footer class="ki-footer text-center py-2">
+<footer class="ki-footer text-center">
   <small class="text-muted">
     &copy; {{ now.year if now else 2025 }} {{ brand.name }}{% if brand.tagline %} &nbsp;|&nbsp;
     {{ brand.tagline }}{% endif %}
@@ -192,6 +192,18 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Keep content clear of the mobile sticky Save bar, whatever its height -->
+<script>
+(function () {
+  const bar = document.querySelector('.ki-sticky-save');
+  if (!bar) return;
+  const sync = () => document.body.style.setProperty('--ki-sticky-h', bar.offsetHeight ? bar.offsetHeight + 'px' : '0px');
+  sync();
+  if (window.ResizeObserver) new ResizeObserver(sync).observe(bar);
+  window.addEventListener('resize', sync);
+})();
+</script>
 
 <!-- Global: PDF share/download helper -->
 <script>

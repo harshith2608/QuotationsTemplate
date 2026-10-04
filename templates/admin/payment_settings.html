@@ -11,7 +11,7 @@
   .ki-guide[open] summary .when-open { display: inline; }
   .ki-guide[open] summary .when-closed { display: none; }
   .ki-steps { counter-reset: step; list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 1rem; }
-  .ki-steps > li { counter-increment: step; position: relative; padding-left: 2.6rem; font-size: .9rem; }
+  .ki-steps > li { counter-increment: step; position: relative; padding-left: 2.6rem; font-size: .9rem; min-width: 0; overflow-wrap: anywhere; }
   .ki-steps > li::before {
     content: counter(step); position: absolute; left: 0; top: -2px; width: 1.85rem; height: 1.85rem; border-radius: 50%;
     background: var(--ki-primary); color: var(--ki-on-primary); font-weight: 700; font-size: .85rem;

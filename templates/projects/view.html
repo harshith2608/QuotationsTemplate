@@ -393,7 +393,7 @@
 
     <!-- Payment records -->
     {% if payments %}
-    <table class="table table-sm table-hover mb-0 small">
+    <div class="table-responsive"><table class="table table-sm table-hover mb-0 small">
       <thead class="table-light">
         <tr>
           <th>Date</th>
@@ -434,7 +434,7 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% else %}
     <p class="text-muted small text-center mb-0">No payments recorded yet.</p>
     {% endif %}
@@ -450,12 +450,12 @@
       </button>
       {% endif %}
       {% if settings.upi_id %}
-      <span class="badge bg-light text-dark border small">
+      <span class="badge bg-light text-dark border small ki-wrap-badge">
         <i class="bi bi-phone me-1 text-success"></i>UPI: <strong>{{ settings.upi_id }}</strong>
       </span>
       {% endif %}
       {% if settings.account_number %}
-      <span class="badge bg-light text-dark border small">
+      <span class="badge bg-light text-dark border small ki-wrap-badge">
         <i class="bi bi-bank me-1 text-primary"></i>
         {{ settings.bank_name }} | {{ settings.account_name }} |
         A/C: {{ settings.account_number }} | IFSC: {{ settings.ifsc_code }}
@@ -515,7 +515,7 @@
     <i class="bi bi-clock-history me-2"></i>Edit History
   </div>
   <div class="card-body p-0">
-    <table class="table table-sm table-hover mb-0 small">
+    <div class="table-responsive"><table class="table table-sm table-hover mb-0 small">
       <thead class="table-light">
         <tr>
           <th class="ps-3">#</th>
@@ -532,7 +532,7 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </div>
 </div>
 {% endif %}

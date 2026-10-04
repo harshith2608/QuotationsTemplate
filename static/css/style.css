@@ -269,22 +269,24 @@ body {
 /* ---- Empty State ---- */
 .ki-empty-state { padding: 40px 20px; }
 
-/* ---- Footer ---- */
+/* ---- Page frame & footer ----
+   The footer sits in normal flow at the end of the page (pushed to the bottom on
+   short pages), so it can never cover content. Only the mobile sticky Save bar on
+   the quotation form is fixed, and pages that have it reserve room for it. */
+body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+body > main { flex: 1 0 auto; }
 .ki-footer {
   background: #fff;
   border-top: 1px solid var(--ki-border);
-  margin-top: auto;
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  z-index: 900;
-  padding: 4px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  line-height: 1.5;
 }
-/* push content above fixed footer */
-main { padding-bottom: 60px; }
-/* on mobile the sticky Save button sits above the footer — add extra clearance */
 @media (max-width: 991.98px) {
-  main { padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+  body:has(.ki-sticky-save) { padding-bottom: var(--ki-sticky-h, calc(76px + env(safe-area-inset-bottom, 0px))); }
 }
+
+/* Long single-line badges (payment details etc.) wrap instead of overflowing on phones */
+.ki-wrap-badge { white-space: normal; text-align: left; line-height: 1.5; overflow-wrap: anywhere; }
 
 
 /* ---- Responsive tweaks ---- */
