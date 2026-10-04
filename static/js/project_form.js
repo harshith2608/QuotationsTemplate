@@ -11,6 +11,9 @@ let roomCounter = 0;
 const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type, work_type } } } }
 let masterRooms = [];
 let masterItems = [];
+let priceList = [];           // [{name, price, unit}] — fittings & accessories (Admin → Rates)
+let modalItemType = 'measured';
+let modalPriceTouched = false;
 
 // Material catalogue — injected by templates/projects/form.html from app/catalog.py
 const CATALOG = window.KI_CATALOG || { woodTypes: [], workTypes: [], defaultWood: '', defaultWork: '' };
@@ -47,14 +50,8 @@ async function _doSaveDraft() {
     if (!roomName) return;
     const itemsPayload = [];
     Object.values(room.items).forEach(item => {
-      const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
-      const wDec = ftInToDecimal(item.widthFt  || 0, item.widthIn  || 0);
-      if (!item.name || lDec <= 0 || wDec <= 0) return;
-      itemsPayload.push({
-        name: item.name, length: lDec, width: wDec,
-        wood_type: item.wood_type, work_type: item.work_type,
-        area: item.area || parseFloat((lDec * wDec).toFixed(4))
-      });
+      const p = _itemPayload(item);
+      if (p) itemsPayload.push(p);
     });
     roomsPayload.push({ name: roomName, items: itemsPayload });
   });
@@ -110,7 +107,9 @@ function decimalToFtIn(decimal) {
 // overflow:hidden/auto can clip it. Positioned ONCE when opened; closed on
 // scroll/touchmove (no continuous repositioning → no jitter on mobile).
 function initAutocomplete(input, suggestions) {
-  if (!input || !suggestions || !suggestions.length) return;
+  // suggestions: an array, or a function returning the current array
+  const getList = typeof suggestions === 'function' ? suggestions : () => suggestions;
+  if (!input || !suggestions || (typeof suggestions !== 'function' && !suggestions.length)) return;
 
   const ul = document.createElement('ul');
   ul.className = 'ki-ac-dropdown';
@@ -129,7 +128,8 @@ function initAutocomplete(input, suggestions) {
 
   function render() {
     const q = input.value.trim().toLowerCase();
-    const list = q ? suggestions.filter(s => s.toLowerCase().includes(q)) : suggestions;
+    const all = getList() || [];
+    const list = q ? all.filter(s => s.toLowerCase().includes(q)) : all;
     if (!list.length) { close(); return; }
     ul.innerHTML = list.map(s => `<li>${escHtml(s)}</li>`).join('');
     position();
@@ -213,9 +213,26 @@ document.addEventListener('DOMContentLoaded', () => {
   masterRooms = _readDatalist('master-rooms-list');
   masterItems = _readDatalist('master-items-list');
 
-  // Init autocomplete on the static modal item name input
+  try { priceList = JSON.parse(document.getElementById('price-list-data').textContent || '[]'); } catch (e) { priceList = []; }
+
+  // Modal item name: suggests room items for measured, the price list for fixed-price items
   const modalNameInput = document.getElementById('modal_item_name');
-  if (modalNameInput) initAutocomplete(modalNameInput, masterItems);
+  if (modalNameInput) {
+    initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name) : masterItems);
+    modalNameInput.addEventListener('input', () => { if (modalItemType === 'fixed') _applyPriceListPrice(); });
+  }
+
+  // Restore the saved discount (edit mode) BEFORE the first recalculation: recalcAll()
+  // copies the discount controls into the hidden fields, so restoring afterwards would
+  // read back "none" and saving the quotation would silently drop its discount.
+  const savedType  = (document.getElementById('discount_type_field')  || {}).value || 'none';
+  const savedValue = (document.getElementById('discount_value_field') || {}).value || '0';
+  const dtypeEl = document.getElementById('discount_type_select');
+  const dvalEl  = document.getElementById('discount_value_input');
+  if (dtypeEl && savedType !== 'none') {
+    dtypeEl.value = savedType;
+    if (dvalEl) { dvalEl.value = savedValue; dvalEl.style.display = 'block'; }
+  }
 
   let existingRooms = [];
   try { existingRooms = JSON.parse(document.getElementById('existing-rooms-data').textContent || '[]'); }
@@ -225,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     existingRooms.forEach(rd => {
       const rk = addRoom(rd.name);
       (rd.items || []).forEach(id => {
+        if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price); return; }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
         addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type);
@@ -241,15 +259,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.addEventListener('input', scheduleDraftSave);
   });
 
-  // Restore discount state from hidden fields (edit mode)
-  const savedType  = (document.getElementById('discount_type_field')  || {}).value || 'none';
-  const savedValue = (document.getElementById('discount_value_field') || {}).value || '0';
-  const dtypeEl = document.getElementById('discount_type_select');
-  const dvalEl  = document.getElementById('discount_value_input');
-  if (dtypeEl && savedType !== 'none') {
-    dtypeEl.value = savedType;
-    if (dvalEl) { dvalEl.value = savedValue; dvalEl.style.display = 'block'; }
-  }
 
   // Allow pressing Enter in modal fields to save
   const itemModalEl = document.getElementById('itemModal');
@@ -358,6 +367,12 @@ function openItemModal(rk) {
   if (comboEl) comboEl.value = DEFAULT_COMBO;
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
+  const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
+  const priceEl = document.getElementById('modal_item_price'); if (priceEl) priceEl.value = '';
+  modalPriceTouched = false;
+  const measuredRadio = document.getElementById('modal_type_measured');
+  if (measuredRadio) measuredRadio.checked = true;
+  setModalItemType('measured');
   const modal = new bootstrap.Modal(document.getElementById('itemModal'));
   modal.show();
   setTimeout(() => { if (nameEl) nameEl.focus(); }, 350);
@@ -376,11 +391,138 @@ function modalCalcArea() {
   if (el) el.textContent = area.toFixed(2);
 }
 
+// ─── Fixed-price items (fittings & accessories) ──────────────────────────────
+function setModalItemType(type) {
+  modalItemType = type;
+  document.getElementById('modal_fixed_fields')?.classList.toggle('d-none', type !== 'fixed');
+  document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type === 'fixed');
+  const nameEl = document.getElementById('modal_item_name');
+  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : 'e.g. Wardrobe';
+  if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
+}
+
+function _findPrice(name) {
+  const n = (name || '').trim().toLowerCase();
+  return priceList.find(p => p.name.toLowerCase() === n);
+}
+
+// Fill the unit price from the price list when the name matches (unless the user typed a price)
+function _applyPriceListPrice() {
+  const match = _findPrice(document.getElementById('modal_item_name')?.value);
+  const priceEl = document.getElementById('modal_item_price');
+  const hint = document.getElementById('modal_price_hint');
+  if (match && priceEl && !modalPriceTouched) priceEl.value = match.price;
+  if (hint) hint.textContent = match
+    ? `From your price list: ₹${match.price.toLocaleString('en-IN')}${match.unit ? ' per ' + match.unit : ''}. You can change it for this quotation.`
+    : 'Pick an item from your price list to fill in the price, or type your own.';
+  modalCalcFixed();
+}
+
+function modalCalcFixed() {
+  const qty   = parseFloat(document.getElementById('modal_item_qty')?.value) || 0;
+  const price = parseFloat(document.getElementById('modal_item_price')?.value) || 0;
+  const el = document.getElementById('modal_item_amount');
+  if (el) el.textContent = '₹' + (qty * price).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+function _insertFixedRow(rk, name, quantity, unitPrice) {
+  itemCounter++;
+  const ik = 'item_' + itemCounter;
+  if (!rooms[rk]) return;
+  const qty = quantity !== undefined && quantity !== null ? quantity : 1;
+  const price = unitPrice !== undefined && unitPrice !== null ? unitPrice : '';
+  rooms[rk].items[ik] = { type: 'fixed', name: name || '', quantity: parseFloat(qty) || 0, unit_price: parseFloat(price) || 0 };
+
+  const tbody = document.getElementById('items_tbody_' + rk);
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.className = 'item-row item-row-fixed';
+  tr.id = 'item_row_' + ik;
+  tr.innerHTML = `
+    <td>
+      <div class="ki-ac-wrap">
+        <input type="text" class="form-control form-control-sm" id="item_name_${ik}"
+               placeholder="e.g. Magic Corner" value="${escHtml(name || '')}"
+               oninput="onFixedField('${rk}','${ik}')" autocomplete="off">
+      </div>
+    </td>
+    <td colspan="2">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text px-2 small text-muted">Qty</span>
+        <input type="number" class="form-control text-center px-1" id="item_qty_${ik}" min="0" step="any"
+               value="${qty}" oninput="onFixedField('${rk}','${ik}')" style="max-width:64px" title="Quantity">
+        <span class="input-group-text px-2 small text-muted">× ₹</span>
+        <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
+               value="${price}" oninput="onFixedField('${rk}','${ik}')" title="Price per unit">
+      </div>
+    </td>
+    <td class="text-center"><span class="badge ki-badge-fitting">Fitting</span></td>
+    <td class="text-center">
+      <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
+    </td>
+    <td class="text-center">
+      <button type="button" class="btn btn-outline-danger btn-remove-item"
+              onclick="removeItem('${rk}','${ik}')" title="Remove">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </td>`;
+  tbody.appendChild(tr);
+  const nameInput = document.getElementById('item_name_' + ik);
+  if (nameInput && priceList.length) initAutocomplete(nameInput, () => priceList.map(p => p.name));
+  onFixedField(rk, ik);
+}
+
+function onFixedField(rk, ik) {
+  if (!rooms[rk] || !rooms[rk].items[ik]) return;
+  const nameEl  = document.getElementById('item_name_'  + ik);
+  const qtyEl   = document.getElementById('item_qty_'   + ik);
+  const priceEl = document.getElementById('item_price_' + ik);
+  // Picking a price-list name in an empty-price row fills the price
+  const match = _findPrice(nameEl?.value);
+  if (match && priceEl && priceEl.value === '') priceEl.value = match.price;
+  const quantity   = parseFloat(qtyEl?.value) || 0;
+  const unit_price = parseFloat(priceEl?.value) || 0;
+  rooms[rk].items[ik] = { type: 'fixed', name: nameEl?.value.trim() || '', quantity, unit_price };
+  const amtEl = document.getElementById('item_amount_' + ik);
+  if (amtEl) amtEl.textContent = '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  recalcAll();
+}
+
+// Serialise one item for the server; returns null if incomplete
+function _itemPayload(item) {
+  if (item.type === 'fixed') {
+    if (!item.name || !(item.quantity > 0) || !(item.unit_price >= 0)) return null;
+    return { type: 'fixed', name: item.name, quantity: item.quantity, unit_price: item.unit_price };
+  }
+  const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
+  const wDec = ftInToDecimal(item.widthFt  || 0, item.widthIn  || 0);
+  if (!item.name || lDec <= 0 || wDec <= 0) return null;
+  return {
+    name: item.name, length: lDec, width: wDec,
+    wood_type: item.wood_type, work_type: item.work_type,
+    area: item.area || parseFloat((lDec * wDec).toFixed(4))
+  };
+}
+
 function saveItemFromModal() {
   const nameEl = document.getElementById('modal_item_name');
   const name   = nameEl?.value.trim() || '';
   if (!name) { if (nameEl) nameEl.classList.add('is-invalid'); return; }
   if (nameEl) nameEl.classList.remove('is-invalid');
+
+  if (modalItemType === 'fixed') {
+    const qty   = parseFloat(document.getElementById('modal_item_qty')?.value) || 0;
+    const price = parseFloat(document.getElementById('modal_item_price')?.value);
+    const qtyEl = document.getElementById('modal_item_qty');
+    const priceEl = document.getElementById('modal_item_price');
+    qtyEl?.classList.toggle('is-invalid', !(qty > 0));
+    priceEl?.classList.toggle('is-invalid', isNaN(price) || price < 0);
+    if (!(qty > 0) || isNaN(price) || price < 0) return;
+    _insertFixedRow(_modalRoomKey, name, qty, price);
+    const inst = bootstrap.Modal.getInstance(document.getElementById('itemModal'));
+    if (inst) inst.hide();
+    return;
+  }
 
   const lFt  = parseFloat(document.getElementById('modal_item_lft')?.value) || 0;
   const lIn  = parseFloat(document.getElementById('modal_item_lin')?.value) || 0;
@@ -543,9 +685,11 @@ function recalcAll() {
   const comboAreas = {};  // { 'wood|work': area }
   let totalArea = 0;
 
+  let fixedTotal = 0;
   Object.entries(rooms).forEach(([rk, room]) => {
     let roomArea = 0;
     Object.values(room.items).forEach(item => {
+      if (item.type === 'fixed') { fixedTotal += (item.quantity || 0) * (item.unit_price || 0); return; }
       const a = item.area || 0;
       roomArea += a;
       totalArea += a;
@@ -556,10 +700,10 @@ function recalcAll() {
     if (badge) badge.textContent = roomArea.toFixed(2) + ' sqft';
   });
 
-  let grandTotal = 0;
+  let grandTotal = fixedTotal;
   Object.entries(comboAreas).forEach(([key, area]) => { grandTotal += area * (itemRates[key] || 0); });
 
-  renderSummary(comboAreas, grandTotal);
+  renderSummary(comboAreas, grandTotal, fixedTotal);
 
   const fmt = '₹' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gtEl = document.getElementById('grand-total-display');
@@ -646,10 +790,10 @@ const COMBO_COLORS = {
   'Veneer|Frame Work':   { bg:'#fed7aa', color:'#7c2d12' },
 };
 
-function renderSummary(comboAreas, grandTotal) {
+function renderSummary(comboAreas, grandTotal, fixedTotal) {
   const panel = document.getElementById('summary-content');
   if (!panel) return;
-  const hasData = Object.values(comboAreas).some(a => a > 0);
+  const hasData = Object.values(comboAreas).some(a => a > 0) || fixedTotal > 0;
   if (!hasData) {
     panel.innerHTML = '<p class="text-muted text-center small py-2">Add rooms and items to see cost breakdown.</p>';
     return;
@@ -670,6 +814,14 @@ function renderSummary(comboAreas, grandTotal) {
         <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
+  if (fixedTotal > 0) {
+    html += `
+      <div class="summary-wood-row">
+        <span class="summary-wood-label"><span class="badge me-1 ki-badge-fitting">${escHtml(CATALOG.fixedLabel || 'Fittings & Accessories')}</span></span>
+        <span class="text-muted small"></span>
+        <span class="summary-wood-value">₹${fixedTotal.toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      </div>`;
+  }
   panel.innerHTML = html;
 }
 
@@ -695,17 +847,9 @@ function _validateForm() {
 
     const itemsPayload = [];
     Object.values(room.items).forEach(item => {
-      const lDec = ftInToDecimal(item.lengthFt, item.lengthIn);
-      const wDec = ftInToDecimal(item.widthFt, item.widthIn);
-      if (!item.name || lDec <= 0 || wDec <= 0) return;
-      itemsPayload.push({
-        name:      item.name,
-        length:    lDec,
-        width:     wDec,
-        wood_type: item.wood_type,
-        work_type: item.work_type,
-        area:      item.area || parseFloat((lDec * wDec).toFixed(4))
-      });
+      const p = _itemPayload(item);
+      if (!p) return;
+      itemsPayload.push(p);
       hasItem = true;
     });
 
@@ -713,7 +857,7 @@ function _validateForm() {
   });
 
   if (!hasItem) {
-    showFormAlert('Please add at least one room with one complete item (name, length, width).', 'warning');
+    showFormAlert('Please add at least one room with one complete item (name and size, or name, quantity and price).', 'warning');
     valid = false;
   }
 

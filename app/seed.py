@@ -16,7 +16,8 @@ from werkzeug.security import generate_password_hash
 
 from . import db, catalog
 from .models import (User, Project, ProjectAccess, Payment, AppSetting, WoodRate,
-                     WorkTypeRate, ItemRate, MasterRoom, MasterItem, ProjectStageChange)
+                     WorkTypeRate, ItemRate, MasterRoom, MasterItem, ProjectStageChange,
+                     PriceListItem)
 
 
 class SeedError(Exception):
@@ -51,6 +52,9 @@ def seed_reference_data():
     if not MasterItem.query.first():
         db.session.add_all(MasterItem(name=n) for n in catalog.DEFAULT_ITEMS)
         seeded.append('item names')
+    if not PriceListItem.query.first():
+        db.session.add_all(PriceListItem(name=n, price=p, unit=u) for n, p, u in catalog.DEFAULT_PRICE_LIST)
+        seeded.append('fittings price list')
     db.session.commit()
     return seeded
 
@@ -108,7 +112,9 @@ DEMO_PROJECTS = [
                           ('Loft', 8, 2, 'Laminates', 'Box Work'),
                           ('Dressing Table', 3, 6, 'Acrylic', 'Frame Work')]),
       ('Kitchen', [('Base Cabinet', 10, 2.75, 'Acrylic', 'Box Work'),
-                   ('Overhead Cabinet', 10, 2.5, 'Acrylic', 'Box Work')])],
+                   ('Overhead Cabinet', 10, 2.5, 'Acrylic', 'Box Work'),
+                   ('Magic Corner', 'fixed', 1, 18000),
+                   ('Tandem Drawer', 'fixed', 4, 4500)])],
      [(50000, 'Advance payment')]),
     ('Rahul Sample', '9000000002', 'rahul@example.com', 'Villa 7, Placeholder Gardens, Bengaluru',
      'demo-admin', 9, ('none', 0),
@@ -193,9 +199,12 @@ def seed_demo(reset=False, password=None):
         db.session.add(project)
         db.session.flush()
 
-        rooms_data = [{'name': room, 'items': [
-            {'name': n, 'length': l, 'width': w, 'wood_type': wood, 'work_type': work}
-            for n, l, w, wood, work in items]} for room, items in rooms]
+        def _item(row):
+            if len(row) == 4 and row[1] == 'fixed':          # (name, 'fixed', quantity, unit price)
+                return {'type': 'fixed', 'name': row[0], 'quantity': row[2], 'unit_price': row[3]}
+            n, l, w, wood, work = row
+            return {'name': n, 'length': l, 'width': w, 'wood_type': wood, 'work_type': work}
+        rooms_data = [{'name': room, 'items': [_item(r) for r in items]} for room, items in rooms]
         project.grand_total = _save_project_data(project, rooms_data)
 
         if not users[creator].is_admin:

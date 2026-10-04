@@ -46,3 +46,17 @@ STAGES = {
 DEFAULT_STAGE = 'pending'
 # The main path shown as a progress stepper; on_hold / cancelled are side states
 STAGE_PATH = ['pending', 'confirmed', 'ongoing', 'completed']
+
+# Fixed-price items (fittings & accessories): priced per unit, no dimensions.
+# Seeded into Admin → Rates → Price list for a new deployment; admins edit them there.
+# (name, default price per unit, unit label)
+DEFAULT_PRICE_LIST = [
+    ('Magic Corner',               18000.0, 'piece'),
+    ('Tandem Drawer',               4500.0, 'piece'),
+    ('Pull-out Basket',             3500.0, 'piece'),
+    ('Tall Unit Pantry Pull-out',  22000.0, 'piece'),
+    ('Loft Lift-up Mechanism',      3200.0, 'piece'),
+    ('Profile LED Light',            350.0, 'running ft'),
+    ('Hob & Chimney Installation',  1500.0, 'job'),
+]
+FIXED_ITEMS_LABEL = 'Fittings & Accessories'

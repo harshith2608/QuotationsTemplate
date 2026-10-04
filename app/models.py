@@ -96,9 +96,17 @@ class Project(db.Model):
         totals = {}
         for room in (rooms if rooms is not None else self.rooms_with_items()):
             for item in room.item_list:
+                if item.is_fixed:
+                    continue          # fittings have no area / material
                 key = key_fn(item)
                 totals[key] = totals.get(key, 0.0) + item.area
         return totals
+
+    def fixed_items_total(self, rooms=None):
+        """Sum of all fittings & accessories (quantity × unit price)."""
+        return round(sum((i.quantity or 0) * (i.unit_price or 0)
+                         for room in (rooms if rooms is not None else self.rooms_with_items())
+                         for i in room.item_list if i.is_fixed), 2)
 
     def get_wood_totals(self, rooms=None):
         """Returns dict of {wood_type: total_area}. Pass preloaded rooms to avoid re-querying."""
@@ -159,6 +167,12 @@ class Room(db.Model):
 
 
 class Item(db.Model):
+    """
+    A line in a room. Two kinds:
+      * 'measured' — length × width = area, priced by the material/work rate per sqft
+      * 'fixed'    — fittings & accessories (e.g. Magic Corner): quantity × unit price,
+                     no dimensions (length/width/area are 0, wood/work types empty)
+    """
     __tablename__ = 'items'
     id = db.Column(db.Integer, primary_key=True)
     room_id = db.Column(db.Integer, db.ForeignKey('rooms.id'), nullable=False)
@@ -168,6 +182,19 @@ class Item(db.Model):
     area = db.Column(db.Float, nullable=False)
     wood_type = db.Column(db.String(50), nullable=False)
     work_type = db.Column(db.String(50), nullable=False, default='Box Work')
+    item_type = db.Column(db.String(10), nullable=False, default='measured', server_default='measured')
+    quantity = db.Column(db.Float, nullable=True)
+    unit_price = db.Column(db.Float, nullable=True)
+
+    @property
+    def is_fixed(self):
+        return self.item_type == 'fixed'
+
+    def cost(self, item_rates):
+        """Amount for this line. item_rates: {'wood|work': rate per sqft}."""
+        if self.is_fixed:
+            return (self.quantity or 0) * (self.unit_price or 0)
+        return self.area * item_rates.get(f'{self.wood_type}|{self.work_type}', 0)
 
     def __repr__(self):
         return f'<Item {self.name}>'
@@ -345,3 +372,15 @@ class ProjectStageChange(db.Model):
 
     def __repr__(self):
         return f'<StageChange project={self.project_id} {self.from_stage}→{self.to_stage}>'
+
+
+class PriceListItem(db.Model):
+    """Admin-managed fittings & accessories price list (Admin → Rates)."""
+    __tablename__ = 'price_list_items'
+    id    = db.Column(db.Integer, primary_key=True)
+    name  = db.Column(db.String(100), unique=True, nullable=False)
+    price = db.Column(db.Float, nullable=False, default=0.0)
+    unit  = db.Column(db.String(30), nullable=True)
+
+    def __repr__(self):
+        return f'<PriceListItem {self.name}: {self.price}>'

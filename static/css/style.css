@@ -178,6 +178,8 @@ body {
   padding: 4px 8px; border-radius: 6px; font-weight: 600;
 }
 
+.ki-badge-fitting { background:#f3e8ff; color:#6b21a8; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+
 /* ---- Grand Total Row ---- */
 .ki-grand-total-row td {
   background: var(--ki-light);

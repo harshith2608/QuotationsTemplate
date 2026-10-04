@@ -51,7 +51,8 @@
 <!-- Item rates for JS: { 'wood|work': rate } -->
 <script id="item-rates-data" type="application/json">{{ item_rates | tojson }}</script>
 <!-- Existing rooms data for edit mode -->
-<script id="existing-rooms-data" type="application/json">{{ rooms_json | safe }}</script>
+<script id="existing-rooms-data" type="application/json">{{ rooms_json | replace('<', '\\u003c') | safe }}</script>
+<script id="price-list-data" type="application/json">{{ price_list | tojson }}</script>
 <!-- Native datalists for room/item name suggestions -->
 <datalist id="master-rooms-list">
   {% for r in master_rooms %}<option value="{{ r }}">{% endfor %}
@@ -289,6 +290,12 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body pb-2">
+        <div class="btn-group w-100 mb-3" role="group" aria-label="Item type">
+          <input type="radio" class="btn-check" name="modal_item_type" id="modal_type_measured" value="measured" checked onchange="setModalItemType('measured')">
+          <label class="btn btn-outline-primary" for="modal_type_measured"><i class="bi bi-rulers me-1"></i>Measured (sqft)</label>
+          <input type="radio" class="btn-check" name="modal_item_type" id="modal_type_fixed" value="fixed" onchange="setModalItemType('fixed')">
+          <label class="btn btn-outline-primary" for="modal_type_fixed"><i class="bi bi-tag me-1"></i>Fixed price</label>
+        </div>
         <div class="mb-3">
           <label class="form-label fw-medium small mb-1">Item Name <span class="text-danger">*</span></label>
           <div class="ki-ac-wrap">
@@ -297,6 +304,28 @@
           </div>
           <div class="invalid-feedback">Item name is required.</div>
         </div>
+        <!-- Fixed-price item: quantity × unit price (e.g. Magic Corner) -->
+        <div id="modal_fixed_fields" class="d-none">
+          <div class="row g-2 mb-3">
+            <div class="col-5">
+              <label class="form-label fw-medium small mb-1" for="modal_item_qty">Quantity</label>
+              <input type="number" class="form-control text-center" id="modal_item_qty" value="1" min="0" step="any" inputmode="decimal" oninput="modalCalcFixed()">
+            </div>
+            <div class="col-7">
+              <label class="form-label fw-medium small mb-1" for="modal_item_price">Price per unit</label>
+              <div class="input-group">
+                <span class="input-group-text">&#8377;</span>
+                <input type="number" class="form-control text-end" id="modal_item_price" placeholder="0" min="0" step="any" inputmode="decimal" oninput="modalPriceTouched=true; modalCalcFixed()">
+              </div>
+            </div>
+          </div>
+          <div class="small text-muted mb-3" id="modal_price_hint">Pick an item from your price list to fill in the price, or type your own.</div>
+          <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
+            <span class="small text-muted fw-medium">Amount</span>
+            <span class="fw-bold text-primary fs-6" id="modal_item_amount">&#8377;0</span>
+          </div>
+        </div>
+        <div id="modal_measured_fields">
         <div class="row g-2 mb-3">
           <div class="col-6">
             <label class="form-label fw-medium small mb-1">Length</label>
@@ -333,6 +362,7 @@
           <span class="small text-muted fw-medium">Calculated Area</span>
           <span class="fw-bold text-primary fs-6"><span id="modal_item_area">0.00</span> sqft</span>
         </div>
+        </div>{# /modal_measured_fields #}
       </div>
       <div class="modal-footer pt-2">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
@@ -351,7 +381,8 @@
     woodTypes:   {{ catalog.WOOD_TYPES|tojson }},
     workTypes:   {{ catalog.WORK_TYPES|tojson }},
     defaultWood: {{ catalog.DEFAULT_WOOD|tojson }},
-    defaultWork: {{ catalog.DEFAULT_WORK|tojson }}
+    defaultWork: {{ catalog.DEFAULT_WORK|tojson }},
+    fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }}
   };
 </script>
 <script src="{{ asset_url('js/project_form.js') }}"></script>

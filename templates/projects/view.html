@@ -183,7 +183,7 @@
         <i class="bi bi-calculator me-2"></i>Cost Summary
       </div>
       <div class="card-body">
-        {% if item_summary %}
+        {% if item_summary or fixed_total %}
         <!-- Mobile: stacked list -->
         <div class="d-md-none">
           {% for row in item_summary %}
@@ -195,6 +195,12 @@
             <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(row.subtotal) }}</span>
           </div>
           {% endfor %}
+          {% if fixed_total %}
+          <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+            <span class="badge ki-badge-fitting">{{ catalog.FIXED_ITEMS_LABEL }}</span>
+            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(fixed_total) }}</span>
+          </div>
+          {% endif %}
           <div class="d-flex justify-content-between py-2 text-muted small">
             <span>Subtotal</span><span>&#8377;{{ "{:,.2f}".format(project.grand_total) }}</span>
           </div>
@@ -229,6 +235,14 @@
               <td class="text-end fw-semibold">{{ "{:,.2f}".format(row.subtotal) }}</td>
             </tr>
             {% endfor %}
+            {% if fixed_total %}
+            <tr>
+              <td><span class="badge ki-badge-fitting">{{ catalog.FIXED_ITEMS_LABEL }}</span></td>
+              <td class="text-end text-muted">—</td>
+              <td class="text-end text-muted">—</td>
+              <td class="text-end fw-semibold">{{ "{:,.2f}".format(fixed_total) }}</td>
+            </tr>
+            {% endif %}
           </tbody>
           <tfoot>
             <tr>
@@ -312,7 +326,20 @@
             </thead>
             <tbody>
               {% for item in room.item_list %}
-              {% set item_subtotal = item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
+              {% set item_subtotal = item.cost(item_rates) %}
+              {% if item.is_fixed %}
+              <tr>
+                <td class="fw-medium">{{ item.name }}</td>
+                <td class="text-center text-muted d-none d-md-table-cell">—</td>
+                <td class="text-center text-muted d-none d-md-table-cell">—</td>
+                <td class="text-center text-muted">—</td>
+                <td class="text-center">
+                  <span class="badge ki-badge-fitting">Fitting</span>
+                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }} &times; &#8377;{{ "{:,.0f}".format(item.unit_price) }}</div>
+                </td>
+                <td class="text-end fw-semibold text-success">&#8377;{{ "{:,.2f}".format(item_subtotal) }}</td>
+              </tr>
+              {% else %}
               <tr>
                 <td class="fw-medium">{{ item.name }}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.length | ft_in }}</td>
@@ -327,6 +354,7 @@
                 </td>
                 <td class="text-end fw-semibold text-success">&#8377;{{ "{:,.2f}".format(item_subtotal) }}</td>
               </tr>
+              {% endif %}
               {% endfor %}
             </tbody>
             <tfoot>
@@ -337,7 +365,7 @@
                 <td></td>
                 {% set room_cost = namespace(val=0) %}
                 {% for item in room.item_list %}
-                  {% set room_cost.val = room_cost.val + item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
+                  {% set room_cost.val = room_cost.val + item.cost(item_rates) %}
                 {% endfor %}
                 <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>
               </tr>

@@ -7,15 +7,21 @@ from flask_login import login_required, current_user
 from . import db
 from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, WorkTypeRate, ItemRate,
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
-                     PaymentLink, Notification)
+                     PaymentLink, Notification, PriceListItem)
 from .decorators import admin_required
-from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WOOD, DEFAULT_WORK, STAGES
+from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WOOD, DEFAULT_WORK, STAGES, FIXED_ITEMS_LABEL
 from .branding import get_brand
 
 projects_bp = Blueprint('projects', __name__)
 
 def _get_work_type_rates():
     return {r.work_type: r.rate_per_sqft for r in WorkTypeRate.query.all()}
+
+def _get_price_list():
+    """Fittings & accessories price list for the quotation form: [{name, price, unit}]."""
+    return [{'name': p.name, 'price': p.price, 'unit': p.unit or ''}
+            for p in PriceListItem.query.order_by(PriceListItem.name).all()]
+
 
 def _get_item_rates():
     """Returns flat dict { 'wood_type|work_type': rate } for the JS form."""
@@ -112,6 +118,20 @@ def _save_project_data(project, rooms_data):
         for id_ in rd.get('items', []):
             item_name = id_.get('name', '').strip()
             if not item_name:
+                continue
+            if id_.get('type') == 'fixed':
+                # Fittings & accessories: quantity × unit price, no dimensions
+                try:
+                    quantity = float(id_.get('quantity', 1))
+                    unit_price = float(id_.get('unit_price', 0))
+                except (ValueError, TypeError):
+                    continue
+                if quantity <= 0 or unit_price < 0:
+                    continue
+                db.session.add(Item(room_id=room.id, name=item_name[:100], item_type='fixed',
+                                    quantity=quantity, unit_price=unit_price,
+                                    length=0, width=0, area=0, wood_type='', work_type=''))
+                grand_total += quantity * unit_price
                 continue
             try:
                 length = float(id_.get('length', 0))
@@ -269,6 +289,7 @@ def create_project():
                                    rates=rates,
                                    work_type_rates=work_type_rates,
                                    item_rates=item_rates,
+                                   price_list=_get_price_list(),
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile,
                                               'email': email,
@@ -324,6 +345,7 @@ def create_project():
                            rates=rates,
                            work_type_rates=work_type_rates,
                            item_rates=item_rates,
+                           price_list=_get_price_list(),
                            form_data={},
                            rooms_json='[]',
                            project=None)
@@ -342,7 +364,8 @@ def view_project(project_id):
         return redirect(url_for('projects.edit_project', project_id=project.id))
     item_rates_flat = _get_item_rates()
     rooms = project.rooms_with_items()
-    item_totals = project.get_item_totals(rooms)  # { 'wood|work': area }
+    item_totals = project.get_item_totals(rooms)  # { 'wood|work': area } — measured items only
+    fixed_total = project.fixed_items_total(rooms)
     item_summary = []
     for key in [f'{w}|{wk}' for w in WOOD_TYPES for wk in WORK_TYPES]:
         area = item_totals.get(key, 0.0)
@@ -377,6 +400,7 @@ def view_project(project_id):
                            balance=balance,
                            settings=settings,
                            stage_history=project.stage_changes.all(),
+                           fixed_total=fixed_total,
                            can_change_stage=_can_change_stage(project),
                            title=f'Quotation – {project.customer_name}')
 
@@ -469,6 +493,7 @@ def edit_project(project_id):
                                    rates=rates,
                                    work_type_rates=work_type_rates,
                                    item_rates=item_rates,
+                                   price_list=_get_price_list(),
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile, 'email': email,
                                               'plywood_thickness': plywood_thickness},
@@ -503,6 +528,7 @@ def edit_project(project_id):
                            rates=rates,
                            work_type_rates=work_type_rates,
                            item_rates=item_rates,
+                           price_list=_get_price_list(),
                            form_data={
                                'customer_name': project.customer_name,
                                'mobile': project.mobile,
@@ -522,11 +548,14 @@ def _build_rooms_json(project):
             'items': [
                 {
                     'name': item.name,
+                    'type': item.item_type,
                     'length': item.length,
                     'width': item.width,
                     'wood_type': item.wood_type,
                     'work_type': item.work_type,
-                    'area': item.area
+                    'area': item.area,
+                    'quantity': item.quantity,
+                    'unit_price': item.unit_price,
                 }
                 for item in room.item_list
             ]
@@ -722,9 +751,10 @@ def whatsapp_share(project_id):
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
 
-    rates = _get_wood_rates()
+    item_rates = _get_item_rates()
     rooms = project.rooms_with_items()
-    wood_totals = project.get_wood_totals(rooms)
+    combo_totals = project.get_item_totals(rooms)    # measured items, by material & work
+    fixed_total = project.fixed_items_total(rooms)
 
     # Payment info for WhatsApp
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
@@ -752,15 +782,19 @@ def whatsapp_share(project_id):
     for room in rooms:
         lines.append(f"\n🏠 *{room.name}*")
         for item in room.item_list:
-            lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {item.area:.2f} sqft ({item.wood_type})")
+            if item.is_fixed:
+                lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{item.unit_price:,.0f}")
+            else:
+                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {item.area:.2f} sqft ({item.wood_type})")
 
     lines += ["", "*Material Summary:*"]
-    for wt in WOOD_TYPES:
-        area = wood_totals.get(wt, 0.0)
+    for key, area in combo_totals.items():
         if area > 0:
-            rate = rates.get(wt, 0.0)
-            subtotal = area * rate
-            lines.append(f"  • {wt}: {area:.2f} sqft × Rs.{rate:,.0f} = Rs.{subtotal:,.0f}")
+            rate = item_rates.get(key, 0.0)
+            wood, work = key.split('|')
+            lines.append(f"  • {wood} – {work}: {area:.2f} sqft × Rs.{rate:,.0f} = Rs.{area * rate:,.0f}")
+    if fixed_total > 0:
+        lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{fixed_total:,.0f}")
 
     lines.append("")
     if project.discount_amount > 0:

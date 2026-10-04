@@ -64,6 +64,76 @@
     </div>
   </div>
 
+  <!-- Fittings & accessories price list -->
+  <div class="col-12" id="price-list">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header">
+        <i class="bi bi-tags me-2"></i>Fittings &amp; Accessories Price List
+      </div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Items priced per unit instead of by area, such as a Magic Corner, tandem drawers or profile lights.
+          When adding a <strong>Fixed price</strong> item to a quotation, staff pick from this list and the price fills in
+          (they can still change it for that quotation).
+        </p>
+        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="table-responsive">
+            <table class="table table-bordered align-middle mb-3">
+              <thead class="ki-table-head">
+                <tr>
+                  <th class="ps-3" style="min-width:200px">Item</th>
+                  <th style="min-width:150px">Price per unit</th>
+                  <th style="min-width:130px">Unit <span class="fw-normal text-lowercase">(optional)</span></th>
+                  <th class="text-center" style="width:80px">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in price_list %}
+                <tr>
+                  <td>
+                    <input type="hidden" name="pl_id" value="{{ p.id }}">
+                    <input type="text" name="pl_name" class="form-control form-control-sm" value="{{ p.name }}" maxlength="100" aria-label="Item name">
+                  </td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="pl_price" class="form-control text-end" step="0.01" min="0" value="{{ p.price | round(2) }}" aria-label="Price">
+                    </div>
+                  </td>
+                  <td><input type="text" name="pl_unit" class="form-control form-control-sm" value="{{ p.unit or '' }}" maxlength="30" placeholder="piece" aria-label="Unit"></td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox" name="pl_delete" value="{{ p.id }}" aria-label="Remove {{ p.name }}">
+                  </td>
+                </tr>
+                {% endfor %}
+                {% for _ in range(3) %}
+                <tr class="table-light">
+                  <td>
+                    <input type="hidden" name="pl_id" value="">
+                    <input type="text" name="pl_name" class="form-control form-control-sm" placeholder="Add new item…" maxlength="100" aria-label="New item name">
+                  </td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="pl_price" class="form-control text-end" step="0.01" min="0" placeholder="0" aria-label="New item price">
+                    </div>
+                  </td>
+                  <td><input type="text" name="pl_unit" class="form-control form-control-sm" placeholder="piece" maxlength="30" aria-label="New item unit"></td>
+                  <td></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" name="price_list_submit" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Save Price List
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- How Rates Work -->
   <div class="col-12 col-lg-6">
     <div class="card shadow-sm border-0">
@@ -72,7 +142,9 @@
         <p class="mb-2">Each item's cost = Area × Rate for that material + work combination.</p>
         <code class="d-block bg-light p-2 rounded mb-2">Item Cost = Area × Rate(Material, Work Type)</code>
         <p class="mb-2">Example — Wardrobe: 10 sqft, Laminates + Box Work @ ₹850:</p>
-        <code class="d-block bg-light p-2 rounded">10 × ₹850 = ₹8,500</code>
+        <code class="d-block bg-light p-2 rounded mb-2">10 × ₹850 = ₹8,500</code>
+        <p class="mb-2">Fittings &amp; accessories cost = Quantity × Price per unit, e.g. 4 Tandem Drawers @ ₹4,500:</p>
+        <code class="d-block bg-light p-2 rounded">4 × ₹4,500 = ₹18,000</code>
       </div>
     </div>
   </div>

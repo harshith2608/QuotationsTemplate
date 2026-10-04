@@ -11,6 +11,7 @@ This repository is a **template**: each client gets their own deployment with th
 ### Quotation Management
 - Create quotations with customer details, rooms, and items (length × width → sqft)
 - Material types: **Acrylic**, **Laminates**, **Veneer** · Work types: **Box Work**, **Frame Work** (defined once in `app/catalog.py`)
+- **Fixed-price items** (fittings & accessories such as a Magic Corner or tandem drawers): quantity × unit price, no dimensions. Picked from an admin-managed price list (Admin → Rates), itemised per room in the Full Quotation and shown as one "Fittings & Accessories" line in the Initial Quotation
 - Auto-calculates area and cost per item using admin-configured rates
 - Discount support — percentage or fixed amount
 - Live cost summary and plywood board estimate (8×4 ft boards) as rooms/items are added
@@ -177,6 +178,8 @@ flask db upgrade                            # apply locally
 ```
 
 Commit the new migration file. Every deployment picks it up on its next `flask db upgrade`. No manual `ALTER TABLE` needed.
+
+After upgrading an existing deployment, also run `flask bootstrap`: it only fills empty reference tables (for example the fittings price list added later) and never touches existing data.
 
 **Adopting an existing database** that was created before migrations existed (tables already present): run `flask db stamp head` once against it to mark it as up to date, then use `flask db upgrade` from then on.
 

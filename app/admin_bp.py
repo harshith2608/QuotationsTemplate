@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
 from . import db
-from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate, MasterRoom, MasterItem, AppSetting, Notification
+from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate, MasterRoom, MasterItem, AppSetting, Notification, PriceListItem
 from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
 from .pdf_utils import DEFAULT_TERMS
@@ -39,6 +39,7 @@ def dashboard():
     # Wood type distribution (total area per wood type)
     wood_dist = (
         db.session.query(Item.wood_type, func.sum(Item.area).label('total_area'))
+        .filter(Item.item_type == 'measured')          # fittings have no material/area
         .group_by(Item.wood_type)
         .all()
     )
@@ -173,9 +174,55 @@ def change_user_password(user_id):
     return redirect(url_for('admin.users'))
 
 
+def _save_price_list():
+    """Apply edits, additions and deletions from the price-list form. Returns error messages."""
+    errors = []
+    ids, names = request.form.getlist('pl_id'), request.form.getlist('pl_name')
+    prices, units = request.form.getlist('pl_price'), request.form.getlist('pl_unit')
+    delete_ids = {d for d in request.form.getlist('pl_delete') if d}
+    existing = {str(p.id): p for p in PriceListItem.query.all()}
+    seen = set()
+    for item_id, name, price, unit in zip(ids, names, prices, units):
+        name, unit = name.strip()[:100], unit.strip()[:30]
+        if item_id in delete_ids:
+            if item_id in existing:
+                db.session.delete(existing[item_id])
+            continue
+        if not name:
+            continue                       # blank "add" rows are simply ignored
+        if name.lower() in seen:
+            errors.append(f'"{name}" appears twice in the price list.')
+            continue
+        try:
+            price_val = max(0.0, float(price or 0))
+        except ValueError:
+            errors.append(f'Price for "{name}" must be a number.')
+            continue
+        seen.add(name.lower())
+        row = existing.get(item_id)
+        if row:
+            row.name, row.price, row.unit = name, price_val, unit or None
+        else:
+            clash = PriceListItem.query.filter(func.lower(PriceListItem.name) == name.lower()).first()
+            if clash and str(clash.id) not in ids:
+                errors.append(f'"{name}" is already in the price list.')
+                continue
+            db.session.add(PriceListItem(name=name, price=price_val, unit=unit or None))
+    return errors
+
+
 @admin_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
     item_rates_map = {(r.wood_type, r.work_type): r for r in ItemRate.query.all()}
+
+    if request.method == 'POST' and 'price_list_submit' in request.form:
+        errors = _save_price_list()
+        db.session.commit()
+        for err in errors:
+            flash(err, 'danger')
+        if not errors:
+            flash('Price list updated.', 'success')
+        return redirect(url_for('admin.rates') + '#price-list')
 
     if request.method == 'POST' and 'item_rates_submit' in request.form:
         for wood in WOOD_TYPES:
@@ -205,6 +252,7 @@ def rates():
 
     return render_template('admin/rates.html', title='Manage Rates',
                            item_rates=item_rates,
+                           price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                            wood_types=WOOD_TYPES, work_types=WORK_TYPES)
 
 

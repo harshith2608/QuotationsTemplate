@@ -11,7 +11,7 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from .models import AppSetting
-from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WORK
+from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WORK, FIXED_ITEMS_LABEL
 from .branding import get_brand, tint, luminance, readable_text_on, load_logo_png
 
 
@@ -284,6 +284,13 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         room_total_area = 0.0
         room_total_cost = 0.0
         for item in room.item_list:
+            if item.is_fixed:
+                # Fitting/accessory: quantity × unit price, no dimensions
+                subtotal = item.cost(_item_rates_map)
+                room_total_cost += subtotal
+                item_rows.append([item.name, '—', '—',
+                                  f'Fitting: {item.quantity:g} × Rs. {item.unit_price:,.0f}', '—', f'{subtotal:,.2f}'])
+                continue
             work_type  = getattr(item, 'work_type', DEFAULT_WORK)
             rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
             subtotal   = item.area * rate
@@ -356,6 +363,10 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 combo_total += subtotal
                 combo_area_total += area
                 combo_data.append([f'{wood} – {work}', f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
+    fixed_total = project.fixed_items_total(rooms)
+    if fixed_total > 0:
+        combo_total += fixed_total
+        combo_data.append([FIXED_ITEMS_LABEL, '—', '—', f'{fixed_total:,.2f}'])
     combo_data.append(['', '', 'Subtotal', f'Rs. {combo_total:,.2f}'])
 
     combo_table = Table(combo_data, colWidths=summary_cw)
@@ -688,6 +699,11 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                 mat_total    += subtotal
                 total_area_all += area
                 cost_data.append([f'{wood} – {work}', f'{subtotal:,.2f}'])
+    # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
+    fixed_total2 = project.fixed_items_total()
+    if fixed_total2 > 0:
+        mat_total += fixed_total2
+        cost_data.append([FIXED_ITEMS_LABEL, f'{fixed_total2:,.2f}'])
     cost_data.append(['Total', f'Rs. {mat_total:,.2f}'])
 
     cost_table = Table(cost_data, colWidths=cost_cw)
