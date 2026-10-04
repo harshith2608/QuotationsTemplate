@@ -90,6 +90,19 @@ Clients customise their portal themselves in **Admin → Settings**; the env var
 
 **Admin → Payment Settings** holds Razorpay keys, the webhook secret, UPI and bank details. **Admin → Settings** also has *Quotation PDFs* (material specifications, T&C) and *Email* (SMTP for payment notifications).
 
+### Company identity lock
+
+One subscription covers one business. With `LOCK_COMPANY_DETAILS=1` (the default), the **company name, GSTIN and logo become read-only once the client saves them**. Each field locks on its own, so a GSTIN can still be added later. Before the first save the client must tick a confirmation box, and GSTINs are format-checked. Locked fields link to your `SUPPORT_WHATSAPP`.
+
+To allow a genuine change, run against that client's database:
+
+```bash
+DATABASE_URL="postgresql://..." flask company-status
+DATABASE_URL="postgresql://..." flask company-unlock gstin      # or: name, logo, --all
+```
+
+The client can then change that field once; it locks again when they save.
+
 ### Marketing page
 
 The product's own sales page (pricing, features, a working sample quote) plus `/privacy` and `/terms`. Because every client deployment runs the same code, these are **off by default** and return 404. With `MARKETING_SITE=1`, `/` always shows the landing page (signed-in users get an "Open app" button; logging out returns there), so your domain root is the sales page; it's also at `/landingpage`. The legal pages read `MARKETING_LEGAL_NAME`, `MARKETING_CONTACT_EMAIL`, `MARKETING_ADDRESS` and `MARKETING_JURISDICTION`. Enable it only on your own demo/marketing deployment with `MARKETING_SITE=1`, and set `MARKETING_WHATSAPP` (all buttons open a WhatsApp chat), `MARKETING_PRODUCT_NAME`, and optionally `META_PIXEL_ID`, `GOOGLE_ADS_ID` / `GOOGLE_ADS_CONVERSION` (a WhatsApp-button click is tracked as a lead) and `MARKETING_PRIVACY_URL` / `MARKETING_TERMS_URL`. The "Try the live demo" button goes to that deployment's login page.

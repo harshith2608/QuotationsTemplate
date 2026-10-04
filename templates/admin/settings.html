@@ -108,11 +108,23 @@
           ('company_gstin', 'GSTIN (optional)', 'text', 'col-md-4'),
         ] %}
         {% for name, label, type, col in fields %}
+        {% set lock_key = {'company_name': 'name', 'company_gstin': 'gstin'}.get(name) %}
+        {% set is_locked = lock_key and lock_key in locked %}
         <div class="col-12 {{ col }}">
-          <label class="form-label fw-medium small" for="{{ name }}">{{ label }}</label>
-          <input type="{{ type }}" id="{{ name }}" name="{{ name }}" class="form-control{% if name == 'company_gstin' %} text-uppercase{% endif %}"
+          <label class="form-label fw-medium small" for="{{ name }}">
+            {{ label }}{% if is_locked %} <i class="bi bi-lock-fill text-muted ms-1" title="Locked"></i>{% endif %}
+          </label>
+          <input type="{{ type }}" id="{{ name }}" name="{{ name }}" class="form-control{% if name == 'company_gstin' %} text-uppercase{% endif %}{% if is_locked %} bg-light{% endif %}"
                  {% if name == 'company_gstin' %}maxlength="15"{% endif %}
+                 {% if is_locked %}readonly aria-readonly="true"{% endif %}
                  placeholder="{{ defaults[name] }}" value="{{ saved[name] }}">
+          {% if is_locked %}
+          <div class="form-text">
+            Locked after setup.
+            {% if support_url %}<a href="{{ support_url }}" target="_blank" rel="noopener">Contact support</a> to change it.
+            {% else %}Contact support to change it.{% endif %}
+          </div>
+          {% endif %}
         </div>
         {% endfor %}
         <div class="col-12">
@@ -121,6 +133,17 @@
                     placeholder="{{ defaults.company_address or 'e.g. 12, Main Road, Your City - 000000' }}">{{ saved.company_address }}</textarea>
         </div>
       </div>
+
+      {% if lock_enabled and ('name' not in locked or 'gstin' not in locked) %}
+      <div class="alert alert-warning small mt-3 mb-0">
+        <i class="bi bi-shield-lock me-1"></i>
+        <strong>Check carefully:</strong> your company name and GSTIN are locked once saved and can only be changed by contacting support.
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="confirm_identity" value="1" id="confirm_identity">
+          <label class="form-check-label" for="confirm_identity">These details are correct and belong to my business</label>
+        </div>
+      </div>
+      {% endif %}
 
       <hr class="my-4">
       <div class="ki-section-title"><i class="bi bi-pen me-1"></i>PDF signature</div>
@@ -274,13 +297,27 @@
               </div>
             </div>
             <div class="col-12 col-sm-7">
+              {% if 'logo' in locked %}
+              <p class="small mb-1"><i class="bi bi-lock-fill text-muted me-1"></i><strong>Your logo is locked.</strong></p>
+              <p class="small text-muted mb-0">
+                {% if support_url %}<a href="{{ support_url }}" target="_blank" rel="noopener">Contact support</a>{% else %}Contact support{% endif %}
+                if you need to change it.
+              </p>
+              {% else %}
               <input type="file" class="form-control form-control-sm" name="logo" id="logoInput" accept="image/png,image/jpeg,image/webp">
               <div class="form-text">PNG, JPG or WebP up to 2 MB. A transparent PNG looks best. Shown in the top bar, login page and on PDFs.</div>
+              {% if lock_enabled %}
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="confirm_logo" value="1" id="confirm_logo">
+                <label class="form-check-label small" for="confirm_logo">This is my company's logo <span class="text-muted">(it's locked after upload)</span></label>
+              </div>
+              {% endif %}
               {% if brand.logo_version %}
               <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" name="remove_logo" value="1" id="removeLogo">
                 <label class="form-check-label small" for="removeLogo">Remove current logo</label>
               </div>
+              {% endif %}
               {% endif %}
             </div>
           </div>
@@ -606,7 +643,7 @@
     const t = state();
     apply(t);
     document.getElementById('unsavedBar').classList.toggle('d-none', JSON.stringify(t) === initial
-      && !document.getElementById('logoInput').files.length);
+      && !(document.getElementById('logoInput') && document.getElementById('logoInput').files.length));
   }
 
   form.querySelectorAll('[data-theme-input]').forEach(el => el.addEventListener('input', () => {
@@ -630,7 +667,7 @@
 
   // Logo: preview the chosen file before uploading
   const logoInput = document.getElementById('logoInput');
-  logoInput.addEventListener('change', () => {
+  if (logoInput) logoInput.addEventListener('change', () => {
     const file = logoInput.files[0];
     if (!file) return refresh();
     if (file.size > 2 * 1024 * 1024) {

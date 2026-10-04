@@ -324,6 +324,41 @@ def _save_brand_fields(brand_keys):
     return errors
 
 
+def _save_company_fields():
+    """
+    Save the Company tab. Company name and GSTIN lock once saved (see branding.locked_fields);
+    saving a new value for them requires ticking the confirmation box. Returns error messages.
+    """
+    errors = []
+    locked = branding.locked_fields()
+    confirmed = bool(request.form.get('confirm_identity'))
+    needs_confirm = []
+    for key in branding.COMPANY_KEYS:
+        app_key = branding.FIELDS[key][0]
+        raw = request.form.get(app_key, '').strip()
+        if key in ('name', 'gstin'):
+            if key in locked:
+                continue                       # read-only: ignore whatever was submitted
+            if key == 'gstin' and raw:
+                raw = raw.upper().replace(' ', '')
+                if not branding.GSTIN_RE.match(raw):
+                    errors.append(f'"{raw}" doesn\'t look like a valid GSTIN (15 characters, e.g. 29ABCDE1234F1Z5).')
+                    continue
+            current = (AppSetting.get(app_key, '') or '').strip()
+            if branding.lock_enabled() and raw and raw != current and not confirmed:
+                needs_confirm.append('company name' if key == 'name' else 'GSTIN')
+                continue
+            AppSetting.set(app_key, raw)
+            if raw:
+                branding.relock(key)
+        else:
+            AppSetting.set(app_key, raw)
+    if needs_confirm:
+        errors.append(f'Tick "These details are correct" to save your {" and ".join(needs_confirm)}. '
+                      'They can\'t be changed later without contacting support.')
+    return errors
+
+
 @admin_bp.route('/settings', methods=['GET', 'POST'])
 def settings():
     tab = request.args.get('tab') or request.form.get('section') or 'company'
@@ -332,21 +367,29 @@ def settings():
     if request.method == 'POST':
         errors = []
         if tab == 'company':
-            errors = _save_brand_fields(branding.COMPANY_KEYS)
+            errors = _save_company_fields()
         elif tab == 'appearance':
             if request.form.get('reset_theme'):
                 for key in branding.THEME_KEYS:
                     AppSetting.set(branding.FIELDS[key][0], '')
             else:
                 errors = _save_brand_fields(branding.THEME_KEYS)
-            if request.form.get('remove_logo'):
+            uploading = request.files.get('logo') and request.files['logo'].filename
+            logo_locked = 'logo' in branding.locked_fields()
+            if (uploading or request.form.get('remove_logo')) and logo_locked:
+                errors.append('Your logo is locked. Contact support to change it.')
+            elif request.form.get('remove_logo'):
                 branding.remove_logo()
-            elif request.files.get('logo') and request.files['logo'].filename:
-                try:
-                    png, version = branding.process_logo_upload(request.files['logo'].read())
-                    branding.save_logo_png(png, version)
-                except branding.LogoError as exc:
-                    errors.append(str(exc))
+            elif uploading:
+                if branding.lock_enabled() and not request.form.get('confirm_logo'):
+                    errors.append('Tick "This is my company\'s logo" to upload it. It can\'t be changed later without contacting support.')
+                else:
+                    try:
+                        png, version = branding.process_logo_upload(request.files['logo'].read())
+                        branding.save_logo_png(png, version)
+                        branding.relock('logo')
+                    except branding.LogoError as exc:
+                        errors.append(str(exc))
         elif tab == 'documents':
             # Multi-line fields — preserve newlines, allow blanking
             AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
@@ -367,8 +410,11 @@ def settings():
     saved['terms_conditions'] = saved['terms_conditions'] or DEFAULT_TERMS
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)
                 for k in branding.COMPANY_KEYS + branding.THEME_KEYS}
+    support_display, support_url = branding.support_contact()
     return render_template('admin/settings.html', title='Settings', tab=tab,
-                           saved=saved, defaults=defaults, options=branding.ui_options())
+                           saved=saved, defaults=defaults, options=branding.ui_options(),
+                           locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
+                           support_display=support_display, support_url=support_url)
 
 
 @admin_bp.route('/notifications')

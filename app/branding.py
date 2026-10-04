@@ -235,6 +235,63 @@ def ui_options():
     }
 
 
+# ── Company identity lock ─────────────────────────────────────────────────────
+# One subscription = one business. Once the company name, GSTIN or logo has been
+# saved, it becomes read-only for the client; the operator unlocks a field with
+# `flask company-unlock` when a genuine change is needed. Each field locks on its
+# own, so an empty GSTIN can still be added later. Disable with LOCK_COMPANY_DETAILS=0.
+
+LOCKABLE = ('name', 'gstin', 'logo')
+UNLOCKED_KEY = 'company_unlocked'      # comma-separated fields the operator has unlocked
+GSTIN_RE = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$')
+
+
+def lock_enabled():
+    return (os.environ.get('LOCK_COMPANY_DETAILS') or '1').strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def support_contact():
+    """(display, url) for the operator's support WhatsApp, from SUPPORT_WHATSAPP (digits)."""
+    digits = re.sub(r'\D', '', os.environ.get('SUPPORT_WHATSAPP') or '')
+    if not digits:
+        return '', ''
+    display = f'+91 {digits[2:7]} {digits[7:]}' if len(digits) == 12 and digits.startswith('91') else f'+{digits}'
+    return display, f'https://wa.me/{digits}'
+
+
+def _unlocked_set():
+    from .models import AppSetting
+    return {f for f in (AppSetting.get(UNLOCKED_KEY, '') or '').split(',') if f}
+
+
+def locked_fields():
+    """Set of LOCKABLE fields that currently have a saved value and are not unlocked."""
+    if not lock_enabled():
+        return set()
+    from .models import AppSetting
+    saved = {
+        'name': AppSetting.get(FIELDS['name'][0], ''),
+        'gstin': AppSetting.get(FIELDS['gstin'][0], ''),
+        'logo': AppSetting.get(LOGO_VERSION_KEY, ''),
+    }
+    unlocked = _unlocked_set()
+    return {f for f, v in saved.items() if (v or '').strip() and f not in unlocked}
+
+
+def relock(field):
+    """Called after a field is saved: an operator unlock lasts for one change."""
+    from .models import AppSetting
+    unlocked = _unlocked_set()
+    if field in unlocked:
+        unlocked.discard(field)
+        AppSetting.set(UNLOCKED_KEY, ','.join(sorted(unlocked)))
+
+
+def unlock(fields):
+    from .models import AppSetting
+    AppSetting.set(UNLOCKED_KEY, ','.join(sorted(_unlocked_set() | set(fields))))
+
+
 # ── Logo storage ──────────────────────────────────────────────────────────────
 
 MAX_LOGO_UPLOAD_BYTES = 2 * 1024 * 1024
