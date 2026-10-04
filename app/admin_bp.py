@@ -411,7 +411,9 @@ def settings():
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)
                 for k in branding.COMPANY_KEYS + branding.THEME_KEYS}
     support_display, support_url = branding.support_contact()
-    return render_template('admin/settings.html', title='Settings', tab=tab,
+    support_links = {key: branding.support_message_url(what, current_user, request.host_url)
+                     for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
+    return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
                            support_display=support_display, support_url=support_url)

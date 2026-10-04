@@ -121,7 +121,7 @@
           {% if is_locked %}
           <div class="form-text">
             Locked after setup.
-            {% if support_url %}<a href="{{ support_url }}" target="_blank" rel="noopener">Contact support</a> to change it.
+            {% if support_url %}<a href="{{ support_links[lock_key] }}" target="_blank" rel="noopener">Contact support</a> to change it.
             {% else %}Contact support to change it.{% endif %}
           </div>
           {% endif %}
@@ -300,7 +300,7 @@
               {% if 'logo' in locked %}
               <p class="small mb-1"><i class="bi bi-lock-fill text-muted me-1"></i><strong>Your logo is locked.</strong></p>
               <p class="small text-muted mb-0">
-                {% if support_url %}<a href="{{ support_url }}" target="_blank" rel="noopener">Contact support</a>{% else %}Contact support{% endif %}
+                {% if support_url %}<a href="{{ support_links.logo }}" target="_blank" rel="noopener">Contact support</a>{% else %}Contact support{% endif %}
                 if you need to change it.
               </p>
               {% else %}

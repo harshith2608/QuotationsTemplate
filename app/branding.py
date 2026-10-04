@@ -259,6 +259,33 @@ def support_contact():
     return display, f'https://wa.me/{digits}'
 
 
+def support_message_url(what, user=None, host_url=''):
+    """
+    WhatsApp link to the operator with a pre-filled message identifying this client:
+    which field they want changed, their company details, which app (deployment) and who's asking.
+    Returns '' when SUPPORT_WHATSAPP isn't set.
+    """
+    from urllib.parse import quote
+    _, base = support_contact()
+    if not base:
+        return ''
+    brand = get_brand()
+    lines = [
+        f'Hi! I need to change my {what}.',
+        '',
+        f'Company: {brand["name"]}',
+        f'GSTIN: {brand["gstin"] or "—"}',
+        f'Phone: {brand["phone"] or "—"}',
+        f'Email: {brand["email"] or "—"}',
+        f'App: {host_url or "—"}',
+    ]
+    if user is not None and getattr(user, 'is_authenticated', False):
+        who = user.username if user.display_name == user.username else f'{user.display_name} ({user.username})'
+        lines.append(f'Requested by: {who}')
+    lines += ['', "I'll send the new logo in this chat." if what == 'logo' else f'New {what}: ']
+    return f'{base}?text={quote(chr(10).join(lines))}'
+
+
 def _unlocked_set():
     from .models import AppSetting
     return {f for f in (AppSetting.get(UNLOCKED_KEY, '') or '').split(',') if f}
