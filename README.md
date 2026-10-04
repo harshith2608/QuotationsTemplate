@@ -152,6 +152,9 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
 
 ## Deploying for a New Client
 
+> Running this as a business (onboarding customers, shipping updates, support)? See **[docs/OPERATIONS.md](docs/OPERATIONS.md)**.
+
+
 1. **Create a Postgres database** for the client (Neon, Supabase or Render Postgres) and copy its connection URL.
 2. **Add branding** — set the branding env vars; optionally commit the client's logo to `static/brand/` and set `LOGO_FILE`.
 3. **Set core env vars** — `FLASK_ENV=production`, `SECRET_KEY`, `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
