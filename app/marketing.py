@@ -66,7 +66,7 @@ def _context():
 
 
 def render_landing():
-    """The landing page. Also served at / for signed-out visitors (see main.index)."""
+    """The landing page. Also served at / on the marketing deployment (see main.index)."""
     ctx = _context()
     ctx['home_url'] = ''   # on the landing page itself, nav links are plain #anchors
     return render_template('marketing/landing.html', **ctx)

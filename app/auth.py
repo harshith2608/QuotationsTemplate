@@ -16,9 +16,12 @@ def login():
         user = User.query.filter_by(username=form.username.data.strip()).first()
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=True)
-            next_page = request.args.get('next')
+            next_page = request.args.get('next', '')
+            # Only follow ?next= to a page on this site (blocks open redirects to other domains)
+            if not (next_page.startswith('/') and not next_page.startswith('//')) or next_page == '/':
+                next_page = url_for('projects.list_projects')
             flash(f'Welcome back, {user.username}!', 'success')
-            return redirect(next_page or url_for('projects.list_projects'))
+            return redirect(next_page)
         flash('Invalid username or password.', 'danger')
     return render_template('auth/login.html', form=form, title='Sign In')
 
@@ -28,4 +31,5 @@ def login():
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('auth.login'))
+    from .marketing import marketing_enabled
+    return redirect(url_for('main.index') if marketing_enabled() else url_for('auth.login'))

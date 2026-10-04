@@ -8,11 +8,12 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def index():
-    if current_user.is_authenticated:
-        return redirect(url_for('projects.list_projects'))
-    # On the product's own marketing deployment the domain root is the sales page
+    # On the product's own marketing deployment the domain root is always the sales page
+    # (signed-in users get an "Open app" button there); everywhere else / is the app.
     if marketing_enabled():
         return render_landing()
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.list_projects'))
     return current_app.login_manager.unauthorized()
 
 
