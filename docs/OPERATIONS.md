@@ -38,6 +38,11 @@ Run every `flask …` command below from this folder with the venv active.
 
 Pick a short subdomain name for them, e.g. `acme`.
 
+### 0. Before the first paying customer: upgrade Vercel to Pro
+If the account is still on the Hobby plan, upgrade it **before** creating the customer's project
+(Vercel → Settings → Billing). Hobby is non-commercial only, and a paying customer's app must not
+depend on it. One Pro seat covers every project in the account. Only needed once.
+
 ### 1. Database (Neon)
 1. Neon → **New Project** → name `acme`, region **AWS Asia Pacific (Singapore)**.
 2. Copy two connection strings:
