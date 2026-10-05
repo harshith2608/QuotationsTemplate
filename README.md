@@ -171,6 +171,20 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
 
 ---
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
+Each script in `tests/checks/` runs against its own fresh SQLite database (migrated and seeded
+automatically) and prints `PASS`/`FAIL` per check; you can also run one directly to see every
+line. The multi-tenant (trials) checks need Postgres and are skipped unless `TEST_PG_URL` and
+`TEST_PG_TARGET_URL` point at two **empty, throwaway** databases. Never point them at a real one.
+
+---
+
 ## Database Migrations
 
 The schema is managed by Flask-Migrate (Alembic) in `migrations/`. When you change `app/models.py`:
@@ -207,6 +221,7 @@ After upgrading an existing deployment, also run `flask bootstrap`: it only fill
 │   ├── forms.py         # WTForms
 │   └── decorators.py    # @admin_required
 ├── migrations/          # Alembic migration scripts
+├── tests/               # python -m pytest tests -q (checks/ = one script per feature)
 ├── templates/           # Jinja templates (base, auth, projects, admin, errors)
 ├── static/
 │   ├── brand/           # Put client logos here

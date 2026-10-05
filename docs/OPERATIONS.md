@@ -299,7 +299,11 @@ and create staff logins in **Admin → Users**.
 
 ## 7. Shipping an update
 
-1. Work on a `dev` branch; test locally.
+1. Work on a `dev` branch and run the tests (in the venv; first time: `pip install -r requirements-dev.txt`):
+   ```bash
+   python -m pytest tests -q
+   ```
+   Everything should pass (one skipped trials test is normal). Don't ship with a failure.
 2. Check whether the update changes the database:
    ```bash
    git diff --stat main..dev -- migrations/versions/
