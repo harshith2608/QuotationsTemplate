@@ -36,9 +36,28 @@ def register_cli(app):
         except SeedError as exc:
             raise click.ClickException(str(exc))
 
+    def _maybe_trial(slug):
+        """Context manager: run inside a trial's schema when --trial is given, else a no-op."""
+        from contextlib import nullcontext
+        if not slug:
+            return nullcontext()
+        from sqlalchemy import text
+        from . import db, tenancy
+        with db.engine.connect() as conn:
+            row = conn.execute(text("SELECT schema_name FROM public.tenants WHERE slug = :s AND status = 'active'"),
+                               {'s': slug}).first()
+        if not row:
+            raise click.ClickException(f'No active trial named "{slug}".')
+        return tenancy.tenant_context(slug, row[0])
+
     @app.cli.command('company-status')
-    def company_status_command():
+    @click.option('--trial', 'trial_slug', default=None, help='Run inside this trial (trials database).')
+    def company_status_command(trial_slug):
         """Show the company identity fields and which are locked."""
+        with _maybe_trial(trial_slug):
+            _company_status()
+
+    def _company_status():
         from .models import AppSetting
         locked = branding.locked_fields()
         rows = [('name', AppSetting.get('company_name', '')), ('gstin', AppSetting.get('company_gstin', '')),
@@ -52,15 +71,17 @@ def register_cli(app):
     @app.cli.command('company-unlock')
     @click.argument('fields', nargs=-1)
     @click.option('--all', 'all_fields', is_flag=True, help='Unlock name, GSTIN and logo.')
-    def company_unlock_command(fields, all_fields):
+    @click.option('--trial', 'trial_slug', default=None, help='Run inside this trial (trials database).')
+    def company_unlock_command(fields, all_fields, trial_slug):
         """Let the client change a locked field once: name, gstin and/or logo. It re-locks when they save."""
         from . import db
         chosen = set(branding.LOCKABLE) if all_fields else set(fields)
         bad = chosen - set(branding.LOCKABLE)
         if not chosen or bad:
             raise click.ClickException('Choose one or more of: name, gstin, logo (or --all).')
-        branding.unlock(chosen)
-        db.session.commit()
+        with _maybe_trial(trial_slug):
+            branding.unlock(chosen)
+            db.session.commit()
         click.echo(f'Unlocked: {", ".join(sorted(chosen))}. The client can change it once in Admin → Settings; '
                    'it locks again when they save.')
 
