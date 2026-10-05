@@ -7,7 +7,12 @@ from .catalog import STAGES, DEFAULT_STAGE
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    # In the shared trials app ids are "<slug>:<id>", so a session from one trial is useless in another
+    from .tenancy import current_slug
+    slug, _, raw = str(user_id).rpartition(':')
+    if (slug or None) != current_slug() or not raw.isdigit():
+        return None
+    return User.query.get(int(raw))
 
 
 class User(UserMixin, db.Model):
@@ -29,6 +34,11 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self):
         return self.role == 'admin'
+
+    def get_id(self):
+        from .tenancy import current_slug
+        slug = current_slug()
+        return f'{slug}:{self.id}' if slug else str(self.id)
 
     def __repr__(self):
         return f'<User {self.username}>'

@@ -1,7 +1,10 @@
 import logging
 from logging.config import fileConfig
 
+import re
+
 from flask import current_app
+from sqlalchemy import text
 
 from alembic import context
 
@@ -96,6 +99,13 @@ def run_migrations_online():
 
     connectable = get_engine()
 
+    # Shared trials app: `-x tenant_schema=t_acme` migrates one trial's schema
+    tenant_schema = context.get_x_argument(as_dictionary=True).get('tenant_schema')
+    if tenant_schema:
+        if not re.fullmatch(r't_[a-z][a-z0-9_]{1,29}', tenant_schema):
+            raise ValueError(f'Invalid tenant schema: {tenant_schema!r}')
+        conf_args['version_table_schema'] = tenant_schema
+
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
@@ -104,6 +114,9 @@ def run_migrations_online():
         )
 
         with context.begin_transaction():
+            if tenant_schema:
+                # SET LOCAL lasts for this transaction only, so it is safe through a connection pooler
+                connection.execute(text(f'SET LOCAL search_path TO "{tenant_schema}"'))
             context.run_migrations()
 
 

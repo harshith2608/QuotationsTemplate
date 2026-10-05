@@ -59,12 +59,12 @@ def seed_reference_data():
     return seeded
 
 
-def bootstrap():
+def bootstrap(username=None, password=None):
     """Create the first admin (if none) and seed reference data. Returns a list of log lines."""
     log = []
     if not User.query.filter_by(role='admin').first():
-        username = (os.environ.get('ADMIN_USERNAME') or 'admin').strip()
-        password = os.environ.get('ADMIN_PASSWORD') or ''
+        username = (username or os.environ.get('ADMIN_USERNAME') or 'admin').strip()
+        password = password or os.environ.get('ADMIN_PASSWORD') or ''
         if len(password) < 8:
             raise SeedError('No admin user exists. Set ADMIN_PASSWORD (min 8 characters) '
                             'and optionally ADMIN_USERNAME, then run this again.')

@@ -31,6 +31,12 @@ def create_app(config_name='default'):
 
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # Shared trials app: pick the tenant schema from the Host before any other hook queries the DB
+    from . import tenancy
+    if tenancy.tenant_mode() and not tenancy.base_domain():
+        raise RuntimeError('TENANT_MODE needs TENANT_BASE_DOMAIN (e.g. quote-room.co.in).')
+    app.before_request(tenancy.resolve_tenant)
     login_manager.init_app(app)
     csrf.init_app(app)
 
