@@ -73,6 +73,13 @@ unset DATABASE_URL
    | `TENANT_BASE_DOMAIN` | `quote-room.co.in` |
    | `SUPPORT_WHATSAPP` | your number |
 
+   Generate the `SECRET_KEY` (a new one for every project; never reuse one):
+   ```bash
+   python3 -c "import secrets; print(secrets.token_hex(32))"
+   ```
+   Also set **Settings → Functions → Function Region → Singapore (sin1)**.
+   Don't set `MARKETING_SITE`, `DEMO_MODE`, `CRON_SECRET`, `ADMIN_*` or `COMPANY_*` here.
+
    Don't run `flask db upgrade` on the trials database: trial tables are created per trial.
 
 ### Start a trial (≈2 minutes)
