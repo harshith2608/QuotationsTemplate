@@ -272,7 +272,7 @@ footer nav { display: flex; gap: 1.2rem; }
       {% if current_user.is_authenticated %}
       <a class="btn btn-primary" href="{{ url_for('projects.list_projects') }}">Open app</a>
       {% else %}
-      <a class="btn btn-primary" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27d%20like%20a%20demo%20of%20{{ product|urlencode }}" target="_blank" rel="noopener" data-cta>Book a demo</a>
+      <a class="btn btn-primary" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27d%20like%20to%20start%20a%20free%20trial%20of%20{{ product|urlencode }}" target="_blank" rel="noopener" data-cta>Start free trial</a>
       {% endif %}
     </nav>
   </div>

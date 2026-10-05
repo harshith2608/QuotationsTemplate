@@ -223,6 +223,32 @@ def register_cli(app):
                     delete_on = st.delete_on.strftime('%d %b %Y')
             click.echo(f'{r["slug"]:20} {r["status"]:10} {plan_txt:12} {ends:12} {state:10} {delete_on}')
 
+    @trial_group.command('extend')
+    @click.argument('slug')
+    @click.argument('length')
+    def trial_extend(slug, length):
+        """Give a trial more time, e.g.  flask trial extend acme 7d"""
+        from datetime import timedelta
+        from sqlalchemy import text
+        from . import db, tenancy
+        _need_postgres()
+        try:
+            plan_mod.parse_length(length)
+        except ValueError as exc:
+            raise click.ClickException(str(exc))
+        with db.engine.connect() as conn:
+            row = conn.execute(text("SELECT schema_name FROM public.tenants WHERE slug = :s AND status = 'active'"),
+                               {'s': slug}).first()
+        if not row:
+            raise click.ClickException(f'No active trial named "{slug}".')
+        with tenancy.tenant_context(slug, row[0]):
+            st = plan_mod.load_status(on=plan_mod.today())
+            base = max(st.ends_on, plan_mod.today()) if st.has_limit else plan_mod.today()
+            plan_mod.save_plan('trial', st.started_on or plan_mod.today(), plan_mod.add_length(base, length))
+            db.session.commit()
+            st = plan_mod.load_status(on=plan_mod.today())
+        click.echo(f'Trial "{slug}" now ends {st.ends_on.strftime("%d %b %Y")} ({st.days_left} days left).')
+
     @trial_group.command('migrate-all')
     def trial_migrate_all():
         """Apply database updates to every active trial schema."""
