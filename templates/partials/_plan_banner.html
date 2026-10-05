@@ -1,0 +1,59 @@
+{#- Subscription reminder / expiry banner. `plan` and `renew_url` come from the app context processor. -#}
+{% if plan and plan.has_limit and plan.state != 'active' %}
+{% set fmt = '%d %b %Y' %}
+{% set is_admin = current_user.is_authenticated and current_user.is_admin %}
+{% macro renew_button(label) -%}
+  {% if is_admin and renew_url %}
+  <a href="{{ renew_url }}" target="_blank" rel="noopener" class="btn btn-sm {{ 'btn-light' if plan.state == 'read_only' else 'btn-outline-dark' }} fw-semibold ms-md-2 mt-2 mt-md-0 flex-shrink-0">
+    <i class="bi bi-whatsapp me-1"></i>{{ label }}
+  </a>
+  {% elif is_admin %}
+  <span class="small ms-md-2 fw-semibold">Contact support to {{ 'subscribe' if plan.is_trial else 'renew' }}.</span>
+  {% elif current_user.is_authenticated %}
+  <span class="small ms-md-2">Ask your admin to {{ 'subscribe' if plan.is_trial else 'renew' }}.</span>
+  {% endif %}
+{%- endmacro %}
+
+{% if plan.state == 'reminder' and is_admin %}
+  {% set when = 'today' if plan.days_left == 0 else ('tomorrow' if plan.days_left == 1 else 'in ' ~ plan.days_left ~ ' days') %}
+  <div class="alert {{ 'alert-info' if plan.is_trial else 'alert-warning' }} d-md-flex align-items-center justify-content-between py-2 mb-2 ki-plan-banner" role="status">
+    <div>
+      <i class="bi {{ 'bi-gift' if plan.is_trial else 'bi-calendar-event' }} me-1"></i>
+      {% if plan.is_trial %}
+        <strong>Free trial</strong> ends {{ when }} ({{ plan.ends_on.strftime(fmt) }}). Choose a plan to keep using the app without interruption.
+      {% else %}
+        Your <strong>{{ plan.label }}</strong> ends {{ when }} ({{ plan.ends_on.strftime(fmt) }}). Renew to keep creating quotations.
+      {% endif %}
+    </div>
+    {{ renew_button('Choose a plan' if plan.is_trial else 'Renew') }}
+  </div>
+
+{% elif plan.state == 'grace' %}
+  <div class="alert alert-danger d-md-flex align-items-center justify-content-between py-2 mb-2 ki-plan-banner" role="alert">
+    <div>
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>
+      Your plan ended on <strong>{{ plan.ends_on.strftime(fmt) }}</strong>. You can keep working until
+      <strong>{{ plan.grace_until.strftime(fmt) }}</strong>; after that the app becomes read-only.
+    </div>
+    {{ renew_button('Renew now') }}
+  </div>
+
+{% elif plan.state == 'read_only' %}
+  <div class="alert alert-danger py-3 mb-2 ki-plan-banner ki-plan-expired" role="alert">
+    <div class="d-md-flex align-items-start justify-content-between">
+      <div>
+        <div class="fw-bold mb-1"><i class="bi bi-lock-fill me-1"></i>
+          {{ 'Your free trial has ended.' if plan.is_trial else 'Your plan has ended.' }} This app is now read-only.
+        </div>
+        <div class="small">You can still sign in, view your quotations and download PDFs, but you can't create or edit anything.</div>
+        <div class="mt-2 p-2 rounded ki-plan-delete-note">
+          <i class="bi bi-trash3 me-1"></i>
+          <strong>On {{ plan.delete_on.strftime(fmt) }}, all your data will be permanently deleted and you will no longer have access to this website.</strong>
+          {{ 'Subscribe' if plan.is_trial else 'Renew' }} before then to keep everything.
+        </div>
+      </div>
+      {{ renew_button('Subscribe now' if plan.is_trial else 'Renew now') }}
+    </div>
+  </div>
+{% endif %}
+{% endif %}

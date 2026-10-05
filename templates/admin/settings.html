@@ -76,6 +76,14 @@
   </a>
 </div>
 
+{% if plan and plan.has_limit %}
+<div class="d-flex flex-wrap align-items-center gap-2 small mb-3 text-muted">
+  <span class="badge {{ 'bg-info text-dark' if plan.is_trial else 'bg-success' }}">{{ plan.label }}</span>
+  <span>{{ plan.started_on.strftime('%d %b %Y') if plan.started_on else '' }} – {{ plan.ends_on.strftime('%d %b %Y') }}</span>
+  {% if renew_url %}<a href="{{ renew_url }}" target="_blank" rel="noopener" class="ms-1">{{ 'Choose a plan' if plan.is_trial else 'Renew' }}</a>{% endif %}
+</div>
+{% endif %}
+
 <ul class="nav nav-pills ki-settings-nav mb-3 flex-nowrap overflow-auto">
   {% for key, icon, label in [('company','building','Company'), ('appearance','palette','Appearance'),
                                ('documents','file-earmark-text','Quotation PDFs'), ('email','envelope','Email')] %}

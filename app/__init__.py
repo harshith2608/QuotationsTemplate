@@ -51,6 +51,8 @@ def create_app(config_name='default'):
     app.register_blueprint(marketing_bp)
     app.register_blueprint(demo_bp)
     app.before_request(block_demo_writes)
+    from .plan import enforce_read_only
+    app.before_request(enforce_read_only)
 
     # Serve static files efficiently in production (Gunicorn doesn't serve them)
     # autorefresh=True in development so edited JS/CSS is served without restart
@@ -106,7 +108,15 @@ def create_app(config_name='default'):
         from .branding import get_brand
         return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
-                'marketing_mode': marketing_enabled()}
+                'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
+
+    def _plan_context(user):
+        from flask import request
+        from .plan import load_status, renew_message_url
+        status = load_status()
+        if not status.has_limit:
+            return {'plan': status, 'renew_url': ''}
+        return {'plan': status, 'renew_url': renew_message_url(status, user, request.host_url)}
 
     from .cli import register_cli
     register_cli(app)

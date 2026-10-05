@@ -442,6 +442,10 @@ body > main { flex: 1 0 auto; }
 .dropdown-menu { --bs-dropdown-link-active-bg: var(--ki-primary); --bs-dropdown-link-active-color: var(--ki-on-primary); }
 .progress, .progress-stacked { --bs-progress-bar-bg: var(--ki-primary); }
 
+/* ---- Plan expiry banner ---- */
+.ki-plan-expired { border-left: 5px solid #b91c1c; }
+.ki-plan-delete-note { background: rgba(255,255,255,.6); color: #7f1d1d; font-size: .85rem; }
+
 /* ---- Demo mode banner ---- */
 .ki-demo-banner {
   background: #fff7d6; color: #5c4400; border-bottom: 1px solid #f1d98a;
