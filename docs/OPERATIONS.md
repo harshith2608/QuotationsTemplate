@@ -437,8 +437,15 @@ and create staff logins in **Admin → Users**.
      python -m flask trial migrate-all
      ```
    - Each paying customer: same commands as the demo, with their URL and key.
-   `flask db current` should end with `(head)`. `bootstrap` only fills empty reference tables and
-   never changes existing data. Then `unset DATABASE_URL DATA_ENCRYPTION_KEY`, merge to `main` and push.
+   **Check it worked:** the last command, `flask db current`, prints the database's version, e.g.
+   `a7c41e0d9b21 (head)`. **`(head)` at the end means "fully up to date with the code".** If you see
+   a code without `(head)`, or nothing at all, the update didn't finish: run `python -m flask db upgrade`
+   again and read the error it prints. (The code changes with every database update, so don't
+   compare it with this example; only look for `(head)`.) For trials, `migrate-all` does this check
+   itself and ends with `All trial schemas are up to date.`
+
+   `bootstrap` only fills empty reference tables and encrypts any leftover plain values; it never
+   changes your data. Then `unset DATABASE_URL DATA_ENCRYPTION_KEY`, merge to `main` and push.
 
 ---
 
