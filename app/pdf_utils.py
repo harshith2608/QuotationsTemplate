@@ -49,11 +49,17 @@ def ft_in(decimal_ft):
 GREY_BG = colors.HexColor('#f5f5f5')
 
 
+def _money(value, spec=',.2f'):
+    """Format an amount. In the public demo, amounts are deliberately wrong (see demo.scramble_amount)."""
+    from .demo import demo_enabled, scramble_amount
+    return format(scramble_amount(value) if demo_enabled() else value, spec)
+
+
 def _build(doc, elements):
-    """Build the PDF, adding the demo watermark on every page when DEMO_MODE is on."""
-    from .demo import demo_enabled, watermark_canvas_class
+    """Build the PDF, adding the demo notice and watermark on every page when DEMO_MODE is on."""
+    from .demo import demo_enabled, demo_notice_flowable, watermark_canvas_class
     if demo_enabled():
-        doc.build(elements, canvasmaker=watermark_canvas_class())
+        doc.build([demo_notice_flowable(doc.width)] + list(elements), canvasmaker=watermark_canvas_class())
     else:
         doc.build(elements)
 
@@ -289,7 +295,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 subtotal = item.cost(_item_rates_map)
                 room_total_cost += subtotal
                 item_rows.append([item.name, '—', '—',
-                                  f'Fitting: {item.quantity:g} × Rs. {item.unit_price:,.0f}', '—', f'{subtotal:,.2f}'])
+                                  f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}', '—', f'{_money(subtotal)}'])
                 continue
             work_type  = getattr(item, 'work_type', DEFAULT_WORK)
             rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
@@ -302,10 +308,10 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 ft_in(item.width),
                 f'{item.wood_type} – {work_type}',
                 f'{item.area:.2f}',
-                f'{subtotal:,.2f}'
+                f'{_money(subtotal)}'
             ])
         # Room total row
-        item_rows.append(['', '', '', 'Room Total:', f'{room_total_area:.2f} sqft', f'Rs. {room_total_cost:,.2f}'])
+        item_rows.append(['', '', '', 'Room Total:', f'{room_total_area:.2f} sqft', f'Rs. {_money(room_total_cost)}'])
 
         item_table = Table(item_rows, colWidths=col_widths)
         item_table.setStyle(TableStyle([
@@ -362,12 +368,12 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 subtotal = area * rate
                 combo_total += subtotal
                 combo_area_total += area
-                combo_data.append([f'{wood} – {work}', f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
+                combo_data.append([f'{wood} – {work}', f'{area:,.2f}', f'{_money(rate, ",.0f")}', f'{_money(subtotal)}'])
     fixed_total = project.fixed_items_total(rooms)
     if fixed_total > 0:
         combo_total += fixed_total
-        combo_data.append([FIXED_ITEMS_LABEL, '—', '—', f'{fixed_total:,.2f}'])
-    combo_data.append(['', '', 'Subtotal', f'Rs. {combo_total:,.2f}'])
+        combo_data.append([FIXED_ITEMS_LABEL, '—', '—', f'{_money(fixed_total)}'])
+    combo_data.append(['', '', 'Subtotal', f'Rs. {_money(combo_total)}'])
 
     combo_table = Table(combo_data, colWidths=summary_cw)
     combo_table.setStyle(TableStyle([
@@ -401,7 +407,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         dtype = getattr(project, 'discount_type', 'none')
         dval  = getattr(project, 'discount_value', 0) or 0
         disc_label = f'Discount ({dval:.0f}%)' if dtype == 'percentage' else 'Discount (Fixed)'
-        total_rows.append(['', '', disc_label, f'- Rs. {discount_amount:,.2f}'])
+        total_rows.append(['', '', disc_label, f'- Rs. {_money(discount_amount)}'])
         total_style_cmds += [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
             ('TEXTCOLOR', (2, 0), (-1, 0), colors.HexColor('#b91c1c')),
@@ -412,7 +418,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append(['', f'{combo_area_total:,.2f} sqft', 'FINAL TOTAL', f'Rs. {final_total:,.2f}'])
+    total_rows.append(['', f'{combo_area_total:,.2f} sqft', 'FINAL TOTAL', f'Rs. {_money(final_total)}'])
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
         ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
@@ -499,8 +505,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         # Payment status row
         balance = max(project.final_total - total_paid, 0)
         if total_paid > 0:
-            pay_rows.append(['Amount Paid', f'Rs. {total_paid:,.2f}',
-                             'Balance Due', f'Rs. {balance:,.2f}'])
+            pay_rows.append(['Amount Paid', f'Rs. {_money(total_paid)}',
+                             'Balance Due', f'Rs. {_money(balance)}'])
 
         upi   = ps.get('upi_id', '')
         bname = ps.get('bank_name', '')
@@ -698,13 +704,13 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                 subtotal      = area * _item_rates_map2.get(key, 0.0)
                 mat_total    += subtotal
                 total_area_all += area
-                cost_data.append([f'{wood} – {work}', f'{subtotal:,.2f}'])
+                cost_data.append([f'{wood} – {work}', f'{_money(subtotal)}'])
     # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
     fixed_total2 = project.fixed_items_total()
     if fixed_total2 > 0:
         mat_total += fixed_total2
-        cost_data.append([FIXED_ITEMS_LABEL, f'{fixed_total2:,.2f}'])
-    cost_data.append(['Total', f'Rs. {mat_total:,.2f}'])
+        cost_data.append([FIXED_ITEMS_LABEL, f'{_money(fixed_total2)}'])
+    cost_data.append(['Total', f'Rs. {_money(mat_total)}'])
 
     cost_table = Table(cost_data, colWidths=cost_cw)
     cost_table.setStyle(TableStyle([
@@ -736,7 +742,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         dtype = getattr(project, 'discount_type', 'none')
         dval  = getattr(project, 'discount_value', 0) or 0
         disc_label = f'Discount ({dval:.0f}%)' if dtype == 'percentage' else 'Discount (Fixed)'
-        total_rows.append([disc_label, f'- Rs. {discount_amount:,.2f}'])
+        total_rows.append([disc_label, f'- Rs. {_money(discount_amount)}'])
         total_style_cmds += [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#b91c1c')),
@@ -747,7 +753,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append([f'FINAL TOTAL  ({total_area_all:,.2f} sqft)', f'Rs. {final_total:,.2f}'])
+    total_rows.append([f'FINAL TOTAL  ({total_area_all:,.2f} sqft)', f'Rs. {_money(final_total)}'])
     ft_cw = cost_cw
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
@@ -825,7 +831,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         pay_rows = []
         balance = max(project.final_total - total_paid, 0)
         if total_paid > 0:
-            pay_rows.append(['Amount Paid', f'Rs. {total_paid:,.2f}', 'Balance Due', f'Rs. {balance:,.2f}'])
+            pay_rows.append(['Amount Paid', f'Rs. {_money(total_paid)}', 'Balance Due', f'Rs. {_money(balance)}'])
         if ps.get('upi_id'):
             pay_rows.append(['UPI ID', ps['upi_id'], '', ''])
         if ps.get('account_number'):

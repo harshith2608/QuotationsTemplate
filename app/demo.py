@@ -11,10 +11,14 @@ In demo mode:
   * anything that could vandalise the demo or produce a convincing fake is
     blocked: all admin saves (settings, branding, rates, users), deleting,
     payment links and access changes
-  * every PDF carries a large "DEMO — NOT A VALID QUOTATION" watermark
+  * every PDF carries a large "DEMO — NOT A VALID QUOTATION" watermark, a
+    notice box at the top, and deliberately WRONG amounts (each figure is
+    altered independently, so rows and totals don't add up) — a demo PDF can
+    never be passed off as a real quotation
   * /demo/reset (called by the Vercel cron with CRON_SECRET) wipes and
     reloads the demo data
 """
+import hashlib
 import hmac
 import os
 
@@ -35,6 +39,52 @@ BLOCKED_ENDPOINTS = {
 }
 
 WATERMARK_TEXT = 'DEMO — NOT A VALID QUOTATION'
+NOTICE_TITLE = 'DEMO QUOTATION — NOT VALID'
+NOTICE_TEXT = ('This PDF was made in a public demo. All amounts shown are deliberately altered sample '
+               'figures, not actual calculated values, and totals will not add up. Do not use it as a quotation.')
+FOOTER_TEXT = 'Demo PDF · amounts are altered sample figures, not actual calculated values'
+
+
+def scramble_amount(value):
+    """A deliberately wrong amount for demo PDFs: the real value × 0.35–0.85 or 1.15–1.85, rounded.
+    Deterministic (same input → same output) so a PDF looks stable, but each figure is changed
+    independently, so rows never add up to the totals."""
+    try:
+        value = float(value or 0)
+    except (TypeError, ValueError):
+        return value
+    if not value:
+        return 0.0
+    h = int(hashlib.sha256(f'{value:.2f}'.encode()).hexdigest()[:8], 16)
+    step = (h % 1000) / 1000                       # 0.000–0.999
+    factor = 0.35 + step * 0.5 if h & 1 << 20 else 1.15 + step * 0.7
+    wrong = value * factor
+    if abs(wrong) >= 100:
+        wrong = round(wrong, -1)
+    elif round(wrong, 2) == round(value, 2):
+        wrong += 1
+    return round(wrong, 2)
+
+
+def demo_notice_flowable(width):
+    """Red-bordered notice box placed at the top of every demo PDF."""
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph, Table, TableStyle
+    red = colors.HexColor('#c62828')
+    title = Paragraph(NOTICE_TITLE, ParagraphStyle('demo_t', fontName='Helvetica-Bold', fontSize=12,
+                                                   textColor=red, leading=15, spaceAfter=2))
+    body = Paragraph(NOTICE_TEXT, ParagraphStyle('demo_b', fontName='Helvetica', fontSize=8.5,
+                                                 textColor=colors.HexColor('#7f1d1d'), leading=11))
+    box = Table([[title], [body]], colWidths=[width])
+    box.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1.5, red),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fef2f2')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (0, 0), 6), ('BOTTOMPADDING', (0, -1), (-1, -1), 7),
+    ]))
+    box.spaceAfter = 8
+    return box
 
 
 def demo_enabled():
@@ -98,7 +148,12 @@ def _draw_watermark(canvas):
     canvas.rotate(40)
     canvas.drawCentredString(0, 0, WATERMARK_TEXT)
     canvas.setFont('Helvetica-Bold', 16)
-    canvas.drawCentredString(0, -34, 'Created in a public demo · values are examples only')
+    canvas.drawCentredString(0, -34, 'Amounts are altered sample figures, not calculated values')
+    canvas.restoreState()
+    canvas.saveState()
+    canvas.setFillColor(colors.HexColor('#c62828'))
+    canvas.setFont('Helvetica-Bold', 8)
+    canvas.drawCentredString(width / 2, 0.45 * 28.35, FOOTER_TEXT)
     canvas.restoreState()
 
 

@@ -15,7 +15,11 @@ pdftext = lambda c, u: '\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(
 app = make(); c = app.test_client()
 ok('off: /demo and /demo/reset 404', c.get('/demo').status_code == 404 and c.get('/demo/reset').status_code == 404)
 c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
-ok('off: no watermark on PDFs', 'NOT A VALID QUOTATION' not in pdftext(c, '/projects/1/pdf'))
+with app.app_context():
+    p1 = db.session.get(Project, 1); REAL = [f'{p1.final_total:,.2f}', f'{p1.grand_total:,.2f}']
+off_txt = pdftext(c, '/projects/1/pdf')
+ok('off: no watermark on PDFs', 'NOT A VALID QUOTATION' not in off_txt and 'DEMO QUOTATION' not in off_txt)
+ok('off: PDFs show the real totals', all(v in off_txt for v in REAL))
 ok('off: no demo banner', 'exploring the demo' not in c.get('/projects').text)
 
 # ── Demo mode ON ──
@@ -59,7 +63,16 @@ with app.app_context():
 
 # Watermark + WhatsApp label
 for u in ['/projects/1/pdf', '/projects/1/pdf/customer']:
-    ok(f'watermark on {u}', 'DEMO — NOT A VALID QUOTATION' in pdftext(c, u))
+    t = pdftext(c, u)
+    ok(f'watermark, notice box and footer on {u}', 'DEMO — NOT A VALID QUOTATION' in t
+       and 'DEMO QUOTATION — NOT VALID' in t and 'not actual calculated values' in t
+       and t.count('amounts are altered sample figures') == len(PdfReader(io.BytesIO(c.get(u).data)).pages))
+    ok(f'real totals never appear on {u}', not any(v in t for v in REAL) and 'Rs. 0.00' not in t.split('Amount Paid')[0])
+from app.demo import scramble_amount
+vals = [1, 99.5, 4500, 18000, 172710, 181800.25]
+ok('scrambled amounts are always wrong, deterministic, positive',
+   all(scramble_amount(v) != v and scramble_amount(v) == scramble_amount(v) and scramble_amount(v) > 0 for v in vals)
+   and scramble_amount(0) == 0)
 wa = unquote(c.get('/projects/1/whatsapp').headers['Location'])
 ok('WhatsApp summary marked as demo', 'DEMO — NOT A VALID QUOTATION' in wa)
 
