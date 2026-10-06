@@ -6,7 +6,7 @@ app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 
 with app.app_context():
-    priya = Project.query.filter(Project.customer_name.like('Priya%')).first()
+    priya = next(p for p in Project.query.all() if p.customer_name.startswith('Priya'))
     priya_final, priya_gross = priya.final_total, priya.grand_total
     uid = User.query.filter_by(username='demo-admin').first().id
     for gt, dt, dv in [(1000, 'fixed', 5000), (1000, 'percentage', 150), (1000, 'percentage', None),
@@ -14,10 +14,12 @@ with app.app_context():
         db.session.add(Project(customer_name='Edge', mobile='0', created_by=uid, grand_total=gt,
                                discount_type=dt, discount_value=dv, status='draft'))
     db.session.commit()
-    rows = db.session.query(Project, Project.final_total_sql()).all()
-    bad = [(p.id, p.final_total, sql) for p, sql in rows if abs(p.final_total - sql) > 0.01]
-    ok(f'SQL final total matches Python for all {len(rows)} projects (incl. edge discounts) {bad}', not bad)
-    py_sum = round(sum(p.final_total for p, _ in rows), 2)
+    rows = Project.query.all()
+    expect = {1000: {'fixed': 0, 'percentage': 0}, 500: {'none': 500}, 800: {'bogus': 800}}
+    edge = [(p.grand_total, p.discount_type, p.discount_value, p.final_total) for p in rows if p.customer_name == 'Edge']
+    ok(f'edge discounts: over-discount floors at 0, missing/unknown discount ignored {edge}',
+       sorted(e[3] for e in edge) == [0.0, 0.0, 500.0, 800.0, 1000.0])
+    py_sum = round(sum(p.final_total for p in rows), 2)
 
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 m = re.search(r'ki-kpi-value">&#8377;([\d,]+)', c.get('/admin/dashboard').text)

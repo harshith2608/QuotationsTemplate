@@ -82,7 +82,7 @@ ok('reset without secret → 404', anon.get('/demo/reset').status_code == 404)
 ok('reset with wrong secret → 404', anon.get('/demo/reset', headers={'Authorization': 'Bearer nope'}).status_code == 404)
 r = anon.get('/demo/reset', headers={'Authorization': 'Bearer s3cret-value'})
 with app.app_context():
-    p3 = db.session.query(Project).filter_by(customer_name='Meera Test').first()
+    p3 = next(p for p in Project.query.all() if p.customer_name == 'Meera Test')
     ok('reset with secret restores demo data', r.status_code == 200 and p3.stage == 'pending' and p3.payments.count() == 0
        and Project.query.count() == 5)
 ok('visitor can sign in again after reset', anon.get('/demo').status_code == 302)

@@ -76,7 +76,20 @@ def bootstrap(username=None, password=None):
 
     seeded = seed_reference_data()
     log.append(f'Seeded: {", ".join(seeded)}.' if seeded else 'Reference data already present — skipped.')
+    log.append(encrypt_existing_data())
     return log
+
+
+def encrypt_existing_data():
+    """Encrypt any data still stored in plain text (after upgrading an older database). Returns a log line."""
+    from . import crypto
+    if not crypto.enabled():
+        return f'Encryption: {crypto.ENV} not set — data is stored unencrypted (fine for local development only).'
+    changed = crypto.encrypt_existing(db.session, db.metadata, AppSetting.ENCRYPTED_KEYS)
+    db.session.commit()
+    if not changed:
+        return 'Encryption: all data already encrypted.'
+    return 'Encryption: encrypted rows in ' + ', '.join(f'{t} ({n})' for t, n in changed.items()) + '.'
 
 
 # ── Demo data ─────────────────────────────────────────────────────────────────

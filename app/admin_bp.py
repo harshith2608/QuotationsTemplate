@@ -1,7 +1,9 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
+from types import SimpleNamespace
 from sqlalchemy import func
+from sqlalchemy.orm import load_only
 from . import db
 from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate, MasterRoom, MasterItem, AppSetting, Notification, PriceListItem
 from .forms import CreateUserForm, ChangePasswordForm
@@ -22,19 +24,21 @@ def require_admin():
 
 @admin_bp.route('/dashboard')
 def dashboard():
+    # Amounts and mobiles are encrypted, so totals are added up here rather than in SQL
+    projects = Project.query.options(load_only(
+        Project.id, Project.created_by, Project.stage, Project.status, Project.mobile,
+        Project.grand_total, Project.discount_type, Project.discount_value)).all()
+
     # Employee performance stats
-    employee_stats = (
-        db.session.query(
-            User.id,
-            User.username,
-            func.count(Project.id).label('project_count'),
-            func.coalesce(func.sum(Project.final_total_sql()), 0).label('total_value')
-        )
-        .outerjoin(Project, Project.created_by == User.id)
-        .filter(User.role == 'employee')
-        .group_by(User.id, User.username)
-        .all()
-    )
+    per_user = {}
+    for p in projects:
+        count, value = per_user.get(p.created_by, (0, 0.0))
+        per_user[p.created_by] = (count + 1, value + p.final_total)
+    employee_stats = [
+        SimpleNamespace(id=u.id, username=u.username, project_count=per_user.get(u.id, (0, 0))[0],
+                        total_value=round(per_user.get(u.id, (0, 0.0))[1], 2))
+        for u in User.query.filter_by(role='employee').order_by(User.id).all()
+    ]
 
     # Wood type distribution (total area per wood type)
     wood_dist = (
@@ -58,19 +62,17 @@ def dashboard():
     room_data = [r.count for r in room_dist]
 
     # Overall stats
-    total_projects = Project.query.count()
-    total_value = db.session.query(func.coalesce(func.sum(Project.final_total_sql()), 0)).scalar()
-    total_customers = db.session.query(func.count(func.distinct(Project.mobile))).scalar()
+    total_projects = len(projects)
+    total_value = round(sum(p.final_total for p in projects), 2)
+    total_customers = len({p.mobile for p in projects})
     total_employees = User.query.filter_by(role='employee').count()
 
     # Pipeline: count and value per workflow stage (excluding unfinished drafts)
-    stage_rows = (
-        db.session.query(Project.stage, func.count(Project.id),
-                         func.coalesce(func.sum(Project.final_total_sql()), 0))
-        .filter(Project.status != 'draft')
-        .group_by(Project.stage).all()
-    )
-    by_stage = {key: (count, value) for key, count, value in stage_rows}
+    by_stage = {}
+    for p in projects:
+        if p.status != 'draft':
+            count, value = by_stage.get(p.stage, (0, 0.0))
+            by_stage[p.stage] = (count + 1, round(value + p.final_total, 2))
     pipeline = [{'key': key, 'label': st[0], 'icon': st[1], 'color': st[2], 'bg': st[3],
                  'count': by_stage.get(key, (0, 0))[0], 'value': by_stage.get(key, (0, 0))[1]}
                 for key, st in STAGES.items()]

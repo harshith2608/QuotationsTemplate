@@ -61,10 +61,11 @@ All configuration is via environment variables. Copy `.env.example` to `.env` fo
 |---|---|---|
 | `SECRET_KEY` | production | Long random string. `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 | `DATABASE_URL` | production | This deployment's Postgres URL. Unset locally → SQLite `app.db` |
+| `DATA_ENCRYPTION_KEY` | production | Encrypts client data at rest (see Security). `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. **Losing it loses the data.** |
 | `FLASK_ENV` | | `production` when deployed (default `development`) |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | first deploy | First admin, created by `flask bootstrap` if no admin exists (password ≥ 8 chars) |
 
-The app refuses to start with `FLASK_ENV=production` unless `SECRET_KEY` and `DATABASE_URL` are set.
+The app refuses to start with `FLASK_ENV=production` unless `SECRET_KEY`, `DATABASE_URL` and `DATA_ENCRYPTION_KEY` are set.
 
 ### Branding & theme
 
@@ -157,7 +158,7 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
 
 1. **Create a Postgres database** for the client (Neon, Supabase or Render Postgres) and copy its connection URL.
 2. **Add branding** — set the branding env vars; optionally commit the client's logo to `static/brand/` and set `LOGO_FILE`.
-3. **Set core env vars** — `FLASK_ENV=production`, `SECRET_KEY`, `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
+3. **Set core env vars** — `FLASK_ENV=production`, `SECRET_KEY`, `DATABASE_URL`, `DATA_ENCRYPTION_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
 4. **Initialise the database** — `flask db upgrade && flask bootstrap`.
    - **Render**: `render.yaml` runs both on every start. Rename the service and database first.
    - **Heroku-style hosts**: the `release:` line in `Procfile` runs both on each deploy.
@@ -261,7 +262,10 @@ After upgrading an existing deployment, also run `flask bootstrap`: it only fill
 - Secure, HttpOnly, SameSite=Lax session cookies in production
 - Theme values are validated (`#rrggbb` colours, whitelisted choices) before being injected into CSS; logo uploads are re-encoded through Pillow and SVG is rejected
 
-Note: Razorpay secrets and the SMTP password entered in the admin settings are stored unencrypted in the `app_settings` table — restrict database access accordingly.
+- **Encryption at rest** (`app/crypto.py`, Fernet: AES + HMAC, random IV): customer names, mobiles, emails and addresses; quotation totals, discounts, fitting prices, payments and notes; material rates and the price list; notifications; Razorpay/webhook/SMTP secrets and bank account details. Someone with only database access (a leaked URL, the Neon console) sees `enc1:…` instead of values. The key lives in the deployment's `DATA_ENCRYPTION_KEY`, so the app (and whoever controls its hosting) can still decrypt.
+  - Encrypted columns can't be searched, sorted or summed in SQL; the app does that in Python (fine for one business's data).
+  - Upgrading an older database: `flask db upgrade` then `flask bootstrap` (or `flask encrypt-data`) encrypts existing plain values; plain values stay readable until then.
+  - `flask export-data DIR` writes a decrypted CSV per table for a customer's data request.
 
 ---
 

@@ -49,7 +49,7 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
-    REQUIRED_ENV = ('SECRET_KEY', 'DATABASE_URL')
+    REQUIRED_ENV = ('SECRET_KEY', 'DATABASE_URL', 'DATA_ENCRYPTION_KEY')
     SESSION_COOKIE_SECURE   = True   # HTTPS only
     SESSION_COOKIE_HTTPONLY = True   # no JS access
     SESSION_COOKIE_SAMESITE = 'Lax'

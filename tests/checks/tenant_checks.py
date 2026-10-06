@@ -80,16 +80,36 @@ ok(f'rows land in the right schema (acme={a_proj}, sharma={b_proj})', a_proj == 
 # Convert sharma → its own database
 cb.post('/api/draft', base_url=B, json={'customer_name': 'Sharma Client', 'mobile': '2', 'rooms_data': [
     {'name': 'Hall', 'items': [{'name': 'TV Unit', 'length': 9, 'width': 7, 'wood_type': 'Veneer', 'work_type': 'Frame Work'}]}]})
-r = runner.invoke(args=['trial', 'convert', 'sharma', '--to', TARGET, '--plan', '1y'])
+from cryptography.fernet import Fernet
+from app import crypto
+NEW_KEY = Fernet.generate_key().decode()
+with app.app_context():
+    from app.tenancy import tenant_context
+    from app.models import AppSetting
+    with tenant_context('sharma'):
+        AppSetting.set('account_number', 'SHARMA-ACCT-1'); db.session.commit()
+ok('convert refuses a bad --to-key', runner.invoke(args=['trial', 'convert', 'sharma', '--to', TARGET, '--plan', '1y',
+                                                         '--to-key', 'nope']).exit_code != 0)
+r = runner.invoke(args=['trial', 'convert', 'sharma', '--to', TARGET, '--plan', '1y', '--to-key', NEW_KEY])
 ok('convert sharma', r.exit_code == 0 and 'Paid plan 1y' in r.output)
 t = create_engine(TARGET.replace('postgresql://', 'postgresql+psycopg2://'))
 with t.begin() as c:
     users = c.execute(text('select username from users')).scalars().all()
-    projects = c.execute(text('select customer_name from projects')).scalars().all()
+    raw_projects = c.execute(text('select customer_name from projects')).scalars().all()
+    raw_acct = c.execute(text("select value from app_settings where key='account_number'")).scalar()
     plan = dict(c.execute(text("select key, value from app_settings where key like 'plan_%'")).all())
     name = c.execute(text("select value from app_settings where key='company_name'")).scalar()
     c.execute(text("insert into projects (customer_name, mobile, created_by, grand_total, status, stage) values ('After', '3', 1, 0, 'complete', 'pending')"))
+with crypto.using_key(NEW_KEY):
+    projects = [crypto.decrypt(v) for v in raw_projects]
+    acct = crypto.decrypt(raw_acct)
 ok(f'target has sharma data only {users} {projects}', users == ['owner'] and projects == ['Sharma Client'] and name == 'Sharma Furniture')
+ok('target data re-encrypted with the customer\'s own key', all(v.startswith('enc1:') for v in raw_projects)
+   and acct == 'SHARMA-ACCT-1')
+try:
+    crypto.decrypt(raw_projects[0]); ok('trials key can no longer read the customer copy', False)
+except crypto.EncryptionError:
+    ok('trials key can no longer read the customer copy', True)
 ok(f'paid plan set on target {plan}', plan.get('plan_name') == '1y' and plan.get('plan_ends_on'))
 ok('sequences continue after copy (insert worked)', True)
 ok('converted trial no longer served by trials app', app.test_client().get('/login', base_url=B).status_code == 404)

@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+TEST_KEY = 'q8b1iX0Hn6Jx7m0lF3Yp9cG2sV5tR4wK1zA0eD6uB3o='   # test-only Fernet key; data is encrypted in every test
 ROOT = Path(__file__).resolve().parent.parent
 CHECKS = Path(__file__).resolve().parent / 'checks'
 
@@ -27,11 +28,11 @@ SETUP = {
     'demo_checks': 'seed', 'fixed_checks': 'seed', 'guides_checks': 'seed', 'landing_checks': 'seed',
     'legal_checks': 'seed', 'plan_checks': 'seed', 'settings_checks': 'seed', 'smoke_checks': 'seed',
     'stage_checks': 'seed', 'totals_checks': 'seed', 'webhook_checks': 'seed',
-    'lock_checks': 'bootstrap', 'tenant_checks': 'postgres',
+    'encryption_checks': 'seed', 'lock_checks': 'bootstrap', 'tenant_checks': 'postgres',
 }
 
 # env vars from the developer's shell/.env that would change app behaviour
-SCRUB = ('DEMO_MODE', 'MARKETING_SITE', 'TENANT_MODE', 'TENANT_BASE_DOMAIN', 'LOCK_COMPANY_DETAILS',
+SCRUB = ('DATA_ENCRYPTION_KEY', 'TARGET_DATA_ENCRYPTION_KEY', 'DEMO_MODE', 'MARKETING_SITE', 'TENANT_MODE', 'TENANT_BASE_DOMAIN', 'LOCK_COMPANY_DETAILS',
          'SUPPORT_WHATSAPP', 'CRON_SECRET', 'FLASK_ENV', 'FLASK_CONFIG')
 
 
@@ -40,7 +41,7 @@ def _env(database_url, **extra):
            if k not in SCRUB and not k.startswith(('COMPANY_', 'BRAND_', 'MARKETING_', 'SIGNATORY_',
                                                     'ADMIN_', 'MAIL_', 'RAZORPAY_', 'PLAN_'))}
     env.update(DATABASE_URL=database_url, FLASK_APP='run.py', PYTHONPATH=str(ROOT),
-               SECRET_KEY='test-secret-key', **extra)
+               SECRET_KEY='test-secret-key', DATA_ENCRYPTION_KEY=TEST_KEY, **extra)
     return env
 
 

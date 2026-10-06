@@ -1,7 +1,7 @@
 from datetime import datetime
 from flask_login import UserMixin
-from sqlalchemy import case, func
 from . import db, login_manager
+from .crypto import EncryptedFloat, EncryptedText, decrypt, encrypt
 from .catalog import STAGES, DEFAULT_STAGE
 
 
@@ -47,14 +47,16 @@ class User(UserMixin, db.Model):
 class Project(db.Model):
     __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
-    customer_name = db.Column(db.String(100), nullable=False)
-    mobile = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(100), nullable=True)
-    address = db.Column(db.Text, nullable=True)
+    # Customer details and amounts are encrypted at rest (app/crypto.py): never filter,
+    # sort or sum these in SQL; do it in Python after loading.
+    customer_name = db.Column(EncryptedText, nullable=False)
+    mobile = db.Column(EncryptedText, nullable=False)
+    email = db.Column(EncryptedText, nullable=True)
+    address = db.Column(EncryptedText, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    grand_total    = db.Column(db.Float, default=0.0)
+    grand_total    = db.Column(EncryptedFloat, default=0.0)
     discount_type  = db.Column(db.String(20), default='none')   # 'none', 'percentage', 'fixed'
-    discount_value = db.Column(db.Float, default=0.0)
+    discount_value = db.Column(EncryptedFloat, default=0.0)
     status = db.Column(db.String(20), default='complete', nullable=False)   # 'complete' or 'draft' (form auto-save)
     # Workflow stage, see catalog.STAGES (pending → confirmed → ongoing → completed, plus on_hold / cancelled)
     stage = db.Column(db.String(20), nullable=False, default=DEFAULT_STAGE,
@@ -132,27 +134,16 @@ class Project(db.Model):
 
     @property
     def discount_amount(self):
+        gt = self.grand_total or 0
         if self.discount_type == 'percentage':
-            return round(self.grand_total * (self.discount_value or 0) / 100, 2)
+            return round(gt * (self.discount_value or 0) / 100, 2)
         elif self.discount_type == 'fixed':
-            return round(min(self.discount_value or 0, self.grand_total), 2)
+            return round(min(self.discount_value or 0, gt), 2)
         return 0.0
 
     @property
     def final_total(self):
-        return round(max(self.grand_total - self.discount_amount, 0), 2)
-
-    @classmethod
-    def final_total_sql(cls):
-        """SQL expression equivalent of final_total, for aggregate queries."""
-        gt = func.coalesce(cls.grand_total, 0.0)
-        dv = func.coalesce(cls.discount_value, 0.0)
-        discount = case(
-            (cls.discount_type == 'percentage', gt * dv / 100.0),
-            (cls.discount_type == 'fixed', case((dv < gt, dv), else_=gt)),
-            else_=0.0,
-        )
-        return case((gt - discount > 0, gt - discount), else_=0.0)
+        return round(max((self.grand_total or 0) - self.discount_amount, 0), 2)
 
     def __repr__(self):
         return f'<Project {self.id}: {self.customer_name}>'
@@ -194,7 +185,7 @@ class Item(db.Model):
     work_type = db.Column(db.String(50), nullable=False, default='Box Work')
     item_type = db.Column(db.String(10), nullable=False, default='measured', server_default='measured')
     quantity = db.Column(db.Float, nullable=True)
-    unit_price = db.Column(db.Float, nullable=True)
+    unit_price = db.Column(EncryptedFloat, nullable=True)
 
     @property
     def is_fixed(self):
@@ -232,7 +223,7 @@ class WoodRate(db.Model):
     __tablename__ = 'wood_rates'
     id = db.Column(db.Integer, primary_key=True)
     wood_type = db.Column(db.String(50), unique=True, nullable=False)
-    rate_per_sqft = db.Column(db.Float, nullable=False)
+    rate_per_sqft = db.Column(EncryptedFloat, nullable=False)
 
     def __repr__(self):
         return f'<WoodRate {self.wood_type}: {self.rate_per_sqft}>'
@@ -242,7 +233,7 @@ class WorkTypeRate(db.Model):
     __tablename__ = 'work_type_rates'
     id = db.Column(db.Integer, primary_key=True)
     work_type = db.Column(db.String(50), unique=True, nullable=False)
-    rate_per_sqft = db.Column(db.Float, nullable=False)
+    rate_per_sqft = db.Column(EncryptedFloat, nullable=False)
 
     def __repr__(self):
         return f'<WorkTypeRate {self.work_type}: {self.rate_per_sqft}>'
@@ -253,7 +244,7 @@ class ItemRate(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     wood_type     = db.Column(db.String(50), nullable=False)
     work_type     = db.Column(db.String(50), nullable=False)
-    rate_per_sqft = db.Column(db.Float, nullable=False, default=0.0)
+    rate_per_sqft = db.Column(EncryptedFloat, nullable=False, default=0.0)
     __table_args__ = (db.UniqueConstraint('wood_type', 'work_type', name='uq_item_rate'),)
     def __repr__(self):
         return f'<ItemRate {self.wood_type}|{self.work_type}: {self.rate_per_sqft}>'
@@ -282,19 +273,29 @@ class AppSetting(db.Model):
     key   = db.Column(db.String(100), primary_key=True)
     value = db.Column(db.Text, nullable=True)
 
+    # Settings stored encrypted (secrets and bank details); everything else is plain text
+    ENCRYPTED_KEYS = frozenset({'razorpay_key_secret', 'webhook_secret', 'smtp_pass', 'smtp_user',
+                                'account_number', 'ifsc_code'})
+
+    @classmethod
+    def _out(cls, key, value):
+        return decrypt(value) if key in cls.ENCRYPTED_KEYS else value
+
     @classmethod
     def get(cls, key, default=None):
         row = cls.query.get(key)
-        return row.value if row else default
+        return cls._out(key, row.value) if row else default
 
     @classmethod
     def get_many(cls, keys, default=''):
         """Fetch several settings in one query: {key: value or default}."""
-        rows = {r.key: r.value for r in cls.query.filter(cls.key.in_(keys)).all()}
+        rows = {r.key: cls._out(r.key, r.value) for r in cls.query.filter(cls.key.in_(keys)).all()}
         return {k: rows.get(k) or default for k in keys}
 
     @classmethod
     def set(cls, key, value):
+        if key in cls.ENCRYPTED_KEYS and value:
+            value = encrypt(value)
         row = cls.query.get(key)
         if row:
             row.value = value
@@ -310,8 +311,8 @@ class Payment(db.Model):
     __tablename__ = 'payments'
     id                  = db.Column(db.Integer, primary_key=True)
     project_id          = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
-    amount              = db.Column(db.Float, nullable=False)
-    note                = db.Column(db.String(200), nullable=True)
+    amount              = db.Column(EncryptedFloat, nullable=False)
+    note                = db.Column(EncryptedText, nullable=True)
     recorded_by         = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     recorded_at         = db.Column(db.DateTime, default=datetime.utcnow)
     source              = db.Column(db.String(20), default='manual')   # 'manual' or 'razorpay'
@@ -329,7 +330,7 @@ class PaymentLink(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     project_id       = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
     razorpay_link_id = db.Column(db.String(100), unique=True, nullable=False)
-    amount           = db.Column(db.Float, nullable=False)
+    amount           = db.Column(EncryptedFloat, nullable=False)
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
 
     project = db.relationship('Project')
@@ -342,8 +343,8 @@ class Notification(db.Model):
     """In-app notification for admin (e.g. auto payment received)."""
     __tablename__ = 'notifications'
     id         = db.Column(db.Integer, primary_key=True)
-    title      = db.Column(db.String(200), nullable=False)
-    message    = db.Column(db.Text, nullable=False)
+    title      = db.Column(EncryptedText, nullable=False)
+    message    = db.Column(EncryptedText, nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='SET NULL'), nullable=True)
     is_read    = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -376,7 +377,7 @@ class ProjectStageChange(db.Model):
     to_stage   = db.Column(db.String(20), nullable=False)
     changed_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    note       = db.Column(db.String(200), nullable=True)
+    note       = db.Column(EncryptedText, nullable=True)
 
     user = db.relationship('User')
 
@@ -389,7 +390,7 @@ class PriceListItem(db.Model):
     __tablename__ = 'price_list_items'
     id    = db.Column(db.Integer, primary_key=True)
     name  = db.Column(db.String(100), unique=True, nullable=False)
-    price = db.Column(db.Float, nullable=False, default=0.0)
+    price = db.Column(EncryptedFloat, nullable=False, default=0.0)
     unit  = db.Column(db.String(30), nullable=True)
 
     def __repr__(self):

@@ -4,8 +4,8 @@ How to run QuoteRoom as a business: set up the platform, start trials, onboard p
 ship updates and handle support. Customers never need this document.
 
 > **Never put real secrets in this file, in the repo, or in chats.** Database URLs (they contain the
-> password), `SECRET_KEY`s and API keys belong only in Vercel's environment variables and your
-> password manager. Keep your customer list (name, subdomain, Vercel project, Neon URLs, admin
+> password), `SECRET_KEY`s, `DATA_ENCRYPTION_KEY`s and API keys belong only in Vercel's environment
+> variables and your password manager. Keep your customer list (name, subdomain, Vercel project, Neon URLs, admin
 > username) in your password manager.
 >
 > **Placeholders in this guide are in CAPITALS**, e.g. `PASTE_DIRECT_URL_HERE`. Always replace them
@@ -91,6 +91,16 @@ export DATABASE_URL="PASTE_DIRECT_URL_HERE"
   ```
 - When finished: `unset DATABASE_URL`
 
+**Most commands also need that project's encryption key** (the same `DATA_ENCRYPTION_KEY` as in its
+Vercel project), so they can read and write the encrypted data:
+
+```bash
+export DATA_ENCRYPTION_KEY="PASTE_THAT_PROJECTS_KEY_HERE"
+```
+
+Always set both together, for the **same** project, and clear both when finished:
+`unset DATABASE_URL DATA_ENCRYPTION_KEY`. (Plan and company-lock commands work without the key.)
+
 Optional, so trial commands print real addresses: `export TENANT_BASE_DOMAIN=quote-room.co.in`
 
 ### Generating a SECRET_KEY
@@ -99,6 +109,17 @@ A new one for **every** Vercel project; never reuse one:
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+### Generating a DATA_ENCRYPTION_KEY
+Also a new one for **every** Vercel project (demo, trials, each customer). Run inside the venv:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Save it in your password manager **next to that customer's entry** before adding it to Vercel.
+**If this key is lost, that customer's data can't be recovered by anyone.** Never change it in Vercel
+without following "Rotating an encryption key" (section 3e).
 
 ---
 
@@ -120,6 +141,7 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 |---|---|
 | `FLASK_ENV` | `production` |
 | `SECRET_KEY` | new random value |
+| `DATA_ENCRYPTION_KEY` | new key (section 2) |
 | `DATABASE_URL` | demo DB **pooled** URL |
 | `MARKETING_SITE` | `1` |
 | `MARKETING_WHATSAPP` | your number, digits only, e.g. `917675801918` |
@@ -131,7 +153,8 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 | `META_PIXEL_ID`, `GOOGLE_ADS_ID`, `GOOGLE_ADS_CONVERSION` | when you start ads |
 
 Region: **Settings → Functions → Function Region → Singapore (sin1)**.
-Demo database first-time setup (direct URL): `python -m flask db upgrade` then `python -m flask seed-demo`.
+Demo database first-time setup (direct URL **and** the demo key exported): `python -m flask db upgrade` then
+`python -m flask seed-demo`.
 
 **The demo database is wiped and reloaded every night (~02:00 IST).** Never use it for anything
 else, and never set `DEMO_MODE` on a customer project. Manual reset: Vercel → `quotations-template`
@@ -145,6 +168,7 @@ else, and never set `DEMO_MODE` on a customer project. Manual reset: Vercel → 
    |---|---|
    | `FLASK_ENV` | `production` |
    | `SECRET_KEY` | new random value |
+   | `DATA_ENCRYPTION_KEY` | new key (section 2) |
    | `DATABASE_URL` | trials **pooled** URL |
    | `TENANT_MODE` | `1` |
    | `TENANT_BASE_DOMAIN` | `quote-room.co.in` |
@@ -162,6 +186,24 @@ else, and never set `DEMO_MODE` on a customer project. Manual reset: Vercel → 
 2. Neon → **Connect** → copy the new **pooled** string → Vercel project → **Settings → Environment
    Variables** → edit `DATABASE_URL` → save → **Deployments → ⋯ → Redeploy**.
 3. Save the new direct + pooled strings in your password manager; delete the old ones.
+
+### 3e. Encryption keys
+
+**Turning encryption on for projects created before October 2026** (one time, in this order;
+the app won't start without the key, so the key must be in Vercel **before** the code is deployed):
+1. Generate a key for each project (section 2) and save each in your password manager.
+2. Vercel → each project (`quotations-template`, `trials`, each customer) → **Settings → Environment
+   Variables** → add `DATA_ENCRYPTION_KEY` (Production) with that project's key.
+3. Deploy the new code (push to `main`).
+4. Encrypt the existing data in each database (direct URL + that project's key, section 2):
+   - Demo and each customer: `python -m flask db upgrade && python -m flask bootstrap`
+     (the last line says `Encryption: encrypted rows in …`; run again → `all data already encrypted`)
+   - Trials: `python -m flask trial migrate-all`
+   Until step 4 the apps keep working with the old plain values.
+
+**Rotating an encryption key** (if a key may have leaked): in Vercel set `DATA_ENCRYPTION_KEY` to
+`NEW_KEY,OLD_KEY` (comma, no spaces) and redeploy. New data uses the new key and old data still
+reads. Keep the old key in the list: existing rows aren't re-encrypted automatically yet.
 
 ---
 
@@ -202,8 +244,9 @@ Pick their name: lowercase letters, numbers, single hyphens, e.g. `acme`.
 1. Create it (trials **direct** URL):
    ```bash
    export DATABASE_URL="PASTE_TRIALS_DIRECT_URL_HERE"
+   export DATA_ENCRYPTION_KEY="PASTE_TRIALS_KEY_HERE"
    python -m flask trial create acme
-   unset DATABASE_URL
+   unset DATABASE_URL DATA_ENCRYPTION_KEY
    ```
    It asks you to **choose a password for the trial's `admin` login** (not the database password;
    at least 8 characters). **Nothing shows on screen while typing**; type it, Enter, then again to
@@ -235,10 +278,13 @@ unset DATABASE_URL
    export DATABASE_URL="PASTE_NEW_CUSTOMER_DIRECT_URL_HERE"
    python -m flask db upgrade
    export DATABASE_URL="PASTE_TRIALS_DIRECT_URL_HERE"
+   export DATA_ENCRYPTION_KEY="PASTE_TRIALS_KEY_HERE"
    python -m flask trial convert acme --to "PASTE_NEW_CUSTOMER_DIRECT_URL_HERE" --plan 1y   # or 6m
-   unset DATABASE_URL
+   unset DATABASE_URL DATA_ENCRYPTION_KEY
    ```
-   It copies everything (logins, settings, logo, quotations) and starts their paid plan from today.
+   It asks for the **customer project's** `DATA_ENCRYPTION_KEY` (the new one you put in their Vercel
+   project; nothing shows while typing). It copies everything (logins, settings, logo, quotations),
+   re-encrypting it with the customer's own key, and starts their paid plan from today.
    The trial address immediately stops being served by the trials app.
 4. **Vercel:** remove `acme.quote-room.co.in` from `trials` → add it to the customer's project.
    **GoDaddy:** edit the `acme` CNAME to the value the customer's project shows. Same address,
@@ -272,6 +318,7 @@ New project named after them (e.g. `acme`), region **Singapore**. Save pooled + 
 |---|---|
 | `FLASK_ENV` | `production` |
 | `SECRET_KEY` | new random value |
+| `DATA_ENCRYPTION_KEY` | new key (section 2) |
 | `DATABASE_URL` | their **pooled** URL |
 | `SUPPORT_WHATSAPP` | your number, digits only |
 
@@ -280,10 +327,11 @@ Don't set `MARKETING_SITE`, `DEMO_MODE` or `TENANT_MODE`. Region **Singapore (si
 ### 3. Tables, admin login and plan (their direct URL)
 ```bash
 export DATABASE_URL="PASTE_CUSTOMER_DIRECT_URL_HERE"
+export DATA_ENCRYPTION_KEY="PASTE_CUSTOMER_KEY_HERE"
 python -m flask db upgrade
 ADMIN_USERNAME=admin ADMIN_PASSWORD="CHOOSE_A_STRONG_PASSWORD" python -m flask bootstrap
 python -m flask plan set --plan 1y        # or 6m
-unset DATABASE_URL
+unset DATABASE_URL DATA_ENCRYPTION_KEY
 ```
 
 ### 4. Subdomain
@@ -314,16 +362,18 @@ and create staff logins in **Admin → Users**.
    - Demo:
      ```bash
      export DATABASE_URL="PASTE_DEMO_DIRECT_URL_HERE"
+     export DATA_ENCRYPTION_KEY="PASTE_DEMO_KEY_HERE"
      python -m flask db upgrade && python -m flask bootstrap && python -m flask db current
      ```
    - Trials (all at once):
      ```bash
      export DATABASE_URL="PASTE_TRIALS_DIRECT_URL_HERE"
+     export DATA_ENCRYPTION_KEY="PASTE_TRIALS_KEY_HERE"
      python -m flask trial migrate-all
      ```
-   - Each paying customer: same three commands as the demo, with their URL.
+   - Each paying customer: same commands as the demo, with their URL and key.
    `flask db current` should end with `(head)`. `bootstrap` only fills empty reference tables and
-   never changes existing data. Then `unset DATABASE_URL`, merge to `main` and push.
+   never changes existing data. Then `unset DATABASE_URL DATA_ENCRYPTION_KEY`, merge to `main` and push.
 
 ---
 
@@ -365,8 +415,12 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 ---
 
 ## 9. Ending a customer
-1. Before the deletion date (end + 30 days) they can ask for an export: Neon → their project →
-   backup/download, or `pg_dump "PASTE_DIRECT_URL_HERE" > acme.sql`.
+1. Before the deletion date (end + 30 days) they can ask for an export. With their direct URL and
+   key (section 2), write readable CSV files (one per table; a raw database dump would be encrypted):
+   ```bash
+   python -m flask export-data ~/Desktop/acme-export                # trial: add --trial acme
+   ```
+   Zip and send them securely, then delete the folder.
 2. After the deletion date: delete their Vercel project, their Neon project and the GoDaddy CNAME.
 3. Remove them from your password manager list.
 
@@ -386,6 +440,10 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 | Vercel domain: *Generating SSL Certificate* | normal after DNS is valid | Wait a few minutes |
 | Browser: "can't find server" right after adding a domain | your computer cached the old answer | Wait 10–15 minutes or try a private window / phone on mobile data |
 | Trials project's `vercel.app` address shows "Not found" | expected: only trial addresses are served | Nothing to fix |
+| Vercel log: `Missing required environment variable(s): DATA_ENCRYPTION_KEY` | key not added to that Vercel project | Add it (section 3e), redeploy |
+| `DATA_ENCRYPTION_KEY is not a valid key` | typo, or a `SECRET_KEY` pasted instead | Copy the key again from your password manager |
+| `This data was encrypted with a different key` | the key you exported belongs to another project | Export the key that matches the `DATABASE_URL` |
+| `This data is encrypted but DATA_ENCRYPTION_KEY is not set` | key not exported on your Mac | `export DATA_ENCRYPTION_KEY="…"` for that project |
 | Site errors right after a push with a new migration | code deployed before the migration ran | Run the migrations (section 7) now; the site recovers on the next request |
 
 ---

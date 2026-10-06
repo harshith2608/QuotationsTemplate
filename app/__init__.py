@@ -25,6 +25,9 @@ def create_app(config_name='default'):
     missing = [k for k in getattr(cfg, 'REQUIRED_ENV', ()) if not os.environ.get(k)]
     if missing:
         raise RuntimeError(f"Missing required environment variable(s): {', '.join(missing)}")
+    from . import crypto
+    if crypto.enabled():
+        crypto.validate_key(os.environ[crypto.ENV])   # fail at startup, not on the first save
 
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
     app.config.from_object(cfg)

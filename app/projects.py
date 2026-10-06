@@ -193,12 +193,11 @@ def list_projects():
         accessible_ids = db.session.query(ProjectAccess.project_id).filter_by(user_id=current_user.id)
         query = Project.query.filter(Project.id.in_(accessible_ids))
     if search:
-        query = query.filter(
-            db.or_(
-                Project.customer_name.ilike(f'%{search}%'),
-                Project.mobile.ilike(f'%{search}%')
-            )
-        )
+        # Names and mobiles are encrypted, so match them in Python after decrypting
+        needle = search.lower()
+        rows = query.with_entities(Project.id, Project.customer_name, Project.mobile).all()
+        ids = [r.id for r in rows if needle in (r.customer_name or '').lower() or needle in (r.mobile or '')]
+        query = query.filter(Project.id.in_(ids))
     # Stage counts for the filter pills (drafts are unfinished forms, so they have no real stage)
     stage_counts = dict(
         query.filter(Project.status != 'draft')

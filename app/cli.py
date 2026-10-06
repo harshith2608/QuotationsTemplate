@@ -50,6 +50,45 @@ def register_cli(app):
             raise click.ClickException(f'No active trial named "{slug}".')
         return tenancy.tenant_context(slug, row[0])
 
+    @app.cli.command('encrypt-data')
+    @click.option('--trial', 'trial_slug', default=None, help='Run inside this trial (trials database).')
+    def encrypt_data_command(trial_slug):
+        """Encrypt any data still stored in plain text (also done by `flask bootstrap`)."""
+        from . import crypto
+        from .seed import encrypt_existing_data
+        if not crypto.enabled():
+            raise click.ClickException(f'Set {crypto.ENV} first (the same key as the Vercel project).')
+        with _maybe_trial(trial_slug):
+            click.echo(encrypt_existing_data())
+
+    @app.cli.command('export-data')
+    @click.argument('out_dir', type=click.Path(file_okay=False))
+    @click.option('--trial', 'trial_slug', default=None, help='Export this trial (trials database).')
+    def export_data_command(out_dir, trial_slug):
+        """Write the customer's data, decrypted, as one CSV file per table (for their export request)."""
+        import csv
+        from . import crypto, db
+        from .models import AppSetting
+        os.makedirs(out_dir, exist_ok=True)
+        skip_cols = {'password_hash'}
+        skip_settings = {'logo_png'} | AppSetting.ENCRYPTED_KEYS - {'account_number', 'ifsc_code'}
+        with _maybe_trial(trial_slug):
+            for table in db.metadata.sorted_tables:
+                cols = [c for c in table.columns if c.name not in skip_cols]
+                rows = db.session.execute(table.select().with_only_columns(*cols)).mappings().all()
+                path = os.path.join(out_dir, f'{table.name}.csv')
+                with open(path, 'w', newline='', encoding='utf-8') as f:
+                    w = csv.writer(f)
+                    w.writerow([c.name for c in cols])
+                    for r in rows:
+                        if table.name == 'app_settings':
+                            if r['key'] in skip_settings:
+                                continue
+                            r = dict(r, value=crypto.decrypt(r['value']) if r['value'] else r['value'])
+                        w.writerow([r[c.name] for c in cols])
+                click.echo(f'{path}: {len(rows)} rows')
+        click.echo('Done. These files contain the customer\'s data in plain text: send them securely, then delete them.')
+
     @app.cli.command('company-status')
     @click.option('--trial', 'trial_slug', default=None, help='Run inside this trial (trials database).')
     def company_status_command(trial_slug):
@@ -283,6 +322,9 @@ def register_cli(app):
             click.echo(f'→ {r["slug"]} ({r["schema_name"]})')
             try:
                 _migrate_schema(r['schema_name'])
+                from .seed import encrypt_existing_data
+                with tenancy.tenant_context(r['slug'], r['schema_name']):
+                    click.echo('  ' + encrypt_existing_data())
             except Exception as exc:              # keep going; report at the end
                 failed.append(r['slug'])
                 click.echo(f'  FAILED: {exc}')
@@ -315,11 +357,20 @@ def register_cli(app):
     @click.argument('slug')
     @click.option('--to', 'target_url', required=True, help='The customer\'s NEW database URL (direct, not -pooler).')
     @click.option('--plan', 'plan_name', type=click.Choice(['6m', '1y']), required=True)
-    def trial_convert(slug, target_url, plan_name):
+    @click.option('--to-key', 'to_key', envvar='TARGET_DATA_ENCRYPTION_KEY', prompt='New project\'s DATA_ENCRYPTION_KEY',
+                  hide_input=True, help='The customer project\'s own DATA_ENCRYPTION_KEY (asked if not given).')
+    def trial_convert(slug, target_url, plan_name, to_key):
         """Copy a trial into the customer's own (new, migrated, empty) database and start their paid plan."""
         from sqlalchemy import create_engine, inspect, text
-        from . import db, tenancy
+        from . import crypto, db, tenancy
+        from .models import AppSetting
         _need_postgres()
+        try:
+            crypto.validate_key(to_key)
+        except crypto.EncryptionError as exc:
+            raise click.ClickException(f'--to-key: {exc}')
+        if not crypto.enabled():
+            raise click.ClickException(f'Set {crypto.ENV} to the trials project\'s key so the trial data can be read.')
         tenancy.ensure_registry()
         with db.engine.connect() as conn:
             row = conn.execute(text('SELECT schema_name, status FROM public.tenants WHERE slug = :s'), {'s': slug}).first()
@@ -348,9 +399,17 @@ def register_cli(app):
             src = db.session.connection()                 # schema-mapped to the trial
             with target.begin() as tc:
                 for table in tables:
+                    # Read decrypts with the trials key; insert re-encrypts with the customer's own key
                     rows = [dict(r) for r in src.execute(table.select()).mappings()]
+                    if table.name == 'app_settings':
+                        for r in rows:
+                            if r['key'] in AppSetting.ENCRYPTED_KEYS and r['value']:
+                                plain = crypto.decrypt(r['value'])
+                                with crypto.using_key(to_key):
+                                    r['value'] = crypto.encrypt(plain)
                     if rows:
-                        tc.execute(table.insert(), rows)
+                        with crypto.using_key(to_key):
+                            tc.execute(table.insert(), rows)
                     copied[table.name] = len(rows)
                 # Continue id sequences after the copied rows
                 for table in tables:

@@ -31,7 +31,7 @@ with app.app_context():
     p = Payment.query.filter_by(razorpay_payment_id='pay_REAL1').first()
     ok(f'valid signed webhook → payment recorded (was a crash before) [{r.status_code}]',
        r.status_code == 200 and p is not None and p.amount == 25000.0 and p.source == 'razorpay')
-    ok('admin notification created', Notification.query.filter(Notification.message.contains('25,000.00')).count() == 1)
+    ok('admin notification created', sum('25,000.00' in n.message for n in Notification.query.all()) == 1)
 r = post(payload(3, 'pay_REAL1', 2500000), secret='whsec_test')
 with app.app_context():
     ok('duplicate delivery ignored', r.get_json().get('status') == 'duplicate' and Payment.query.filter_by(razorpay_payment_id='pay_REAL1').count() == 1)
