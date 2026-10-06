@@ -189,21 +189,86 @@ else, and never set `DEMO_MODE` on a customer project. Manual reset: Vercel → 
 
 ### 3e. Encryption keys
 
-**Turning encryption on for projects created before October 2026** (one time, in this order;
-the app won't start without the key, so the key must be in Vercel **before** the code is deployed):
-1. Generate a key for each project (section 2) and save each in your password manager.
-2. Vercel → each project (`quotations-template`, `trials`, each customer) → **Settings → Environment
-   Variables** → add `DATA_ENCRYPTION_KEY` (Production) with that project's key.
-3. Deploy the new code (push to `main`).
-4. Encrypt the existing data in each database (direct URL + that project's key, section 2):
-   - Demo and each customer: `python -m flask db upgrade && python -m flask bootstrap`
-     (the last line says `Encryption: encrypted rows in …`; run again → `all data already encrypted`)
-   - Trials: `python -m flask trial migrate-all`
-   Until step 4 the apps keep working with the old plain values.
+Every project has its own `DATA_ENCRYPTION_KEY` (in its Vercel env vars and your password manager).
+It encrypts customer details, amounts, rates and payment secrets in that project's database.
+**A database must only ever be used with its own project's key.** Using another project's key
+makes that data unreadable until the right key is used.
 
-**Rotating an encryption key** (if a key may have leaked): in Vercel set `DATA_ENCRYPTION_KEY` to
-`NEW_KEY,OLD_KEY` (comma, no spaces) and redeploy. New data uses the new key and old data still
-reads. Keep the old key in the list: existing rows aren't re-encrypted automatically yet.
+#### Turning encryption on for projects created before October 2026 (one time)
+
+Do these in order. The app refuses to start without its key, so the key must be in Vercel
+**before** the new code is deployed.
+
+**Step 1: install the new library (once, on your Mac).**
+```bash
+cd ~/Documents/Harshith/QuotationTemplate
+source venv/bin/activate
+git pull
+python -m pip install -r requirements.txt
+```
+
+**Step 2: create one key per project.** Run this once for each project (demo, trials, each existing
+customer). Each run prints a different key:
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+Save each key in your password manager **next to that project's entry** (e.g. "QuoteRoom demo –
+DATA_ENCRYPTION_KEY") before doing anything else.
+
+**Step 3: add each key to its Vercel project.** Vercel → project → **Settings → Environment
+Variables** → Key `DATA_ENCRYPTION_KEY`, Value = that project's key, Environment **Production** → Save.
+Demo key → `quotations-template`. Trials key → `trials`. Each customer's key → their project.
+
+**Step 4: deploy.** Push the code to `main` (or ask Claude to). Check the sites still open.
+They keep working with the old, unencrypted values until step 5.
+
+**Step 5: encrypt the existing data, one database at a time.** Each block sets that project's
+direct URL and key, runs the command, then clears both. Paste the real values in place of the
+CAPITALS (keep the double quotes).
+
+Demo database:
+```bash
+export DATABASE_URL="PASTE_DEMO_DIRECT_URL_HERE"
+export DATA_ENCRYPTION_KEY="PASTE_DEMO_KEY_HERE"
+python -m flask db upgrade && python -m flask bootstrap
+unset DATABASE_URL DATA_ENCRYPTION_KEY
+```
+Expected last lines: `Admin user already exists — skipped.`, `Reference data already present — skipped.`,
+`Encryption: encrypted rows in projects (…), payments (…), …`
+
+Trials database (all trials at once):
+```bash
+export DATABASE_URL="PASTE_TRIALS_DIRECT_URL_HERE"
+export DATA_ENCRYPTION_KEY="PASTE_TRIALS_KEY_HERE"
+python -m flask trial migrate-all
+unset DATABASE_URL DATA_ENCRYPTION_KEY
+```
+Expected: for each trial a line `→ test (t_test)` followed by `Encryption: encrypted rows in …`
+(or `all data already encrypted`), and finally `All trial schemas are up to date.`
+
+Each paying customer (repeat per customer, with **their** URL and key):
+```bash
+export DATABASE_URL="PASTE_CUSTOMER_DIRECT_URL_HERE"
+export DATA_ENCRYPTION_KEY="PASTE_CUSTOMER_KEY_HERE"
+python -m flask db upgrade && python -m flask bootstrap
+unset DATABASE_URL DATA_ENCRYPTION_KEY
+```
+
+**Step 6: check.** Open each site, log in, and open a quotation and the dashboard: everything
+should look exactly as before. Running a step 5 block again is safe; it then prints
+`Encryption: all data already encrypted.`
+
+If a command prints an error, see the encryption rows in section 10 (Troubleshooting).
+
+#### New projects from now on
+Nothing extra beyond the normal setup: section 2 shows how to create the key, and sections 3b,
+3c and 6 list `DATA_ENCRYPTION_KEY` with the other env vars.
+
+#### Rotating an encryption key (only if a key may have leaked)
+1. Create a new key (step 2 above) and save it in your password manager **without deleting the old one**.
+2. In Vercel set `DATA_ENCRYPTION_KEY` to `NEW_KEY,OLD_KEY` (new first, a comma, no spaces) and redeploy.
+New data uses the new key, and old data still reads. Keep the old key in the list: existing rows
+aren't re-encrypted with the new key automatically yet.
 
 ---
 
