@@ -7,7 +7,9 @@ Public demo mode — for the product's own demo deployment only.
     CRON_SECRET=...      lets the nightly Vercel cron reset the demo data
 
 In demo mode:
-  * /demo signs a visitor straight into the demo account (no password shown)
+  * /demo signs a visitor straight into the demo account (no password shown), and
+    /login redirects there, so visitors never see a password form; the sign-in is
+    remembered, so closing the browser doesn't sign them out
   * anything that could vandalise the demo or produce a convincing fake is
     blocked: all admin saves (settings, branding, rates, users), deleting,
     payment links and access changes
@@ -114,14 +116,20 @@ def start():
     """One click into the demo account — no password needed."""
     if not demo_enabled():
         abort(404)
+    from flask_login import current_user
+    from .auth import safe_next
     from .models import User
+    if current_user.is_authenticated:
+        return redirect(safe_next())
     user = User.query.filter_by(username=demo_username()).first()
     if not user:
-        flash('The demo is being reset. Please try again in a minute.', 'warning')
-        return redirect(url_for('auth.login'))
-    login_user(user)
+        # No redirect to the login page here: in demo mode that sends visitors back to /demo (a loop)
+        return ('<!doctype html><meta name="viewport" content="width=device-width"><title>Demo resetting</title>'
+                '<body style="font-family:system-ui;padding:3rem;text-align:center"><h2>The demo is being reset</h2>'
+                '<p>Please try again in a minute.</p><p><a href="/demo">Try again</a></p></body>', 503)
+    login_user(user, remember=True)     # stays signed in after the browser is closed
     flash('Welcome to the demo! Explore freely — everything resets every night.', 'success')
-    return redirect(url_for('projects.list_projects'))
+    return redirect(safe_next())
 
 
 @demo_bp.route('/demo/reset', methods=['GET', 'POST'])

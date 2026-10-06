@@ -7,21 +7,29 @@ from .forms import LoginForm
 auth_bp = Blueprint('auth', __name__)
 
 
+def safe_next(default_endpoint='projects.list_projects'):
+    """?next= only if it points to a page on this site (blocks open redirects to other domains)."""
+    next_page = request.args.get('next', '')
+    if not (next_page.startswith('/') and not next_page.startswith('//')) or next_page == '/':
+        return url_for(default_endpoint)
+    return next_page
+
+
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('projects.list_projects'))
+    from .demo import demo_enabled
+    if demo_enabled() and request.method == 'GET':
+        # Public demo: never show a password form; sign the visitor straight in
+        return redirect(url_for('demo.start', next=request.args.get('next') or None))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data.strip()).first()
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=True)
-            next_page = request.args.get('next', '')
-            # Only follow ?next= to a page on this site (blocks open redirects to other domains)
-            if not (next_page.startswith('/') and not next_page.startswith('//')) or next_page == '/':
-                next_page = url_for('projects.list_projects')
             flash(f'Welcome back, {user.username}!', 'success')
-            return redirect(next_page)
+            return redirect(safe_next())
         flash('Invalid username or password.', 'danger')
     return render_template('auth/login.html', form=form, title='Sign In')
 

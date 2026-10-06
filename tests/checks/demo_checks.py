@@ -24,7 +24,21 @@ ok('off: no demo banner', 'exploring the demo' not in c.get('/projects').text)
 
 # ── Demo mode ON ──
 app = make(DEMO_MODE='1', CRON_SECRET='s3cret-value', MARKETING_SITE='1'); c = app.test_client()
-ok('login page offers one-click demo', 'href="/demo"' in c.get('/login').text)
+r = c.get('/login')
+ok('login page never shown: redirects to one-click demo', r.status_code == 302 and r.headers['Location'].endswith('/demo'))
+r = c.get('/projects/3')
+r2 = c.get(r.headers['Location'])
+ok('protected page → login → /demo keeps the destination', r.status_code == 302 and r2.status_code == 302
+   and '/demo?next=' in r2.headers['Location'])
+fresh = app.test_client()
+r = fresh.get(fresh.get(fresh.get('/projects/3').headers['Location']).headers['Location'])
+ok('…and lands on that page after signing in', r.status_code == 302 and r.headers['Location'].endswith('/projects/3'))
+ok('/demo?next= to another site is ignored', app.test_client().get('/demo?next=//evil.example').headers['Location'].endswith('/projects'))
+# Closing the browser drops the session cookie; the remember-me cookie keeps them signed in
+b = app.test_client(); b.get('/demo')
+ok('demo sign-in sets a remember-me cookie', b.get_cookie('remember_token') is not None)
+b.delete_cookie('session')
+ok('still signed in after the browser is closed', b.get('/projects').status_code == 200)
 ok('landing demo button → /demo', 'href="/demo">Try the live demo — no signup' in c.get('/').text)
 r = c.get('/demo')
 ok('/demo signs in without a password', r.status_code == 302 and r.headers['Location'].endswith('/projects'))
