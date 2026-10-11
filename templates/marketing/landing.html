@@ -10,7 +10,7 @@
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>
             Start your 7-day free trial
           </a>
-          <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}">Try the live demo{{ ' — no signup' if demo_mode }}</a>
+          <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo{{ ' — no signup' if demo_mode }}</a>
         </div>
         <div class="proof">
           <span>7-day free trial</span><span>No payment to start</span><span>Works on any phone</span><span>Your logo &amp; colours</span>

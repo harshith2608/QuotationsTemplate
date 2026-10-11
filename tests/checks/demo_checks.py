@@ -39,7 +39,7 @@ b = app.test_client(); b.get('/demo')
 ok('demo sign-in sets a remember-me cookie', b.get_cookie('remember_token') is not None)
 b.delete_cookie('session')
 ok('still signed in after the browser is closed', b.get('/projects').status_code == 200)
-ok('landing demo button → /demo', 'href="/demo">Try the live demo — no signup' in c.get('/').text)
+ok('landing demo button → /demo', 'href="/demo" data-demo>Try the live demo — no signup' in c.get('/').text)
 r = c.get('/demo')
 ok('/demo signs in without a password', r.status_code == 302 and r.headers['Location'].endswith('/projects'))
 t = c.get('/projects').text

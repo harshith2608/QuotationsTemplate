@@ -388,8 +388,10 @@ footer nav { display: flex; gap: 1.2rem; }
       gtag('js', new Date()); gtag('config', T.gads);
     }
   }
+  // Meta standard events use 'track'; our own names (StartTrialClick, DemoClick) use 'trackCustom'
+  const STANDARD = new Set(['PageView', 'Lead', 'Contact']);
   function track(metaEvent, googleConversion) {
-    try { if (window.fbq) fbq('track', metaEvent); } catch (e) {}
+    try { if (window.fbq) fbq(STANDARD.has(metaEvent) ? 'track' : 'trackCustom', metaEvent); } catch (e) {}
     try { if (googleConversion && window.gtag && T.gconv) gtag('event', 'conversion', { send_to: T.gconv }); } catch (e) {}
   }
 
@@ -409,6 +411,8 @@ footer nav { display: flex; gap: 1.2rem; }
   document.addEventListener('click', e => {
     const a = e.target.closest('[data-cta]');
     if (a) track('Contact', a.dataset.cta !== 'followup');
+    if (e.target.closest('[data-trial]')) track('StartTrialClick');   // opened the trial form (Lead = submitted it)
+    if (e.target.closest('[data-demo]')) track('DemoClick');
   });
 
   // ── Free-trial form ──
