@@ -8,11 +8,28 @@ from . import branding
 from . import plan as plan_mod
 
 
+TRIALS_DB_MESSAGE = ('This is the shared trials database, which holds many trials. Say which trial with '
+                     '--trial NAME, e.g.  python -m flask company-status --trial acme   '
+                     '(list them with: python -m flask trial list). For plan dates use: flask trial extend NAME LENGTH.')
+
+
+def _refuse_on_trials_db():
+    """Commands for a single business must not run against the shared trials database without --trial."""
+    from sqlalchemy import text
+    from . import db, tenancy
+    if tenancy.current_schema() or db.engine.dialect.name != 'postgresql':
+        return
+    with db.engine.connect() as conn:
+        if conn.execute(text("SELECT to_regclass('public.tenants')")).scalar():
+            raise click.ClickException(TRIALS_DB_MESSAGE)
+
+
 def register_cli(app):
 
     @app.cli.command('bootstrap')
     def bootstrap_command():
         """Create the first admin (from ADMIN_USERNAME/ADMIN_PASSWORD) and seed reference data."""
+        _refuse_on_trials_db()
         try:
             for line in bootstrap():
                 click.echo(line)
@@ -26,6 +43,7 @@ def register_cli(app):
                   help='Password for the demo users (default: $DEMO_PASSWORD or demo1234).')
     def seed_demo_command(reset, force, password):
         """Load fictional "Demo Interiors" data (users, quotations, payments)."""
+        _refuse_on_trials_db()
         if os.environ.get('FLASK_ENV') == 'production' and not force:
             raise click.ClickException('Refusing to seed demo data in production. Use --force if you really mean it.')
         if reset:
@@ -40,6 +58,7 @@ def register_cli(app):
         """Context manager: run inside a trial's schema when --trial is given, else a no-op."""
         from contextlib import nullcontext
         if not slug:
+            _refuse_on_trials_db()
             return nullcontext()
         from sqlalchemy import text
         from . import db, tenancy
@@ -146,6 +165,7 @@ def register_cli(app):
     @plan_group.command('status')
     def plan_status():
         """Show the current plan and its dates."""
+        _refuse_on_trials_db()
         _show(plan_mod.load_status(on=plan_mod.today()))
 
     @plan_group.command('set')
@@ -154,6 +174,7 @@ def register_cli(app):
     @click.option('--until', default=None, help='End date YYYY-MM-DD (default: start + plan length).')
     def plan_set(plan_name, start, until):
         """Set the plan, e.g.  flask plan set --plan 1y   or  --plan custom --until 2027-03-31"""
+        _refuse_on_trials_db()
         from . import db
         from datetime import date
         try:
@@ -178,6 +199,7 @@ def register_cli(app):
                   help='Plan after renewing (default: 6m for 6m, 1y for 1y, else unchanged).')
     def plan_extend(length, plan_name):
         """Renew: add 6m, 1y, 7d… Extends from the current end date if still within grace, else from today."""
+        _refuse_on_trials_db()
         from . import db
         status = plan_mod.load_status(on=plan_mod.today())
         try:
@@ -199,6 +221,7 @@ def register_cli(app):
     @plan_group.command('clear')
     def plan_clear():
         """Remove all plan limits (unlimited)."""
+        _refuse_on_trials_db()
         from . import db
         plan_mod.save_plan('', None, None)
         db.session.commit()

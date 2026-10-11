@@ -114,6 +114,10 @@ def run_migrations_online():
         )
 
         with context.begin_transaction():
+            if not tenant_schema and connection.dialect.name == 'postgresql' and \
+                    connection.execute(text("SELECT to_regclass('public.tenants')")).scalar():
+                raise RuntimeError('This is the shared trials database: don\'t run "flask db upgrade" on it. '
+                                   'Use "python -m flask trial migrate-all" instead.')
             if tenant_schema:
                 # SET LOCAL lasts for this transaction only, so it is safe through a connection pooler
                 connection.execute(text(f'SET LOCAL search_path TO "{tenant_schema}"'))

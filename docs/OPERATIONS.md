@@ -531,6 +531,8 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 | `DATA_ENCRYPTION_KEY is not a valid key` | typo, or a `SECRET_KEY` pasted instead | Copy the key again from your password manager |
 | `This data was encrypted with a different key` | the key you exported belongs to another project | Export the key that matches the `DATABASE_URL` |
 | `This data is encrypted but DATA_ENCRYPTION_KEY is not set` | key not exported on your Mac | `export DATA_ENCRYPTION_KEY="…"` for that project |
+| `This is the shared trials database … --trial NAME` | a single-business command (company-status, plan, bootstrap, …) run on the trials database | Add `--trial NAME` (see `python -m flask trial list`); for trial dates use `trial extend` |
+| `This is the shared trials database: don't run "flask db upgrade" on it` | `db upgrade` pointed at the trials database | Use `python -m flask trial migrate-all` instead |
 | Site errors right after a push with a new migration | code deployed before the migration ran | Run the migrations (section 7) now; the site recovers on the next request |
 
 ---

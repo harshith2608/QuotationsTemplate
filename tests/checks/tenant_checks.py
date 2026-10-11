@@ -119,3 +119,16 @@ r = runner.invoke(args=['trial', 'delete', 'acme', '--yes'])
 with ENGINE.connect() as c:
     gone = c.execute(text("select count(*) from information_schema.schemata where schema_name='t_acme'")).scalar() == 0
 ok('delete drops schema and stops serving', r.exit_code == 0 and gone and app.test_client().get('/login', base_url=A).status_code == 404)
+
+# Single-business commands on the shared trials database need --trial (clear message, no traceback)
+r = runner.invoke(args=['company-status'])
+ok('company-status without --trial → clear message', r.exit_code != 0 and '--trial NAME' in r.output and 'Traceback' not in r.output)
+ok('plan / bootstrap / encrypt-data without --trial refused too',
+   all('--trial NAME' in runner.invoke(args=a).output for a in (['plan', 'status'], ['bootstrap'], ['encrypt-data'])))
+ok('company-status --trial still works', runner.invoke(args=['company-status', '--trial', 'sharma']).exit_code == 0
+   if runner.invoke(args=['trial', 'list']).output.count('sharma') and 'active' in runner.invoke(args=['trial', 'list']).output
+   else True)
+r = runner.invoke(args=['db', 'upgrade'])
+with ENGINE.connect() as c:
+    stray = c.execute(text("select count(*) from information_schema.tables where table_schema='public' and table_name <> 'tenants'")).scalar()
+ok('flask db upgrade refused on the trials database (no stray tables)', 'trial migrate-all' in (r.output + str(r.exception)) and stray == 0)
