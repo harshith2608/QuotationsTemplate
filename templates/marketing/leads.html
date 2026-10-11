@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Trial requests – {{ product }}</title>
+<style>
+:root { --paper: #f5f6f2; --card: #fff; --ink: #16231f; --muted: #56655f; --line: #d8ddd7; --pine: #1f4d3f; --pine-soft: #e3ece7; }
+@media (prefers-color-scheme: dark) { :root { --paper: #0f1513; --card: #161e1b; --ink: #e7eee9; --muted: #9caaa3; --line: #28332e; --pine: #7cc7a6; --pine-soft: #1b2a24; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; margin-bottom: 16px; }
+h1 { font-size: 1.5rem; margin: 0; }
+.muted { color: var(--muted); }
+a { color: var(--pine); }
+.btn { display: inline-block; padding: .45rem .9rem; border-radius: 999px; border: 1.5px solid var(--line); text-decoration: none; color: var(--ink); font-weight: 600; font-size: .9rem; }
+.wa { background: #25d366; border-color: #25d366; color: #0b2e17; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--pine-soft); }
+tr:last-child td { border-bottom: 0; }
+.empty { padding: 32px; text-align: center; background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
+@media (max-width: 680px) {
+  thead { display: none; }
+  table, tbody, tr, td { display: block; width: 100%; }
+  tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  td { border: 0; padding: 4px 12px; }
+  td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: .85rem; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Trial requests</h1>
+      <p class="muted">{{ items|length }} request{{ '' if items|length == 1 else 's' }}{% if items|length == 500 %} (latest 500){% endif %} · newest first · times in IST · deleted automatically after 12 months</p>
+    </div>
+    <a class="btn" href="{{ url_for('marketing.leads_csv') }}">Download CSV</a>
+  </header>
+  {% if items %}
+  <table>
+    <thead><tr><th>Received</th><th>Name</th><th>Phone</th><th>Business</th><th>Source</th><th></th></tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td data-label="Received">{{ (it.lead.created_at + ist_offset).strftime('%d %b %Y, %I:%M %p') }}</td>
+        <td><strong>{{ it.lead.name }}</strong></td>
+        <td data-label="Phone"><a href="tel:+{{ it.lead.phone }}">{{ it.phone_display }}</a></td>
+        <td data-label="Business">{{ it.business }}</td>
+        <td data-label="Source" class="muted">{{ it.lead.source or '—' }}</td>
+        <td><a class="btn wa" href="{{ it.wa_url }}" target="_blank" rel="noopener">WhatsApp</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty"><p><strong>No trial requests yet.</strong></p><p class="muted">They'll appear here when someone fills in the "Start free trial" form.</p></div>
+  {% endif %}
+</div>
+</body>
+</html>

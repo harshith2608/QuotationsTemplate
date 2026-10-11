@@ -1,0 +1,20 @@
+{% extends "marketing/_base.html" %}
+{% from "marketing/_trial_form.html" import trial_form, trial_done with context %}
+{% block title %}Start your free trial – {{ product }}{% endblock %}
+{% block description %}Request a free 7-day trial of {{ product }}, the quotation app for interior designers and furniture makers.{% endblock %}
+{% block canonical %}{{ url_for('marketing.free_trial', _external=True) }}{% endblock %}
+{% block content %}
+<section class="trial-page">
+  <div class="wrap">
+    <div class="trial-card" data-trial-root>
+      <div data-trial-start {% if name %}hidden{% endif %}>
+        <p class="eyebrow">7-day free trial · no payment</p>
+        <h1>Start your free trial</h1>
+        <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+        {{ trial_form('page', errors or {}, form or {}) }}
+      </div>
+      {{ trial_done(name or '', whatsapp_url or '#') }}
+    </div>
+  </div>
+</section>
+{% endblock %}

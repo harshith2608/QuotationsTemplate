@@ -72,6 +72,9 @@ def create_app(config_name='default'):
     # Razorpay webhook is called by Razorpay servers — exempt from CSRF
     from .projects import razorpay_webhook
     csrf.exempt(razorpay_webhook)
+    # Public trial form: no login or session involved; protected by a honeypot and a rate limit instead
+    from .marketing import trial_request
+    csrf.exempt(trial_request)
 
     @app.template_global()
     def asset_url(filename):

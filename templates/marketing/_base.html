@@ -18,23 +18,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-{% if meta_pixel_id %}
-<!-- Meta Pixel -->
-<script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', {{ meta_pixel_id|tojson }}); fbq('track', 'PageView');
-</script>
-{% endif %}
-{% if google_ads_id %}
-<!-- Google tag (Google Ads) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id={{ google_ads_id|urlencode }}"></script>
-<script>
-window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date()); gtag('config', {{ google_ads_id|tojson }});
-</script>
-{% endif %}
+{% set tracking = meta_pixel_id or google_ads_id %}
+{# Ad tags are NOT loaded here: they load only after the visitor accepts the cookie notice (see the script at the end). #}
 <style>
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; }
@@ -258,6 +243,66 @@ footer nav { display: flex; gap: 1.2rem; }
 .legal a { color: var(--pine); }
 .legal .contact { margin-top: .8rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
 .legal .contact p { margin: .2rem 0; }
+
+/* Cookie notice */
+.cookie {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  max-width: 640px; margin-inline: auto; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: .92rem;
+}
+.cookie p { flex: 1 1 260px; color: var(--muted); }
+.cookie p a { color: var(--ink); }
+.cookie .actions { display: flex; gap: .5rem; margin-left: auto; }
+.cookie .btn { padding: .5rem 1rem; font-size: .9rem; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* Free-trial form (pop-up and /free-trial page) */
+.trial-dialog { width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); border: 0; border-radius: 18px;
+  padding: 0; background: var(--card); color: var(--ink); box-shadow: 0 24px 60px rgba(0,0,0,.3); }
+.trial-dialog::backdrop { background: rgba(10, 20, 16, .55); }
+.trial-dialog .inner { padding: 26px 22px 22px; position: relative; }
+.trial-dialog h2 { font-size: 1.5rem; padding-right: 2rem; }
+.dlg-close { position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: transparent; color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+.dlg-close:hover { background: var(--pine-soft); color: var(--ink); }
+.trial-lede { color: var(--muted); margin: .5rem 0 1.1rem; }
+.trial-form { display: grid; gap: 14px; }
+.trial-form .field { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.trial-form label, .trial-form legend { font-weight: 600; font-size: .92rem; padding: 0; }
+.trial-form legend { margin-bottom: 6px; }
+.trial-form input[type=text], .trial-form input[type=tel] {
+  width: 100%; font: 400 1rem var(--body); color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--line); border-radius: 10px; padding: .75rem .85rem; min-height: 48px; }
+.trial-form input:focus { outline: none; border-color: var(--pine); box-shadow: 0 0 0 3px var(--pine-soft); }
+.trial-form input[aria-invalid=true] { border-color: #c62828; }
+.phone-input { display: flex; align-items: stretch; }
+.phone-input span { display: grid; place-items: center; padding: 0 .75rem; border: 1.5px solid var(--line); border-right: 0;
+  border-radius: 10px 0 0 10px; background: var(--pine-soft); font-family: var(--mono); font-size: .95rem; }
+.phone-input input { border-radius: 0 10px 10px 0 !important; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; cursor: pointer; }
+.chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.chip span { display: inline-flex; align-items: center; min-height: 44px; padding: .55rem 1rem; border-radius: 999px;
+  border: 1.5px solid var(--line); background: var(--paper); font-weight: 500; font-size: .95rem; }
+.chip input:checked + span { background: var(--pine); border-color: var(--pine); color: var(--on-pine); }
+.chip input:focus-visible + span { outline: 3px solid var(--tape); outline-offset: 2px; }
+.field-error, .form-error { color: #c62828; font-size: .86rem; }
+@media (prefers-color-scheme: dark) { .field-error, .form-error { color: #ff8a80; } .trial-form input[aria-invalid=true] { border-color: #ff8a80; } }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.trial-submit { justify-content: center; width: 100%; margin-top: 4px; }
+.trial-submit[disabled] { opacity: .65; cursor: wait; }
+.fine { font-size: .8rem; color: var(--muted); }
+.trial-done { text-align: center; padding: 6px 0 4px; }
+.trial-done h2 { padding-right: 0; outline: none; }
+.trial-done p { color: var(--muted); margin-top: .5rem; }
+.trial-done .done-skip { margin-top: 1.3rem; color: var(--ink); }
+.done-tick { width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 50%; background: var(--pine-soft); color: var(--pine);
+  display: grid; place-items: center; font-size: 1.7rem; font-weight: 800; }
+.btn-wa { background: #25d366; color: #0b2e17; justify-content: center; width: 100%; margin-top: .7rem; }
+.trial-page { padding-block: 48px 72px; }
+.trial-card { max-width: 520px; margin: 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 28px 22px; }
+.trial-card h1 { font-size: clamp(1.8rem, 5vw, 2.4rem); margin-top: .5rem; }
 </style>
 </head>
 <body>
@@ -272,7 +317,7 @@ footer nav { display: flex; gap: 1.2rem; }
       {% if current_user.is_authenticated %}
       <a class="btn btn-primary" href="{{ url_for('projects.list_projects') }}">Open app</a>
       {% else %}
-      <a class="btn btn-primary" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27d%20like%20to%20start%20a%20free%20trial%20of%20{{ product|urlencode }}" target="_blank" rel="noopener" data-cta>Start free trial</a>
+      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start free trial</a>
       {% endif %}
     </nav>
   </div>
@@ -285,19 +330,158 @@ footer nav { display: flex; gap: 1.2rem; }
 <footer>
   <div class="wrap">
     <span>© {{ year }} {{ legal_name }}</span>
-    <nav aria-label="Legal"><a href="{{ privacy_url }}">Privacy policy</a><a href="{{ terms_url }}">Terms of service</a></nav>
+    <nav aria-label="Legal"><a href="{{ privacy_url }}">Privacy policy</a><a href="{{ terms_url }}">Terms of service</a>{% if tracking %}<button class="linklike" type="button" data-cookie-settings>Cookie settings</button>{% endif %}</nav>
   </div>
 </footer>
+
+{% if tracking %}
+<div class="cookie" id="cookieBanner" role="region" aria-label="Cookie notice" hidden>
+  <p>We'd like to use cookies from Meta and Google to see which of our ads bring people here. Nothing loads unless you accept.
+    <a href="{{ privacy_url }}#cookies">Privacy policy</a></p>
+  <div class="actions">
+    <button class="btn btn-ghost" type="button" data-consent="denied">Decline</button>
+    <button class="btn btn-primary" type="button" data-consent="granted">Accept</button>
+  </div>
+</div>
+{% endif %}
+
+{% if not standalone_trial %}
+{% from "marketing/_trial_form.html" import trial_form, trial_done with context %}
+<dialog class="trial-dialog" id="trialDialog" aria-labelledby="trialDialogTitle">
+  <div class="inner" data-trial-root>
+    <button class="dlg-close" type="button" data-close-dialog aria-label="Close">×</button>
+    <div data-trial-start>
+      <h2 id="trialDialogTitle">Start your 7&#8209;day free trial</h2>
+      <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+      {{ trial_form('dlg') }}
+    </div>
+    {{ trial_done() }}
+  </div>
+</dialog>
+{% endif %}
 
 <script>
 (function () {
   'use strict';
-  const CONV = { googleSendTo: {{ google_ads_conversion|tojson }} };
-  // Ad conversion tracking: a click on any WhatsApp button counts as a lead
-  document.querySelectorAll('[data-cta]').forEach(a => a.addEventListener('click', () => {
-    try { if (window.fbq) fbq('track', 'Contact'); } catch (e) {}
-    try { if (window.gtag && CONV.googleSendTo) gtag('event', 'conversion', { send_to: CONV.googleSendTo }); } catch (e) {}
-  }));
+  const T = { pixel: {{ meta_pixel_id|tojson }}, gads: {{ google_ads_id|tojson }}, gconv: {{ google_ads_conversion|tojson }} };
+  const KEY = 'qr_cookie_consent';
+  const store = {
+    get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } },
+    set(v) { try { localStorage.setItem(KEY, v); } catch (e) {} },
+  };
+
+  // ── Ad tags: loaded only after consent ──
+  let loaded = false;
+  function loadTracking() {
+    if (loaded) return; loaded = true;
+    if (T.pixel) {
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', T.pixel); fbq('track', 'PageView');
+    }
+    if (T.gads) {
+      const g = document.createElement('script'); g.async = true;
+      g.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(T.gads);
+      document.head.appendChild(g);
+      window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); };
+      gtag('js', new Date()); gtag('config', T.gads);
+    }
+  }
+  function track(metaEvent, googleConversion) {
+    try { if (window.fbq) fbq('track', metaEvent); } catch (e) {}
+    try { if (googleConversion && window.gtag && T.gconv) gtag('event', 'conversion', { send_to: T.gconv }); } catch (e) {}
+  }
+
+  const banner = document.getElementById('cookieBanner');
+  if (banner) {
+    const choice = store.get();
+    if (choice === 'granted') loadTracking(); else if (choice !== 'denied') banner.hidden = false;
+    banner.querySelectorAll('[data-consent]').forEach(b => b.addEventListener('click', () => {
+      const v = b.dataset.consent; store.set(v); banner.hidden = true;
+      if (v === 'granted') loadTracking();
+      else if (loaded) location.reload();     // withdrawing consent: reload so the tags are gone
+    }));
+    document.querySelectorAll('[data-cookie-settings]').forEach(b => b.addEventListener('click', () => { banner.hidden = false; }));
+  }
+
+  // WhatsApp buttons (plans, follow-up) count as a contact; plan buttons also as an ad conversion
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-cta]');
+    if (a) track('Contact', a.dataset.cta !== 'followup');
+  });
+
+  // ── Free-trial form ──
+  const params = new URLSearchParams(location.search);
+  document.querySelectorAll('[data-trial-form]').forEach(form => {
+    const root = form.closest('[data-trial-root]');
+    const other = form.querySelector('[data-other-field]');
+    form.utm_source.value = form.utm_source.value || (params.get('utm_source') || '').slice(0, 60);
+    form.utm_campaign.value = form.utm_campaign.value || (params.get('utm_campaign') || '').slice(0, 60);
+    form.page.value = form.page.value || location.pathname;
+
+    function clearError(name) {
+      const p = form.querySelector(`[data-error-for="${name}"]`);
+      if (p && !p.hidden) { p.hidden = true; p.textContent = ''; }
+      const input = form.querySelector(`[name="${name}"]`);
+      if (input) input.removeAttribute('aria-invalid');
+    }
+    form.addEventListener('input', e => { if (e.target.name) clearError(e.target.name); });
+    form.addEventListener('change', e => {
+      if (e.target.name) clearError(e.target.name);
+      if (e.target.name === 'business_type') {
+        other.hidden = e.target.value !== 'other';
+        if (!other.hidden) other.querySelector('input').focus();
+      }
+    });
+    function showErrors(errors) {
+      form.querySelectorAll('[data-error-for]').forEach(p => {
+        const msg = errors[p.dataset.errorFor] || '';
+        p.textContent = msg; p.hidden = !msg;
+        const input = form.querySelector(`[name="${p.dataset.errorFor}"]`);
+        if (input && input.type !== 'radio') { if (msg) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid'); }
+      });
+      const first = Object.keys(errors)[0];
+      const el = first && form.querySelector(`[name="${first}"]`);
+      if (el) el.focus();
+    }
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = form.querySelector('.trial-submit');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
+        const data = await res.json();
+        if (!data.ok) { showErrors(data.errors || { form: 'Something went wrong. Please try again.' }); return; }
+        track('Lead', true);
+        const done = root.querySelector('[data-trial-done]');
+        root.querySelector('[data-trial-start]').hidden = true;
+        done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
+        done.querySelector('[data-trial-wa]').href = data.whatsapp_url;
+        done.hidden = false;
+        done.querySelector('[data-done-title]').focus();
+      } catch (err) {
+        showErrors({ form: 'Could not send. Check your internet connection and try again.' });
+      } finally {
+        btn.disabled = false; btn.textContent = 'Request my free trial';
+      }
+    });
+  });
+
+  // Every "Start free trial" button opens the pop-up (the link to /free-trial is the no-JS fallback)
+  const dialog = document.getElementById('trialDialog');
+  if (dialog && typeof dialog.showModal === 'function') {
+    document.addEventListener('click', e => {
+      const t = e.target.closest('[data-trial]');
+      if (!t) return;
+      e.preventDefault();
+      dialog.showModal();
+      const start = dialog.querySelector('[data-trial-start]');
+      if (!start.hidden) dialog.querySelector('input[name=name]').focus();
+    });
+    dialog.querySelector('[data-close-dialog]').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });   // tap outside closes
+  }
 })();
 </script>
 {% block scripts %}{% endblock %}

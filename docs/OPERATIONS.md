@@ -150,7 +150,8 @@ without following "Rotating an encryption key" (section 3e).
 | `DEMO_MODE` | `1` |
 | `DEMO_PASSWORD` | random value (visitors use the one-click demo, not a password) |
 | `CRON_SECRET` | random value (lets the nightly cron reset the demo) |
-| `META_PIXEL_ID`, `GOOGLE_ADS_ID`, `GOOGLE_ADS_CONVERSION` | when you start ads |
+| `META_PIXEL_ID`, `GOOGLE_ADS_ID`, `GOOGLE_ADS_CONVERSION` | when you start ads (they only load after a visitor accepts the cookie notice) |
+| `LEADS_PASSWORD` | a long random password (section 2 "SECRET_KEY" command works); opens `/leads` |
 
 Region: **Settings → Functions → Function Region → Singapore (sin1)**.
 Demo database first-time setup (direct URL **and** the demo key exported): `python -m flask db upgrade` then
@@ -302,6 +303,20 @@ Trials use `trial extend` instead (section 5).
 ---
 
 ## 5. Free trials
+
+### New trial requests (check daily)
+Every "Start free trial" button on the website opens a short form (name, mobile, business type).
+To see who asked:
+1. Open **https://www.quote-room.co.in/leads** (bookmark it). Your browser asks to sign in:
+   any username, password = `LEADS_PASSWORD` from the `quotations-template` Vercel project.
+2. Each request shows when it came in (IST), the name, number, business and which ad or page it
+   came from. Tap **WhatsApp** to message them, then start their trial as below.
+   **Download CSV** gives you the whole list.
+- Serious people may also tap "Skip the wait" and message you on WhatsApp straight away, with
+  their name and business already in the message.
+- Requests are encrypted, survive the nightly demo reset, and are deleted automatically after 12 months.
+- For ads, link to **https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=CAMPAIGN_NAME**
+  so the "Source" column shows which campaign each request came from.
 
 ### Start a trial (≈5 minutes)
 Pick their name: lowercase letters, numbers, single hyphens, e.g. `acme`.

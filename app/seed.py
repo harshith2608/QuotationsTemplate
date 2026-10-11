@@ -168,10 +168,15 @@ STAGE_FLOW_BY_PROJECT = [
 ]
 
 
+# Real data that lives in the marketing/demo database and must survive the nightly demo reset
+KEEP_ON_RESET = {'leads'}
+
+
 def _clear_all_tables():
-    """Delete every row from every app table (keeps the schema and alembic_version)."""
+    """Delete every row from every app table except KEEP_ON_RESET (keeps the schema and alembic_version)."""
     for table in reversed(db.metadata.sorted_tables):
-        db.session.execute(table.delete())
+        if table.name not in KEEP_ON_RESET:
+            db.session.execute(table.delete())
     db.session.commit()
 
 

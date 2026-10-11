@@ -395,3 +395,19 @@ class PriceListItem(db.Model):
 
     def __repr__(self):
         return f'<PriceListItem {self.name}: {self.price}>'
+
+
+class Lead(db.Model):
+    """A free-trial request from the marketing site's form. Survives the nightly demo reset."""
+    __tablename__ = 'leads'
+    id            = db.Column(db.Integer, primary_key=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    name          = db.Column(EncryptedText, nullable=False)
+    phone         = db.Column(EncryptedText, nullable=False)       # normalised: 91XXXXXXXXXX
+    business_type = db.Column(db.String(20), nullable=False)       # interiors / furniture / other
+    business_other = db.Column(EncryptedText, nullable=True)       # free text when "other"
+    source        = db.Column(db.String(200), nullable=True)       # utm_source / utm_campaign, page
+    ip_hash       = db.Column(db.String(64), nullable=True, index=True)  # for rate limiting only
+
+    def __repr__(self):
+        return f'<Lead {self.id}>'
