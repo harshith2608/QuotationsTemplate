@@ -41,6 +41,13 @@ try:
     ok(f'all main pages render, no old branding {bad}', not bad)
     t = c.get('/projects/new').text
     ok('form uses material catalogue', 'value="Acrylic|' in t and 'Laminates|Box Work" selected' in t and 'KI_CATALOG' in t)
+    v = c.get('/projects/1').text
+    ok('quotation page: both PDF buttons open to view in a new tab (no forced download)',
+       'href="/projects/1/pdf" target="_blank"' in v and 'href="/projects/1/pdf/customer" target="_blank"' in v
+       and 'pdf?download=1"' not in v and 'customer?download=1"' not in v)
+    r = c.get('/projects/1/pdf')
+    ok('PDF served inline with a proper file name (for Save / Share from the viewer)',
+       r.headers.get('Content-Disposition', '').startswith('inline') and '.pdf' in r.headers.get('Content-Disposition', ''))
     ok('favicon uses brand colour', '#7b1fa2' in c.get('/favicon.svg').text)
     for u in ['/projects/1/pdf', '/projects/1/pdf/customer']:
         r = c.get(u)
