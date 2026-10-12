@@ -57,3 +57,35 @@ def not_found(e):
 @main_bp.app_errorhandler(500)
 def internal_error(e):
     return render_template('errors/500.html'), 500
+
+
+@main_bp.route('/healthz')
+def healthz():
+    """Private status for the operator console: which database this app is connected to.
+    Needs ?ts=<unix time>&sig=<HMAC-SHA256(SECRET_KEY, "healthz:<ts>")>, valid for 5 minutes; else 404."""
+    import hashlib
+    import hmac
+    import os
+    import time
+    from flask import jsonify
+    from sqlalchemy import text
+    from . import db
+    from .models import User
+    ts, sig = request.args.get('ts', ''), request.args.get('sig', '')
+    key = (current_app.config.get('SECRET_KEY') or '').encode()
+    if not (ts.isdigit() and key and abs(time.time() - int(ts)) < 300):
+        abort(404)
+    expected = hmac.new(key, f'healthz:{ts}'.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        abort(404)
+    row = db.session.execute(text('SELECT current_database(), current_user')).first() \
+        if db.engine.dialect.name == 'postgresql' else (db.engine.url.database, None)
+    try:
+        rev = db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()
+    except Exception:
+        db.session.rollback()
+        rev = None
+    resp = jsonify(database=row[0], user=row[1], revision=rev, flask_env=os.environ.get('FLASK_ENV'),
+                   admins=[u.username for u in User.query.filter_by(role='admin').order_by(User.id)])
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp

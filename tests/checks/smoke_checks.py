@@ -51,6 +51,15 @@ try:
     r = c.get('/projects/1/whatsapp')
     ok('WhatsApp share uses company name', r.status_code == 302 and 'Demo Interiors' in unquote(r.headers.get('Location', '')))
     c.post('/admin/settings', data={'section': 'company', 'company_name': '', 'company_gstin': '', 'company_tagline': ''})
+    import hashlib, hmac, time as _t
+    ts = str(int(_t.time())); key = app.config['SECRET_KEY'].encode()
+    sig = hmac.new(key, f'healthz:{ts}'.encode(), hashlib.sha256).hexdigest()
+    h = app.test_client().get(f'/healthz?ts={ts}&sig={sig}')
+    ok('/healthz: signed request reports the database and admins', h.status_code == 200 and h.json['admins'] == ['demo-admin']
+       and h.json['revision'])
+    ok('/healthz: unsigned / wrong / old signatures get 404', app.test_client().get('/healthz').status_code == 404
+       and app.test_client().get(f'/healthz?ts={ts}&sig=bad').status_code == 404
+       and app.test_client().get('/healthz?ts=1000&sig=' + hmac.new(key, b'healthz:1000', hashlib.sha256).hexdigest()).status_code == 404)
     t = c.get('/projects').text
     ok('cleared admin values fall back to env', 'Env Name Co' in t and 'Kitchens &amp; Wardrobes' in t)
     txt = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(c.get('/projects/1/pdf').data)).pages)

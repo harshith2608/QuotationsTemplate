@@ -449,6 +449,24 @@ def _url_identity(url):
     return f'{p.username} @ {host} / {p.path.lstrip("/")}'
 
 
+def live_report(slug, s=None):
+    """The live app's signed /healthz report (dict), or an error string."""
+    import hashlib
+    import hmac
+    import time
+    import urllib.request
+    s = s if s is not None else _secrets(slug)
+    if not s.get('secret_key'):
+        return 'no secret key stored for this customer'
+    ts = str(int(time.time()))
+    sig = hmac.new(s['secret_key'].encode(), f'healthz:{ts}'.encode(), hashlib.sha256).hexdigest()
+    try:
+        with urllib.request.urlopen(f'{app_url(slug)}/healthz?ts={ts}&sig={sig}', timeout=15) as resp:
+            return json.loads(resp.read())
+    except Exception as exc:
+        return f'{exc} (an older app build has no /healthz yet: it appears after the next deployment)'
+
+
 def diagnose(slug, password=None):
     """Checks for "the app doesn't behave as the console expects". Returns [(label, ok, detail)]."""
     from werkzeug.security import check_password_hash
@@ -467,16 +485,24 @@ def diagnose(slug, password=None):
         need = ['FLASK_ENV', 'SECRET_KEY', 'DATABASE_URL', 'DATA_ENCRYPTION_KEY']
         missing = [k for k in need if k not in env]
         out.append(('App settings present', not missing, 'missing: ' + ', '.join(missing) if missing else ', '.join(sorted(env))))
-        out.append(('App runs in production mode', env.get('FLASK_ENV') == 'production', env.get('FLASK_ENV') or 'not set'))
+        if env.get('FLASK_ENV') is not None or 'FLASK_ENV' not in env:
+            out.append(('App runs in production mode', env.get('FLASK_ENV') == 'production', env.get('FLASK_ENV') or 'not set'))
         app_db = env.get('DATABASE_URL')
-        if app_db is None and 'DATABASE_URL' in env:
-            out.append(('App database', None, 'Vercel won\'t reveal the value (sensitive variable); can\'t compare'))
-        else:
+        if app_db is not None or 'DATABASE_URL' not in env:
             got = _url_identity(app_db)
-            out.append(('App uses the same database', got == expected, got or 'not set'))
+            out.append(('App settings point to the same database', got == expected, got or 'not set'))
         out.append(('App has the customer\'s encryption key', env.get('DATA_ENCRYPTION_KEY') in (None, s.get('data_key')),
                     'matches' if env.get('DATA_ENCRYPTION_KEY') == s.get('data_key') else
                     ('hidden by Vercel' if env.get('DATA_ENCRYPTION_KEY') is None else 'DIFFERENT key')))
+    live = live_report(slug, s)
+    if isinstance(live, dict):
+        got = f'{live.get("user")} / {live.get("database")}'
+        same = expected and live.get('user') == expected.split(' @ ')[0] and live.get('database') == expected.rsplit('/ ', 1)[-1]
+        out.append(('Live app is connected to the same database', bool(same), got))
+        out.append(('Live app runs in production mode', live.get('flask_env') == 'production', live.get('flask_env') or 'not set'))
+        out.append(('Live app sees these admins', True, ', '.join(live.get('admins') or []) or 'none'))
+    else:
+        out.append(('Ask the live app which database it uses', False, live))
     try:
         state, url = providers.vercel().latest_deployment(row['vercel_project_id'])
         out.append(('Latest build', state == 'READY', f'{state} ({url})'))

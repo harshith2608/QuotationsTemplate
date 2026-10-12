@@ -53,6 +53,8 @@ for leftover in ('sharma', 'acme', 'beta'):           # from an earlier interrup
 
 fake = FakeVercel()
 providers.vercel = lambda: fake
+LIVE = {}            # what the (pretend) live app reports from its signed /healthz
+cust.live_report = lambda slug, s=None: LIVE.get(slug, 'unreachable')
 
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client()
@@ -173,12 +175,15 @@ m2 = re.search(r'Password:</strong> <span class="secret">([^<]+)</span>', r.text
 with create_engine(s2['direct_url'].replace('postgresql://', 'postgresql+psycopg2://')).connect() as conn:
     h2 = conn.execute(text("select password_hash from users where username='boss'")).scalar()
 ok('reset admin password works', m2 and check_password_hash(h2, m2.group(1)) and not check_password_hash(h2, m.group(1)))
+LIVE['acme'] = {'database': 'c_acme', 'user': 'r_acme', 'flask_env': 'production', 'admins': ['boss']}
 r = c.post('/customers/acme/diagnose', data={'password': m2.group(1)})
 ok('Diagnose: same database, settings present, password matches', r.text.count('>problem<') == 0
-   and 'App uses the same database' in r.text and 'yes, for boss' in r.text and m2.group(1) not in r.text)
+   and 'Live app is connected to the same database' in r.text
+   and 'App settings point to the same database' in r.text and 'yes, for boss' in r.text and m2.group(1) not in r.text)
 fake.projects['qr-acme']['env']['DATABASE_URL'] = 'postgresql://someone:pw@other-host/otherdb'
+LIVE['acme'] = {'database': 'otherdb', 'user': 'someone', 'flask_env': 'production', 'admins': ['x']}
 r = c.post('/customers/acme/diagnose', data={'password': 'wrong-password'})
-ok('Diagnose flags a different app database and a non-matching password', r.text.count('>problem<') == 2
+ok('Diagnose flags a different app database and a non-matching password', r.text.count('>problem<') == 3
    and 'someone @ other-host / otherdb' in r.text and 'no admin has this password' in r.text)
 fake.projects['qr-acme']['env']['DATABASE_URL'] = s2['app_url']
 with app.app_context():
