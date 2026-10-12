@@ -653,19 +653,33 @@ def generate_payment_link(project_id):
 
     payments   = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments)
-    remaining  = max(project.final_total - total_paid, 0)
+    remaining  = round(max(project.final_total - total_paid, 0), 2)
     if remaining <= 0:
         return jsonify({'error': 'This quotation is fully paid — no outstanding balance.'}), 400
+    # Amount to collect: the whole balance by default, or a part (advance, stage payment)
+    requested = (request.get_json(silent=True) or {}).get('amount')
+    if requested in (None, ''):
+        amount = remaining
+    else:
+        try:
+            amount = round(float(requested), 2)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Enter the amount to collect, e.g. 50000.'}), 400
+        if amount < 1:
+            return jsonify({'error': 'The amount must be at least ₹1.'}), 400
+        if amount > remaining:
+            return jsonify({'error': f'That is more than the balance due (₹{remaining:,.2f}).'}), 400
 
     mobile_clean = project.mobile.lstrip('+').replace(' ', '').replace('-', '')
     if not mobile_clean.startswith('91') and len(mobile_clean) == 10:
         mobile_clean = '91' + mobile_clean
 
     payload = _json.dumps({
-        'amount': int(remaining * 100),
+        'amount': int(round(amount * 100)),
         'currency': 'INR',
         'accept_partial': True,
-        'description': f"{get_brand()['name']} – Quotation #{project.id} for {project.customer_name}",
+        'description': f"{get_brand()['name']} – Quotation #{project.id} for {project.customer_name}"
+                       + ('' if amount == remaining else ' (part payment)'),
         'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean,
                      'email': project.email or ''},
         'notify': {'sms': True, 'email': bool(project.email)},
@@ -692,13 +706,20 @@ def generate_payment_link(project_id):
                     db.session.add(PaymentLink(
                         project_id=project.id,
                         razorpay_link_id=link_id,
-                        amount=remaining
+                        amount=amount
                     ))
                     db.session.commit()
-            return jsonify({'payment_link': short_url})
+            return jsonify({'payment_link': short_url, 'amount': amount})
     except urllib.error.HTTPError as e:
-        err_body = _json.loads(e.read())
-        return jsonify({'error': err_body.get('error', {}).get('description', 'Razorpay error.')}), 400
+        try:
+            message = _json.loads(e.read()).get('error', {}).get('description') or 'Razorpay error.'
+        except ValueError:
+            message = f'Razorpay error (HTTP {e.code}).'
+        if 'maximum amount' in message.lower():
+            message = (f'Razorpay won\'t accept ₹{amount:,.0f} in one payment: it is above your Razorpay account\'s '
+                       'per-payment limit. Request a smaller amount (e.g. the advance), or ask Razorpay support '
+                       'to raise your maximum transaction amount.')
+        return jsonify({'error': message}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

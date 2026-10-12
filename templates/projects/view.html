@@ -471,11 +471,16 @@
   <!-- Payment link / UPI / bank details footer -->
   <div class="card-footer bg-light">
     <div class="d-flex flex-wrap gap-2 align-items-center">
-      {% if settings.razorpay_key_id %}
-      <button class="btn btn-primary btn-sm fw-semibold" id="genPayLinkBtn"
-              onclick="generatePaymentLink({{ project.id }})">
-        <i class="bi bi-link-45deg me-1"></i>Generate Payment Link
-      </button>
+      {% if settings.razorpay_key_id and balance > 0 %}
+      <div class="input-group input-group-sm" style="max-width: 330px;">
+        <span class="input-group-text">₹</span>
+        <input type="number" class="form-control" id="payLinkAmount" min="1" max="{{ '%.2f'|format(balance) }}"
+               step="0.01" value="{{ '%.2f'|format(balance) }}" aria-label="Amount to collect">
+        <button class="btn btn-primary fw-semibold" id="genPayLinkBtn" type="button"
+                onclick="generatePaymentLink({{ project.id }})">
+          <i class="bi bi-link-45deg me-1"></i>Payment Link
+        </button>
+      </div>
       {% endif %}
       {% if settings.upi_id %}
       <span class="badge bg-light text-dark border small ki-wrap-badge">
@@ -610,38 +615,45 @@ async function generatePaymentLink(projectId) {
   resultDiv.innerHTML = '';
 
   try {
+    const amountInput = document.getElementById('payLinkAmount');
     const resp = await fetch(`/projects/${projectId}/payment-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-      body: JSON.stringify({})
+      body: JSON.stringify({ amount: amountInput ? amountInput.value : '' })
     });
     const data = await resp.json();
 
     if (!resp.ok || data.error) {
-      resultDiv.innerHTML = `<div class="alert alert-danger py-1 small mb-0">
-        <i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'Failed to generate link.'}
-      </div>`;
+      showPayLinkError(resultDiv, data.error || 'Failed to generate link.');
     } else {
-      const link = data.payment_link;
-      resultDiv.innerHTML = `
-        <div class="alert alert-success py-2 mb-0 small">
-          <i class="bi bi-check-circle me-1"></i><strong>Payment link ready!</strong><br>
-          <a href="${link}" target="_blank" class="text-break">${link}</a>
-          <button class="btn btn-sm btn-outline-success ms-2 py-0"
-                  onclick="navigator.clipboard.writeText('${link}');this.textContent='Copied!'">
-            Copy
-          </button>
-        </div>`;
+      // Built with DOM methods so nothing from the response is treated as HTML
+      const link = String(data.payment_link || '');
+      const box = document.createElement('div');
+      box.className = 'alert alert-success py-2 mb-0 small';
+      const title = document.createElement('strong');
+      title.textContent = 'Payment link ready for ₹' + Number(data.amount).toLocaleString('en-IN') + '!';
+      const a = document.createElement('a');
+      a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.className = 'text-break'; a.textContent = link;
+      const copy = document.createElement('button');
+      copy.type = 'button'; copy.className = 'btn btn-sm btn-outline-success ms-2 py-0'; copy.textContent = 'Copy';
+      copy.addEventListener('click', () => { navigator.clipboard.writeText(link); copy.textContent = 'Copied!'; });
+      box.append(title, document.createElement('br'), a, copy);
+      resultDiv.replaceChildren(box);
     }
   } catch (e) {
-    resultDiv.innerHTML = `<div class="alert alert-danger py-1 small mb-0">
-      <i class="bi bi-exclamation-triangle me-1"></i>Network error. Please try again.
-    </div>`;
+    showPayLinkError(resultDiv, 'Network error. Please try again.');
   } finally {
     resultDiv.style.display = 'block';
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Generate Payment Link';
+    btn.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Payment Link';
   }
+}
+
+function showPayLinkError(resultDiv, message) {
+  const box = document.createElement('div');
+  box.className = 'alert alert-danger py-1 small mb-0';
+  box.textContent = '⚠ ' + message;
+  resultDiv.replaceChildren(box);
 }
 </script>
 {% endblock %}
