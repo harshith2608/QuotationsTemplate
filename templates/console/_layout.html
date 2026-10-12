@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f4d3f">
+<title>{% block title %}Console{% endblock %} · QuoteRoom ops</title>
+<style>
+:root {
+  --paper: #f5f6f2; --card: #fff; --ink: #16231f; --muted: #56655f; --line: #d8ddd7;
+  --pine: #1f4d3f; --pine-soft: #e3ece7; --on-pine: #fff; --tape: #f2b705;
+  --warn: #9a6700; --warn-bg: #fff6d6; --bad: #b42318; --bad-bg: #fdecea; --good: #1e7a4c; --good-bg: #e3f4ea;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #0f1513; --card: #161e1b; --ink: #e7eee9; --muted: #9caaa3; --line: #28332e;
+    --pine: #7cc7a6; --pine-soft: #1b2a24; --on-pine: #0b1612;
+    --warn: #f5c63a; --warn-bg: #2b2410; --bad: #ff8a80; --bad-bg: #2d1513; --good: #7cc7a6; --good-bg: #13261d;
+    color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+a { color: var(--pine); }
+.top { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px; display: flex; align-items: center; gap: 12px; }
+.top .brand { font-weight: 800; text-decoration: none; color: var(--ink); }
+.top .brand span { color: var(--muted); font-weight: 500; }
+.top nav { margin-left: auto; display: flex; gap: 14px; align-items: center; font-size: .92rem; }
+.top nav a { text-decoration: none; color: var(--muted); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 18px 16px 64px; }
+h1 { font-size: 1.45rem; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 26px 0 10px; }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.stack > * + * { margin-top: 10px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px;
+  border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+  font: 600 .9rem system-ui, sans-serif; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.btn-primary { background: var(--pine); border-color: var(--pine); color: var(--on-pine); }
+.btn-danger { border-color: var(--bad); color: var(--bad); background: transparent; }
+.btn-wa { background: #25d366; border-color: #25d366; color: #0b2e17; }
+.btn-sm { min-height: 34px; padding: 0 11px; font-size: .84rem; }
+input[type=text], input[type=password], input[type=number], select, textarea {
+  width: 100%; min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--paper); color: var(--ink); font: 1rem system-ui, sans-serif; }
+textarea { min-height: 150px; font-family: ui-monospace, Menlo, monospace; font-size: .9rem; }
+label { font-weight: 600; font-size: .88rem; display: block; margin-bottom: 4px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.row > .grow { flex: 1 1 180px; }
+.flash { border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+.flash.ok { background: var(--good-bg); color: var(--good); }
+.flash.error { background: var(--bad-bg); color: var(--bad); }
+.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+.b-active { background: var(--good-bg); color: var(--good); }
+.b-reminder, .b-grace { background: var(--warn-bg); color: var(--warn); }
+.b-read_only, .b-due { background: var(--bad-bg); color: var(--bad); }
+.b-other { background: var(--pine-soft); color: var(--muted); }
+.list { display: grid; gap: 10px; }
+.item { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.item-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.item-head strong { font-size: 1.02rem; }
+.item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.item-actions form { display: inline-flex; gap: 6px; margin: 0; }
+.item-actions select { width: auto; min-height: 34px; padding: 2px 8px; font-size: .84rem; }
+details > summary { cursor: pointer; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: .9rem; }
+th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+code, .mono { font-family: ui-monospace, Menlo, monospace; }
+.secret { font-family: ui-monospace, Menlo, monospace; font-size: 1.05rem; background: var(--pine-soft); padding: 2px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+{% if session.get('console_at') %}
+<header class="top">
+  <a class="brand" href="{{ url_for('console.dashboard') }}">QuoteRoom <span>ops</span></a>
+  <nav>
+    <a href="{{ url_for('console.dashboard') }}">Trials</a>
+    <a href="{{ url_for('console.activity') }}">Activity</a>
+    <form method="post" action="{{ url_for('console.logout') }}" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm" type="submit">Sign out</button>
+    </form>
+  </nav>
+</header>
+{% endif %}
+<main class="wrap">
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ 'ok' if category == 'ok' else 'error' }}" role="status">{{ message }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<script>
+// Copy buttons: <button data-copy="#id">
+document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+  const el = document.querySelector(b.dataset.copy);
+  try { await navigator.clipboard.writeText(el.value || el.textContent); b.textContent = 'Copied'; }
+  catch (e) { el.select && el.select(); }
+}));
+// Buttons that need a second look: <form data-confirm="Sure?">
+document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener('submit', e => {
+  if (!confirm(f.dataset.confirm)) e.preventDefault();
+}));
+</script>
+</body>
+</html>

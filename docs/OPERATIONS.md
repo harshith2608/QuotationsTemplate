@@ -271,6 +271,71 @@ Nothing extra beyond the normal setup: section 2 shows how to create the key, an
 New data uses the new key, and old data still reads. Keep the old key in the list: existing rows
 aren't re-encrypted with the new key automatically yet.
 
+### 3f. Operator console (`ops.quote-room.co.in`)
+
+A private web page to manage trials with buttons: see new trial requests, create a trial from a
+request (address, admin login and a ready-to-send WhatsApp message), extend, reset the admin
+password, unlock company details and delete. It runs as its **own** Vercel project. Sign-in needs your
+password **and** a 6-digit code from an authenticator app. Every action is logged under **Activity**.
+
+**Step 1: move the domain's DNS to Vercel (once).** This lets every new trial address work
+automatically. The domain stays registered (and renewed) at GoDaddy; only its DNS moves.
+1. In GoDaddy → `quote-room.co.in` → **DNS**, write down any records **you** added (for example a
+   Meta verification **TXT** record, or email **MX** records). The A / CNAME records for the website
+   don't need copying: Vercel creates those itself.
+2. Vercel → **Domains** (top menu, not inside a project) → `quote-room.co.in` → **DNS Records** →
+   add the records from step 1 again exactly.
+3. On the same Vercel page, note the nameservers it asks for (`ns1.vercel-dns.com`, `ns2.vercel-dns.com`).
+4. GoDaddy → `quote-room.co.in` → **DNS → Nameservers → Change Nameservers** → **I'll use my own
+   nameservers** → enter both → Save. GoDaddy may warn that its DNS records stop being used: that's expected.
+5. Wait until Vercel's Domains page shows the domain using Vercel nameservers (usually under an hour,
+   up to 48 h). The sites keep working during the switch.
+6. Vercel → `trials` → **Settings → Domains → Add** → `*.quote-room.co.in` → Connect to Production.
+   From now on new trials need **no** domain or GoDaddy step. (`www`, the apex domain and `ops` stay on
+   their own projects, because a specific address always wins over the wildcard.)
+
+**Step 2: create the console's password and 2FA key (on your Mac, in the venv).**
+```bash
+python -m flask console-setup
+```
+Choose a strong password (12+ characters). It prints a **setup key**: in your authenticator app
+(Google Authenticator, Microsoft Authenticator, 1Password, …) tap **+ → Enter a setup key**, account
+"QuoteRoom console", type the key, time-based. Then type the 6-digit code the app shows to confirm.
+It prints two values, `CONSOLE_PASSWORD_HASH` and `CONSOLE_TOTP_SECRET`. Save the setup key and your
+password in your password manager (you need the key to set up a new phone).
+
+**Step 3: create the console project.** Vercel → **Add New → Project** → import
+`QuotationsTemplate`, name it `console`. Env vars (Production):
+
+| Name | Value |
+|---|---|
+| `FLASK_ENV` | `production` |
+| `CONSOLE_MODE` | `1` |
+| `SECRET_KEY` | new random value (section 2) |
+| `DATABASE_URL` | **trials** pooled URL (same as the `trials` project) |
+| `DATA_ENCRYPTION_KEY` | **trials** key (same as the `trials` project) |
+| `TENANT_BASE_DOMAIN` | `quote-room.co.in` |
+| `CONSOLE_PASSWORD_HASH`, `CONSOLE_TOTP_SECRET` | from step 2 |
+| `LEADS_DATABASE_URL` | **demo** pooled URL (same as `quotations-template`), so trial requests show up |
+| `LEADS_DATA_ENCRYPTION_KEY` | **demo** key (same as `quotations-template`) |
+| `MARKETING_PRODUCT_NAME` | `QuoteRoom` (used in the welcome message) |
+
+Don't set `TENANT_MODE`, `MARKETING_SITE` or `DEMO_MODE` here. Region **Singapore (sin1)**. In
+**Settings → Functions**, make sure **Max Duration** is at least **30 seconds** (creating a trial
+builds its tables). Deploy.
+
+**Step 4: its address.** `console` → **Settings → Domains → Add** → `ops.quote-room.co.in`.
+(With Vercel DNS from step 1 there's nothing to do in GoDaddy.) Open https://ops.quote-room.co.in and
+sign in. Bookmark it on your phone.
+
+**Security notes**
+- 5 wrong sign-ins within 15 minutes lock sign-in for 15 minutes (for everyone, including you).
+- Each 6-digit code works once. Sessions last 12 hours.
+- Changing `CONSOLE_PASSWORD_HASH` or `CONSOLE_TOTP_SECRET` in Vercel (and redeploying) signs out every
+  session: do this if you lose your phone. Run `console-setup` again for new values.
+- Check **Activity** now and then: unknown sign-ins or failed attempts from strange IPs mean someone found
+  the address. Change the password and 2FA key if so.
+
 ---
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
@@ -303,6 +368,10 @@ Trials use `trial extend` instead (section 5).
 ---
 
 ## 5. Free trials
+
+> **Use the operator console** (https://ops.quote-room.co.in, section 3f) for everything in this
+> section: new requests, creating, extending and deleting trials are buttons there. The terminal
+> commands below still work and are kept for reference.
 
 ### New trial requests (check daily)
 Every "Start free trial" button on the website opens a short form (name, mobile, business type).

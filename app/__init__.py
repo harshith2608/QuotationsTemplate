@@ -39,9 +39,26 @@ def create_app(config_name='default'):
     from . import tenancy
     if tenancy.tenant_mode() and not tenancy.base_domain():
         raise RuntimeError('TENANT_MODE needs TENANT_BASE_DOMAIN (e.g. quote-room.co.in).')
-    app.before_request(tenancy.resolve_tenant)
     login_manager.init_app(app)
     csrf.init_app(app)
+
+    # Operator console deployment: serves only the console (no business app, no tenants)
+    from .console import console_mode
+    if console_mode():
+        if tenancy.tenant_mode():
+            raise RuntimeError('CONSOLE_MODE and TENANT_MODE cannot both be on.')
+        if config_name == 'production':
+            missing = [k for k in ('CONSOLE_PASSWORD_HASH', 'CONSOLE_TOTP_SECRET') if not os.environ.get(k)]
+            if missing:
+                raise RuntimeError(f"Missing required environment variable(s): {', '.join(missing)}")
+        from .console import console_bp
+        app.config['SESSION_COOKIE_NAME'] = 'qr_console'
+        app.register_blueprint(console_bp)
+        from .cli import register_cli
+        register_cli(app)
+        return app
+
+    app.before_request(tenancy.resolve_tenant)
 
     from .auth import auth_bp
     from .main import main_bp

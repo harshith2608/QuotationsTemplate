@@ -1,0 +1,18 @@
+{% extends "console/_layout.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="card stack" style="max-width:380px;margin:12vh auto 0">
+  <h1>QuoteRoom ops</h1>
+  <p class="muted small">Operator console. Password and a code from your authenticator app.</p>
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" class="stack" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus></div>
+    <div><label for="code">6-digit code</label>
+      <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}"
+             maxlength="7" required></div>
+    <button class="btn btn-primary" type="submit" style="width:100%">Sign in</button>
+  </form>
+</div>
+{% endblock %}

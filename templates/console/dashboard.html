@@ -1,0 +1,113 @@
+{% extends "console/_layout.html" %}
+{% block title %}Trials{% endblock %}
+{% block content %}
+<h1>Trials</h1>
+<p class="muted small">New trial addresses work automatically at <span class="mono">NAME.{{ base_domain or 'TENANT_BASE_DOMAIN' }}</span>.</p>
+
+{% if leads is none %}
+  <p class="muted small">Trial requests aren't connected (set <span class="mono">LEADS_DATABASE_URL</span> and <span class="mono">LEADS_DATA_ENCRYPTION_KEY</span>).</p>
+{% else %}
+  <h2>New trial requests {% if new_leads %}<span class="badge b-reminder">{{ new_leads|length }}</span>{% endif %}</h2>
+  {% if not new_leads %}<p class="muted">No new requests.</p>{% endif %}
+  <div class="list">
+  {% for l in new_leads %}
+    <div class="item">
+      <div class="item-head">
+        <strong>{{ l.name }}</strong><span class="muted">{{ l.business }}</span>
+        <span class="muted small" style="margin-left:auto">{{ l.created_at|ist }}</span>
+      </div>
+      <div class="small"><a href="https://wa.me/{{ l.phone }}" target="_blank" rel="noopener">+{{ l.phone }}</a>
+        {% if l.source %}<span class="muted"> · {{ l.source }}</span>{% endif %}</div>
+      <details style="margin-top:10px">
+        <summary>Create trial</summary>
+        <form method="post" action="{{ url_for('console.create_trial') }}" class="row" style="margin-top:10px"
+              data-confirm="Create this trial?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="lead_id" value="{{ l.id }}">
+          <input type="hidden" name="name" value="{{ l.name }}">
+          <input type="hidden" name="phone" value="{{ l.phone }}">
+          <div class="grow"><label>Address name</label>
+            <input type="text" name="slug" value="{{ l.suggested_slug }}" required pattern="[a-z][a-z0-9-]{1,29}"
+                   title="2–30 lowercase letters, numbers or hyphens, starting with a letter"></div>
+          <div style="width:110px"><label>Days</label><input type="number" name="days" value="7" min="1" max="90"></div>
+          <button class="btn btn-primary" type="submit">Create</button>
+        </form>
+      </details>
+      <div class="item-actions">
+        <a class="btn btn-sm btn-wa" href="https://wa.me/{{ l.phone }}?text={{ ('Hi ' ~ l.name ~ ', thanks for your interest in QuoteRoom!')|urlencode }}" target="_blank" rel="noopener">WhatsApp</a>
+        <form method="post" action="{{ url_for('console.dismiss_lead', lead_id=l.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm" type="submit">Not interested</button>
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+{% endif %}
+
+<h2>New trial (without a request)</h2>
+<div class="card">
+  <form method="post" action="{{ url_for('console.create_trial') }}" class="row" data-confirm="Create this trial?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grow"><label for="nt-slug">Address name</label>
+      <input id="nt-slug" type="text" name="slug" placeholder="e.g. sharma" required pattern="[a-z][a-z0-9-]{1,29}"
+             title="2–30 lowercase letters, numbers or hyphens, starting with a letter"></div>
+    <div class="grow"><label for="nt-name">Customer name <span class="muted">(optional)</span></label>
+      <input id="nt-name" type="text" name="name"></div>
+    <div class="grow"><label for="nt-phone">WhatsApp number <span class="muted">(optional)</span></label>
+      <input id="nt-phone" type="text" name="phone" inputmode="numeric" placeholder="919876543210"></div>
+    <div style="width:110px"><label for="nt-days">Days</label><input id="nt-days" type="number" name="days" value="7" min="1" max="90"></div>
+    <button class="btn btn-primary" type="submit">Create trial</button>
+  </form>
+</div>
+
+<h2>All trials <span class="muted small">({{ trials|length }})</span></h2>
+{% if not trials %}<p class="muted">No trials yet.</p>{% endif %}
+<div class="list">
+{% for t in trials %}
+  {% set st = t.status_obj %}
+  <div class="item">
+    <div class="item-head">
+      <strong><a href="{{ url_for('console.trial_detail', slug=t.slug) }}">{{ t.slug }}</a></strong>
+      <span class="badge {{ t.badge[1] }}">{{ t.badge[0] }}</span>
+      {% if st and st.has_limit %}
+        <span class="muted small" style="margin-left:auto">
+          {% if st.days_left >= 0 %}ends {{ st.ends_on.strftime('%d %b') }} · {{ st.days_left }} day{{ '' if st.days_left == 1 else 's' }} left
+          {% else %}ended {{ st.ends_on.strftime('%d %b') }} · deletes {{ st.delete_on.strftime('%d %b %Y') }}{% endif %}
+        </span>
+      {% endif %}
+    </div>
+    {% if t.error %}<div class="small" style="color:var(--bad)">{{ t.error }}</div>{% endif %}
+    <div class="item-actions">
+      {% if t.status == 'active' %}
+      <a class="btn btn-sm" href="{{ t.url }}" target="_blank" rel="noopener">Open</a>
+      <form method="post" action="{{ url_for('console.extend_trial', slug=t.slug) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="length" aria-label="Extend by">{% for c in extend_choices %}<option value="{{ c }}" {% if c == '7d' %}selected{% endif %}>+{{ c[:-1] }} days</option>{% endfor %}</select>
+        <button class="btn btn-sm btn-primary" type="submit">Extend</button>
+      </form>
+      {% endif %}
+      <a class="btn btn-sm" href="{{ url_for('console.trial_detail', slug=t.slug) }}">Manage</a>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+{% if leads %}
+  {% set done = leads|selectattr('link_status')|list %}
+  {% if done %}
+  <h2>Handled requests</h2>
+  <div class="card"><table>
+    <tr><th>Request</th><th>Outcome</th><th></th></tr>
+    {% for l in done[:30] %}
+    <tr><td>{{ l.name }} <span class="muted small">· {{ l.created_at|ist }}</span></td>
+        <td>{% if l.link_status == 'trial' %}trial <a href="{{ url_for('console.trial_detail', slug=l.link_slug) }}">{{ l.link_slug }}</a>{% else %}<span class="muted">not interested</span>{% endif %}</td>
+        <td>{% if l.link_status == 'dismissed' %}
+          <form method="post" action="{{ url_for('console.restore_lead', lead_id=l.id) }}" style="margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm" type="submit">Undo</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "console/_layout.html" %}
+{% block title %}{{ t.slug }}{% endblock %}
+{% block content %}
+{% set st = t.status_obj %}
+<p class="small"><a href="{{ url_for('console.dashboard') }}">← All trials</a></p>
+<h1>{{ t.slug }}</h1>
+<p class="muted"><a href="{{ t.url }}" target="_blank" rel="noopener">{{ t.url }}</a> · registry status: {{ t.status }}
+  · created {{ t.created_at|ist }}</p>
+
+{% if st and st.has_limit %}
+<div class="card stack">
+  <div><strong>Plan:</strong> {{ st.plan }} · {{ st.started_on.strftime('%d %b %Y') if st.started_on else '—' }} → {{ st.ends_on.strftime('%d %b %Y') }}
+    <span class="badge {{ t.badge[1] }}">{{ t.badge[0] }}</span></div>
+  <div class="muted small">{% if st.days_left >= 0 %}{{ st.days_left }} days left.{% else %}Ended {{ -st.days_left }} days ago.{% endif %}
+    Data is deleted on {{ st.delete_on.strftime('%d %b %Y') }} unless extended or converted.</div>
+  <form method="post" action="{{ url_for('console.extend_trial', slug=t.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="back" value="detail">
+    <div><label for="len">Extend by</label>
+      <select id="len" name="length">{% for c in extend_choices %}<option value="{{ c }}" {% if c == '7d' %}selected{% endif %}>{{ c[:-1] }} days</option>{% endfor %}</select></div>
+    <button class="btn btn-primary" type="submit">Extend trial</button>
+  </form>
+</div>
+{% endif %}
+
+{% if t.status == 'active' %}
+<h2>Admin login</h2>
+<div class="card stack">
+  <p class="muted small">Admins: {{ admins|join(', ') or '—' }}. A new password is shown once, with a WhatsApp message ready to send.</p>
+  <form method="post" action="{{ url_for('console.reset_password', slug=t.slug) }}" class="row"
+        data-confirm="Set a new password? The old one stops working immediately.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if admins|length > 1 %}
+    <div><label for="u">Admin</label><select id="u" name="username">{% for a in admins %}<option>{{ a }}</option>{% endfor %}</select></div>
+    {% endif %}
+    <button class="btn" type="submit">Reset admin password</button>
+  </form>
+</div>
+
+<h2>Company details lock</h2>
+<div class="card stack">
+  <p class="muted small">Name, GSTIN and logo lock after the customer first saves them. Unlock lets them change it once (it locks again on save).
+    Currently locked: <strong>{{ locked|join(', ') or 'nothing' }}</strong>.</p>
+  <form method="post" action="{{ url_for('console.unlock_company', slug=t.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for f, label in [('name', 'Company name'), ('gstin', 'GSTIN'), ('logo', 'Logo')] %}
+    <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+      <input type="checkbox" name="fields" value="{{ f }}" {% if f not in locked %}disabled{% endif %}> {{ label }}</label>
+    {% endfor %}
+    <button class="btn" type="submit" {% if not locked %}disabled{% endif %}>Unlock for one change</button>
+  </form>
+</div>
+{% endif %}
+
+<h2>Delete</h2>
+<div class="card stack" style="border-color:var(--bad)">
+  <p class="small">Permanently deletes <strong>{{ t.slug }}</strong> and all its quotations, users and settings. This can't be undone.
+    {% if st and st.has_limit and st.days_left >= 0 %}<strong>The trial is still running.</strong>{% endif %}</p>
+  <form method="post" action="{{ url_for('console.delete_trial', slug=t.slug) }}" class="row"
+        data-confirm="Permanently delete {{ t.slug }} and ALL its data?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grow"><label for="confirm">Type <span class="mono">{{ t.slug }}</span> to confirm</label>
+      <input id="confirm" type="text" name="confirm" autocomplete="off" required></div>
+    <button class="btn btn-danger" type="submit">Delete trial</button>
+  </form>
+</div>
+
+<h2>History</h2>
+<div class="card">
+  {% if history %}<table>
+    {% for h in history %}<tr><td class="small muted" style="white-space:nowrap">{{ h.at|ist }}</td><td>{{ h.action.replace('trial_', '').replace('_', ' ') }}</td><td class="small">{{ h.detail or '' }}</td></tr>{% endfor %}
+  </table>{% else %}<p class="muted small">No console actions yet (trials created from the terminal don't appear here).</p>{% endif %}
+</div>
+{% endblock %}

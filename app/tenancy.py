@@ -31,7 +31,8 @@ from . import db
 
 SLUG_RE = re.compile(r'^[a-z][a-z0-9-]{1,29}$')
 SCHEMA_RE = re.compile(r'^t_[a-z][a-z0-9_]{1,29}$')
-RESERVED = {'www', 'app', 'api', 'admin', 'demo', 'trials', 'trial', 'mail', 'smtp', 'support', 'static'}
+RESERVED = {'www', 'app', 'api', 'admin', 'demo', 'trials', 'trial', 'mail', 'smtp', 'support', 'static',
+            'ops', 'console', 'status', 'help', 'blog', 'docs'}
 
 REGISTRY_DDL = """
 CREATE TABLE IF NOT EXISTS public.tenants (

@@ -1,0 +1,18 @@
+{% extends "console/_layout.html" %}
+{% block title %}Activity{% endblock %}
+{% block content %}
+<h1>Activity</h1>
+<p class="muted small">Every sign-in and action in this console, newest first (last 200). Times in IST.</p>
+<div class="card" style="overflow-x:auto">
+  <table>
+    <tr><th>When</th><th>Action</th><th>Target</th><th>Detail</th><th>IP</th></tr>
+    {% for r in rows %}
+    <tr {% if r.action == 'login_failed' %}style="color:var(--bad)"{% endif %}>
+      <td class="small" style="white-space:nowrap">{{ r.at|ist }}</td><td>{{ r.action.replace('_', ' ') }}</td>
+      <td>{{ r.target or '' }}</td><td class="small">{{ r.detail or '' }}</td><td class="small muted mono">{{ r.ip or '' }}</td></tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">Nothing yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

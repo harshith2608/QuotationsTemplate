@@ -1,0 +1,23 @@
+{% extends "console/_layout.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('console.dashboard') }}">← All trials</a></p>
+<h1>{{ title }}</h1>
+<div class="card stack">
+  <div><strong>Address:</strong> <a href="{{ trial.url }}" target="_blank" rel="noopener">{{ trial.url }}</a></div>
+  <div><strong>Username:</strong> <span class="secret">{{ trial.username }}</span></div>
+  <div><strong>Password:</strong> <span class="secret">{{ trial.password }}</span></div>
+  {% if trial.ends_on %}<div class="muted small">Trial ends {{ trial.ends_on.strftime('%d %b %Y') }}.</div>{% endif %}
+  <p class="small" style="color:var(--warn)"><strong>The password is shown only now.</strong> Send it, or note it in your password manager, before leaving this page.</p>
+</div>
+
+<h2>Message for the customer</h2>
+<div class="card stack">
+  <textarea id="msg" readonly>{{ message }}</textarea>
+  <div class="row">
+    {% if wa_url %}<a class="btn btn-wa" href="{{ wa_url }}" target="_blank" rel="noopener">Send on WhatsApp to +{{ phone }}</a>{% endif %}
+    <button class="btn" type="button" data-copy="#msg">Copy message</button>
+    <a class="btn" href="{{ url_for('console.trial_detail', slug=trial.slug) }}">Manage {{ trial.slug }}</a>
+  </div>
+</div>
+{% endblock %}

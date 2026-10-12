@@ -69,6 +69,34 @@ def register_cli(app):
             raise click.ClickException(f'No active trial named "{slug}".')
         return tenancy.tenant_context(slug, row[0])
 
+    @app.cli.command('console-setup')
+    def console_setup_command():
+        """Create the operator console's password hash and authenticator (2FA) secret."""
+        from urllib.parse import quote
+        from werkzeug.security import generate_password_hash
+        from .console import new_totp_secret, totp_match
+        password = click.prompt('Choose a console password (min 12 characters)', hide_input=True,
+                                confirmation_prompt=True)
+        if len(password) < 12:
+            raise click.ClickException('Use at least 12 characters.')
+        secret = new_totp_secret()
+        grouped = ' '.join(secret[i:i + 4] for i in range(0, len(secret), 4))
+        click.echo('\n1) In your authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, …)')
+        click.echo('   tap + → "Enter a setup key". Account: QuoteRoom console. Key (time-based):\n')
+        click.echo(f'   {grouped}\n')
+        click.echo(f'   (or open: otpauth://totp/{quote("QuoteRoom console")}?secret={secret}&issuer=QuoteRoom)\n')
+        for attempt in range(3):
+            code = click.prompt('2) Type the 6-digit code the app shows now')
+            if totp_match(secret, code) is not None:
+                break
+            click.echo('   That code doesn\'t match. Check the key was typed exactly, then try the next code.')
+        else:
+            raise click.ClickException('Codes didn\'t match. Run this again and re-enter the key.')
+        click.echo('\n3) Add these two env vars to the console Vercel project (Production), then redeploy:\n')
+        click.echo(f'   CONSOLE_PASSWORD_HASH = {generate_password_hash(password, method="pbkdf2:sha256:600000")}')
+        click.echo(f'   CONSOLE_TOTP_SECRET   = {secret}\n')
+        click.echo('Keep the setup key in your password manager too: you need it to set up a new phone.')
+
     @app.cli.command('encrypt-data')
     @click.option('--trial', 'trial_slug', default=None, help='Run inside this trial (trials database).')
     def encrypt_data_command(trial_slug):
@@ -231,14 +259,15 @@ def register_cli(app):
     trial_group = AppGroup('trial', help='Manage trials in the shared trials database (Postgres).')
     app.cli.add_command(trial_group)
 
-    def _need_postgres():
-        from . import db
-        if db.engine.dialect.name != 'postgresql':
-            raise click.ClickException('Trials need a PostgreSQL DATABASE_URL.')
+    from . import ops
 
-    def _migrate_schema(schema):
-        from flask_migrate import upgrade
-        upgrade(x_arg=[f'tenant_schema={schema}'])
+    def _need_postgres():
+        try:
+            ops.need_postgres()
+        except ops.OpsError as exc:
+            raise click.ClickException(str(exc))
+
+    _migrate_schema = ops.migrate_schema
 
     @trial_group.command('create')
     @click.argument('slug')
@@ -248,62 +277,28 @@ def register_cli(app):
     @click.option('--days', default=7, show_default=True, help='Trial length in days.')
     def trial_create(slug, admin_username, admin_password, days):
         """Create a trial: its schema, tables, admin login, default data and a 7-day trial plan."""
-        from datetime import timedelta
-        from sqlalchemy import text
-        from . import db, tenancy
-        from .seed import bootstrap, SeedError
-        _need_postgres()
         try:
-            slug = tenancy.validate_slug(slug)
-        except tenancy.TenantError as exc:
+            t = ops.create_trial(slug, admin_username, admin_password, days, log=click.echo)
+        except ops.OpsError as exc:
             raise click.ClickException(str(exc))
-        if len(admin_password or '') < 8:
-            raise click.ClickException('The admin password must be at least 8 characters.')
-        schema = tenancy.schema_for(slug)
-        tenancy.ensure_registry()
-        with db.engine.begin() as conn:
-            if conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': slug}).first():
-                raise click.ClickException(f'A trial named "{slug}" already exists.')
-            conn.execute(text(f'CREATE SCHEMA "{schema}"'))
-            conn.execute(text("INSERT INTO public.tenants (slug, schema_name, status) VALUES (:s, :sc, 'creating')"),
-                         {'s': slug, 'sc': schema})
-        click.echo(f'Creating tables in schema {schema}…')
-        _migrate_schema(schema)
-        with tenancy.tenant_context(slug, schema):
-            try:
-                for line in bootstrap(username=admin_username, password=admin_password):
-                    click.echo(line)
-            except SeedError as exc:
-                raise click.ClickException(str(exc))
-            start = plan_mod.today()
-            plan_mod.save_plan('trial', start, start + timedelta(days=days))
-            db.session.commit()
-        with db.engine.begin() as conn:
-            conn.execute(text("UPDATE public.tenants SET status = 'active' WHERE slug = :s"), {'s': slug})
-        base = tenancy.base_domain() or '<TENANT_BASE_DOMAIN>'
-        click.echo(f'\nTrial "{slug}" is ready. {days}-day trial ends {(start + timedelta(days=days)).strftime("%d %b %Y")}.')
-        click.echo(f'Next: add {slug}.{base} to the trials Vercel project and a CNAME "{slug}" in GoDaddy.')
-        click.echo(f'Login: https://{slug}.{base}  ·  username: {admin_username}')
+        click.echo(f'\nTrial "{t["slug"]}" is ready. {days}-day trial ends {t["ends_on"].strftime("%d %b %Y")}.')
+        click.echo(f'Login: {t["url"]}  ·  username: {t["username"]}')
 
     @trial_group.command('list')
     def trial_list():
         """List trials with their plan status."""
-        from . import tenancy
         _need_postgres()
-        tenancy.ensure_registry()
-        rows = tenancy.registry_rows()
+        rows = ops.list_trials()
         if not rows:
             click.echo('No trials yet.')
             return
         click.echo(f'{"SLUG":20} {"STATUS":10} {"PLAN":12} {"ENDS":12} {"STATE":10} DELETE ON')
         for r in rows:
             plan_txt = ends = state = delete_on = '—'
-            if r['status'] == 'active':
-                with tenancy.tenant_context(r['slug'], r['schema_name']):
-                    st = plan_mod.load_status(on=plan_mod.today())
-                if st.has_limit:
-                    plan_txt, ends, state = st.plan, st.ends_on.strftime('%d %b %Y'), st.state
-                    delete_on = st.delete_on.strftime('%d %b %Y')
+            st = r['status_obj']
+            if st is not None and st.has_limit:
+                plan_txt, ends, state = st.plan, st.ends_on.strftime('%d %b %Y'), st.state
+                delete_on = st.delete_on.strftime('%d %b %Y')
             click.echo(f'{r["slug"]:20} {r["status"]:10} {plan_txt:12} {ends:12} {state:10} {delete_on}')
 
     @trial_group.command('extend')
@@ -311,25 +306,10 @@ def register_cli(app):
     @click.argument('length')
     def trial_extend(slug, length):
         """Give a trial more time, e.g.  flask trial extend acme 7d"""
-        from datetime import timedelta
-        from sqlalchemy import text
-        from . import db, tenancy
-        _need_postgres()
         try:
-            plan_mod.parse_length(length)
-        except ValueError as exc:
+            st = ops.extend_trial(slug, length)
+        except ops.OpsError as exc:
             raise click.ClickException(str(exc))
-        with db.engine.connect() as conn:
-            row = conn.execute(text("SELECT schema_name FROM public.tenants WHERE slug = :s AND status = 'active'"),
-                               {'s': slug}).first()
-        if not row:
-            raise click.ClickException(f'No active trial named "{slug}".')
-        with tenancy.tenant_context(slug, row[0]):
-            st = plan_mod.load_status(on=plan_mod.today())
-            base = max(st.ends_on, plan_mod.today()) if st.has_limit else plan_mod.today()
-            plan_mod.save_plan('trial', st.started_on or plan_mod.today(), plan_mod.add_length(base, length))
-            db.session.commit()
-            st = plan_mod.load_status(on=plan_mod.today())
         click.echo(f'Trial "{slug}" now ends {st.ends_on.strftime("%d %b %Y")} ({st.days_left} days left).')
 
     @trial_group.command('migrate-all')
@@ -360,21 +340,15 @@ def register_cli(app):
     @click.option('--yes', is_flag=True, help='Skip the confirmation prompt.')
     def trial_delete(slug, yes):
         """Permanently delete a trial's schema and all its data."""
-        from sqlalchemy import text
-        from . import db, tenancy
         _need_postgres()
-        tenancy.ensure_registry()
-        with db.engine.connect() as conn:
-            row = conn.execute(text('SELECT schema_name FROM public.tenants WHERE slug = :s'), {'s': slug}).first()
-        if not row:
-            raise click.ClickException(f'No trial named "{slug}".')
-        if not yes:
-            click.confirm(f'Permanently delete trial "{slug}" and ALL its data?', abort=True)
-        with db.engine.begin() as conn:
-            conn.execute(text(f'DROP SCHEMA IF EXISTS "{row[0]}" CASCADE'))
-            conn.execute(text('DELETE FROM public.tenants WHERE slug = :s'), {'s': slug})
-        tenancy.clear_cache()
-        click.echo(f'Deleted trial "{slug}". Remember to remove its domain from Vercel and its CNAME from GoDaddy.')
+        try:
+            ops.schema_of(slug, active_only=False)
+            if not yes:
+                click.confirm(f'Permanently delete trial "{slug}" and ALL its data?', abort=True)
+            ops.delete_trial(slug)
+        except ops.OpsError as exc:
+            raise click.ClickException(str(exc))
+        click.echo(f'Deleted trial "{slug}".')
 
     @trial_group.command('convert')
     @click.argument('slug')
