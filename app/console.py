@@ -529,7 +529,8 @@ def customer_detail(slug):
         row = c.resume(slug)                      # continues, e.g. connects the address once the build is ready
         if row['status'] == 'active':
             audit('customer_ready', slug)
-    username, password = (c.take_pending_password(slug) if row['status'] != 'deleted' and row['secrets'] else (None, None))
+    # Only once setup is finished: the setup page refreshes itself, which would hide a one-time password
+    username, password = (c.take_pending_password(slug) if row['status'] == 'active' and row['secrets'] else (None, None))
     live, rev, admins, locked, live_error = None, None, [], set(), None
     if row['status'] == 'active':
         try:

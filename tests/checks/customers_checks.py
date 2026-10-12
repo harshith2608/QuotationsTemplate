@@ -134,8 +134,12 @@ with app.app_context(), db.engine.connect() as conn:
 ok('customer secrets stored sealed (no URL or key in plain text)', blob.startswith('enc1:') and 'postgresql' not in blob
    and key not in blob)
 
-# New customer without a trial: admin password shown once
+# New customer without a trial: admin password shown once, only after setup finished
+fake.state = 'BUILDING'
 r = c.post('/customers', data={'source': 'new', 'slug': 'acme', 'name': 'Acme Interiors', 'plan': '6m', 'admin_username': 'boss'})
+t = c.get('/customers/acme').text
+ok('password not shown (or used up) while the setup page is still refreshing', 'shown once' not in t and 'http-equiv="refresh"' in t)
+fake.state = 'READY'
 t = c.get('/customers/acme').text
 m = re.search(r'Password:</strong> <span class="secret">([^<]+)</span>', t)
 ok('new customer: admin password shown once', m and 'Username:</strong> <span class="secret">boss' in t)

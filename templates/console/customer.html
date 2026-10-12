@@ -35,6 +35,7 @@
     {% endif %}
   </div>
   {% endif %}
+  {% if not row.source_trial %}<p class="muted small">The admin password appears here once setup has finished.</p>{% endif %}
   {% if row.source_trial %}<p class="muted small">The trial keeps working until the address moves to the new app. Ask the customer not to make changes for a few minutes.</p>{% endif %}
 </div>
 {% endif %}
