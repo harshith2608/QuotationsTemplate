@@ -19,13 +19,14 @@
     color-scheme: dark; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
 a { color: var(--pine); }
 .top { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line);
   padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px; display: flex; align-items: center; gap: 12px; }
 .top .brand { font-weight: 800; text-decoration: none; color: var(--ink); }
 .top .brand span { color: var(--muted); font-weight: 500; }
-.top nav { margin-left: auto; display: flex; gap: 14px; align-items: center; font-size: .92rem; }
+.top nav { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; align-items: center; font-size: .92rem; }
 .top nav a { text-decoration: none; color: var(--muted); }
 .wrap { max-width: 980px; margin: 0 auto; padding: 18px 16px 64px; }
 h1 { font-size: 1.45rem; margin: 0 0 4px; }
@@ -77,6 +78,8 @@ code, .mono { font-family: ui-monospace, Menlo, monospace; }
   <a class="brand" href="{{ url_for('console.dashboard') }}">QuoteRoom <span>ops</span></a>
   <nav>
     <a href="{{ url_for('console.dashboard') }}">Trials</a>
+    <a href="{{ url_for('console.customers_list') }}">Customers</a>
+    <a href="{{ url_for('console.updates') }}">Updates</a>
     <a href="{{ url_for('console.activity') }}">Activity</a>
     <form method="post" action="{{ url_for('console.logout') }}" style="margin:0">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

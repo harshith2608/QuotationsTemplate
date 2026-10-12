@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from flask import g
+from flask import g, has_app_context
 
 PLAN_KEY, STARTED_KEY, ENDS_KEY = 'plan_name', 'plan_started_on', 'plan_ends_on'
 
@@ -144,6 +144,23 @@ def save_plan(plan, started_on, ends_on):
     AppSetting.set(PLAN_KEY, plan or '')
     AppSetting.set(STARTED_KEY, started_on.isoformat() if started_on else '')
     AppSetting.set(ENDS_KEY, ends_on.isoformat() if ends_on else '')
+
+
+def renew(length, plan_name=None):
+    """Add 6m / 1y / 7d… to this deployment's plan. On time (within grace) it extends from the end date,
+    so no days are lost; late or with no plan it starts from today. 6m / 1y renewals become that plan
+    (this is also how a trial becomes paid); other lengths keep the current plan. Returns the new status.
+    Caller commits."""
+    parse_length(length)                     # raises ValueError for bad input
+    status = load_status(on=today())
+    start = today()
+    base = status.ends_on if status.has_limit and start <= status.grace_until else start
+    key = length.strip().lower()
+    new_plan = plan_name or {'6m': '6m', '1y': '1y', '12m': '1y'}.get(key) or status.plan or 'custom'
+    save_plan(new_plan, base, add_length(base, length))
+    if has_app_context():
+        g.pop('plan_status', None)
+    return load_status(on=start)
 
 
 def renew_message_url(status, user=None, host_url=''):

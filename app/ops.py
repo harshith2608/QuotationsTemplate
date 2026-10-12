@@ -4,6 +4,7 @@ Trial operations shared by the CLI (`flask trial …`) and the operator console.
 All functions need an app context whose DATABASE_URL is the shared trials database
 (Postgres), and DATA_ENCRYPTION_KEY set to the trials project's key.
 """
+import os
 import secrets
 from datetime import timedelta
 
@@ -22,9 +23,110 @@ def need_postgres():
         raise OpsError('Trials need a PostgreSQL DATABASE_URL.')
 
 
+MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'migrations')
+
+
 def migrate_schema(schema):
     from flask_migrate import upgrade
-    upgrade(x_arg=[f'tenant_schema={schema}'])
+    upgrade(directory=MIGRATIONS_DIR, x_arg=[f'tenant_schema={schema}'])
+
+
+def migrate_all_trials(log=None):
+    """Apply database updates (and encrypt leftovers) in every active trial schema. Returns failed slugs."""
+    from .seed import encrypt_existing_data
+    log = log or (lambda line: None)
+    need_postgres()
+    tenancy.ensure_registry()
+    failed = []
+    for r in tenancy.registry_rows():
+        if r['status'] != 'active':
+            continue
+        log(f'→ {r["slug"]} ({r["schema_name"]})')
+        try:
+            migrate_schema(r['schema_name'])
+            with tenancy.tenant_context(r['slug'], r['schema_name']):
+                log('  ' + encrypt_existing_data())
+        except Exception as exc:              # keep going; report at the end
+            failed.append(r['slug'])
+            log(f'  FAILED: {exc}')
+    return failed
+
+
+def normalize_url(url):
+    url = url.strip()
+    for prefix in ('postgres://', 'postgresql://'):
+        if url.startswith(prefix):
+            return 'postgresql+psycopg2://' + url[len(prefix):]
+    return url
+
+
+def engine_for(url):
+    from sqlalchemy import create_engine
+    return create_engine(normalize_url(url), pool_pre_ping=True)
+
+
+def copy_trial(slug, target_url, to_key, plan_name):
+    """Copy a trial into a customer's own, migrated, EMPTY database, re-encrypting with the customer's key,
+    and start their paid plan there. Returns ({table: rows}, start, end). Doesn't change the trial."""
+    from sqlalchemy import inspect
+    from . import crypto
+    from .models import AppSetting
+    need_postgres()
+    try:
+        crypto.validate_key(to_key)
+    except crypto.EncryptionError as exc:
+        raise OpsError(f'Customer key: {exc}')
+    if not crypto.enabled():
+        raise OpsError(f'Set {crypto.ENV} to the trials project\'s key so the trial data can be read.')
+    schema = schema_of(slug, active_only=False)
+    target = engine_for(target_url)
+    tables = db.metadata.sorted_tables
+    with target.connect() as tc:
+        names = set(inspect(tc).get_table_names())
+        if [t.name for t in tables if t.name not in names] or 'alembic_version' not in names:
+            raise OpsError('The new database isn\'t set up yet (run its database update first).')
+        if tc.execute(text('SELECT COUNT(*) FROM users')).scalar():
+            raise OpsError('The new database already has users. Use an empty database.')
+    copied = {}
+    with tenancy.tenant_context(slug, schema):
+        src = db.session.connection()                 # schema-mapped to the trial
+        with target.begin() as tc:
+            for table in tables:
+                # Read decrypts with the trials key; insert re-encrypts with the customer's own key
+                rows = [dict(r) for r in src.execute(table.select()).mappings()]
+                if table.name == 'app_settings':
+                    for r in rows:
+                        if r['key'] in AppSetting.ENCRYPTED_KEYS and r['value']:
+                            plain = crypto.decrypt(r['value'])
+                            with crypto.using_key(to_key):
+                                r['value'] = crypto.encrypt(plain)
+                if rows:
+                    with crypto.using_key(to_key):
+                        tc.execute(table.insert(), rows)
+                copied[table.name] = len(rows)
+            for table in tables:                      # continue id sequences after the copied rows
+                if 'id' in table.c and table.c.id.primary_key:
+                    tc.execute(text(
+                        f"SELECT setval(pg_get_serial_sequence('\"{table.name}\"', 'id'), "
+                        f"COALESCE((SELECT MAX(id) FROM \"{table.name}\"), 1), "
+                        f"(SELECT MAX(id) FROM \"{table.name}\") IS NOT NULL)"))
+            start = plan_mod.today()
+            end = plan_mod.add_length(start, plan_name)
+            for key, value in ((plan_mod.PLAN_KEY, plan_name), (plan_mod.STARTED_KEY, start.isoformat()),
+                               (plan_mod.ENDS_KEY, end.isoformat())):
+                tc.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': key})
+                tc.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'), {'k': key, 'v': value})
+        db.session.rollback()
+    target.dispose()
+    return copied, start, end
+
+
+def mark_converted(slug):
+    """The trials app stops serving this trial (its data stays until deleted)."""
+    with db.engine.begin() as conn:
+        conn.execute(text("UPDATE public.tenants SET status = 'converted', converted_at = (now() AT TIME ZONE 'utc') "
+                          "WHERE slug = :s"), {'s': slug})
+    tenancy.clear_cache()
 
 
 def generate_password():

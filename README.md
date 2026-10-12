@@ -156,7 +156,7 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
 
 ## Operator console
 
-`CONSOLE_MODE=1` turns a deployment into the operator console (`app/console.py`): the trials database plus buttons to create trials from website requests, extend, reset admin passwords, unlock company details and delete, with password + TOTP sign-in and an audit log. The trial logic is shared with `flask trial …` in `app/ops.py`. Setup: [docs/OPERATIONS.md](docs/OPERATIONS.md) section 3f.
+`CONSOLE_MODE=1` turns a deployment into the operator console (`app/console.py`): the trials database plus buttons to create trials from website requests, extend, reset admin passwords, unlock company details and delete, with password + TOTP sign-in and an audit log. The trial logic is shared with `flask trial …` in `app/ops.py`. Paying customers (`app/customers.py`, `app/providers.py`): one Postgres database + login per customer in a shared Neon project (plain SQL, no Neon API), their own Vercel project via the Vercel API, resumable provisioning, renewals, and "update all databases". Setup: [docs/OPERATIONS.md](docs/OPERATIONS.md) sections 3f and 3g.
 
 ---
 

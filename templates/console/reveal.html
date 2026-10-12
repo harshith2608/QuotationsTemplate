@@ -1,0 +1,17 @@
+{% extends "console/_layout.html" %}
+{% block title %}{{ row.slug }} connection{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('console.customer_detail', slug=row.slug) }}">← {{ row.name }}</a></p>
+<h1>Connection details: {{ row.slug }}</h1>
+<div class="card stack">
+  <p class="small" style="color:var(--warn)"><strong>Keep these private.</strong> Use them only in your Mac's Terminal, never in chats or emails.
+    Close this page when done.</p>
+  <div><label>DATABASE_URL (direct)</label><textarea id="u" readonly style="min-height:80px">{{ direct_url }}</textarea>
+    <button class="btn btn-sm" type="button" data-copy="#u">Copy</button></div>
+  <div><label>DATA_ENCRYPTION_KEY</label><textarea id="k" readonly style="min-height:50px">{{ data_key }}</textarea>
+    <button class="btn btn-sm" type="button" data-copy="#k">Copy</button></div>
+  <p class="muted small">Example, a data export (OPERATIONS.md section 9): set both with <span class="mono">export DATABASE_URL="…"</span> and
+    <span class="mono">export DATA_ENCRYPTION_KEY="…"</span>, run <span class="mono">python -m flask export-data ~/Desktop/{{ row.slug }}-export</span>,
+    then <span class="mono">unset DATABASE_URL DATA_ENCRYPTION_KEY</span>.</p>
+</div>
+{% endblock %}

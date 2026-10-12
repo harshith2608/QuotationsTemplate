@@ -1,0 +1,138 @@
+{% extends "console/_layout.html" %}
+{% block title %}{{ row.name }}{% endblock %}
+{% block content %}
+{% if row.status == 'provisioning' %}<meta http-equiv="refresh" content="10">{% endif %}
+<p class="small"><a href="{{ url_for('console.customers_list') }}">← All customers</a></p>
+<h1>{{ row.name }} <span class="badge {{ badge[1] }}" style="vertical-align:middle">{{ badge[0] }}</span></h1>
+<p class="muted">{% if row.status == 'active' %}<a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a>{% else %}{{ url }}{% endif %}
+  · {{ row.slug }}{% if row.source_trial %} · converted from trial{% endif %} · since {{ row.created_at|ist }}</p>
+
+{% if row.status in ('provisioning', 'failed') %}
+<div class="card stack" {% if row.status == 'failed' %}style="border-color:var(--bad)"{% endif %}>
+  <strong>{{ 'Setting up…' if row.status == 'provisioning' else 'Setup stopped' }}</strong>
+  <ol class="small" style="margin:0;padding-left:1.2rem">
+    {% set done_i = steps.index(row.step) if row.step else -1 %}
+    {% for s in steps %}
+      <li>{{ step_labels[s] }} —
+        {% if loop.index0 <= done_i %}<span style="color:var(--good)">done</span>
+        {% elif s == next_step and row.status == 'failed' %}<span style="color:var(--bad)">failed</span>
+        {% elif s == next_step and s == 'domain' %}<span style="color:var(--warn)">waiting for the first build (about a minute; this page refreshes itself)</span>
+        {% elif s == next_step %}<span style="color:var(--warn)">next</span>
+        {% else %}<span class="muted">pending</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  {% if row.error %}<div class="flash error">{{ row.error }}</div>{% endif %}
+  {% if row.status == 'failed' %}
+  <div class="row">
+    <form method="post" action="{{ url_for('console.customer_retry', slug=row.slug) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary" type="submit">Retry</button></form>
+    {% if not row.step and 'already exists' in (row.error or '') %}
+    <form method="post" action="{{ url_for('console.customer_leftovers', slug=row.slug) }}"
+          data-confirm="Delete the half-created database and login for {{ row.slug }}?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger" type="submit">Remove leftovers</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if row.source_trial %}<p class="muted small">The trial keeps working until the address moves to the new app. Ask the customer not to make changes for a few minutes.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if password %}
+<h2>Admin login (shown once)</h2>
+<div class="card stack">
+  <div><strong>Username:</strong> <span class="secret">{{ username }}</span> · <strong>Password:</strong> <span class="secret">{{ password }}</span></div>
+  <p class="small" style="color:var(--warn)"><strong>This password is shown only now.</strong> Send it or save it before leaving this page
+    (otherwise use "Reset admin password" later).</p>
+</div>
+{% endif %}
+
+{% if message %}
+<h2>Message for the customer</h2>
+<div class="card stack">
+  <textarea id="msg" readonly>{{ message }}</textarea>
+  <div class="row">
+    {% if wa_url %}<a class="btn btn-wa" href="{{ wa_url }}" target="_blank" rel="noopener">Send on WhatsApp to +{{ row.phone }}</a>{% endif %}
+    <button class="btn" type="button" data-copy="#msg">Copy message</button>
+  </div>
+  {% if row.status != 'active' %}<p class="muted small">The address starts working when setup shows all steps done.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if row.status == 'active' %}
+<h2>Plan</h2>
+<div class="card stack">
+  {% if live %}
+  <div><strong>{{ live.label }}</strong>: {{ live.started_on.strftime('%d %b %Y') if live.started_on else '—' }} → {{ live.ends_on.strftime('%d %b %Y') }}
+    · {% if live.days_left >= 0 %}{{ live.days_left }} days left{% else %}ended {{ -live.days_left }} days ago (data deleted on {{ live.delete_on.strftime('%d %b %Y') }}){% endif %}</div>
+  {% elif live_error %}<div class="flash error">Couldn't read the app: {{ live_error }}</div>{% endif %}
+  <form method="post" action="{{ url_for('console.customer_renew', slug=row.slug) }}" class="row"
+        data-confirm="Renew this plan? Only after payment is received.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label for="len">Renew by</label><select id="len" name="length"><option value="6m">6 months</option><option value="1y" selected>12 months</option></select></div>
+    <button class="btn btn-primary" type="submit">Renew</button>
+  </form>
+  <p class="muted small">On time, it adds to the current end date (no days lost); after the grace period it starts from today.</p>
+</div>
+
+<h2>Admin login</h2>
+<div class="card stack">
+  <p class="muted small">Admins: {{ admins|join(', ') or '—' }}.</p>
+  <form method="post" action="{{ url_for('console.customer_reset_password', slug=row.slug) }}" class="row"
+        data-confirm="Set a new admin password? The old one stops working immediately.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if admins|length > 1 %}<div><label for="u">Admin</label><select id="u" name="username">{% for a in admins %}<option>{{ a }}</option>{% endfor %}</select></div>{% endif %}
+    <button class="btn" type="submit">Reset admin password</button>
+  </form>
+</div>
+
+<h2>Company details lock</h2>
+<div class="card stack">
+  <p class="muted small">Currently locked: <strong>{{ locked|join(', ') or 'nothing' }}</strong>. Unlock lets them change it once.</p>
+  <form method="post" action="{{ url_for('console.customer_unlock', slug=row.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for f, label in [('name', 'Company name'), ('gstin', 'GSTIN'), ('logo', 'Logo')] %}
+    <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+      <input type="checkbox" name="fields" value="{{ f }}" {% if f not in locked %}disabled{% endif %}> {{ label }}</label>
+    {% endfor %}
+    <button class="btn" type="submit" {% if not locked %}disabled{% endif %}>Unlock for one change</button>
+  </form>
+</div>
+
+<h2>Technical</h2>
+<div class="card small stack">
+  <div>Vercel project: <span class="mono">{{ row.vercel_project_name or '—' }}</span></div>
+  <div>Database version: <span class="mono">{{ rev or '—' }}</span> {% if rev and rev == head %}<span class="badge b-active">latest</span>{% elif rev %}<span class="badge b-reminder">update available</span> (Updates page){% endif %}</div>
+  {% if pooler_note %}<div style="color:var(--warn)">Note: {{ pooler_note }}</div>{% endif %}
+  <form method="post" action="{{ url_for('console.customer_reveal', slug=row.slug) }}"
+        data-confirm="Show this customer's database link and encryption key? (Recorded in Activity.)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm" type="submit">Show connection details</button>
+    <span class="muted">For a data export or an emergency fix from your Mac.</span>
+  </form>
+</div>
+{% endif %}
+
+{% if row.status != 'deleted' %}
+<h2>Delete</h2>
+<div class="card stack" style="border-color:var(--bad)">
+  <p class="small">Permanently deletes <strong>{{ row.name }}</strong>'s app, database and login. This can't be undone.
+    {% if live and live.days_left is not none and live.days_left >= -30 %}<strong>Their plan ended less than 30 days ago or is still running: only delete after the deletion date{% if live.delete_on %} ({{ live.delete_on.strftime('%d %b %Y') }}){% endif %}, and only after any export they asked for.</strong>{% endif %}</p>
+  <form method="post" action="{{ url_for('console.customer_delete', slug=row.slug) }}" class="row"
+        data-confirm="Permanently delete {{ row.slug }}'s app and ALL its data?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grow"><label for="confirm">Type <span class="mono">delete {{ row.slug }}</span> to confirm</label>
+      <input id="confirm" type="text" name="confirm" autocomplete="off" required></div>
+    <button class="btn btn-danger" type="submit">Delete customer</button>
+  </form>
+</div>
+{% endif %}
+
+<h2>History</h2>
+<div class="card">
+  {% if history %}<table>
+    {% for h in history %}<tr><td class="small muted" style="white-space:nowrap">{{ h.at|ist }}</td><td>{{ h.action.replace('customer_', '').replace('_', ' ') }}</td><td class="small">{{ h.detail or '' }}</td></tr>{% endfor %}
+  </table>{% else %}<p class="muted small">Nothing yet.</p>{% endif %}
+</div>
+{% endblock %}

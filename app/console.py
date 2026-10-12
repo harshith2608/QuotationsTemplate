@@ -473,3 +473,216 @@ def activity():
 @console_bp.app_template_filter('ist')
 def ist(dt):
     return (dt + timedelta(hours=5, minutes=30)).strftime('%d %b %Y, %I:%M %p') if isinstance(dt, datetime) else '—'
+
+
+# ── Paying customers ─────────────────────────────────────────────────────────
+
+def _customers():
+    from . import customers
+    return customers
+
+
+@console_bp.route('/customers')
+@login_required
+def customers_list():
+    c = _customers()
+    rows = c.all_customers() if not c.missing_settings() else []
+    for r in rows:
+        r['badge'] = c.plan_badge(r)
+        r['url'] = c.app_url(r['slug'])
+    active_trials = [t for t in ops.list_trials() if t['status'] == 'active']
+    return render_template('console/customers.html', rows=rows, missing=c.missing_settings(),
+                           trials=active_trials, base_domain=tenancy.base_domain(), plans=c.PLANS)
+
+
+@console_bp.route('/customers', methods=['POST'])
+@login_required
+def customers_create():
+    c = _customers()
+    source = request.form.get('source', 'new')
+    trial = request.form.get('trial', '').strip() if source == 'trial' else None
+    slug = trial or request.form.get('slug', '').strip().lower()
+    phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    try:
+        row = c.start(slug, request.form.get('name', ''), request.form.get('plan', ''), source_trial=trial,
+                      admin_username=request.form.get('admin_username', 'admin'), phone=phone)
+    except (c.CustomerError, ops.OpsError, tenancy.TenantError) as exc:
+        flash(f'Could not start: {exc}', 'error')
+        return redirect(url_for('console.customers_list'))
+    audit('customer_create', row['slug'], f'plan {row["plan"]}' + (f', from trial {trial}' if trial else ', new'))
+    return redirect(url_for('console.customer_detail', slug=row['slug']))
+
+
+def _customer_or_404(slug):
+    row = _customers().get(slug)
+    if not row:
+        abort(404)
+    return row
+
+
+@console_bp.route('/customers/<slug>')
+@login_required
+def customer_detail(slug):
+    c = _customers()
+    row = _customer_or_404(slug)
+    if row['status'] == 'provisioning':
+        row = c.resume(slug)                      # continues, e.g. connects the address once the build is ready
+        if row['status'] == 'active':
+            audit('customer_ready', slug)
+    username, password = (c.take_pending_password(slug) if row['status'] != 'deleted' and row['secrets'] else (None, None))
+    live, rev, admins, locked, live_error = None, None, [], set(), None
+    if row['status'] == 'active':
+        try:
+            live, rev = c.live_status(slug)
+            admins = c.admin_usernames(slug)
+            locked = c.locked_fields(slug)
+        except Exception as exc:
+            live_error = str(exc)
+    secrets_ = c.unseal(row['secrets']) if row['secrets'] else {}
+    message = ''
+    if password:
+        message = (f"Hi! Your {_product()} app is ready.\n\nOpen: {c.app_url(slug)}\nUsername: {username}\n"
+                   f"Password: {password}\n\nOn your phone, add the page to your home screen for one-tap access. "
+                   "Reply here if you need any help!")
+    elif row['status'] == 'active' and row['source_trial']:
+        message = (f"Hi! Thank you for subscribing to {_product()}. Your app is now on your paid plan: same address "
+                   f"({c.app_url(slug)}), same login and all your quotations. Reply here if you need any help!")
+    with db.engine.connect() as conn:
+        history = conn.execute(text("SELECT at, action, detail FROM public.console_audit WHERE target = :s "
+                                    "ORDER BY at DESC LIMIT 30"), {'s': slug}).mappings().all()
+    return render_template('console/customer.html', row=row, c=c, steps=c.STEPS, step_labels=c.STEP_LABELS,
+                           next_step=c.next_step(row) if row['status'] in ('provisioning', 'failed') else None,
+                           username=username, password=password, message=message,
+                           wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,
+                           head=c.head_revision(), admins=admins, locked=locked, live_error=live_error,
+                           pooler_note=secrets_.get('pooler_note'), history=history, url=c.app_url(slug),
+                           badge=c.plan_badge(row))
+
+
+@console_bp.route('/customers/<slug>/retry', methods=['POST'])
+@login_required
+def customer_retry(slug):
+    _customer_or_404(slug)
+    row = _customers().resume(slug)
+    audit('customer_retry', slug, row['error'] or row['status'])
+    return redirect(url_for('console.customer_detail', slug=slug))
+
+
+@console_bp.route('/customers/<slug>/leftovers', methods=['POST'])
+@login_required
+def customer_leftovers(slug):
+    c = _customers()
+    try:
+        c.remove_leftovers(slug)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_remove_leftovers', slug)
+        flash('Removed the half-created database. Press Retry.', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug))
+
+
+@console_bp.route('/customers/<slug>/renew', methods=['POST'])
+@login_required
+def customer_renew(slug):
+    c = _customers()
+    try:
+        st = c.renew(slug, request.form.get('length', ''))
+    except Exception as exc:
+        flash(f'Could not renew: {exc}', 'error')
+    else:
+        audit('customer_renew', slug, f'+{request.form.get("length")} → ends {st.ends_on.isoformat()}')
+        flash(f'Renewed: plan {st.plan} now ends {st.ends_on.strftime("%d %b %Y")}.', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug))
+
+
+@console_bp.route('/customers/<slug>/reset-password', methods=['POST'])
+@login_required
+def customer_reset_password(slug):
+    c = _customers()
+    try:
+        username, password = c.reset_admin_password(slug, request.form.get('username') or None)
+    except Exception as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('console.customer_detail', slug=slug))
+    audit('customer_reset_password', slug, username)
+    message = (f"Hi! Your new {_product()} password is ready.\n\nOpen: {c.app_url(slug)}\nUsername: {username}\n"
+               f"Password: {password}")
+    row = c.get(slug)
+    return render_template('console/result.html', title=f'New password for "{slug}"',
+                           trial={'slug': slug, 'url': c.app_url(slug), 'username': username, 'password': password,
+                                  'ends_on': row['ends_on']}, message=message,
+                           wa_url=_wa_link(row['phone'], message), phone=row['phone'], manage_endpoint='customer_detail')
+
+
+@console_bp.route('/customers/<slug>/unlock', methods=['POST'])
+@login_required
+def customer_unlock(slug):
+    from .branding import LOCKABLE
+    fields = [f for f in request.form.getlist('fields') if f in LOCKABLE]
+    if fields:
+        try:
+            _customers().unlock_company(slug, fields)
+        except Exception as exc:
+            flash(str(exc), 'error')
+        else:
+            audit('customer_unlock', slug, ', '.join(fields))
+            flash(f'Unlocked {", ".join(fields)} for one change.', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug))
+
+
+@console_bp.route('/customers/<slug>/delete', methods=['POST'])
+@login_required
+def customer_delete(slug):
+    if request.form.get('confirm', '').strip().lower() != f'delete {slug}':
+        flash(f'Type "delete {slug}" exactly to confirm.', 'error')
+        return redirect(url_for('console.customer_detail', slug=slug))
+    try:
+        _customers().delete(slug)
+    except Exception as exc:
+        flash(f'Could not delete: {exc}', 'error')
+        return redirect(url_for('console.customer_detail', slug=slug))
+    audit('customer_delete', slug)
+    flash(f'Deleted customer "{slug}": their app, database and login are gone.', 'ok')
+    return redirect(url_for('console.customers_list'))
+
+
+@console_bp.route('/customers/<slug>/reveal', methods=['POST'])
+@login_required
+def customer_reveal(slug):
+    """Database link + key for manual jobs (data export, emergencies). Logged."""
+    c = _customers()
+    row = _customer_or_404(slug)
+    s = c.unseal(row['secrets']) if row['secrets'] else {}
+    if not s.get('direct_url'):
+        flash('No database yet.', 'error')
+        return redirect(url_for('console.customer_detail', slug=slug))
+    audit('customer_reveal_secrets', slug)
+    return render_template('console/reveal.html', row=row, direct_url=s['direct_url'], data_key=s['data_key'])
+
+
+# ── Database updates ─────────────────────────────────────────────────────────
+
+@console_bp.route('/updates', methods=['GET', 'POST'])
+@login_required
+def updates():
+    c = _customers()
+    targets = c.update_targets()
+    results = []
+    if request.method == 'POST':
+        wanted = request.form.get('target', 'all')
+        keys = [k for k, _ in targets] if wanted == 'all' else [wanted]
+        labels = dict(targets)
+        started = time.time()
+        for key in keys:
+            if key not in labels:
+                continue
+            if time.time() - started > 40:                 # stay inside the function time limit
+                results.append((labels[key], False, 'not run (time limit): press Update all again'))
+                continue
+            try:
+                results.append((labels[key], True, c.run_update(key)))
+            except Exception as exc:
+                results.append((labels[key], False, str(exc)[:400]))
+        audit('db_update', wanted, '; '.join(f'{l}: {"ok" if ok else "FAILED"}' for l, ok, _ in results))
+    return render_template('console/updates.html', targets=targets, results=results, head=c.head_revision())

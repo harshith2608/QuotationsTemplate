@@ -1,0 +1,71 @@
+{% extends "console/_layout.html" %}
+{% block title %}Customers{% endblock %}
+{% block content %}
+<h1>Paying customers</h1>
+<p class="muted small">Each customer gets their own database, their own app on Vercel and the address
+  <span class="mono">NAME.{{ base_domain or 'TENANT_BASE_DOMAIN' }}</span>.</p>
+
+{% if missing %}
+<div class="card stack" style="border-color:var(--warn)">
+  <strong>Not set up yet</strong>
+  <p class="small">Add these to the console's Vercel project, then redeploy (see OPERATIONS.md section 3g):</p>
+  <ul class="small">{% for m in missing %}<li class="mono">{{ m }}</li>{% endfor %}</ul>
+</div>
+{% else %}
+
+<h2>New paying customer</h2>
+<div class="card">
+  <form method="post" action="{{ url_for('console.customers_create') }}" class="stack"
+        data-confirm="Create this customer's database and app? (Takes about a minute.)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row">
+      <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+        <input type="radio" name="source" value="trial" {% if trials %}checked{% endif %} {% if not trials %}disabled{% endif %}
+               onchange="document.getElementById('fromTrial').hidden=false;document.getElementById('fromNew').hidden=true"> Convert a trial</label>
+      <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+        <input type="radio" name="source" value="new" {% if not trials %}checked{% endif %}
+               onchange="document.getElementById('fromTrial').hidden=true;document.getElementById('fromNew').hidden=false"> New (no trial)</label>
+    </div>
+    <div id="fromTrial" class="row" {% if not trials %}hidden{% endif %}>
+      <div class="grow"><label for="trial">Trial</label>
+        <select id="trial" name="trial">{% for t in trials %}<option value="{{ t.slug }}">{{ t.slug }}</option>{% endfor %}</select>
+        <p class="muted small">Keeps the same address, logins and quotations.</p></div>
+    </div>
+    <div id="fromNew" class="row" {% if trials %}hidden{% endif %}>
+      <div class="grow"><label for="slug">Address name</label>
+        <input id="slug" type="text" name="slug" placeholder="e.g. sharma" pattern="[a-z][a-z0-9-]{1,29}"
+               title="2–30 lowercase letters, numbers or hyphens, starting with a letter"></div>
+      <div class="grow"><label for="au">Admin username</label><input id="au" type="text" name="admin_username" value="admin"></div>
+    </div>
+    <div class="row">
+      <div class="grow"><label for="name">Business name</label><input id="name" type="text" name="name" required placeholder="e.g. Sharma Interiors"></div>
+      <div class="grow"><label for="phone">WhatsApp number <span class="muted">(optional)</span></label>
+        <input id="phone" type="text" name="phone" inputmode="numeric" placeholder="919876543210"></div>
+      <div><label for="plan">Plan</label>
+        <select id="plan" name="plan">{% for p in plans %}<option value="{{ p }}" {% if p == '1y' %}selected{% endif %}>{{ '6 months' if p == '6m' else '12 months' }}</option>{% endfor %}</select></div>
+    </div>
+    <button class="btn btn-primary" type="submit">Create customer</button>
+    <p class="muted small">Only after payment is received. The plan starts today.</p>
+  </form>
+</div>
+
+<h2>All customers <span class="muted small">({{ rows|length }})</span></h2>
+{% if not rows %}<p class="muted">No paying customers yet.</p>{% endif %}
+<div class="list">
+{% for r in rows %}
+  <div class="item">
+    <div class="item-head">
+      <strong><a href="{{ url_for('console.customer_detail', slug=r.slug) }}">{{ r.name }}</a></strong>
+      <span class="muted small">{{ r.slug }}</span>
+      <span class="badge {{ r.badge[1] }}">{{ r.badge[0] }}</span>
+      {% if r.ends_on %}<span class="muted small" style="margin-left:auto">{{ r.plan }} · ends {{ r.ends_on.strftime('%d %b %Y') }}</span>{% endif %}
+    </div>
+    <div class="item-actions">
+      {% if r.status == 'active' %}<a class="btn btn-sm" href="{{ r.url }}" target="_blank" rel="noopener">Open</a>{% endif %}
+      <a class="btn btn-sm" href="{{ url_for('console.customer_detail', slug=r.slug) }}">Manage</a>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

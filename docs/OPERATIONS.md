@@ -336,6 +336,42 @@ sign in. Bookmark it on your phone.
 - Check **Activity** now and then: unknown sign-ins or failed attempts from strange IPs mean someone found
   the address. Change the password and 2FA key if so.
 
+### 3g. Paying customers in the console (one-time setup)
+
+Each paying customer gets **their own database and login** inside one shared Neon project called
+`customers` (their login can open only their own database), **their own Vercel project** (`qr-NAME`) with
+their own keys, and their address `NAME.quote-room.co.in`. The console's **Customers** page creates all of
+that with one button, and its **Updates** page updates every database before you ship.
+
+1. **Neon project for customers.** Neon → **New project** → name `customers`, region **AWS Asia Pacific
+   (Singapore)**. Open **Connect**, turn **Connection pooling OFF**, and copy the connection string
+   (it uses the `neondb_owner` login). Save it in your password manager as "Neon customers admin".
+2. **Vercel token.** Vercel → your avatar → **Account Settings → Tokens → Create Token**: name
+   `QuoteRoom console`, scope = your team (the one your projects are in), expiration **No expiration**
+   (or 1 year, with a calendar reminder). Copy it once; save it in your password manager.
+3. **Team ID.** Vercel → the team switcher (top left) → **Settings → General** → copy **Team ID**
+   (starts with `team_`).
+4. **Vault key** (the console encrypts each customer's database link and keys with it). Create a new key
+   with the DATA_ENCRYPTION_KEY command in section 2 and save it in your password manager as
+   "QuoteRoom console vault key". Without it the console can't open its customer records (the customers'
+   apps keep working).
+5. Vercel → the **console** project → **Settings → Environment Variables** (Production) → add:
+
+   | Name | Value |
+   |---|---|
+   | `CUSTOMERS_ADMIN_DATABASE_URL` | from step 1 (direct, pooling OFF) |
+   | `VERCEL_TOKEN` | from step 2 |
+   | `VERCEL_TEAM_ID` | from step 3 |
+   | `CONSOLE_VAULT_KEY` | from step 4 |
+   | `SUPPORT_WHATSAPP` | your number, digits only (passed on to every customer app) |
+   | `VERCEL_GIT_REPO` | `harshith2608/QuotationsTemplate` (optional; this is the default) |
+
+   Also set **Settings → Functions → Max Duration** to **60** seconds. Then **Deployments → ⋯ → Redeploy**.
+6. Open the console's **Customers** page: when the yellow "Not set up yet" box is gone, it's ready.
+
+**Only for real paying customers:** upgrade Vercel to **Pro** first (section 6, step 0). Testing with a
+made-up customer on Hobby is fine; delete it afterwards.
+
 ---
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
@@ -419,6 +455,15 @@ unset DATABASE_URL
 ```
 
 ### Trial → paying customer
+**With the console (section 3g):** after the payment arrives, **Customers → New paying customer → Convert a
+trial** → choose the trial, type the business name (and WhatsApp number), choose the plan → **Create
+customer**. It creates their database and app, copies everything from the trial (logins, settings, logo,
+quotations), starts the paid plan, and once the first build is ready (about a minute; the page refreshes
+itself) moves the address to their new app. Then send them the ready-made WhatsApp message. Delete the
+old trial copy a few days later from **Trials → Manage**. If a step fails, the page shows why: fix it and
+press **Retry** (it continues where it stopped).
+
+**Without the console** (manual fallback):
 1. **Vercel Pro first** (section 6, step 0) if not done yet.
 2. Create their **Neon project** and **Vercel project** exactly as in section 6, steps 1–2.
    Skip section 6 step 3: their data comes from the trial.
@@ -452,6 +497,10 @@ URL), then remove the domain in Vercel and the CNAME in GoDaddy.
 ---
 
 ## 6. Onboard a paying customer directly (no trial, ≈15 minutes)
+
+> **With the console (section 3g):** **Customers → New paying customer → New (no trial)** → address name,
+> business name, WhatsApp number, plan → **Create customer**. The admin password is shown once with a
+> ready-to-send WhatsApp message. Step 0 (Vercel Pro) still applies. The manual steps below are the fallback.
 
 ### 0. Before the first paying customer: upgrade Vercel to Pro
 If the account is still on Hobby, upgrade **before** creating the customer's project
@@ -495,6 +544,9 @@ and create staff logins in **Admin → Users**.
 ---
 
 ## 7. Shipping an update
+
+> **With the console:** step 3 below is one button: **Updates → Update all** (demo, every trial and every
+> customer). Run it **before** merging to `main`; it's safe to run any time.
 
 1. Work on a `dev` branch and run the tests (in the venv; first time: `pip install -r requirements-dev.txt`):
    ```bash
@@ -571,6 +623,10 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 ---
 
 ## 9. Ending a customer
+
+> **With the console:** for an export, open the customer → **Show connection details** (gives the two values
+> for step 1). After the deletion date: customer page → **Delete** (removes their app, database and login;
+> type `delete NAME` to confirm). Then remove them from your password manager list.
 1. Before the deletion date (end + 30 days) they can ask for an export. With their direct URL and
    key (section 2), write readable CSV files (one per table; a raw database dump would be encrypted):
    ```bash

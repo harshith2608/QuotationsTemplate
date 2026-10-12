@@ -11,6 +11,8 @@ are skipped unless these are set to two EMPTY throwaway databases:
     TEST_PG_URL         trials database
     TEST_PG_TARGET_URL  "dedicated" database used by `trial convert`
 Never point these at a real database: the checks create and delete data.
+The paying-customer checks need a REAL PostgreSQL (they create databases and logins):
+    TEST_REAL_PG_ADMIN_URL  e.g. postgresql://owner:pw@127.0.0.1:55460/neondb (role with CREATEDB + CREATEROLE)
 """
 import os
 import subprocess
@@ -29,6 +31,7 @@ SETUP = {
     'legal_checks': 'seed', 'plan_checks': 'seed', 'settings_checks': 'seed', 'smoke_checks': 'seed',
     'stage_checks': 'seed', 'totals_checks': 'seed', 'webhook_checks': 'seed',
     'encryption_checks': 'seed', 'leads_checks': 'seed', 'lock_checks': 'bootstrap', 'tenant_checks': 'postgres', 'console_checks': 'postgres',
+    'customers_checks': 'realpg',
 }
 
 # env vars from the developer's shell/.env that would change app behaviour
@@ -59,7 +62,20 @@ def test_every_check_script_is_registered():
 @pytest.mark.parametrize('module', sorted(SETUP))
 def test_checks(module, tmp_path):
     kind = SETUP[module]
-    if kind == 'postgres':
+    if kind == 'realpg':
+        admin = os.environ.get('TEST_REAL_PG_ADMIN_URL')
+        if not admin:
+            pytest.skip('set TEST_REAL_PG_ADMIN_URL (a real PostgreSQL role with CREATEDB + CREATEROLE) '
+                        'to run the paying-customer checks')
+        import psycopg2
+        conn = psycopg2.connect(admin); conn.autocommit = True
+        with conn.cursor() as cur:                    # fresh console/trials database for this run
+            cur.execute('DROP DATABASE IF EXISTS qr_console_test WITH (FORCE)')
+            cur.execute("CREATE DATABASE qr_console_test ENCODING 'UTF8' TEMPLATE template0")
+        conn.close()
+        console_url = admin.rsplit('/', 1)[0] + '/qr_console_test'
+        env = _env(console_url, TEST_REAL_PG_ADMIN_URL=admin)
+    elif kind == 'postgres':
         url, target = os.environ.get('TEST_PG_URL'), os.environ.get('TEST_PG_TARGET_URL')
         if not (url and target):
             pytest.skip('set TEST_PG_URL and TEST_PG_TARGET_URL to run the Postgres trials checks')

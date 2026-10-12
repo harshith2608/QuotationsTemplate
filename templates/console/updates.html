@@ -1,0 +1,33 @@
+{% extends "console/_layout.html" %}
+{% block title %}Database updates{% endblock %}
+{% block content %}
+<h1>Database updates</h1>
+<p class="muted small">When an update to the app changes the database (the "Shipping an update" check in OPERATIONS.md section 7
+  lists files), run this <strong>before</strong> merging it to <span class="mono">main</span>. It's always safe to run: databases that are already
+  up to date are left as they are. Latest version: <span class="mono">{{ head }}</span>.</p>
+
+{% if results %}
+<h2>Results</h2>
+<div class="card"><table>
+  {% for label, ok, msg in results %}
+  <tr><td><strong>{{ label }}</strong></td><td><span class="badge {{ 'b-active' if ok else 'b-due' }}">{{ 'ok' if ok else 'failed' }}</span></td><td class="small">{{ msg }}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<h2>Databases</h2>
+<div class="card stack">
+  <form method="post" data-confirm="Update every database now?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="target" value="all">
+    <button class="btn btn-primary" type="submit">Update all ({{ targets|length }})</button>
+  </form>
+  <table>
+    {% for key, label in targets %}
+    <tr><td>{{ label }}</td><td style="text-align:right">
+      <form method="post" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="target" value="{{ key }}"><button class="btn btn-sm" type="submit">Update</button></form></td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

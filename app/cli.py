@@ -229,22 +229,12 @@ def register_cli(app):
         """Renew: add 6m, 1y, 7d… Extends from the current end date if still within grace, else from today."""
         _refuse_on_trials_db()
         from . import db
-        status = plan_mod.load_status(on=plan_mod.today())
         try:
-            plan_mod.parse_length(length)
+            status = plan_mod.renew(length, plan_name)
         except ValueError as exc:
             raise click.ClickException(str(exc))
-        today = plan_mod.today()
-        if status.has_limit and today <= status.grace_until:
-            base = status.ends_on          # renewing on time: no days lost
-        else:
-            base = today                   # late renewal (or no plan yet): start fresh
-        key = length.strip().lower()
-        # 6m / 1y renewals become that plan (incl. converting a trial); other lengths keep the current plan
-        new_plan = plan_name or {'6m': '6m', '1y': '1y', '12m': '1y'}.get(key) or status.plan or 'custom'
-        plan_mod.save_plan(new_plan, base, plan_mod.add_length(base, length))
         db.session.commit()
-        _show(plan_mod.load_status(on=today))
+        _show(status)
 
     @plan_group.command('clear')
     def plan_clear():
@@ -315,22 +305,8 @@ def register_cli(app):
     @trial_group.command('migrate-all')
     def trial_migrate_all():
         """Apply database updates to every active trial schema."""
-        from . import tenancy
         _need_postgres()
-        tenancy.ensure_registry()
-        failed = []
-        for r in tenancy.registry_rows():
-            if r['status'] != 'active':
-                continue
-            click.echo(f'→ {r["slug"]} ({r["schema_name"]})')
-            try:
-                _migrate_schema(r['schema_name'])
-                from .seed import encrypt_existing_data
-                with tenancy.tenant_context(r['slug'], r['schema_name']):
-                    click.echo('  ' + encrypt_existing_data())
-            except Exception as exc:              # keep going; report at the end
-                failed.append(r['slug'])
-                click.echo(f'  FAILED: {exc}')
+        failed = ops.migrate_all_trials(log=click.echo)
         if failed:
             raise click.ClickException(f'Migration failed for: {", ".join(failed)}')
         click.echo('All trial schemas are up to date.')
@@ -358,75 +334,12 @@ def register_cli(app):
                   hide_input=True, help='The customer project\'s own DATA_ENCRYPTION_KEY (asked if not given).')
     def trial_convert(slug, target_url, plan_name, to_key):
         """Copy a trial into the customer's own (new, migrated, empty) database and start their paid plan."""
-        from sqlalchemy import create_engine, inspect, text
-        from . import crypto, db, tenancy
-        from .models import AppSetting
-        _need_postgres()
+        from . import tenancy
         try:
-            crypto.validate_key(to_key)
-        except crypto.EncryptionError as exc:
-            raise click.ClickException(f'--to-key: {exc}')
-        if not crypto.enabled():
-            raise click.ClickException(f'Set {crypto.ENV} to the trials project\'s key so the trial data can be read.')
-        tenancy.ensure_registry()
-        with db.engine.connect() as conn:
-            row = conn.execute(text('SELECT schema_name, status FROM public.tenants WHERE slug = :s'), {'s': slug}).first()
-        if not row:
-            raise click.ClickException(f'No trial named "{slug}".')
-        schema = row[0]
-
-        url = target_url.strip()
-        if url.startswith('postgres://'):
-            url = url.replace('postgres://', 'postgresql+psycopg2://', 1)
-        elif url.startswith('postgresql://'):
-            url = url.replace('postgresql://', 'postgresql+psycopg2://', 1)
-        target = create_engine(url)
-        tables = db.metadata.sorted_tables
-        with target.connect() as tc:
-            names = set(inspect(tc).get_table_names())
-            missing = [t.name for t in tables if t.name not in names]
-            if missing or 'alembic_version' not in names:
-                raise click.ClickException('The new database isn\'t set up yet. Run first:\n'
-                                           f'  DATABASE_URL="<new-direct-url>" flask db upgrade')
-            if tc.execute(text('SELECT COUNT(*) FROM users')).scalar():
-                raise click.ClickException('The new database already has users. Use an empty database.')
-
-        copied = {}
-        with tenancy.tenant_context(slug, schema):
-            src = db.session.connection()                 # schema-mapped to the trial
-            with target.begin() as tc:
-                for table in tables:
-                    # Read decrypts with the trials key; insert re-encrypts with the customer's own key
-                    rows = [dict(r) for r in src.execute(table.select()).mappings()]
-                    if table.name == 'app_settings':
-                        for r in rows:
-                            if r['key'] in AppSetting.ENCRYPTED_KEYS and r['value']:
-                                plain = crypto.decrypt(r['value'])
-                                with crypto.using_key(to_key):
-                                    r['value'] = crypto.encrypt(plain)
-                    if rows:
-                        with crypto.using_key(to_key):
-                            tc.execute(table.insert(), rows)
-                    copied[table.name] = len(rows)
-                # Continue id sequences after the copied rows
-                for table in tables:
-                    if 'id' in table.c and table.c.id.primary_key:
-                        tc.execute(text(
-                            f"SELECT setval(pg_get_serial_sequence('\"{table.name}\"', 'id'), "
-                            f"COALESCE((SELECT MAX(id) FROM \"{table.name}\"), 1), "
-                            f"(SELECT MAX(id) FROM \"{table.name}\") IS NOT NULL)"))
-                # Start the paid plan in the new database
-                start = plan_mod.today()
-                end = plan_mod.add_length(start, plan_name)
-                for key, value in ((plan_mod.PLAN_KEY, plan_name), (plan_mod.STARTED_KEY, start.isoformat()),
-                                   (plan_mod.ENDS_KEY, end.isoformat())):
-                    tc.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': key})
-                    tc.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'), {'k': key, 'v': value})
-            db.session.rollback()
-        with db.engine.begin() as conn:
-            conn.execute(text("UPDATE public.tenants SET status = 'converted', converted_at = (now() AT TIME ZONE 'utc') "
-                              "WHERE slug = :s"), {'s': slug})
-        tenancy.clear_cache()
+            copied, start, end = ops.copy_trial(slug, target_url, to_key, plan_name)
+        except ops.OpsError as exc:
+            raise click.ClickException(str(exc))
+        ops.mark_converted(slug)
         click.echo('Copied: ' + ', '.join(f'{k} {v}' for k, v in copied.items() if v))
         click.echo(f'Paid plan {plan_name} runs {start.strftime("%d %b %Y")} – {end.strftime("%d %b %Y")}.')
         click.echo(f'Next: move {slug}.{tenancy.base_domain() or "<domain>"} from the trials project to the customer\'s '
