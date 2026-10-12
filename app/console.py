@@ -181,7 +181,8 @@ def _headers(resp):
     resp.headers['Cache-Control'] = 'no-store'
     resp.headers['X-Frame-Options'] = 'DENY'
     resp.headers['X-Content-Type-Options'] = 'nosniff'
-    resp.headers['Referrer-Policy'] = 'no-referrer'
+    # same-origin, not no-referrer: Flask-WTF's HTTPS CSRF check needs the Referer on our own form posts
+    resp.headers['Referrer-Policy'] = 'same-origin'
     resp.headers['X-Robots-Tag'] = 'noindex, nofollow'
     return resp
 

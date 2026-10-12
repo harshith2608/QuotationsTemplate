@@ -139,6 +139,14 @@ ok('sign-in locks after 5 failures in 15 minutes', 'Sign-in is locked' in r.text
 # CSRF is enforced on the real config
 app_csrf = create_app('development'); cc = app_csrf.test_client()
 ok('forms need a CSRF token', cc.post('/login', data={'password': 'x', 'code': '1'}).status_code == 400)
+# Over HTTPS Flask-WTF also checks the Referer, so the console must not suppress it on its own pages
+hs = app_csrf.test_client()
+r = hs.get('/login', base_url='https://ops.quote-room.test')
+ok('Referrer-Policy keeps same-origin referrers (needed for HTTPS form posts)', r.headers.get('Referrer-Policy') == 'same-origin')
+tok = re.search(r'name="csrf_token" value="([^"]+)"', r.text).group(1)
+r = hs.post('/login', base_url='https://ops.quote-room.test', data={'csrf_token': tok, 'password': 'x', 'code': '123456'},
+            headers={'Referer': 'https://ops.quote-room.test/login'})
+ok('HTTPS sign-in form post passes CSRF (with same-origin Referer)', r.status_code == 200 and ('Wrong password or code' in r.text or 'Sign-in is locked' in r.text))
 
 # Console needs its secrets in production
 import subprocess, sys
