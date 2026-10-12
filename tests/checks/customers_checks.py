@@ -26,6 +26,7 @@ class FakeVercel:
     def __init__(self):
         self.projects, self.domains, self.deploys, self.deleted, self.state = {}, [], [], [], 'BUILDING'
         self.fail_create = 0
+        self.domain_owner, self.released = {}, []
     def get_project(self, name):
         p = self.projects.get(name) or next((p for p in self.projects.values() if p['id'] == name), None)
         return dict(p) if p else None
@@ -39,7 +40,15 @@ class FakeVercel:
         self.deploys.append((pid, repo_id, ref)); return 'dpl_1'
     def latest_deployment(self, pid):
         return self.state, 'x.vercel.app'
-    def add_domain(self, project, domain):
+    def add_domain(self, project, domain, release_from=None):
+        owner = self.domain_owner.get(domain)
+        if owner and owner != project:
+            if release_from and owner == release_from:
+                self.domain_owner.pop(domain); self.released.append((release_from, domain))
+            else:
+                raise providers.ProviderError(f'{domain} is attached to another Vercel project. Remove it there '
+                                              '(Project → Settings → Domains), then press Retry.')
+        self.domain_owner[domain] = project
         self.domains.append((project, domain))
     def delete_project(self, pid):
         self.deleted.append(pid)
@@ -48,7 +57,7 @@ class FakeVercel:
         return dict(p['env'])
 
 
-for leftover in ('sharma', 'acme', 'beta'):           # from an earlier interrupted run
+for leftover in ('sharma', 'acme', 'beta', 'legacy'):           # from an earlier interrupted run
     providers.CustomerDatabases(ADMIN).drop(leftover)
 
 fake = FakeVercel()
@@ -194,6 +203,26 @@ c.post('/customers/acme/unlock', data={'fields': ['name']})
 with app.app_context():
     ok('unlock works on customer apps', 'name' not in cust.locked_fields('acme'))
 
+# An address added by hand to another project (before the wildcard): clear error, no silent "success"
+with app.app_context():
+    ops.create_trial('legacy', 'admin', 'legacy-pass-123', 7)
+fake.domain_owner['legacy.quote-room.test'] = 'prj_some-other-project'
+c.post('/customers', data={'source': 'trial', 'trial': 'legacy', 'name': 'Legacy', 'plan': '6m'})
+c.get('/customers/legacy')
+with app.app_context():
+    row = cust.get('legacy')
+    with db.engine.connect() as conn:
+        tstatus = conn.execute(text("select status from public.tenants where slug='legacy'")).scalar()
+ok('address held by another project → setup stops with a clear message; trial NOT marked converted',
+   row['status'] == 'failed' and 'attached to another Vercel project' in row['error'] and tstatus == 'active')
+os.environ['VERCEL_TRIALS_PROJECT'] = 'prj_some-other-project'
+c.post('/customers/legacy/retry')
+with app.app_context():
+    row = cust.get('legacy')
+ok('with VERCEL_TRIALS_PROJECT set, Retry moves the address from the trials project and finishes',
+   row['status'] == 'active' and ('prj_some-other-project', 'legacy.quote-room.test') in fake.released
+   and fake.domain_owner['legacy.quote-room.test'] == 'prj_qr-legacy')
+
 # Failure + retry
 fake.fail_create = 1
 c.post('/customers', data={'source': 'new', 'slug': 'beta', 'name': 'Beta', 'plan': '6m'})
@@ -229,6 +258,6 @@ ok('activity log has the customer actions', all(w in t for w in ['customer creat
 
 # Leave the server tidy
 eng.dispose()
-for slug in ('sharma', 'beta'):
+for slug in ('sharma', 'beta', 'legacy'):
     with app.app_context():
         providers.CustomerDatabases(ADMIN).drop(slug)

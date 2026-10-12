@@ -362,6 +362,7 @@ that with one button, and its **Updates** page updates every database before you
    | `CUSTOMERS_ADMIN_DATABASE_URL` | from step 1 (direct, pooling OFF) |
    | `VERCEL_TOKEN` | from step 2 |
    | `VERCEL_TEAM_ID` | from step 3 |
+   | `VERCEL_TRIALS_PROJECT` | the trials project's Vercel name, e.g. `quotations-template-sg2v` (lets the console move a trial address that was added to it by hand) |
    | `CONSOLE_VAULT_KEY` | from step 4 |
    | `SUPPORT_WHATSAPP` | your number, digits only (passed on to every customer app) |
    | `VERCEL_GIT_REPO` | `harshith2608/QuotationsTemplate` (optional; this is the default) |

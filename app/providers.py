@@ -187,12 +187,38 @@ class Vercel:
             raise
         return {'id': p['id'], 'name': p['name'], 'repo_id': (p.get('link') or {}).get('repoId')}
 
-    def add_domain(self, project, domain):
+    def project_has_domain(self, project, domain):
+        try:
+            self._call('GET', f'/v9/projects/{urllib.parse.quote(project)}/domains/{urllib.parse.quote(domain)}')
+            return True
+        except ProviderError as exc:
+            if '404' in str(exc):
+                return False
+            raise
+
+    def remove_domain(self, project, domain):
+        try:
+            self._call('DELETE', f'/v9/projects/{urllib.parse.quote(project)}/domains/{urllib.parse.quote(domain)}')
+        except ProviderError as exc:
+            if '404' not in str(exc):
+                raise
+
+    def add_domain(self, project, domain, release_from=None):
+        """Attach the domain to `project`. If it's still attached to `release_from` (e.g. a trial address added by
+        hand to the trials project before the wildcard existed), move it from there. Verifies it landed."""
+        if self.project_has_domain(project, domain):
+            return
+        if release_from and self.project_has_domain(release_from, domain):
+            self.remove_domain(release_from, domain)
         try:
             self._call('POST', f'/v10/projects/{urllib.parse.quote(project)}/domains', {'name': domain})
         except ProviderError as exc:
-            if 'already' not in str(exc).lower():      # already on this project: fine
-                raise
+            if 'already' in str(exc).lower():
+                raise ProviderError(f'{domain} is attached to another Vercel project. Remove it there '
+                                    '(Project → Settings → Domains), then press Retry.') from None
+            raise
+        if not self.project_has_domain(project, domain):
+            raise ProviderError(f'Vercel accepted {domain} but it isn\'t on the project. Check Settings → Domains, then Retry.')
 
     def deploy(self, project_id, project_name, repo_id, ref='main'):
         """Start a production deployment of the repo's branch. Returns the deployment id."""

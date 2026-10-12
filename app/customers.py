@@ -357,7 +357,7 @@ def _step_domain(row, log):
         raise CustomerError(f'The first build {state.lower()}. Open the project in Vercel to see why, then Retry.')
     if state != 'READY':
         return False
-    v.add_domain(row['vercel_project_id'], domain_for(row['slug']))
+    v.add_domain(row['vercel_project_id'], domain_for(row['slug']), release_from=_env('VERCEL_TRIALS_PROJECT') or None)
     if row['source_trial']:
         ops.mark_converted(row['source_trial'])          # the trials app stops serving it
     log('Address connected.')
