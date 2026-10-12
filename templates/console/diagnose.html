@@ -1,0 +1,26 @@
+{% extends "console/_layout.html" %}
+{% block title %}Diagnose {{ row.slug }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('console.customer_detail', slug=row.slug) }}">← {{ row.name }}</a></p>
+<h1>Diagnose: {{ row.slug }}</h1>
+<div class="card stack">
+  <form method="post" class="row" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grow"><label for="pw">Password to test <span class="muted">(optional: the one that didn't work)</span></label>
+      <input id="pw" name="password" type="password" autocomplete="off"></div>
+    <button class="btn btn-primary" type="submit">Run checks</button>
+  </form>
+  <p class="muted small">Reads the app's settings from Vercel and the customer's database. Nothing is changed.</p>
+</div>
+{% if checks %}
+<h2>Results</h2>
+<div class="card"><table>
+  {% for label, ok, detail in checks %}
+  <tr><td>{{ label }}</td>
+      <td>{% if ok is sameas true %}<span class="badge b-active">ok</span>{% elif ok is sameas false %}<span class="badge b-due">problem</span>{% else %}<span class="badge b-other">?</span>{% endif %}</td>
+      <td class="small mono" style="word-break:break-all">{{ detail }}</td></tr>
+  {% endfor %}
+</table></div>
+<p class="muted small">Send these results to support if unsure (they contain no passwords or keys).</p>
+{% endif %}
+{% endblock %}

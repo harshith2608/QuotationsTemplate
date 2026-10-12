@@ -209,6 +209,15 @@ class Vercel:
             return None, None
         return items[0].get('state') or items[0].get('readyState'), items[0].get('url')
 
+    def get_env(self, project_id):
+        """{key: value or None} of the project's production env vars (values decrypted where Vercel allows)."""
+        d = self._call('GET', f'/v9/projects/{urllib.parse.quote(project_id)}/env?decrypt=true')
+        out = {}
+        for e in d.get('envs') or []:
+            if 'production' in (e.get('target') or []):
+                out[e['key']] = e.get('value') if e.get('decrypted', True) else None
+        return out
+
     def delete_project(self, id_or_name):
         try:
             self._call('DELETE', f'/v9/projects/{urllib.parse.quote(id_or_name)}')

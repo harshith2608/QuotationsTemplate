@@ -112,6 +112,8 @@
     <button class="btn btn-sm" type="submit">Show connection details</button>
     <span class="muted">For a data export or an emergency fix from your Mac.</span>
   </form>
+  <div><a class="btn btn-sm" href="{{ url_for('console.customer_diagnose', slug=row.slug) }}">Diagnose</a>
+    <span class="muted">When the app doesn't behave as expected (e.g. a reset password doesn't work).</span></div>
 </div>
 {% endif %}
 

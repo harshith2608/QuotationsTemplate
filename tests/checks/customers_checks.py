@@ -43,6 +43,9 @@ class FakeVercel:
         self.domains.append((project, domain))
     def delete_project(self, pid):
         self.deleted.append(pid)
+    def get_env(self, pid):
+        p = next(p for p in self.projects.values() if p['id'] == pid)
+        return dict(p['env'])
 
 
 for leftover in ('sharma', 'acme', 'beta'):           # from an earlier interrupted run
@@ -170,6 +173,14 @@ m2 = re.search(r'Password:</strong> <span class="secret">([^<]+)</span>', r.text
 with create_engine(s2['direct_url'].replace('postgresql://', 'postgresql+psycopg2://')).connect() as conn:
     h2 = conn.execute(text("select password_hash from users where username='boss'")).scalar()
 ok('reset admin password works', m2 and check_password_hash(h2, m2.group(1)) and not check_password_hash(h2, m.group(1)))
+r = c.post('/customers/acme/diagnose', data={'password': m2.group(1)})
+ok('Diagnose: same database, settings present, password matches', r.text.count('>problem<') == 0
+   and 'App uses the same database' in r.text and 'yes, for boss' in r.text and m2.group(1) not in r.text)
+fake.projects['qr-acme']['env']['DATABASE_URL'] = 'postgresql://someone:pw@other-host/otherdb'
+r = c.post('/customers/acme/diagnose', data={'password': 'wrong-password'})
+ok('Diagnose flags a different app database and a non-matching password', r.text.count('>problem<') == 2
+   and 'someone @ other-host / otherdb' in r.text and 'no admin has this password' in r.text)
+fake.projects['qr-acme']['env']['DATABASE_URL'] = s2['app_url']
 with app.app_context():
     with cust.open_customer('acme'):
         AppSetting.set('company_name', 'Acme Interiors'); db.session.commit()

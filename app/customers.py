@@ -439,6 +439,62 @@ def unlock_company(slug, fields):
         db.session.commit()
 
 
+def _url_identity(url):
+    """'user @ host / database' without the password, for comparing connection URLs."""
+    import urllib.parse
+    if not url:
+        return None
+    p = urllib.parse.urlsplit(ops.normalize_url(url).replace('postgresql+psycopg2://', 'postgresql://'))
+    host = (p.hostname or '').replace('-pooler.', '.', 1)
+    return f'{p.username} @ {host} / {p.path.lstrip("/")}'
+
+
+def diagnose(slug, password=None):
+    """Checks for "the app doesn't behave as the console expects". Returns [(label, ok, detail)]."""
+    from werkzeug.security import check_password_hash
+    from .models import User
+    row = get(slug)
+    s = unseal(row['secrets']) if row and row['secrets'] else {}
+    out = []
+    expected = _url_identity(s.get('direct_url'))
+    out.append(('Console writes to', True, expected or '—'))
+    try:
+        env = providers.vercel().get_env(row['vercel_project_id'])
+    except Exception as exc:
+        out.append(('Read the app\'s Vercel settings', False, str(exc)))
+        env = None
+    if env is not None:
+        need = ['FLASK_ENV', 'SECRET_KEY', 'DATABASE_URL', 'DATA_ENCRYPTION_KEY']
+        missing = [k for k in need if k not in env]
+        out.append(('App settings present', not missing, 'missing: ' + ', '.join(missing) if missing else ', '.join(sorted(env))))
+        out.append(('App runs in production mode', env.get('FLASK_ENV') == 'production', env.get('FLASK_ENV') or 'not set'))
+        app_db = env.get('DATABASE_URL')
+        if app_db is None and 'DATABASE_URL' in env:
+            out.append(('App database', None, 'Vercel won\'t reveal the value (sensitive variable); can\'t compare'))
+        else:
+            got = _url_identity(app_db)
+            out.append(('App uses the same database', got == expected, got or 'not set'))
+        out.append(('App has the customer\'s encryption key', env.get('DATA_ENCRYPTION_KEY') in (None, s.get('data_key')),
+                    'matches' if env.get('DATA_ENCRYPTION_KEY') == s.get('data_key') else
+                    ('hidden by Vercel' if env.get('DATA_ENCRYPTION_KEY') is None else 'DIFFERENT key')))
+    try:
+        state, url = providers.vercel().latest_deployment(row['vercel_project_id'])
+        out.append(('Latest build', state == 'READY', f'{state} ({url})'))
+    except Exception as exc:
+        out.append(('Latest build', False, str(exc)))
+    try:
+        with open_customer(slug):
+            admins = User.query.filter_by(role='admin').order_by(User.id).all()
+            out.append(('Admin users in the customer database', bool(admins), ', '.join(u.username for u in admins) or 'none'))
+            if password:
+                hit = [u.username for u in admins if check_password_hash(u.password_hash, password)]
+                out.append(('That password matches in the database', bool(hit),
+                            f'yes, for {", ".join(hit)}' if hit else 'no admin has this password'))
+    except Exception as exc:
+        out.append(('Open the customer database', False, str(exc)))
+    return out
+
+
 def delete(slug):
     """Delete the customer's Vercel project, database and login. The registry keeps a record without secrets."""
     row = get(slug)

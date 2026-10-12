@@ -662,6 +662,17 @@ def customer_reveal(slug):
     return render_template('console/reveal.html', row=row, direct_url=s['direct_url'], data_key=s['data_key'])
 
 
+@console_bp.route('/customers/<slug>/diagnose', methods=['GET', 'POST'])
+@login_required
+def customer_diagnose(slug):
+    row = _customer_or_404(slug)
+    checks = None
+    if request.method == 'POST':
+        checks = _customers().diagnose(slug, request.form.get('password') or None)
+        audit('customer_diagnose', slug)
+    return render_template('console/diagnose.html', row=row, checks=checks)
+
+
 # ── Database updates ─────────────────────────────────────────────────────────
 
 @console_bp.route('/updates', methods=['GET', 'POST'])
