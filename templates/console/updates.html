@@ -2,9 +2,9 @@
 {% block title %}Database updates{% endblock %}
 {% block content %}
 <h1>Database updates</h1>
-<p class="muted small">When an update to the app changes the database (the "Shipping an update" check in OPERATIONS.md section 7
-  lists files), run this <strong>before</strong> merging it to <span class="mono">main</span>. It's always safe to run: databases that are already
-  up to date are left as they are. Latest version: <span class="mono">{{ head }}</span>.</p>
+<p class="muted small">Run this after an update that changes the database has been deployed (OPERATIONS.md section 7).
+  This console only knows about database changes once it is running the new code. It's always safe to run: databases that are
+  already up to date are left as they are. Latest version known to this console: <span class="mono">{{ head }}</span>.</p>
 
 {% if results %}
 <h2>Results</h2>
