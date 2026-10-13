@@ -358,7 +358,7 @@ def scene_quote(t, d):
     paste_center(f, pdf_card(t, d), W / 2 + (1 - pe) * 80, 1040, alpha=pe)
     if t > d - 1.7:
         s = back_out((t - (d - 1.7)) / 0.45)
-        pill(f, 'Sent on WhatsApp', W / 2, 1585, W_, (18, 140, 80), size=50, scale=0.6 + 0.4 * s,
+        pill(f, 'Sent to client', W / 2, 1585, W_, (18, 140, 80), size=50, scale=0.6 + 0.4 * s,
              alpha=clamp(s), icon='check')
     return f
 
@@ -391,15 +391,74 @@ def frame_at(T):
     return img.convert('RGB')
 
 
+def make_music(seconds, path, rate=48000):
+    """A gentle ambient bed composed here (so it's free to use in ads): warm chords + soft plucks, 96 bpm.
+    Fmaj7 → Am7 → Dm7 → Cmaj7, one chord per bar."""
+    import numpy as np
+    n = int(seconds * rate)
+    t = np.arange(n) / rate
+    out = np.zeros(n)
+    bar = 60 / 96 * 4
+    chords = [  # (bass, pad notes) in Hz
+        (87.31, [174.61, 220.00, 261.63, 329.63]),   # Fmaj7
+        (110.00, [220.00, 261.63, 329.63, 392.00]),  # Am7
+        (73.42, [146.83, 174.61, 220.00, 261.63]),   # Dm7
+        (65.41, [130.81, 164.81, 196.00, 246.94]),   # Cmaj7
+    ]
+    rng = np.random.default_rng(7)
+    for b in range(int(seconds / bar) + 2):
+        bass, notes = chords[b % 4]
+        t0, t1 = b * bar, (b + 1) * bar + 0.9                   # overlap into the next bar = smooth changes
+        i0, i1 = max(0, int(t0 * rate)), min(n, int(t1 * rate))
+        if i0 >= n:
+            break
+        tt = t[i0:i1] - t0
+        env = np.minimum(1, tt / 0.7) * np.minimum(1, (t1 - t0 - tt) / 0.9)   # slow attack, soft release
+        pad = sum(np.sin(2 * np.pi * f * (1 + d) * tt + rng.uniform(0, 6.28)) * (0.55 if k else 0.8)
+                  for k, f in enumerate(notes) for d in (-0.0015, 0.0015)) / 8
+        pad += 0.25 * sum(np.sin(2 * np.pi * 2 * f * tt) for f in notes) / 8       # a little shimmer
+        out[i0:i1] += env * (0.55 * pad + 0.35 * np.sin(2 * np.pi * bass * tt))
+        step = bar / 8                                               # soft eighth-note plucks
+        for k in range(8):
+            if k in (3, 7):
+                continue                                             # leave space, don't fill every step
+            f = notes[[0, 2, 1, 3, 2, 0, 3, 1][k]] * 2
+            s0 = int((t0 + k * step) * rate)
+            if s0 >= n:
+                break
+            m = min(n - s0, int(1.2 * rate))
+            pt = np.arange(m) / rate
+            pluck = (np.sin(2 * np.pi * f * pt) + 0.18 * np.sin(2 * np.pi * 3 * f * pt)) * np.exp(-pt / 0.32)
+            out[s0:s0 + m] += 0.10 * pluck * np.minimum(1, pt / 0.004)
+    # gentle low-pass (one-pole) to keep it warm, then fades
+    y = np.empty_like(out); a = 0.18; acc = 0.0
+    for i, v in enumerate(out):
+        acc += a * (v - acc); y[i] = acc
+    y *= np.minimum(1, t / 1.0) * np.minimum(1, (seconds - t) / 1.8)
+    y = y / (np.abs(y).max() + 1e-9) * 0.5
+    with wave.open(path, 'wb') as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+        w.writeframes((y * 32767).astype('<i2').tobytes())
+    return path
+
+
+MUSIC_LEVEL = 0.16        # music under the voice (it also ducks further while someone is speaking)
+
+
 def render(path, size=(W, H), crop_to=None):
     audio = make_audio() if RECORDED else make_tts_audio()
     n = int(math.ceil(TOTAL * FPS))
     out_w, out_h = crop_to or size
+    music = make_music(TOTAL + 0.5, os.path.join(OUT, 'music.wav'))
+    voice_fx = 'highpass=f=75,acompressor=threshold=-20dB:ratio=2.5:attack=5:release=150,' if RECORDED else ''
+    mix = (f'[1:a]{voice_fx}asplit=2[v][sc];'
+           f'[2:a]volume={MUSIC_LEVEL}[m];'
+           '[m][sc]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[md];'
+           '[v][md]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5,aresample=48000[a]')
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{out_w}x{out_h}',
-           '-r', str(FPS), '-i', '-', '-i', audio, '-c:v', 'libx264', '-preset', 'medium', '-crf', '17',
-           '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-af', ('highpass=f=75,acompressor=threshold=-20dB:ratio=2.5:attack=5:release=150,' if RECORDED else '')
-           + 'loudnorm=I=-16:TP=-1.5', '-ar', '48000',
-           '-shortest', '-movflags', '+faststart', path]
+           '-r', str(FPS), '-i', '-', '-i', audio, '-i', music, '-filter_complex', mix,
+           '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'medium', '-crf', '17',
+           '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-shortest', '-movflags', '+faststart', path]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for k in range(n):
         img = frame_at(k / FPS)
