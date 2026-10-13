@@ -62,7 +62,7 @@ LINES = [
     'Still sending quotations days after the site visit?',
     'With Quote Room, measure each room in feet and inches, right on your phone.',
     'Your rates are applied instantly, and every payment is tracked.',
-    'Send a detailed, branded quotation on WhatsApp, before you leave the site.',
+    'Send a detailed quotation to your client, immediately after measurements.',
     'Quote Room. Start your free seven-day trial today.',
 ]
 
@@ -297,7 +297,7 @@ def pdf_card(t, d):
 
 def scene_quote(t, d):
     f = BG.copy().convert('RGBA')
-    draw_lines(f, [[('A ', PAPER), ('detailed', TAPE), (', branded', PAPER)], [('quotation, every time', PAPER)]], 190, 74, t, step=0.12)
+    draw_lines(f, [[('Send a ', PAPER), ('detailed quotation', TAPE)], [('right after measuring', PAPER)]], 200, 64, t, step=0.12)
     pe = ease_out(t / 0.5)
     paste_center(f, pdf_card(t, d), W / 2 + (1 - pe) * 80, 1040, alpha=pe)
     if t > d - 1.7:
