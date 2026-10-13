@@ -77,15 +77,71 @@ def make_voice():
             clips.append((wav, w.getnframes() / w.getframerate()))
     return clips
 
-clips = make_voice()
+# ── recorded voice-over (a real recording instead of `say`) ──
+# Parts of the recording (seconds, from silence detection) → scene, with the gap to leave before each part.
+RECORDING_PARTS = [  # (scene, start, end, gap_before)
+    (0, 0.00, 2.27, 0.00),    # Still sending quotations days after the site visit?
+    (1, 2.86, 6.18, 0.45),    # Type the measurements on site, QuoteRoom does the math instantly.
+    (2, 6.70, 8.27, 0.40),    # Your rates are applied instantly,
+    (2, 8.67, 10.09, 0.30),   # and every payment is tracked.
+    (3, 10.62, 12.37, 0.45),  # Send a detailed quotation to your client
+    (3, 12.74, 15.98, 0.06),  # immediately after the measurements before you even leave the site.  (pause removed)
+    (4, 16.50, 19.05, 0.50),  # QuoteRoom. Start your free seven-day trial today.
+]
+RECORDED = VOICE.lower().endswith(('.m4a', '.wav', '.mp3', '.aac', '.aiff'))
+
+def load_recording(path):
+    wav = os.path.join(OUT, 'recording.wav')
+    subprocess.run([FFMPEG, '-y', '-loglevel', 'error', '-i', path, '-ar', '48000', '-ac', '1', wav], check=True)
+    with wave.open(wav) as w:
+        return array.array('h', w.readframes(w.getnframes())), w.getframerate()
+
+if RECORDED:
+    REC, RATE = load_recording(VOICE)
+    PAD_IN, PAD_OUT = 0.06, 0.12                  # keep soft consonants at the cut points
+    placed, cursor = [], 0.25                     # (scene, time in video, samples)
+    for i, (scene, a, b, gap) in enumerate(RECORDING_PARTS):
+        lo = a - PAD_IN if i == 0 else max(a - PAD_IN, RECORDING_PARTS[i - 1][2] + 0.02)
+        hi = b + PAD_OUT if i == len(RECORDING_PARTS) - 1 else min(b + PAD_OUT, RECORDING_PARTS[i + 1][1] - 0.02)
+        lo = max(lo, 0.0)
+        seg = REC[int(lo * RATE):int(hi * RATE)]
+        fade = int(0.012 * RATE)                  # 12 ms fades: no clicks at the cuts
+        for k in range(min(fade, len(seg))):
+            seg[k] = int(seg[k] * k / fade)
+            seg[-1 - k] = int(seg[-1 - k] * k / fade)
+        cursor += gap if i else 0.0
+        placed.append((scene, cursor, seg))
+        cursor += len(seg) / RATE
+    first = {}
+    for scene, at, _ in placed:
+        first.setdefault(scene, at)
+    starts = [0.0] + [first[k] - 0.25 for k in range(1, 5)]
+    TOTAL = cursor + 1.3
+    durs = [starts[k + 1] - starts[k] for k in range(4)] + [TOTAL - starts[4]]
+    print('recording', VOICE, 'scene durations', [round(d, 2) for d in durs], 'total', round(TOTAL, 2))
+
+    def make_audio():
+        total = int(TOTAL * RATE) + RATE // 2
+        mix = array.array('h', [0]) * total
+        for _, at, seg in placed:
+            off = int(at * RATE)
+            n = max(0, min(len(seg), total - off))
+            mix[off:off + n] = seg[:n]
+        path = os.path.join(OUT, 'voice_track.wav')
+        with wave.open(path, 'wb') as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE); w.writeframes(mix.tobytes())
+        return path
+
+clips = [] if RECORDED else make_voice()
 LEAD = 0.25                                  # silence before each line within its scene
 TAIL = [0.3, 0.35, 0.3, 0.75, 1.1]          # breathing room after each line
-durs = [LEAD + d + t for (_, d), t in zip(clips, TAIL)]
-starts = [sum(durs[:i]) for i in range(len(durs))]
-TOTAL = sum(durs)
-print('voice', VOICE, 'scene durations', [round(d, 2) for d in durs], 'total', round(TOTAL, 2))
+if not RECORDED:
+    durs = [LEAD + d + t for (_, d), t in zip(clips, TAIL)]
+    starts = [sum(durs[:i]) for i in range(len(durs))]
+    TOTAL = sum(durs)
+    print('voice', VOICE, 'scene durations', [round(d, 2) for d in durs], 'total', round(TOTAL, 2))
 
-def make_audio():
+def make_tts_audio():
     rate = 48000
     total = int(TOTAL * rate) + rate // 2
     mix = array.array('h', [0]) * total
@@ -256,7 +312,7 @@ def scene_hook(t, d):
 
 def scene_measure(t, d):
     f = BG.copy().convert('RGBA')
-    draw_lines(f, [[('Measure in ', PAPER), ('feet & inches', TAPE)], [('right on your phone', PAPER)]], 190, 74, t, step=0.12)
+    draw_lines(f, [[('Measure on site.', PAPER)], [('QuoteRoom ', PAPER), ('does the math.', TAPE)]], 190, 74, t, step=0.12)
     hi1 = ease_out((t - 1.1) / 0.4)
     hi2 = ease_out((t - 2.1) / 0.4)
     ph = phone(S_ADD, 375, 812, 1.0, highlights=[(50, 775, 700, 862, hi1 * (1 - hi2 * 0.7)), (52, 1050, 698, 1126, hi2)])
@@ -297,7 +353,7 @@ def pdf_card(t, d):
 
 def scene_quote(t, d):
     f = BG.copy().convert('RGBA')
-    draw_lines(f, [[('Send a ', PAPER), ('detailed quotation', TAPE)], [('right after measuring', PAPER)]], 200, 64, t, step=0.12)
+    draw_lines(f, [[('Send a ', PAPER), ('detailed quotation', TAPE)], [('before you leave the site', PAPER)]], 200, 64, t, step=0.12)
     pe = ease_out(t / 0.5)
     paste_center(f, pdf_card(t, d), W / 2 + (1 - pe) * 80, 1040, alpha=pe)
     if t > d - 1.7:
@@ -336,12 +392,13 @@ def frame_at(T):
 
 
 def render(path, size=(W, H), crop_to=None):
-    audio = make_audio()
+    audio = make_audio() if RECORDED else make_tts_audio()
     n = int(math.ceil(TOTAL * FPS))
     out_w, out_h = crop_to or size
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{out_w}x{out_h}',
            '-r', str(FPS), '-i', '-', '-i', audio, '-c:v', 'libx264', '-preset', 'medium', '-crf', '17',
-           '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-af', 'loudnorm=I=-16:TP=-1.5', '-ar', '48000',
+           '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-af', ('highpass=f=75,acompressor=threshold=-20dB:ratio=2.5:attack=5:release=150,' if RECORDED else '')
+           + 'loudnorm=I=-16:TP=-1.5', '-ar', '48000',
            '-shortest', '-movflags', '+faststart', path]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for k in range(n):
@@ -363,4 +420,5 @@ if __name__ == '__main__':
             frame_at(T).save(os.path.join(OUT, f'still_{T:05.2f}.png'))
         print('stills done')
     else:
-        render(os.path.join(OUT, f'quoteroom-ad-9x16-{VOICE.lower()}.mp4'))
+        name = 'your-voice' if RECORDED else VOICE.lower()
+        render(os.path.join(OUT, f'quoteroom-ad-9x16-{name}.mp4'))
