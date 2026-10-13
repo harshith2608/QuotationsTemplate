@@ -169,6 +169,8 @@ def login_required(view):
 @console_bp.before_app_request
 def _only_console():
     """In console mode the deployment serves the console and nothing else."""
+    if request.endpoint == 'static':                      # the console's own icon files
+        return None
     if request.endpoint is None or not request.endpoint.startswith('console.'):
         abort(404)
     if not _configured():

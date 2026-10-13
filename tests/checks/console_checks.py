@@ -35,6 +35,8 @@ rfc_secret = base64.b32encode(b'12345678901234567890').decode()
 ok('TOTP matches the RFC 6238 test vector', totp_code(rfc_secret, 59 // 30) == '287082')
 ok('TOTP accepts ±30 s, rejects older codes', totp_match(SECRET, now_code(-1)) is not None and totp_match(SECRET, now_code(-3)) is None)
 
+ok('console serves its icon files', c.get('/static/brand/quoteroom-icon.svg').status_code == 200
+   and 'quoteroom-icon.svg' in c.get('/login').text)
 ok('console serves nothing else (app pages 404)', c.get('/projects').status_code == 404 and c.get('/admin/dashboard').status_code == 404
    and c.get('/free-trial').status_code == 404)
 ok('signed out → dashboard redirects to sign-in', c.get('/').headers.get('Location', '').endswith('/login'))

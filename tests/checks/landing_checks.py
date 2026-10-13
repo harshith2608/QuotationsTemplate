@@ -13,6 +13,8 @@ ok('off by default → 404 (client deployments)', c.get('/landingpage').status_c
 c = client(MARKETING_SITE='1', MARKETING_WHATSAPP='+91 98765-43210', MARKETING_PRODUCT_NAME='Sitequote')
 r = c.get('/landingpage'); t = r.text
 ok('on → 200 without login', r.status_code == 200)
+ok('QuoteRoom logo as tab and home-screen icon', 'brand/quoteroom-icon.svg' in t and 'apple-touch-icon' in t
+   and c.get('/static/brand/quoteroom-icon.svg').status_code == 200)
 ok('plan buttons go to WhatsApp, no placeholder number', t.count('https://wa.me/919876543210?text=') >= 2 and '919999999999' not in t)
 ok('every free-trial button opens the trial form', t.count('href="/free-trial" data-trial') >= 4 and 'start%20a%20free%20trial' not in t)
 ok('trial pop-up with the form is on the page', 'id="trialDialog"' in t and 'name="business_type" value="other"' in t)
