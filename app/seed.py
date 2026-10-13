@@ -41,8 +41,9 @@ def seed_reference_data():
         db.session.add_all(WorkTypeRate(work_type=w, rate_per_sqft=r)
                            for w, r in catalog.DEFAULT_WORK_TYPE_RATES.items())
         seeded.append('work type rates')
+    from .materials import table_ready
     fresh_rates = not ItemRate.query.first()
-    if not Material.query.first():
+    if table_ready() and not Material.query.first():
         db.session.add_all(Material(name=n, uses_work_types=w, active=True, sort_order=i)
                            for i, (n, w, _) in enumerate(catalog.DEFAULT_MATERIALS))
         seeded.append('materials')

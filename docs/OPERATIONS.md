@@ -547,7 +547,11 @@ and create staff logins in **Admin → Users**.
 ## 7. Shipping an update
 
 > **With the console:** step 3 below is one button: **Updates → Update all** (demo, every trial and every
-> customer). Run it **before** merging to `main`; it's safe to run any time.
+> customer). It's safe to run any time. The console uses its own deployed code, so it only knows about a
+> database change **after** that change has been merged and deployed. Updates built to cope with that
+> (the release notes / commit say "safe to update after deploy", e.g. custom materials) go:
+> **merge → push → wait for the deploys → Updates → Update all**. For any other database change, update from
+> your Mac on the branch **before** merging (steps below).
 
 1. Work on a `dev` branch and run the tests (in the venv; first time: `pip install -r requirements-dev.txt`):
    ```bash

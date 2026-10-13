@@ -116,3 +116,27 @@ t = c.get('/admin/rates').text
 f = c.get('/projects/new').text
 ok('material names are escaped on the rates page and form', '<b>Bold</b>' not in t and '<b>Bold</b>' not in f
    and '&lt;b&gt;Bold&lt;/b&gt;' in t)
+
+
+# Right after a deploy, before the database update: everything works with the three classic materials
+from sqlalchemy import text as _text
+with app.app_context():
+    db.session.execute(_text('DROP TABLE materials')); db.session.commit()
+import app.materials as _M
+_M._ready_forever.clear()
+c2 = app.test_client(); c2.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
+f = c2.get('/projects/new')
+ok('before the update: form works with the classic materials', f.status_code == 200
+   and 'value="Laminates|Box Work" selected' in f.text and 'value="Glass|"' not in f.text)
+r = c2.post('/projects/new', data={'customer_name': 'Pre Update', 'mobile': '9000000098', 'discount_type': 'none',
+                                   'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Hall', 'items': [
+    {'name': 'TV Unit', 'length': 8, 'width': 6, 'wood_type': 'Acrylic', 'work_type': 'Box Work'}]}])})
+with app.app_context():
+    pre = Project.query.order_by(Project.id.desc()).first()
+    ok('before the update: saving a quotation works', pre.customer_name == 'Pre Update' and pre.grand_total == 48 * 1200)
+    pre_id = pre.id
+ok('before the update: quotation page and PDFs work', c2.get(f'/projects/{pre_id}').status_code == 200
+   and c2.get(f'/projects/{pre_id}/pdf').status_code == 200 and c2.get(f'/projects/{pid}/pdf').status_code == 200)
+t = c2.get('/admin/rates')
+ok('before the update: Rates page explains the pending update (price list still there)', t.status_code == 200
+   and 'database update is pending' in t.text and 'Price List' in t.text)

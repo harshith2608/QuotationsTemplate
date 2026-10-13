@@ -216,6 +216,16 @@ def _save_price_list():
 @admin_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
     from . import materials as M
+    if not M.table_ready():
+        # Right after an update is deployed, before "Update all" has run: price list only, for a few minutes
+        if request.method == 'POST' and 'price_list_submit' not in request.form:
+            flash('Materials can be edited again in a few minutes (a database update is pending).', 'warning')
+            return redirect(url_for('admin.rates'))
+        if request.method == 'GET':
+            flash('A database update is pending: material rates can\'t be edited for a few minutes.', 'warning')
+            return render_template('admin/rates.html', title='Manage Rates', materials=[],
+                                   price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
+                                   work_types=WORK_TYPES)
 
     if request.method == 'POST' and 'price_list_submit' in request.form:
         errors = _save_price_list()
