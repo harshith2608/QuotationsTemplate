@@ -3,6 +3,7 @@
     pip install pillow imageio-ffmpeg
     python tools/ad_video/render_ad.py Aman          # voice: Aman / Rishi / Tara (Indian English, built into macOS)
     python tools/ad_video/render_ad.py Aman stills   # preview frames only
+    python tools/ad_video/render_ad.py ~/Downloads/voice.m4a video 4x5   # a recording (see RECORDING_PARTS); format 9x16 / 4x5 / 16x9
 
 Output: ad-videos/quoteroom-ad-9x16-<voice>.mp4 (git-ignored).
 """
@@ -24,7 +25,24 @@ os.makedirs(OUT, exist_ok=True)
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 VOICE = sys.argv[1] if len(sys.argv) > 1 else 'Rishi'
-W, H = (1080, 1920)
+FORMAT = sys.argv[3] if len(sys.argv) > 3 else '9x16'
+# Positions per format. 9x16: Reels / Stories / Shorts. 4x5: Facebook & Instagram feed. 16x9: YouTube.
+LAYOUTS = {
+    '9x16': dict(size=(1080, 1920), tape_y=150, cap_cx=540, cap_top=190, cap_k=1.0,
+                 hook_cx=540, hook_top=330, hook_size=118, hook_phone=(540, 1920 + 520, 470, 1.0),
+                 phone_cx=540, phone_cy=1060, phone_k=0.80, chip=(540, 1585),
+                 pdf=(540, 1040, 940, 1160), end_cx=540, end=(560, 730, 905, 1130, 1270, 1365), end_k=1.0),
+    '4x5': dict(size=(1080, 1350), tape_y=70, cap_cx=540, cap_top=105, cap_k=0.86,
+                hook_cx=540, hook_top=200, hook_size=104, hook_phone=(540, 1350 + 330, 330, 0.66),
+                phone_cx=540, phone_cy=800, phone_k=0.60, chip=(540, 1210),
+                pdf=(540, 790, 860, 900), end_cx=540, end=(330, 470, 625, 800, 920, 1000), end_k=0.9),
+    '16x9': dict(size=(1920, 1080), tape_y=70, cap_cx=540, cap_top=420, cap_k=0.8,
+                 hook_cx=600, hook_top=230, hook_size=104, hook_phone=(1420, 1080 + 330, 330, 0.66),
+                 phone_cx=1420, phone_cy=545, phone_k=0.58, chip=(540, 680),
+                 pdf=(1400, 560, 720, 900), end_cx=960, end=(245, 395, 545, 700, 815, 890), end_k=0.85),
+}
+L = LAYOUTS[FORMAT]
+W, H = L['size']
 FPS = 30
 
 PINE = (31, 77, 63)
@@ -163,7 +181,7 @@ def make_background():
     bg = Image.new('RGB', (W, H), PINE)
     glow = Image.new('L', (W, H), 0)
     d = ImageDraw.Draw(glow)
-    d.ellipse([-400, -300, W + 200, 1100], fill=90)
+    d.ellipse([-400, -300, W + 200, int(H * 0.57)], fill=90)
     glow = glow.filter(ImageFilter.GaussianBlur(220))
     light = Image.new('RGB', (W, H), (52, 110, 90))
     bg = Image.composite(light, bg, glow)
@@ -245,7 +263,7 @@ def paste_center(base, img, cx, cy, alpha=1.0):
         img.putalpha(a)
     base.alpha_composite(img, (int(cx - img.width / 2), int(cy - img.height / 2)))
 
-def draw_lines(base, lines, top, size, t, delay=0.0, step=0.12, center=True, weight='heavy', line_gap=1.12):
+def draw_lines(base, lines, top, size, t, delay=0.0, step=0.12, center=True, weight='heavy', line_gap=1.12, cx=None):
     """lines: [[(text, colour), ...], ...]; each line slides up and fades in."""
     f = font(size, weight)
     y = top
@@ -257,7 +275,7 @@ def draw_lines(base, lines, top, size, t, delay=0.0, step=0.12, center=True, wei
         width = sum(f.getlength(txt) for txt, _ in parts)
         layer = Image.new('RGBA', base.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
-        x = (W - width) / 2 if center else 90
+        x = (cx if cx is not None else W / 2) - width / 2 if center else 90
         yy = y + (1 - p) * 40
         for txt, col in parts:
             d.text((x, yy), txt, font=f, fill=col + (int(255 * p),))
@@ -303,41 +321,42 @@ W_ = (255, 255, 255)
 # ── scenes (t = seconds since scene start, d = scene length) ──
 def scene_hook(t, d):
     f = BG.copy().convert('RGBA')
-    f.paste(tape_strip(W, 34, t * 80), (0, 150))
+    f.paste(tape_strip(W, 34, t * 80), (0, L['tape_y']))
     draw_lines(f, [[('Still sending', PAPER)], [('quotations', PAPER)], [('days after', TAPE)], [('the site visit?', PAPER)]],
-               330, 118, t, delay=0.05, step=0.14)
+               L['hook_top'], L['hook_size'], t, delay=0.05, step=0.14, cx=L['hook_cx'])
     p = ease_out((t - 0.5) / 0.9)
-    paste_center(f, phone(S_LIST, 375, 812, 1.0), W / 2, H + 520 - p * 470)
+    hx, hy, rise, hk = L['hook_phone']
+    paste_center(f, scaled(phone(S_LIST, 375, 812, 1.0), hk), hx, hy - p * rise)
     return f
 
 def scene_measure(t, d):
     f = BG.copy().convert('RGBA')
-    draw_lines(f, [[('Measure on site.', PAPER)], [('QuoteRoom ', PAPER), ('does the math.', TAPE)]], 190, 74, t, step=0.12)
+    draw_lines(f, [[('Measure on site.', PAPER)], [('QuoteRoom ', PAPER), ('does the math.', TAPE)]], L['cap_top'], int(74 * L['cap_k']), t, step=0.12, cx=L['cap_cx'])
     hi1 = ease_out((t - 1.1) / 0.4)
     hi2 = ease_out((t - 2.1) / 0.4)
     ph = phone(S_ADD, 375, 812, 1.0, highlights=[(50, 775, 700, 862, hi1 * (1 - hi2 * 0.7)), (52, 1050, 698, 1126, hi2)])
-    k = 0.8 + 0.06 * ease_in_out(t / d)              # slow push-in on the whole phone
+    k = L['phone_k'] * (1 + 0.075 * ease_in_out(t / d))   # slow push-in on the whole phone
     pe = ease_out(t / 0.5)
-    paste_center(f, scaled(ph, k), W / 2, 1060 + (1 - pe) * 120, alpha=pe)
+    paste_center(f, scaled(ph, k), L['phone_cx'], L['phone_cy'] + (1 - pe) * 120, alpha=pe)
     if t > 2.2:
         s = back_out((t - 2.2) / 0.45)
-        pill(f, "8'6\" × 6' = 51 sqft", W / 2, 1585, INK, TAPE, size=54, scale=0.6 + 0.4 * s, alpha=clamp(s))
+        pill(f, "8'6\" × 6' = 51 sqft", L['chip'][0], L['chip'][1], INK, TAPE, size=int(54 * L['cap_k']), scale=0.6 + 0.4 * s, alpha=clamp(s))
     return f
 
 def scene_totals(t, d):
     f = BG.copy().convert('RGBA')
-    draw_lines(f, [[('Your rates. ', PAPER), ('Instant totals.', TAPE)], [('Every payment tracked.', PAPER)]], 190, 74, t, step=0.12)
+    draw_lines(f, [[('Your rates. ', PAPER), ('Instant totals.', TAPE)], [('Every payment tracked.', PAPER)]], L['cap_top'], int(74 * L['cap_k']), t, step=0.12, cx=L['cap_cx'])
     hi_room = ease_out((t - 0.4) / 0.4) * (1 - ease_out((t - 1.7) / 0.4))
     hi_pay = ease_out((t - 2.1) / 0.4)
     ph = phone(S_PAY, 375, 812, 1.0, highlights=[(52, 905, 698, 1015, hi_room), (60, 1210, 690, 1360, hi_pay)])
-    k = 0.8 + 0.06 * ease_in_out(t / d)
+    k = L['phone_k'] * (1 + 0.075 * ease_in_out(t / d))
     pe = ease_out(t / 0.4)
-    paste_center(f, scaled(ph, k), W / 2, 1060, alpha=pe)
+    paste_center(f, scaled(ph, k), L['phone_cx'], L['phone_cy'], alpha=pe)
     return f
 
 def pdf_card(t, d):
     """White document card showing a scrolling window of the full quotation."""
-    cw, chh = 940, 1160
+    cw, chh = L['pdf'][2], L['pdf'][3]
     x0, x1 = 105, PDF.width - 105                    # trim the page margins so the tables read larger
     scale = cw / (x1 - x0)
     win_h = chh / scale
@@ -353,28 +372,30 @@ def pdf_card(t, d):
 
 def scene_quote(t, d):
     f = BG.copy().convert('RGBA')
-    draw_lines(f, [[('Send a ', PAPER), ('detailed quotation', TAPE)], [('before you leave the site', PAPER)]], 200, 64, t, step=0.12)
+    draw_lines(f, [[('Send a ', PAPER), ('detailed quotation', TAPE)], [('before you leave the site', PAPER)]], L['cap_top'] + 10, int(64 * L['cap_k']), t, step=0.12, cx=L['cap_cx'])
     pe = ease_out(t / 0.5)
-    paste_center(f, pdf_card(t, d), W / 2 + (1 - pe) * 80, 1040, alpha=pe)
+    paste_center(f, pdf_card(t, d), L['pdf'][0] + (1 - pe) * 80, L['pdf'][1], alpha=pe)
     if t > d - 1.7:
         s = back_out((t - (d - 1.7)) / 0.45)
-        pill(f, 'Sent to client', W / 2, 1585, W_, (18, 140, 80), size=50, scale=0.6 + 0.4 * s,
+        pill(f, 'Sent to client', L['chip'][0] if FORMAT == '16x9' else L['pdf'][0], L['chip'][1], W_, (18, 140, 80), size=int(50 * L['cap_k']), scale=0.6 + 0.4 * s,
              alpha=clamp(s), icon='check')
     return f
 
 def scene_end(t, d):
     f = BG.copy().convert('RGBA')
-    f.paste(tape_strip(W, 34, t * 80), (0, 150))
+    f.paste(tape_strip(W, 34, t * 80), (0, L['tape_y']))
+    ly, ty, gy, cy_, uy, ny = L['end']
+    ek = L['end_k']
     s = back_out(t / 0.55)
-    lg = LOGO.resize((max(1, int(250 * (0.7 + 0.3 * s))),) * 2, Image.LANCZOS)
-    paste_center(f, lg, W / 2, 560, alpha=clamp(s))
-    draw_lines(f, [[('QuoteRoom', PAPER)]], 730, 132, t, delay=0.15)
-    draw_lines(f, [[('Quotes before you leave the site.', (205, 222, 214))]], 905, 50, t, delay=0.35, weight='demi')
+    lg = LOGO.resize((max(1, int(250 * ek * (0.7 + 0.3 * s))),) * 2, Image.LANCZOS)
+    paste_center(f, lg, L['end_cx'], ly, alpha=clamp(s))
+    draw_lines(f, [[('QuoteRoom', PAPER)]], ty, int(132 * ek), t, delay=0.15, cx=L['end_cx'])
+    draw_lines(f, [[('Quotes before you leave the site.', (205, 222, 214))]], gy, int(50 * ek), t, delay=0.35, weight='demi', cx=L['end_cx'])
     if t > 0.6:
         s2 = back_out((t - 0.6) / 0.5)
-        pill(f, 'Start your 7-day free trial', W / 2, 1130, INK, TAPE, size=54, scale=0.6 + 0.4 * s2, alpha=clamp(s2))
-    draw_lines(f, [[('quote-room.co.in', PAPER)]], 1270, 56, t, delay=0.9, weight='bold')
-    draw_lines(f, [[('No payment needed to start', (170, 196, 185))]], 1365, 40, t, delay=1.1, weight='medium')
+        pill(f, 'Start your 7-day free trial', L['end_cx'], cy_, INK, TAPE, size=int(54 * ek), scale=0.6 + 0.4 * s2, alpha=clamp(s2))
+    draw_lines(f, [[('quote-room.co.in', PAPER)]], uy, int(56 * ek), t, delay=0.9, weight='bold', cx=L['end_cx'])
+    draw_lines(f, [[('No payment needed to start', (170, 196, 185))]], ny, int(40 * ek), t, delay=1.1, weight='medium', cx=L['end_cx'])
     return f
 
 SCENES = [scene_hook, scene_measure, scene_totals, scene_quote, scene_end]
@@ -498,8 +519,8 @@ if __name__ == '__main__':
     mode = sys.argv[2] if len(sys.argv) > 2 else 'video'
     if mode == 'stills':
         for T in [1.6, starts[1] + 3.0, starts[2] + 2.9, starts[3] + 1.2, starts[3] + durs[3] - 0.5, starts[4] + 1.6]:
-            frame_at(T).save(os.path.join(OUT, f'still_{T:05.2f}.png'))
+            frame_at(T).save(os.path.join(OUT, f'still_{FORMAT}_{T:05.2f}.png'))
         print('stills done')
     else:
         name = 'your-voice' if RECORDED else VOICE.lower()
-        render(os.path.join(OUT, f'quoteroom-ad-9x16-{name}.mp4'))
+        render(os.path.join(OUT, f'quoteroom-ad-{FORMAT}-{name}.mp4'))
