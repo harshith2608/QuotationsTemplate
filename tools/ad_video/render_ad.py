@@ -392,57 +392,79 @@ def frame_at(T):
 
 
 def make_music(seconds, path, rate=48000):
-    """A gentle ambient bed composed here (so it's free to use in ads): warm chords + soft plucks, 96 bpm.
-    Fmaj7 → Am7 → Dm7 → Cmaj7, one chord per bar."""
+    """An upbeat, catchy bed composed here (free to use in ads): 112 bpm, C → G → Am → F,
+    four-on-the-floor kick, claps, hi-hats, bassline, chord stabs and a short melody hook."""
     import numpy as np
     n = int(seconds * rate)
-    t = np.arange(n) / rate
     out = np.zeros(n)
-    bar = 60 / 96 * 4
-    chords = [  # (bass, pad notes) in Hz
-        (87.31, [174.61, 220.00, 261.63, 329.63]),   # Fmaj7
-        (110.00, [220.00, 261.63, 329.63, 392.00]),  # Am7
-        (73.42, [146.83, 174.61, 220.00, 261.63]),   # Dm7
-        (65.41, [130.81, 164.81, 196.00, 246.94]),   # Cmaj7
-    ]
-    rng = np.random.default_rng(7)
-    for b in range(int(seconds / bar) + 2):
-        bass, notes = chords[b % 4]
-        t0, t1 = b * bar, (b + 1) * bar + 0.9                   # overlap into the next bar = smooth changes
-        i0, i1 = max(0, int(t0 * rate)), min(n, int(t1 * rate))
+    rng = np.random.default_rng(11)
+    beat = 60 / 112
+    bar = 4 * beat
+
+    def add(at, sig, gain):
+        i0 = int(at * rate)
         if i0 >= n:
-            break
-        tt = t[i0:i1] - t0
-        env = np.minimum(1, tt / 0.7) * np.minimum(1, (t1 - t0 - tt) / 0.9)   # slow attack, soft release
-        pad = sum(np.sin(2 * np.pi * f * (1 + d) * tt + rng.uniform(0, 6.28)) * (0.55 if k else 0.8)
-                  for k, f in enumerate(notes) for d in (-0.0015, 0.0015)) / 8
-        pad += 0.25 * sum(np.sin(2 * np.pi * 2 * f * tt) for f in notes) / 8       # a little shimmer
-        out[i0:i1] += env * (0.55 * pad + 0.35 * np.sin(2 * np.pi * bass * tt))
-        step = bar / 8                                               # soft eighth-note plucks
-        for k in range(8):
-            if k in (3, 7):
-                continue                                             # leave space, don't fill every step
-            f = notes[[0, 2, 1, 3, 2, 0, 3, 1][k]] * 2
-            s0 = int((t0 + k * step) * rate)
-            if s0 >= n:
-                break
-            m = min(n - s0, int(1.2 * rate))
-            pt = np.arange(m) / rate
-            pluck = (np.sin(2 * np.pi * f * pt) + 0.18 * np.sin(2 * np.pi * 3 * f * pt)) * np.exp(-pt / 0.32)
-            out[s0:s0 + m] += 0.10 * pluck * np.minimum(1, pt / 0.004)
-    # gentle low-pass (one-pole) to keep it warm, then fades
-    y = np.empty_like(out); a = 0.18; acc = 0.0
-    for i, v in enumerate(out):
-        acc += a * (v - acc); y[i] = acc
-    y *= np.minimum(1, t / 1.0) * np.minimum(1, (seconds - t) / 1.8)
-    y = y / (np.abs(y).max() + 1e-9) * 0.5
+            return
+        m = min(len(sig), n - i0)
+        out[i0:i0 + m] += gain * sig[:m]
+
+    def tone(f, dur, decay, harmonics=((1, 1.0),), attack=0.004):
+        tt = np.arange(int(dur * rate)) / rate
+        sig = sum(a * np.sin(2 * np.pi * f * h * tt) for h, a in harmonics)
+        return sig * np.exp(-tt / decay) * np.minimum(1, tt / attack)
+
+    def highpass(x, k=8):
+        return x - np.convolve(x, np.ones(k) / k, mode='same')
+
+    def lowpass(x, k=6):
+        return np.convolve(x, np.ones(k) / k, mode='same')
+
+    kt = np.arange(int(0.35 * rate)) / rate                      # kick: pitch drop 120 → 45 Hz
+    kick = np.sin(2 * np.pi * np.cumsum(45 + 75 * np.exp(-kt / 0.03)) / rate) * np.exp(-kt / 0.16)
+    ct = np.arange(int(0.25 * rate)) / rate
+    clap = highpass(rng.standard_normal(len(ct)), 6) * np.exp(-ct / 0.07)
+    ht = np.arange(int(0.08 * rate)) / rate
+    hat = highpass(rng.standard_normal(len(ht)), 2) * np.exp(-ht / 0.018)
+
+    C = {'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.0, 'A3': 220.0, 'B3': 246.94,
+         'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.0, 'A4': 440.0, 'B4': 493.88,
+         'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'G5': 783.99, 'A5': 880.0}
+    prog = [  # (bass root, chord tones)
+        (65.41, ['C4', 'E4', 'G4']), (98.0, ['B3', 'D4', 'G4']), (110.0, ['C4', 'E4', 'A4']), (87.31, ['C4', 'F4', 'A4'])]
+    hook = [('E5', 0, 1), ('G5', 1, 1), ('A5', 2, 1.5), ('G5', 3.5, .5), ('E5', 4, 1), ('D5', 5, 1), ('C5', 6, 2),
+            ('E5', 8, 1), ('G5', 9, 1), ('A5', 10, 1.5), ('G5', 11.5, .5), ('E5', 12, 1), ('G5', 13, 1), ('C5', 14, 2)]
+    piano = ((1, 1.0), (2, 0.45), (3, 0.2), (4, 0.08))
+    bars = int(seconds / bar) + 1
+    for b in range(bars):
+        t0 = b * bar
+        root, tones = prog[b % 4]
+        for k in range(4):                                       # drums
+            add(t0 + k * beat, kick, 0.9)
+            add(t0 + k * beat + beat / 2, hat, 0.16)
+            if k in (1, 3):
+                add(t0 + k * beat, clap, 0.32)
+        for k, at in enumerate([0, 1.5, 2, 3, 3.5]):             # syncopated bassline
+            add(t0 + at * beat, tone(root * (2 if k == 3 else 1), 0.5, 0.22, ((1, 1), (2, 0.35), (3, 0.12))), 0.55)
+        for at in (0.5, 1.5, 2.5, 3.5):                          # off-beat chord stabs
+            for nme in tones:
+                add(t0 + at * beat, tone(C[nme], 0.45, 0.16, piano), 0.11)
+        if b >= 1:                                               # melody hook from bar 2 (let the intro breathe)
+            cyc = (b - 1) % 4
+            for nme, st, ln in hook:
+                if cyc * 4 <= st < cyc * 4 + 4:
+                    add(t0 + (st - cyc * 4) * beat, tone(C[nme], ln * beat + 0.3, 0.35 + 0.2 * ln, piano), 0.16)
+    y = lowpass(out, 3)
+    t = np.arange(n) / rate
+    y *= np.minimum(1, t / 0.15) * np.minimum(1, (seconds - t) / 1.2)
+    y = np.tanh(1.6 * y / (np.abs(y).max() + 1e-9)) / np.tanh(1.6)          # gentle glue / saturation
+    y *= 0.7
     with wave.open(path, 'wb') as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
         w.writeframes((y * 32767).astype('<i2').tobytes())
     return path
 
 
-MUSIC_LEVEL = 0.16        # music under the voice (it also ducks further while someone is speaking)
+MUSIC_LEVEL = 0.42        # music level; it ducks a few dB while someone is speaking
 
 
 def render(path, size=(W, H), crop_to=None):
@@ -453,7 +475,7 @@ def render(path, size=(W, H), crop_to=None):
     voice_fx = 'highpass=f=75,acompressor=threshold=-20dB:ratio=2.5:attack=5:release=150,' if RECORDED else ''
     mix = (f'[1:a]{voice_fx}asplit=2[v][sc];'
            f'[2:a]volume={MUSIC_LEVEL}[m];'
-           '[m][sc]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[md];'
+           '[m][sc]sidechaincompress=threshold=0.04:ratio=2.5:attack=20:release=300[md];'
            '[v][md]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5,aresample=48000[a]')
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{out_w}x{out_h}',
            '-r', str(FPS), '-i', '-', '-i', audio, '-i', music, '-filter_complex', mix,
