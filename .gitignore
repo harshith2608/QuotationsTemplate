@@ -48,3 +48,6 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Rendered ad videos (large; kept out of git)
+ad-videos/
