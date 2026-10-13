@@ -5,11 +5,11 @@ from types import SimpleNamespace
 from sqlalchemy import func
 from sqlalchemy.orm import load_only
 from . import db
-from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate, MasterRoom, MasterItem, AppSetting, Notification, PriceListItem
+from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate, MasterRoom, MasterItem, AppSetting, Notification, PriceListItem, Material
 from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
 from .pdf_utils import DEFAULT_TERMS
-from .catalog import WOOD_TYPES, WORK_TYPES, STAGES
+from .catalog import WORK_TYPES, STAGES
 from . import branding
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -215,7 +215,7 @@ def _save_price_list():
 
 @admin_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
-    item_rates_map = {(r.wood_type, r.work_type): r for r in ItemRate.query.all()}
+    from . import materials as M
 
     if request.method == 'POST' and 'price_list_submit' in request.form:
         errors = _save_price_list()
@@ -226,36 +226,121 @@ def rates():
             flash('Price list updated.', 'success')
         return redirect(url_for('admin.rates') + '#price-list')
 
-    if request.method == 'POST' and 'item_rates_submit' in request.form:
-        for wood in WOOD_TYPES:
-            for work in WORK_TYPES:
-                field_key = f"rate_{wood.lower()}_{work.lower().replace(' ', '_')}"
-                try:
-                    rate = float(request.form.get(field_key, 0))
-                except (ValueError, TypeError):
-                    rate = 0
-                rate = max(0, rate)
-                existing = item_rates_map.get((wood, work))
-                if existing:
-                    existing.rate_per_sqft = rate
-                else:
-                    db.session.add(ItemRate(wood_type=wood, work_type=work, rate_per_sqft=rate))
+    if request.method == 'POST' and 'material_add' in request.form:
+        try:
+            name = M.clean_name(request.form.get('mat_name'))
+        except ValueError as exc:
+            flash(str(exc), 'danger')
+            return redirect(url_for('admin.rates') + '#materials')
+        if Material.query.filter(db.func.lower(Material.name) == name.lower()).first():
+            flash(f'"{name}" already exists.', 'danger')
+            return redirect(url_for('admin.rates') + '#materials')
+        uses_work = bool(request.form.get('mat_uses_work'))
+        rate = _rate(request.form.get('mat_rate'))
+        top = db.session.query(db.func.max(Material.sort_order)).scalar() or 0
+        db.session.add(Material(name=name, uses_work_types=uses_work, active=True, sort_order=top + 1))
+        for work in (WORK_TYPES if uses_work else ['']):
+            existing = ItemRate.query.filter_by(wood_type=name, work_type=work).first()
+            if existing:
+                existing.rate_per_sqft = rate
+            else:
+                db.session.add(ItemRate(wood_type=name, work_type=work, rate_per_sqft=rate))
         db.session.commit()
-        flash('Item rates updated successfully.', 'success')
-        return redirect(url_for('admin.rates'))
+        flash(f'Added "{name}". It now appears in the material list on quotations.', 'success')
+        return redirect(url_for('admin.rates') + '#materials')
 
-    # Build a nested dict for the template: { wood_type: { work_type: rate } }
-    item_rates = {}
-    for wood in WOOD_TYPES:
-        item_rates[wood] = {}
-        for work in WORK_TYPES:
-            r = item_rates_map.get((wood, work))
-            item_rates[wood][work] = r.rate_per_sqft if r else 0.0
+    if request.method == 'POST' and 'item_rates_submit' in request.form:
+        errors = _save_materials_and_rates()
+        action = request.form.get('item_rates_submit', '')
+        if not errors and ':' in action:
+            errors += _material_action(*action.split(':', 1))
+        if errors:
+            db.session.rollback()
+            for err in errors:
+                flash(err, 'danger')
+        else:
+            db.session.commit()
+            if ':' not in action:
+                flash('Materials and rates updated.', 'success')
+        return redirect(url_for('admin.rates') + '#materials')
 
-    return render_template('admin/rates.html', title='Manage Rates',
-                           item_rates=item_rates,
+    rate_map = {(r.wood_type, r.work_type): r.rate_per_sqft for r in ItemRate.query.all()}
+    rows = []
+    for m in Material.query.order_by(Material.sort_order, Material.id).all():
+        works = WORK_TYPES if m.uses_work_types else ['']
+        rows.append({'m': m, 'in_use': M.in_use(m.name),
+                     'rates': [(i, w, rate_map.get((m.name, w), 0.0)) for i, w in enumerate(works)]})
+    return render_template('admin/rates.html', title='Manage Rates', materials=rows,
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
-                           wood_types=WOOD_TYPES, work_types=WORK_TYPES)
+                           work_types=WORK_TYPES)
+
+
+def _rate(raw):
+    try:
+        return max(0.0, round(float(raw or 0), 2))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _save_materials_and_rates():
+    """Renames and rates from the materials table. Returns error messages (caller commits / rolls back)."""
+    from . import materials as M
+    errors = []
+    mats = Material.query.all()
+    taken = {m.name.lower(): m.id for m in mats}
+    for m in mats:
+        new_name = request.form.get(f'name_{m.id}')
+        if new_name is not None:
+            try:
+                new_name = M.clean_name(new_name)
+            except ValueError as exc:
+                errors.append(f'{m.name}: {exc}')
+                continue
+            if new_name != m.name:
+                if taken.get(new_name.lower(), m.id) != m.id:
+                    errors.append(f'"{new_name}" already exists.')
+                    continue
+                # Keep every quotation and rate pointing at the renamed material
+                Item.query.filter(Item.wood_type == m.name).update({'wood_type': new_name}, synchronize_session=False)
+                ItemRate.query.filter(ItemRate.wood_type == m.name).update({'wood_type': new_name},
+                                                                          synchronize_session=False)
+                taken.pop(m.name.lower(), None)
+                taken[new_name.lower()] = m.id
+                m.name = new_name
+        for i, work in enumerate(WORK_TYPES if m.uses_work_types else ['']):
+            field = f'rate_{m.id}_{i}'
+            if field not in request.form:
+                continue
+            rate = _rate(request.form.get(field))
+            row = ItemRate.query.filter_by(wood_type=m.name, work_type=work).first()
+            if row:
+                row.rate_per_sqft = rate
+            else:
+                db.session.add(ItemRate(wood_type=m.name, work_type=work, rate_per_sqft=rate))
+    return errors
+
+
+def _material_action(action, mid):
+    from . import materials as M
+    m = db.session.get(Material, int(mid)) if mid.isdigit() else None
+    if not m:
+        return ['That material no longer exists.']
+    if action == 'toggle':
+        if m.active and Material.query.filter_by(active=True).count() <= 1:
+            return ['Keep at least one material visible.']
+        m.active = not m.active
+        flash(f'"{m.name}" is now {"shown on new quotations" if m.active else "hidden from new quotations"}.', 'success')
+        return []
+    if action == 'delete':
+        if M.in_use(m.name):
+            return [f'"{m.name}" is used in existing quotations, so it can\'t be deleted. Hide it instead.']
+        if m.active and Material.query.filter_by(active=True).count() <= 1:
+            return ['Keep at least one material.']
+        ItemRate.query.filter(ItemRate.wood_type == m.name).delete(synchronize_session=False)
+        db.session.delete(m)
+        flash(f'Deleted "{m.name}".', 'success')
+        return []
+    return ['Unknown action.']
 
 
 PAYMENT_KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',

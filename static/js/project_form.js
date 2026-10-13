@@ -16,7 +16,13 @@ let modalItemType = 'measured';
 let modalPriceTouched = false;
 
 // Material catalogue — injected by templates/projects/form.html from app/catalog.py
-const CATALOG = window.KI_CATALOG || { woodTypes: [], workTypes: [], defaultWood: '', defaultWork: '' };
+const CATALOG = window.KI_CATALOG || { combos: [], defaultWood: '', defaultWork: '' };
+// 'Material|Work Type'; materials with a single rate (e.g. Glass) have an empty work type: 'Glass|'
+function splitCombo(value) {
+  const i = (value || '').indexOf('|');
+  return i < 0 ? [CATALOG.defaultWood, CATALOG.defaultWork] : [value.slice(0, i), value.slice(i + 1)];
+}
+function comboLabel(wood, work) { return work ? `${wood} – ${work}` : (wood || ''); }
 const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 
 // ─── Draft Auto-Save ──────────────────────────────────────────────────────────
@@ -528,9 +534,7 @@ function saveItemFromModal() {
   const lIn  = parseFloat(document.getElementById('modal_item_lin')?.value) || 0;
   const wFt  = parseFloat(document.getElementById('modal_item_wft')?.value) || 0;
   const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
-  const combo = (document.getElementById('modal_item_combo')?.value || DEFAULT_COMBO).split('|');
-  const wood = combo[0] || CATALOG.defaultWood;
-  const work = combo[1] || CATALOG.defaultWork;
+  const [wood, work] = splitCombo(document.getElementById('modal_item_combo')?.value || DEFAULT_COMBO);
 
   _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work);
 
@@ -551,7 +555,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const wFt  = presetWFt  !== undefined ? presetWFt  : '';
   const wIn  = presetWIn  !== undefined ? presetWIn  : '';
   const wood = presetWood || CATALOG.defaultWood;
-  const work = presetWork || CATALOG.defaultWork;
+  const work = presetWood ? (presetWork || '') : CATALOG.defaultWork;   // '' is a real value (single-rate material)
   const name = presetName || '';
 
   const lDec = ftInToDecimal(lFt, lIn);
@@ -666,13 +670,13 @@ function onItemField(rk, ik) {
   const wDec = ftInToDecimal(wFt, wIn);
   const area  = parseFloat((lDec * wDec).toFixed(4));
 
-  const comboParts = (comboEl?.value || DEFAULT_COMBO).split('|');
+  const comboParts = splitCombo(comboEl?.value || DEFAULT_COMBO);
   rooms[rk].items[ik] = {
     name:      nameEl?.value.trim() || '',
     lengthFt:  lFt, lengthIn: lIn,
     widthFt:   wFt, widthIn:  wIn,
-    wood_type: comboParts[0] || CATALOG.defaultWood,
-    work_type: comboParts[1] || CATALOG.defaultWork,
+    wood_type: comboParts[0],
+    work_type: comboParts[1],
     area
   };
 
@@ -802,9 +806,9 @@ function renderSummary(comboAreas, grandTotal, fixedTotal) {
   Object.entries(comboAreas).forEach(([key, area]) => {
     if (area <= 0) return;
     const rate = itemRates[key] || 0;
-    const parts = key.split('|');
-    const label = parts[0] + ' – ' + (parts[1] || '');
-    const c = COMBO_COLORS[key] || { bg:'#f3f4f6', color:'#374151' };
+    const parts = splitCombo(key);
+    const label = comboLabel(parts[0], parts[1]);
+    const c = COMBO_COLORS[key] || colorFor(key);
     html += `
       <div class="summary-wood-row">
         <span class="summary-wood-label">
@@ -873,12 +877,25 @@ function validateAndSubmit() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function buildComboOptions(wood, work) {
-  const combos = CATALOG.woodTypes.flatMap(w => CATALOG.workTypes.map(wk => [w, wk]));
-  return combos.map(([w, wk]) => {
-    const val = `${w}|${wk}`;
-    const sel = (w === wood && wk === work) ? 'selected' : '';
-    return `<option value="${val}" ${sel}>${w} – ${wk}</option>`;
+  const combos = (CATALOG.combos || []).slice();
+  const current = `${wood}|${work || ''}`;
+  if (wood && !combos.some(c => c.value === current)) {          // e.g. a material hidden since: keep it
+    combos.push({ value: current, label: comboLabel(wood, work) + ' (hidden)' });
+  }
+  return combos.map(c => {
+    const sel = c.value === current ? 'selected' : '';
+    return `<option value="${escHtml(c.value)}" ${sel}>${escHtml(c.label)}</option>`;
   }).join('');
+}
+
+// Stable soft colour for materials without a preset colour (custom ones like Glass, PU…)
+const SOFT_COLORS = [['#dbeafe', '#1e3a8a'], ['#dcfce7', '#14532d'], ['#fef3c7', '#78350f'], ['#fce7f3', '#831843'],
+                     ['#e0e7ff', '#312e81'], ['#ccfbf1', '#134e4a'], ['#fee2e2', '#7f1d1d'], ['#f3e8ff', '#581c87']];
+function colorFor(key) {
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const [bg, color] = SOFT_COLORS[h % SOFT_COLORS.length];
+  return { bg, color };
 }
 
 function escHtml(str) {

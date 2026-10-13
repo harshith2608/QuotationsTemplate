@@ -30,7 +30,7 @@ SETUP = {
     'demo_checks': 'seed', 'fixed_checks': 'seed', 'guides_checks': 'seed', 'landing_checks': 'seed',
     'legal_checks': 'seed', 'plan_checks': 'seed', 'settings_checks': 'seed', 'smoke_checks': 'seed',
     'stage_checks': 'seed', 'totals_checks': 'seed', 'webhook_checks': 'seed',
-    'encryption_checks': 'seed', 'leads_checks': 'seed', 'lock_checks': 'bootstrap', 'tenant_checks': 'postgres', 'console_checks': 'postgres',
+    'encryption_checks': 'seed', 'leads_checks': 'seed', 'materials_checks': 'seed', 'lock_checks': 'bootstrap', 'tenant_checks': 'postgres', 'console_checks': 'postgres',
     'customers_checks': 'realpg',
 }
 

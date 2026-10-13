@@ -15,6 +15,15 @@ PLYWOOD_OPTIONS = ['18mm 8*4', '12mm 8*4', '6mm 8*4', '25mm Blackboard', '18mm B
 # Admins change real rates from Admin → Rates after deployment.
 DEFAULT_ITEM_RATES = {'Acrylic': 1200.0, 'Laminates': 850.0, 'Veneer': 900.0}
 
+# Materials a NEW business starts with: (name, uses Box/Frame work types, rate per sqft).
+# Each business adds, renames or hides its own in Admin → Rates (stored in the materials table).
+DEFAULT_MATERIALS = [
+    ('Acrylic', True, 1200.0),
+    ('Laminates', True, 850.0),
+    ('Veneer', True, 900.0),
+    ('Glass', False, 450.0),
+]
+
 # Legacy per-material / per-work-type tables (still read by /api/wood-rates)
 DEFAULT_WOOD_RATES = {'Acrylic': 1200.0, 'Laminates': 800.0, 'Veneer': 1500.0}
 DEFAULT_WORK_TYPE_RATES = {'Box Work': 500.0, 'Frame Work': 300.0}

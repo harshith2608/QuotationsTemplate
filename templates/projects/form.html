@@ -254,11 +254,10 @@
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
         </div>
         <ul class="list-group list-group-flush">
-          {% for combo, rate in item_rates.items() %}
-          {% set parts = combo.split('|') %}
+          {% for c in material_combos if '(hidden)' not in c.label %}
           <li class="list-group-item d-flex justify-content-between py-2">
-            <span class="small fw-medium">{{ parts[0] }} – {{ parts[1] }}</span>
-            <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
+            <span class="small fw-medium">{{ c.label }}</span>
+            <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(item_rates.get(c.value, 0)) }}/sqft</span>
           </li>
           {% endfor %}
         </ul>
@@ -353,10 +352,12 @@
         <div class="mb-3">
           <label class="form-label fw-medium small mb-1">Material &amp; Work Type</label>
           <select class="form-select" id="modal_item_combo">
-            {% for wood in catalog.WOOD_TYPES %}{% for work in catalog.WORK_TYPES %}
-            <option value="{{ wood }}|{{ work }}"{% if wood == catalog.DEFAULT_WOOD and work == catalog.DEFAULT_WORK %} selected{% endif %}>{{ wood }} – {{ work }}</option>
-            {% endfor %}{% endfor %}
+            {% for c in material_combos %}
+            <option value="{{ c.value }}"{% if c.value == default_combo %} selected{% endif %}>{{ c.label }}</option>
+            {% endfor %}
           </select>
+          {% if current_user.is_admin %}<div class="form-text small">Need glass, PU, wallpaper…? Add materials in
+            <a href="{{ url_for('admin.rates') }}#materials" target="_blank" rel="noopener">Admin → Rates</a>.</div>{% endif %}
         </div>
         <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
           <span class="small text-muted fw-medium">Calculated Area</span>
@@ -378,10 +379,9 @@
 {% block scripts %}
 <script>
   window.KI_CATALOG = {
-    woodTypes:   {{ catalog.WOOD_TYPES|tojson }},
-    workTypes:   {{ catalog.WORK_TYPES|tojson }},
-    defaultWood: {{ catalog.DEFAULT_WOOD|tojson }},
-    defaultWork: {{ catalog.DEFAULT_WORK|tojson }},
+    combos:      {{ material_combos|tojson }},          // [{value: 'Glass|', label: 'Glass', wood, work}, …]
+    defaultWood: {{ default_combo.split('|')[0]|tojson }},
+    defaultWork: {{ default_combo.split('|', 1)[1]|tojson }},
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }}
   };
 </script>

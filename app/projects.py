@@ -9,7 +9,7 @@ from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, Work
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
                      PaymentLink, Notification, PriceListItem)
 from .decorators import admin_required
-from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WOOD, DEFAULT_WORK, STAGES, FIXED_ITEMS_LABEL
+from .catalog import STAGES, FIXED_ITEMS_LABEL
 from .branding import get_brand
 
 projects_bp = Blueprint('projects', __name__)
@@ -93,6 +93,16 @@ def _get_wood_rates():
     return {r.wood_type: r.rate_per_sqft for r in WoodRate.query.all()}
 
 
+def _form_catalog(project):
+    """Material options for the quotation form; keeps materials already used on `project` even if hidden since."""
+    from . import materials as M
+    used = set()
+    if project is not None:
+        for room in project.rooms_with_items():
+            used |= {(i.wood_type, i.work_type) for i in room.item_list if not i.is_fixed}
+    return M.form_catalog(used)
+
+
 def _save_project_data(project, rooms_data):
     """Delete existing rooms/items and save new ones. Returns grand_total."""
     # Remove existing rooms (cascade deletes items)
@@ -102,6 +112,9 @@ def _save_project_data(project, rooms_data):
 
     item_rates_flat = _get_item_rates()
     grand_total = 0.0
+    from . import materials as M
+    valid_combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
+    fallback_combo = M.default_combo()
 
     for rd in rooms_data:
         room_name = rd.get('name', '').strip()
@@ -141,12 +154,10 @@ def _save_project_data(project, rooms_data):
             if length <= 0 or width <= 0:
                 continue
             area = round(length * width, 4)
-            wood_type = id_.get('wood_type', DEFAULT_WOOD)
-            if wood_type not in WOOD_TYPES:
-                wood_type = DEFAULT_WOOD
-            work_type = id_.get('work_type', DEFAULT_WORK)
-            if work_type not in WORK_TYPES:
-                work_type = DEFAULT_WORK
+            wood_type = str(id_.get('wood_type') or '')
+            work_type = str(id_.get('work_type') or '')       # '' = a material with one rate (e.g. Glass)
+            if (wood_type, work_type) not in valid_combos:
+                wood_type, work_type = fallback_combo
 
             item = Item(
                 room_id=room.id,
@@ -242,6 +253,7 @@ def create_project():
     rates = _get_wood_rates()
     work_type_rates = _get_work_type_rates()
     item_rates = _get_item_rates()
+    form_cat = _form_catalog(None)
 
     if request.method == 'POST':
         customer_name  = request.form.get('customer_name', '').strip()
@@ -286,7 +298,7 @@ def create_project():
                                    master_rooms=master_rooms,
                                    master_items=master_items,
                                    rates=rates,
-                                   work_type_rates=work_type_rates,
+                                   work_type_rates=work_type_rates, **form_cat,
                                    item_rates=item_rates,
                                    price_list=_get_price_list(),
                                    form_data={'customer_name': customer_name,
@@ -342,7 +354,7 @@ def create_project():
                            master_rooms=master_rooms,
                            master_items=master_items,
                            rates=rates,
-                           work_type_rates=work_type_rates,
+                           work_type_rates=work_type_rates, **form_cat,
                            item_rates=item_rates,
                            price_list=_get_price_list(),
                            form_data={},
@@ -365,15 +377,18 @@ def view_project(project_id):
     rooms = project.rooms_with_items()
     item_totals = project.get_item_totals(rooms)  # { 'wood|work': area } — measured items only
     fixed_total = project.fixed_items_total(rooms)
+    from . import materials as M
     item_summary = []
-    for key in [f'{w}|{wk}' for w in WOOD_TYPES for wk in WORK_TYPES]:
+    keys = [M.key(w, k) for w, k, _ in M.combos(include_hidden=True)]
+    keys += [k for k in item_totals if k not in keys]
+    for key in keys:
         area = item_totals.get(key, 0.0)
         if area > 0:
             rate = item_rates_flat.get(key, 0.0)
-            parts = key.split('|')
+            wood, _, work = key.partition('|')
             item_summary.append({
-                'label': f'{parts[0]} – {parts[1]}',
-                'wood_type': parts[0], 'work_type': parts[1],
+                'label': M.label(wood, work),
+                'wood_type': wood, 'work_type': work,
                 'area': area, 'rate': rate, 'subtotal': round(area * rate, 2)
             })
     edit_logs = (ProjectEditLog.query
@@ -446,6 +461,7 @@ def edit_project(project_id):
     rates = _get_wood_rates()
     work_type_rates = _get_work_type_rates()
     item_rates = _get_item_rates()
+    form_cat = _form_catalog(project)
 
     if request.method == 'POST':
         customer_name  = request.form.get('customer_name', '').strip()
@@ -490,7 +506,7 @@ def edit_project(project_id):
                                    master_rooms=master_rooms,
                                    master_items=master_items,
                                    rates=rates,
-                                   work_type_rates=work_type_rates,
+                                   work_type_rates=work_type_rates, **form_cat,
                                    item_rates=item_rates,
                                    price_list=_get_price_list(),
                                    form_data={'customer_name': customer_name,
@@ -525,7 +541,7 @@ def edit_project(project_id):
                            master_rooms=master_rooms,
                            master_items=master_items,
                            rates=rates,
-                           work_type_rates=work_type_rates,
+                           work_type_rates=work_type_rates, **form_cat,
                            item_rates=item_rates,
                            price_list=_get_price_list(),
                            form_data={

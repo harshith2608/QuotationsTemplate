@@ -11,7 +11,8 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from .models import AppSetting
-from .catalog import WOOD_TYPES, WORK_TYPES, DEFAULT_WORK, FIXED_ITEMS_LABEL
+from .catalog import FIXED_ITEMS_LABEL
+from . import materials as M
 from .branding import get_brand, tint, luminance, readable_text_on, load_logo_png
 
 
@@ -297,7 +298,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 item_rows.append([item.name, '—', '—',
                                   f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}', '—', f'{_money(subtotal)}'])
                 continue
-            work_type  = getattr(item, 'work_type', DEFAULT_WORK)
+            work_type  = item.work_type or ''
             rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
             subtotal   = item.area * rate
             room_total_area += item.area
@@ -306,7 +307,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 item.name,
                 ft_in(item.length),
                 ft_in(item.width),
-                f'{item.wood_type} – {work_type}',
+                M.label(item.wood_type, work_type),
                 f'{item.area:.2f}',
                 f'{_money(subtotal)}'
             ])
@@ -359,16 +360,14 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     combo_data = [['Material & Work Type', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
     combo_total = 0.0
     combo_area_total = 0.0
-    for wood in WOOD_TYPES:
-        for work in WORK_TYPES:
-            key = f'{wood}|{work}'
-            area = item_totals.get(key, 0.0)
-            if area > 0:
-                rate = _item_rates_map.get(key, 0.0)
-                subtotal = area * rate
-                combo_total += subtotal
-                combo_area_total += area
-                combo_data.append([f'{wood} – {work}', f'{area:,.2f}', f'{_money(rate, ",.0f")}', f'{_money(subtotal)}'])
+    for key in M.ordered_keys(item_totals):
+        area = item_totals.get(key, 0.0)
+        if area > 0:
+            rate = _item_rates_map.get(key, 0.0)
+            subtotal = area * rate
+            combo_total += subtotal
+            combo_area_total += area
+            combo_data.append([M.label_of(key), f'{area:,.2f}', f'{_money(rate, ",.0f")}', f'{_money(subtotal)}'])
     fixed_total = project.fixed_items_total(rooms)
     if fixed_total > 0:
         combo_total += fixed_total
@@ -696,15 +695,13 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     cost_data = [['Material & Work Type', 'Amount (Rs.)']]
     mat_total = 0.0
     total_area_all = 0.0
-    for wood in WOOD_TYPES:
-        for work in WORK_TYPES:
-            key = f'{wood}|{work}'
-            area = item_totals2.get(key, 0.0)
-            if area > 0:
-                subtotal      = area * _item_rates_map2.get(key, 0.0)
-                mat_total    += subtotal
-                total_area_all += area
-                cost_data.append([f'{wood} – {work}', f'{_money(subtotal)}'])
+    for key in M.ordered_keys(item_totals2):
+        area = item_totals2.get(key, 0.0)
+        if area > 0:
+            subtotal      = area * _item_rates_map2.get(key, 0.0)
+            mat_total    += subtotal
+            total_area_all += area
+            cost_data.append([M.label_of(key), f'{_money(subtotal)}'])
     # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
     fixed_total2 = project.fixed_items_total()
     if fixed_total2 > 0:

@@ -411,3 +411,18 @@ class Lead(db.Model):
 
     def __repr__(self):
         return f'<Lead {self.id}>'
+
+
+class Material(db.Model):
+    """A material a business quotes per sqft (Acrylic, Laminates, Glass, PU, Wallpaper…), managed in Admin → Rates.
+    With work types, it is priced per (material, Box/Frame Work); without, one rate per sqft (work_type '').
+    Items store the material by name; renaming updates them. Hidden materials stay valid on old quotations."""
+    __tablename__ = 'materials'
+    id              = db.Column(db.Integer, primary_key=True)
+    name            = db.Column(db.String(60), unique=True, nullable=False)
+    uses_work_types = db.Column(db.Boolean, nullable=False, default=True)
+    active          = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order      = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<Material {self.name}>'

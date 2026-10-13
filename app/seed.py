@@ -17,7 +17,7 @@ from werkzeug.security import generate_password_hash
 from . import db, catalog
 from .models import (User, Project, ProjectAccess, Payment, AppSetting, WoodRate,
                      WorkTypeRate, ItemRate, MasterRoom, MasterItem, ProjectStageChange,
-                     PriceListItem)
+                     PriceListItem, Material)
 
 
 class SeedError(Exception):
@@ -41,10 +41,17 @@ def seed_reference_data():
         db.session.add_all(WorkTypeRate(work_type=w, rate_per_sqft=r)
                            for w, r in catalog.DEFAULT_WORK_TYPE_RATES.items())
         seeded.append('work type rates')
-    if not ItemRate.query.first():
-        db.session.add_all(ItemRate(wood_type=wood, work_type=work,
-                                    rate_per_sqft=catalog.DEFAULT_ITEM_RATES.get(wood, 0.0))
-                           for wood in catalog.WOOD_TYPES for work in catalog.WORK_TYPES)
+    fresh_rates = not ItemRate.query.first()
+    if not Material.query.first():
+        db.session.add_all(Material(name=n, uses_work_types=w, active=True, sort_order=i)
+                           for i, (n, w, _) in enumerate(catalog.DEFAULT_MATERIALS))
+        seeded.append('materials')
+    if fresh_rates:
+        rows = []
+        for name, uses_work, rate in catalog.DEFAULT_MATERIALS:
+            for work in (catalog.WORK_TYPES if uses_work else ['']):
+                rows.append(ItemRate(wood_type=name, work_type=work, rate_per_sqft=rate))
+        db.session.add_all(rows)
         seeded.append('item rates')
     if not MasterRoom.query.first():
         db.session.add_all(MasterRoom(name=n) for n in catalog.DEFAULT_ROOMS)

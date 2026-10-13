@@ -10,55 +10,113 @@
 
 <div class="alert alert-info py-2 small">
   <i class="bi bi-info-circle me-1"></i>
-  Set the rate per sqft for each Material + Work Type combination.
-  Changes apply to <strong>new</strong> quotation calculations immediately.
-  Grand Total = Σ (Area × Rate) per item.
+  Set your rate per sqft for each material. A quotation's total = Σ (area × rate) for every measured item,
+  plus fittings. Rate changes apply when a quotation is next saved.
 </div>
 
 <div class="row g-3">
 
-  <!-- Combined Item Rates -->
-  <div class="col-12">
+  <!-- Materials & rates -->
+  <div class="col-12" id="materials">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header">
-        <i class="bi bi-layers me-2"></i>Material &amp; Work Type Rates (&#8377;/sqft)
+        <i class="bi bi-layers me-2"></i>Materials &amp; Rates (&#8377;/sqft)
       </div>
       <div class="card-body">
+        <p class="small text-muted mb-3">
+          Materials with <strong>work types</strong> have a rate for {{ work_types|join(' and ') }}.
+          Others (e.g. Glass, Wallpaper) have <strong>one rate per sqft</strong>.
+          Rename a material and existing quotations follow. <strong>Hide</strong> one you no longer offer:
+          old quotations keep it, new ones won't show it.
+        </p>
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="table-responsive">
-            <table class="table table-bordered align-middle mb-3">
+            <table class="table table-bordered align-middle mb-3 ki-materials-table">
               <thead class="ki-table-head">
                 <tr>
-                  <th class="ps-3">Material</th>
-                  {% for work in work_types %}
-                  <th class="text-center">{{ work }}</th>
-                  {% endfor %}
+                  <th class="ps-3" style="min-width:170px">Material</th>
+                  {% for work in work_types %}<th class="text-center" style="min-width:130px">{{ work }}</th>{% endfor %}
+                  <th class="text-center" style="min-width:150px">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {% for wood in wood_types %}
-                <tr>
-                  <td class="ps-3 fw-semibold">{{ wood }}</td>
-                  {% for work in work_types %}
-                  {% set field_key = "rate_" + wood.lower() + "_" + work.lower().replace(' ', '_') %}
-                  <td>
-                    <div class="input-group input-group-sm">
-                      <span class="input-group-text">&#8377;</span>
-                      <input type="number" name="{{ field_key }}" class="form-control text-end"
-                             step="0.01" min="0" placeholder="0"
-                             value="{{ item_rates[wood][work] | round(2) }}">
-                    </div>
+                {% for row in materials %}{% set m = row.m %}
+                <tr class="{{ '' if m.active else 'table-light text-muted' }}">
+                  <td class="ps-2" data-label="Material">
+                    <input type="text" name="name_{{ m.id }}" class="form-control form-control-sm fw-semibold"
+                           value="{{ m.name }}" maxlength="60" aria-label="Material name">
                   </td>
-                  {% endfor %}
+                  {% if m.uses_work_types %}
+                    {% for i, work, rate in row.rates %}
+                    <td data-label="{{ work }}">
+                      <div class="input-group input-group-sm">
+                        <span class="input-group-text">&#8377;</span>
+                        <input type="number" name="rate_{{ m.id }}_{{ i }}" class="form-control text-end" step="0.01" min="0"
+                               value="{{ rate | round(2) }}" aria-label="{{ m.name }} {{ work }} rate">
+                      </div>
+                    </td>
+                    {% endfor %}
+                  {% else %}
+                    {% set i, work, rate = row.rates[0] %}
+                    <td colspan="{{ work_types|length }}" data-label="Rate per sqft">
+                      <div class="input-group input-group-sm" style="max-width:260px;margin:0 auto">
+                        <span class="input-group-text">&#8377;</span>
+                        <input type="number" name="rate_{{ m.id }}_0" class="form-control text-end" step="0.01" min="0"
+                               value="{{ rate | round(2) }}" aria-label="{{ m.name }} rate">
+                        <span class="input-group-text small">one rate</span>
+                      </div>
+                    </td>
+                  {% endif %}
+                  <td class="text-center text-nowrap" data-label="Status">
+                    <span class="badge {{ 'bg-success' if m.active else 'bg-secondary' }} me-1">{{ 'Shown' if m.active else 'Hidden' }}</span>
+                    <button type="submit" name="item_rates_submit" value="toggle:{{ m.id }}" class="btn btn-sm btn-outline-secondary py-0"
+                            title="{{ 'Hide from new quotations' if m.active else 'Show on new quotations' }}">{{ 'Hide' if m.active else 'Show' }}</button>
+                    {% if not row.in_use %}
+                    <button type="submit" name="item_rates_submit" value="delete:{{ m.id }}" class="btn btn-sm btn-outline-danger py-0"
+                            onclick='return confirm({{ ("Delete " ~ m.name ~ "? This cannot be undone.")|tojson }})' title="Delete">
+                      <i class="bi bi-trash"></i></button>
+                    {% endif %}
+                  </td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          <button type="submit" name="item_rates_submit" class="btn btn-primary ki-btn-primary">
-            <i class="bi bi-check-circle me-2"></i>Update Rates
+          <button type="submit" name="item_rates_submit" value="save" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Save Materials &amp; Rates
           </button>
+        </form>
+
+        <hr class="my-4">
+        <h6 class="fw-bold mb-2"><i class="bi bi-plus-circle me-1"></i>Add a material</h6>
+        <form method="POST" action="{{ url_for('admin.rates') }}" class="row g-2 align-items-end" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-medium mb-1" for="mat_name">Name</label>
+            <input type="text" id="mat_name" name="mat_name" class="form-control" maxlength="60"
+                   placeholder="e.g. Glass, PU Finish, Wallpaper" required>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small fw-medium mb-1" for="mat_rate">Rate per sqft</label>
+            <div class="input-group">
+              <span class="input-group-text">&#8377;</span>
+              <input type="number" id="mat_rate" name="mat_rate" class="form-control text-end" step="0.01" min="0" placeholder="0">
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="mat_uses_work" name="mat_uses_work" value="1">
+              <label class="form-check-label small" for="mat_uses_work">Priced by {{ work_types|join(' / ') }}</label>
+            </div>
+          </div>
+          <div class="col-12 col-md-2">
+            <button type="submit" name="material_add" value="1" class="btn btn-outline-primary w-100">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </div>
+          <div class="col-12"><p class="small text-muted mb-0">Tick "Priced by…" for materials like PU or Duco that have
+            different rates for {{ work_types|join(' and ') }} (the rate above is used for both; adjust each one in the table after adding).</p></div>
         </form>
       </div>
     </div>
