@@ -13,6 +13,8 @@ from . import billing, db
 
 share_bp = Blueprint('share', __name__)
 
+DETAILS = {'summary': 'Material breakdown', 'full': 'Full detailed quotation'}
+
 # Public pages: allowed even when the business's plan has ended (see plan.ALWAYS_ALLOWED)
 PUBLIC_ENDPOINTS = {'share.view', 'share.pdf', 'share.respond'}
 
@@ -74,10 +76,28 @@ def create(project_id):
         flash('Save the quotation first.', 'warning')
     elif not _active_share(project):
         billing.ensure_first_revision(project, current_user)
+        detail = request.form.get('detail')
         db.session.add(QuoteShare(project_id=project.id, token=secrets.token_urlsafe(24),
-                                  created_by=current_user.id))
+                                  created_by=current_user.id, detail=detail if detail in DETAILS else 'summary'))
         db.session.commit()
         flash('Approval link created. Send it to your customer.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#approval')
+
+
+@share_bp.route('/projects/<int:project_id>/share/detail', methods=['POST'])
+@login_required
+def set_detail(project_id):
+    """Change what the customer's link shows (same link)."""
+    from .models import Project
+    project = Project.query.get_or_404(project_id)
+    if not _can_view(project):
+        abort(403)
+    share = _active_share(project)
+    detail = request.form.get('detail')
+    if share and detail in DETAILS:
+        share.detail = detail
+        db.session.commit()
+        flash(f'The link now shows the {DETAILS[detail].lower()}.', 'success')
     return redirect(url_for('projects.view_project', project_id=project.id) + '#approval')
 
 
@@ -140,9 +160,10 @@ def view(token):
 def pdf(token):
     share, project = _share_or_404(token)
     from .models import AppSetting
-    from .pdf_utils import generate_customer_pdf
+    from .pdf_utils import generate_customer_pdf, generate_pdf
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
-    buf = generate_customer_pdf(project, payment_settings=pay, total_paid=billing.paid_total(project))
+    make = generate_pdf if share.detail == 'full' else generate_customer_pdf      # full or material breakdown
+    buf = make(project, payment_settings=pay, total_paid=billing.paid_total(project))
     name = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
     return _private(send_file(buf, mimetype='application/pdf', download_name=name, as_attachment=False))
 

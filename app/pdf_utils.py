@@ -969,14 +969,40 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
                              ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('PADDING', (0, 0), (-1, -1), 7)]))
     elements += [box, Spacer(1, 12)]
 
-    # Lines
+    # Lines: room by room (a heading row per room, with a room total) or one line per material
     show_hsn = any(l.get('hsn') for l in data['lines'])
     header = ['#', 'Description'] + (['HSN/SAC'] if show_hsn else []) + ['Qty', 'Rate (Rs.)', 'Amount (Rs.)']
-    rows = [header]
-    for n, l in enumerate(data['lines'], 1):
+    ncols = len(header)
+    detail_style = ParagraphStyle('InvDetail', parent=small, fontSize=7.5, textColor=colors.HexColor('#6b7280'))
+    rows, extra_style, n = [header], [], 0
+
+    def room_total(name, amount):
+        rows.append([f'{name} total'] + [''] * (ncols - 2) + [_money(amount)])
+        r = len(rows) - 1
+        extra_style.extend([('SPAN', (0, r), (ncols - 2, r)), ('ALIGN', (0, r), (-1, r), 'RIGHT'),
+                            ('FONTNAME', (0, r), (-1, r), 'Helvetica-Bold'), ('TEXTCOLOR', (0, r), (-1, r), BRAND_DARK),
+                            ('BACKGROUND', (0, r), (-1, r), BRAND_LIGHT)])
+    current, room_sum = None, 0.0
+    for l in data['lines']:
+        room = l.get('room')
+        if room is not None and room != current:
+            if current is not None:
+                room_total(current, room_sum)
+            current, room_sum = room, 0.0
+            rows.append([room.upper()] + [''] * (ncols - 1))
+            r = len(rows) - 1
+            extra_style.extend([('SPAN', (0, r), (-1, r)), ('BACKGROUND', (0, r), (-1, r), ROOM_HEADER_BG),
+                                ('TEXTCOLOR', (0, r), (-1, r), TABLE_HEADER_FG), ('FONTNAME', (0, r), (-1, r), 'Helvetica-Bold'),
+                                ('ALIGN', (0, r), (-1, r), 'LEFT')])
+        n += 1
+        room_sum += l['amount']
         qty = f"{l['qty']:,.2f} {l['unit']}" if l['unit'] == 'sqft' else f"{l['qty']:g} {l['unit']}"
-        rows.append([str(n), Paragraph(escape(l['description']), small)] + ([l.get('hsn', '')] if show_hsn else [])
-                    + [qty, _money(l['rate']), _money(l['amount'])])
+        desc = [Paragraph(escape(l['description']), small)]
+        if l.get('detail'):
+            desc.append(Paragraph(escape(l['detail']), detail_style))
+        rows.append([str(n), desc] + ([l.get('hsn', '')] if show_hsn else []) + [qty, _money(l['rate']), _money(l['amount'])])
+    if current is not None:
+        room_total(current, room_sum)
     widths = [0.06, 0.40, 0.12, 0.14, 0.13, 0.15] if show_hsn else [0.06, 0.48, 0.16, 0.14, 0.16]
     lines_table = Table(rows, colWidths=[page_width * w for w in widths], repeatRows=1)
     lines_table.setStyle(TableStyle([
@@ -985,7 +1011,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
         ('ALIGN', (2, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')), ('PADDING', (0, 0), (-1, -1), 5),
-    ]))
+    ] + extra_style))
     elements += [lines_table, Spacer(1, 8)]
 
     # Totals

@@ -82,7 +82,8 @@ ok('employees cannot issue invoices', r.status_code == 403)
 with app.app_context():
     n0 = Invoice.query.filter_by(fy=FY).count()      # the demo data already has an invoice this year
 num = lambda k: f'QR9X/{FY}/{n0 + k:03d}'
-r = c.post(f'/projects/{pid}/invoice', data={'gst_rate': '18', 'prices': 'exclusive', 'place_code': '29'}, follow_redirects=True)
+r = c.post(f'/projects/{pid}/invoice', data={'gst_rate': '18', 'prices': 'exclusive', 'place_code': '29', 'layout': 'summary'},
+           follow_redirects=True)
 with app.app_context():
     inv = Invoice.query.filter_by(project_id=pid).one()
     d = billing.invoice_data(inv)
@@ -91,7 +92,7 @@ ok(f'invoice number {inv.number}: prefix / financial year / next number', inv.nu
 ok('in-state customer: CGST 9% + SGST 9% on top, rounded to the rupee',
    [t['label'] for t in d['taxes']] == ['CGST @ 9%', 'SGST @ 9%'] and d['taxable'] == 71900
    and inv_total == round(71900 * 1.18) and d['title'] == 'TAX INVOICE')
-ok('invoice lines: one per material & work + fittings, with HSN', [(l['description'], l['qty']) for l in d['lines']]
+ok('summary invoice: one line per material & work + fittings, with HSN', [(l['description'], l['qty']) for l in d['lines']]
    == [('Acrylic – Box Work', 12.0), ('Laminates – Box Work', 60.0), ('Magic Corner', 1)] and d['lines'][0]['hsn'] == '9403')
 txt = pdftext(c, f'/projects/{pid}/invoices/{inv_id}/pdf')
 ok('invoice PDF: number, GST lines, total in words, notes', num(1) in txt and 'CGST @ 9%' in txt
@@ -135,6 +136,11 @@ with app.app_context():
        and dpl['title'] == 'INVOICE' and not plain.with_gst)
     plain_id = plain.id
 ptxt = pdftext(c, f'/projects/{old_id}/invoices/{plain_id}/pdf')
+ok('room-by-room is the default: every item with its size under its room', dpl['layout'] == 'rooms'
+   and [(l['room'], l['description']) for l in dpl['lines']][:2] == [('Study Room', 'Study Table'), ('Study Room', 'Display Unit')]
+   and dpl['lines'][0]['detail'].startswith('5 ft × 2 ft 6 in · '))
+ok('room-by-room invoice PDF: room headings, item sizes and room totals', 'STUDY ROOM' in ptxt and '5 ft × 2 ft 6 in' in ptxt
+   and 'Study Room total' in ptxt)
 ok('"Without GST" invoice PDF never mentions GST, GSTIN, HSN or tax', 'GST' not in ptxt and 'HSN' not in ptxt
    and 'tax' not in ptxt.lower() and 'Place of supply' not in ptxt and 'INVOICE' in ptxt and 'Thank you for your business.' in ptxt)
 ok('quotation page marks it "without GST"', 'without GST</span>' in c.get(f'/projects/{old_id}').text)
@@ -181,13 +187,23 @@ with app.app_context():
     token = QuoteShare.query.filter_by(project_id=mid, active=True).one().token
 anon = app.test_client()
 r = anon.get(f'/q/{token}')
+ok('link shows the material breakdown by default: no sizes, no per-item amounts', "What's included" in r.text
+   and '10 ft × 5 ft' not in r.text and 'Laminates – Box Work' in r.text)
+ok('…and its PDF is the Initial (customer) quotation', 'Room-by-Room' not in pdftext(anon, f'/q/{token}/pdf'))
+c.post(f'/projects/{mid}/share/detail', data={'detail': 'full'})
+rf = anon.get(f'/q/{token}')
+ok('switched to full detail: every item with size and amount, room totals', '10 ft × 5 ft' in rf.text and 'Hall total' in rf.text
+   and 'Room-by-Room' in pdftext(anon, f'/q/{token}/pdf'))
+c.post(f'/projects/{mid}/share/detail', data={'detail': 'summary'})
 ok('customer opens the link without logging in', r.status_code == 200 and 'Approval Customer' in r.text and 'Accept quotation' in r.text
    and r.headers.get('X-Robots-Tag', '').startswith('noindex') and r.headers.get('Cache-Control') == 'no-store')
 ok('customer page never shows costs or profit', 'profit' not in r.text.lower() and 'your cost' not in r.text.lower())
 ok('customer can download the PDF', anon.get(f'/q/{token}/pdf').status_code == 200 and anon.get(f'/q/{token}/pdf').mimetype == 'application/pdf')
+with app.app_context():
+    views = QuoteShare.query.filter_by(token=token).one().view_count
 c.get(f'/q/{token}')
 with app.app_context():
-    ok('views counted (not staff views)', QuoteShare.query.filter_by(token=token).one().view_count == 1)
+    ok(f'customer views counted ({views}), staff views not', views >= 2 and QuoteShare.query.filter_by(token=token).one().view_count == views)
 ok('wrong token → 404', anon.get('/q/not-a-real-token').status_code == 404)
 t = c.get(f'/projects/{mid}/whatsapp').headers['Location']
 ok('WhatsApp summary includes the approval link', f'/q/{token}' in unquote(t))

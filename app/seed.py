@@ -203,6 +203,7 @@ def _seed_demo_quote_to_cash(users):
         if not p:
             continue
         share = QuoteShare(project_id=p.id, token=secrets.token_urlsafe(24), created_by=admin.id,
+                           detail='full' if kind == 'accepted' else 'summary',
                            created_at=p.created_at, first_viewed_at=p.created_at + timedelta(hours=3),
                            last_viewed_at=now - timedelta(hours=5), view_count=3 if kind == 'accepted' else 2)
         db.session.add(share)

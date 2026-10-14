@@ -605,6 +605,13 @@
         <input type="hidden" name="with_gst" value="0">
         <div class="col-12 col-md-9 small text-muted d-flex align-items-end">No GSTIN in Company settings, so this will be a plain invoice without GST.</div>
         {% endif %}
+        <div class="col-12"><label class="form-label small mb-1 d-block">Show on the invoice</label>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Invoice layout">
+            <input type="radio" class="btn-check" name="layout" id="layRooms" value="rooms" {% if st.layout == 'rooms' %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="layRooms">Room by room</label>
+            <input type="radio" class="btn-check" name="layout" id="laySum" value="summary" {% if st.layout == 'summary' %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="laySum">Summary by material</label>
+          </div></div>
         <div class="col-12"><label class="form-label small mb-1">Notes on the invoice</label>
           <textarea name="notes" class="form-control form-control-sm" rows="2" maxlength="1500">{{ st.notes }}</textarea></div>
         <div class="col-12"><button class="btn btn-sm btn-primary" type="submit"
@@ -632,6 +639,15 @@
     {% endif %}
     {% if sh and sh.share %}
       <p class="small mb-2">Your customer opens this link to see the quotation, download the PDF and tap <strong>Accept</strong>. Accepting moves a pending quotation to Confirmed and notifies you.</p>
+      <form method="POST" action="{{ url_for('share.set_detail', project_id=project.id) }}" class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <span class="small fw-semibold">Customer sees:</span>
+        <select name="detail" class="form-select form-select-sm" style="max-width:230px" onchange="this.form.submit()" aria-label="What the customer sees">
+          <option value="summary" {% if sh.share.detail != 'full' %}selected{% endif %}>Material breakdown</option>
+          <option value="full" {% if sh.share.detail == 'full' %}selected{% endif %}>Full detailed quotation</option>
+        </select>
+        <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Change</button></noscript>
+      </form>
       <div class="input-group input-group-sm mb-2">
         <input type="text" class="form-control" value="{{ sh.url }}" readonly id="approvalUrl" aria-label="Approval link">
         <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('approvalUrl').value); this.textContent='Copied!'">Copy</button>
@@ -649,10 +665,19 @@
       </div>
     {% else %}
       <p class="small text-muted mb-2">Send your customer a link to view this quotation and accept it online, no app or login needed.</p>
-      <form method="POST" action="{{ url_for('share.create', project_id=project.id) }}">
+      <form method="POST" action="{{ url_for('share.create', project_id=project.id) }}" class="d-flex flex-wrap align-items-center gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <span class="small fw-semibold">Customer sees:</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="What the customer sees">
+          <input type="radio" class="btn-check" name="detail" id="detSum" value="summary" checked>
+          <label class="btn btn-outline-primary" for="detSum">Material breakdown</label>
+          <input type="radio" class="btn-check" name="detail" id="detFull" value="full">
+          <label class="btn btn-outline-primary" for="detFull">Full detailed quotation</label>
+        </div>
         <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
       </form>
+      <div class="form-text">Material breakdown: amounts per material, items listed by room without sizes (like the Initial Quotation PDF).
+        Full: every item with its size and amount, room by room (like the Full Quotation PDF).</div>
     {% endif %}
   </div>
 </div>

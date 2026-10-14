@@ -26,7 +26,9 @@ def ready():
         return g._billing_ready
     from sqlalchemy import inspect
     try:
-        found = inspect(db.session.connection()).has_table('invoices', schema=tenancy.current_schema())
+        # the newest quote-to-cash column: everything before it exists too
+        cols = inspect(db.session.connection()).get_columns('quote_shares', schema=tenancy.current_schema())
+        found = any(c['name'] == 'detail' for c in cols)
     except Exception:
         found = False
     if found:
@@ -218,7 +220,8 @@ GST_RATES = (0, 5, 12, 18, 28)
 GSTIN_RE = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$')
 
 # Invoice settings (Admin → Settings → Invoices), stored in app_settings
-INVOICE_KEYS = ('invoice_prefix', 'invoice_gst_rate', 'invoice_hsn', 'invoice_prices', 'invoice_notes', 'invoice_with_gst')
+INVOICE_KEYS = ('invoice_prefix', 'invoice_gst_rate', 'invoice_hsn', 'invoice_prices', 'invoice_notes', 'invoice_with_gst',
+                'invoice_layout')
 DEFAULT_PREFIX = 'INV'
 DEFAULT_GST_RATE = 18
 PRICES_EXCLUSIVE = 'exclusive'      # quotation amounts are before GST (GST added on top)
@@ -240,6 +243,7 @@ def invoice_settings(values=None):
         'prices': s['invoice_prices'] if s['invoice_prices'] in (PRICES_EXCLUSIVE, PRICES_INCLUSIVE) else PRICES_EXCLUSIVE,
         'notes': (s['invoice_notes'] or '').strip(),
         'with_gst': s['invoice_with_gst'] != 'no',          # the usual choice; each invoice can still pick
+        'layout': s['invoice_layout'] if s['invoice_layout'] in ('rooms', 'summary') else 'rooms',
     }
 
 
@@ -323,8 +327,26 @@ class InvoiceError(Exception):
     pass
 
 
-def invoice_lines(snapshot, hsn=''):
-    """Invoice lines from a quotation snapshot: one per material & work (sqft) and one per fitting."""
+LAYOUT_ROOMS = 'rooms'          # every item, grouped by room (like the full quotation)
+LAYOUT_SUMMARY = 'summary'      # one line per material & work, plus fittings
+
+
+def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
+    """Invoice lines from a quotation snapshot. Room by room: each item with its size, under its room
+    ('room' on the line). Summary: one line per material & work (sqft) and one per fitting."""
+    if layout == LAYOUT_ROOMS:
+        lines = []
+        for room in snapshot['rooms']:
+            for it in room['items']:
+                if it['type'] == 'fixed':
+                    lines.append({'room': room['name'], 'description': it['name'], 'detail': '', 'hsn': hsn,
+                                  'qty': it['quantity'], 'unit': 'nos', 'rate': it['unit_price'], 'amount': it['amount']})
+                else:
+                    lines.append({'room': room['name'], 'description': it['name'],
+                                  'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])} · {it['material']}",
+                                  'hsn': hsn, 'qty': round(it['area'], 2), 'unit': 'sqft', 'rate': it['rate'],
+                                  'amount': it['amount']})
+        return lines
     lines = [{'description': s['label'], 'hsn': hsn, 'qty': s['area'], 'unit': 'sqft', 'rate': s['rate'],
               'amount': s['amount']} for s in snapshot['summary']]
     fittings = {}
@@ -340,7 +362,7 @@ def invoice_lines(snapshot, hsn=''):
 
 
 def build_invoice(project, issued_on, gst_rate, prices, customer_gstin='', place_code='', hsn='', notes='',
-                  with_gst=True):
+                  with_gst=True, layout=LAYOUT_ROOMS):
     """Work out an invoice for the quotation as it is now. Returns the frozen data dict.
     Without GST (chosen, or no GSTIN on the business) the invoice carries no GST details at all."""
     from .branding import get_brand
@@ -360,7 +382,8 @@ def build_invoice(project, issued_on, gst_rate, prices, customer_gstin='', place
     if rate not in GST_RATES:
         raise InvoiceError('Choose a GST rate.')
 
-    lines = invoice_lines(snap, hsn)
+    layout = layout if layout in (LAYOUT_ROOMS, LAYOUT_SUMMARY) else LAYOUT_ROOMS
+    lines = invoice_lines(snap, hsn, layout)
     gross = round(sum(l['amount'] for l in lines), 2)
     discount = round(snap['discount']['amount'] or 0, 2)
     after_discount = round(max(gross - discount, 0), 2)
@@ -399,6 +422,7 @@ def build_invoice(project, issued_on, gst_rate, prices, customer_gstin='', place
         'taxable': taxable,
         'gst_rate': rate,
         'prices': prices,
+        'layout': layout,
         'taxes': taxes,
         'round_off': round(total - before_round, 2),
         'total': total,

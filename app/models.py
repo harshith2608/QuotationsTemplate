@@ -444,6 +444,7 @@ class QuoteShare(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
     token      = db.Column(db.String(64), unique=True, nullable=False, index=True)
     active     = db.Column(db.Boolean, nullable=False, default=True)
+    detail     = db.Column(db.String(10), nullable=False, default='summary')   # 'summary' (by material) | 'full'
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     first_viewed_at = db.Column(db.DateTime, nullable=True)

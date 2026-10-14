@@ -69,17 +69,34 @@
     </div>
   </div>
 
+  {% if share.detail == 'full' %}
+  <div class="q-card">
+    <div class="fw-semibold mb-2">Room by room</div>
+    {% for room in snap.rooms %}
+      <div class="fw-semibold small mt-3 mb-1" style="color:var(--p)">{{ room.name }}</div>
+      <div class="table-responsive"><table class="table table-sm small mb-0">
+        <tbody>
+        {% for it in room['items'] %}
+          <tr>
+            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ "%.2f"|format(it.area) }} sqft · {{ it.material }}{% endif %}</div></td>
+            <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
+          </tr>
+        {% endfor %}
+          <tr class="fw-semibold"><td class="text-end">{{ room.name }} total</td>
+            <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(room['items']|sum(attribute='amount')) }}</td></tr>
+        </tbody>
+      </table></div>
+    {% endfor %}
+  </div>
+  {% else %}
   <div class="q-card">
     <div class="fw-semibold mb-2">What's included</div>
     {% for room in snap.rooms %}
       <div class="fw-semibold small mt-2" style="color:var(--p)">{{ room.name }}</div>
-      <ul class="small mb-1 ps-3">
-        {% for it in room['items'] %}
-        <li>{{ it.name }}{% if it.type == 'fixed' %} × {{ '%g'|format(it.quantity) }}{% else %} <span class="q-muted">({{ it.length|ft_in }} × {{ it.width|ft_in }}, {{ it.material }})</span>{% endif %}</li>
-        {% endfor %}
-      </ul>
+      <div class="small q-muted mb-1">{{ room['items']|map(attribute='name')|join(' · ') }}</div>
     {% endfor %}
   </div>
+  {% endif %}
 
   <div class="q-card">
     <div class="fw-semibold mb-2">Price</div>

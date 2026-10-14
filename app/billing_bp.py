@@ -62,6 +62,7 @@ def create_invoice(project_id):
     try:
         inv = billing.issue_invoice(project, current_user, issued_on=issued_on, gst_rate=gst_rate, prices=prices,
                                     with_gst=with_gst,
+                                    layout=request.form.get('layout', settings['layout']),
                                     customer_gstin=request.form.get('customer_gstin', ''),
                                     place_code=request.form.get('place_code', ''),
                                     hsn=(request.form.get('hsn', settings['hsn']) or '').strip()[:10],

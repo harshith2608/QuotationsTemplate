@@ -456,6 +456,18 @@
           <label class="form-label small fw-semibold" for="invHsn">HSN / SAC code <span class="text-muted fw-normal">(optional)</span></label>
           <input id="invHsn" name="invoice_hsn" class="form-control" maxlength="10" value="{{ invoice_settings.hsn }}" placeholder="e.g. 9403 or 9954">
         </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold d-block">Invoice lines</label>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="invoice_layout" id="layR" value="rooms" {% if invoice_settings.layout == 'rooms' %}checked{% endif %}>
+            <label class="form-check-label small" for="layR">room by room (every item with its size)</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="invoice_layout" id="layS" value="summary" {% if invoice_settings.layout == 'summary' %}checked{% endif %}>
+            <label class="form-check-label small" for="layS">summary by material (shorter)</label>
+          </div>
+          <div class="form-text">You can still choose for each invoice.</div>
+        </div>
         {% if business_state %}
         <div class="col-12">
           <label class="form-label small fw-semibold d-block">Usually issue invoices</label>
