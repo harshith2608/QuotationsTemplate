@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "ignoreCommand": "bash tools/vercel_ignore_build.sh",
   "builds": [
     {
       "src": "run.py",

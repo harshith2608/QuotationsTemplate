@@ -588,6 +588,13 @@ and create staff logins in **Admin → Users**.
    `bootstrap` only fills empty reference tables and encrypts any leftover plain values; it never
    changes your data. Then `unset DATABASE_URL DATA_ENCRYPTION_KEY`, merge to `main` and push.
 
+**Pushes that don't need a build.** Every Vercel project built from this repo (demo, trials, console and
+each customer) skips the build when a push only changes `docs/`, `tools/`, `tests/`, `static/ads/`,
+`ad-videos/` or `.md` files (`tools/vercel_ignore_build.sh`, set as `ignoreCommand` in `vercel.json`).
+Those deployments show as **Canceled** ("Ignored Build Step") in Vercel: that's expected, and the live
+site stays on the last real deploy. A **Redeploy** of the same commit (e.g. after changing an
+environment variable) always builds.
+
 ---
 
 ## 8. Support requests
