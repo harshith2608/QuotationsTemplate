@@ -902,7 +902,7 @@ def whatsapp_share(project_id):
         lines += ["", "*Payment Details:*"] + pay_lines
 
     if approval_url:
-        lines += ["", f"👉 *View and accept your quotation online:* {approval_url}"]
+        lines += ["", "👉 *View and accept your quotation online:*", approval_url]
     lines += [
         "",
         "_Please find the detailed PDF quotation attached._",

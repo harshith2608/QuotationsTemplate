@@ -636,7 +636,7 @@
         <input type="text" class="form-control" value="{{ sh.url }}" readonly id="approvalUrl" aria-label="Approval link">
         <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('approvalUrl').value); this.textContent='Copied!'">Copy</button>
       </div>
-      {% set wa_text = 'Hello ' ~ project.customer_name ~ ', here is your quotation from ' ~ brand.name ~ '. You can view it and accept it online: ' ~ sh.url %}
+      {% set wa_text = 'Hello ' ~ project.customer_name ~ ',\n\nHere is your quotation from ' ~ brand.name ~ '. Tap the link to view it, download the PDF and accept it online:\n\n' ~ sh.url ~ '\n\nThank you!' %}
       <div class="d-flex flex-wrap gap-2 align-items-center">
         <a class="btn btn-sm btn-success" target="_blank" rel="noopener"
            href="https://wa.me/{{ q2c.wa_number }}?text={{ wa_text|urlencode }}"><i class="bi bi-whatsapp me-1"></i>Send link on WhatsApp</a>
