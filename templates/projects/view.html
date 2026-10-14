@@ -16,6 +16,7 @@
     <h4 class="mb-0 fw-bold ki-page-title">
       <i class="bi bi-file-earmark-text me-2 text-primary"></i>
       {{ project.customer_name }}
+      {% if q2c.history and q2c.history[0][0].number > 1 %}<a href="#revisions" class="badge bg-light text-dark border align-middle small text-decoration-none">Rev {{ q2c.history[0][0].number }}</a>{% endif %}
       <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>
     </h4>
   </div>
@@ -113,7 +114,7 @@
         <span class="dot" style="background:{{ st[2] }}"></span>
         <strong>{{ st[0] }}</strong>
         {% if ch.from_stage %}<span class="text-muted">from {{ catalog.STAGES.get(ch.from_stage, ['?'])[0] }}</span>{% endif %}
-        <span class="text-muted">· {{ ch.user.display_name if ch.user else 'Unknown' }} · {{ ch.changed_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+        <span class="text-muted">· {{ ch.user.display_name if ch.user else ('the customer, online' if (ch.note or '').startswith('Accepted online') else 'Unknown') }} · {{ ch.changed_at.strftime('%d %b %Y, %I:%M %p') }}</span>
         {% if ch.note %}<div class="text-body-secondary fst-italic">“{{ ch.note }}”</div>{% endif %}
       </li>
       {% endfor %}
@@ -381,7 +382,7 @@
 </div>
 
 <!-- Payment Tracking -->
-<div class="card shadow-sm border-0 mt-3">
+<div class="card shadow-sm border-0 mt-3" id="payments">
   <div class="card-header ki-card-header d-flex justify-content-between align-items-center">
     <span><i class="bi bi-wallet2 me-2"></i>Payment Status</span>
     {% if current_user.is_admin %}
@@ -394,8 +395,8 @@
     <!-- Summary bar -->
     <div class="row g-2 mb-3 text-center">
       <div class="col-4">
-        <div class="small text-muted">Total</div>
-        <div class="fw-bold text-dark">&#8377;{{ "{:,.2f}".format(project.final_total) }}</div>
+        <div class="small text-muted">{{ 'Invoice total' if q2c.invoice else 'Total' }}</div>
+        <div class="fw-bold text-dark">&#8377;{{ "{:,.2f}".format(amount_due) }}</div>
       </div>
       <div class="col-4">
         <div class="small text-muted">Paid</div>
@@ -410,7 +411,7 @@
     </div>
 
     <!-- Progress bar -->
-    {% set pct = [(total_paid / project.final_total * 100) if project.final_total > 0 else 0, 100] | min %}
+    {% set pct = [(total_paid / amount_due * 100) if amount_due > 0 else 0, 100] | min %}
     <div class="progress mb-3" style="height:10px;">
       <div class="progress-bar bg-success" style="width:{{ pct | round(1) }}%"></div>
     </div>
@@ -505,8 +506,194 @@
     </div>
     <!-- Payment link result -->
     <div id="payLinkResult" class="mt-2" style="display:none;"></div>
+    {% if q2c.ready and balance > 0 and project.status != 'draft' %}
+    <form method="POST" action="{{ url_for('billing.send_reminder', project_id=project.id) }}" target="_blank"
+          class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <span class="small fw-semibold"><i class="bi bi-bell me-1"></i>Payment reminder</span>
+      <div class="input-group input-group-sm" style="max-width:190px"><span class="input-group-text">₹</span>
+        <input type="number" name="amount" class="form-control" min="1" max="{{ '%.2f'|format(balance) }}" step="0.01"
+               value="{{ '%.2f'|format(balance) }}" aria-label="Amount to ask for"></div>
+      {% if settings.razorpay_key_id %}<label class="small d-flex align-items-center gap-1 mb-0"><input type="checkbox" name="with_link" value="1" checked> with payment link</label>{% endif %}
+      <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-whatsapp me-1"></i>Send on WhatsApp</button>
+      {% if q2c.last_reminder %}<span class="small text-muted">Last sent {{ q2c.last_reminder.sent_at.strftime('%d %b %Y') }}</span>{% endif %}
+    </form>
+    {% endif %}
   </div>
 </div>
+
+{% if q2c.ready and project.status != 'draft' %}
+<!-- Invoice -->
+<div class="card shadow-sm border-0 mt-3" id="invoice">
+  <div class="card-header ki-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-receipt me-2"></i>Invoice</span>
+    {% if current_user.is_admin and not q2c.invoice %}
+    <button class="btn btn-sm btn-primary py-0 px-2" type="button" data-bs-toggle="collapse" data-bs-target="#invoiceForm">
+      <i class="bi bi-plus-lg me-1"></i>Create invoice</button>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if q2c.changed_after_invoice %}
+    <div class="alert alert-warning small py-2"><i class="bi bi-exclamation-triangle me-1"></i>The quotation was changed after invoice
+      {{ q2c.invoice.number }} was issued. The invoice keeps what was invoiced; cancel it and issue a new one if the customer should be billed the new amount.</div>
+    {% endif %}
+    {% if q2c.invoices %}
+    <div class="table-responsive"><table class="table table-sm align-middle small mb-2">
+      <thead class="table-light"><tr><th>Invoice</th><th>Date</th><th class="text-end">Total</th><th></th></tr></thead>
+      <tbody>
+      {% for inv in q2c.invoices %}
+        <tr class="{{ 'text-muted' if inv.status == 'cancelled' }}">
+          <td class="fw-semibold">{{ inv.number }}{% if inv.status == 'cancelled' %} <span class="badge bg-secondary">cancelled</span>{% endif %}</td>
+          <td>{{ inv.issued_on.strftime('%d %b %Y') }}</td>
+          <td class="text-end">&#8377;{{ "{:,.2f}".format(inv.total) }}</td>
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-primary py-0" target="_blank" rel="noopener"
+               href="{{ url_for('billing.invoice_pdf', project_id=project.id, invoice_id=inv.id) }}"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>
+            {% if current_user.is_admin and inv.status == 'issued' %}
+            <form method="POST" action="{{ url_for('billing.cancel_invoice', project_id=project.id, invoice_id=inv.id) }}" class="d-inline"
+                  onsubmit="return confirm('Cancel invoice {{ inv.number }}? It stays on record as cancelled and its number is not reused.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger py-0" type="submit">Cancel</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% elif not current_user.is_admin %}
+    <p class="small text-muted mb-0">No invoice yet. An admin can create one.</p>
+    {% else %}
+    <p class="small text-muted mb-0">Turn this quotation into a {{ 'GST tax invoice' if q2c.business_state else 'invoice' }} in one step. Payments already recorded are shown against it.</p>
+    {% endif %}
+
+    {% if current_user.is_admin and not q2c.invoice %}
+    {% set st = q2c.invoice_settings %}
+    <div class="collapse" id="invoiceForm">
+      <form method="POST" action="{{ url_for('billing.create_invoice', project_id=project.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-6 col-md-3"><label class="form-label small mb-1">Invoice date</label>
+          <input type="date" name="issued_on" class="form-control form-control-sm" value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}"></div>
+        {% if q2c.business_state %}
+        <div class="col-6 col-md-3"><label class="form-label small mb-1">GST rate</label>
+          <select name="gst_rate" class="form-select form-select-sm">{% for r in q2c.gst_rates %}<option value="{{ r }}" {% if r == st.gst_rate %}selected{% endif %}>{{ r }}%</option>{% endfor %}</select></div>
+        <div class="col-12 col-md-6"><label class="form-label small mb-1">Quoted prices are</label>
+          <select name="prices" class="form-select form-select-sm">
+            <option value="exclusive" {% if st.prices == 'exclusive' %}selected{% endif %}>before GST (add GST on top)</option>
+            <option value="inclusive" {% if st.prices == 'inclusive' %}selected{% endif %}>including GST</option></select></div>
+        <div class="col-12 col-md-6"><label class="form-label small mb-1">Customer GSTIN <span class="text-muted">(business customers)</span></label>
+          <input name="customer_gstin" class="form-control form-control-sm text-uppercase" maxlength="15" placeholder="optional"></div>
+        <div class="col-12 col-md-6"><label class="form-label small mb-1">Place of supply</label>
+          <select name="place_code" class="form-select form-select-sm">
+            {% for code, name in q2c.states.items()|sort(attribute='1') %}<option value="{{ code }}" {% if code == q2c.business_state %}selected{% endif %}>{{ name }}</option>{% endfor %}
+          </select></div>
+        {% else %}
+        <input type="hidden" name="gst_rate" value="0">
+        <div class="col-12 col-md-9 small text-muted d-flex align-items-end">No GSTIN in Company settings, so this will be an invoice without GST.</div>
+        {% endif %}
+        <div class="col-6 col-md-3"><label class="form-label small mb-1">HSN / SAC</label>
+          <input name="hsn" class="form-control form-control-sm" maxlength="10" value="{{ st.hsn }}" placeholder="optional"></div>
+        <div class="col-12"><label class="form-label small mb-1">Notes on the invoice</label>
+          <textarea name="notes" class="form-control form-control-sm" rows="2" maxlength="1500">{{ st.notes }}</textarea></div>
+        <div class="col-12"><button class="btn btn-sm btn-primary" type="submit"
+            onclick="return confirm('Issue the invoice now? Invoice numbers can\'t be reused, but you can cancel it later.')"><i class="bi bi-receipt me-1"></i>Issue invoice</button>
+          <a class="small ms-2" href="{{ url_for('admin.settings', tab='invoices') }}">Invoice settings</a></div>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Online approval -->
+{% set sh = q2c.share %}
+<div class="card shadow-sm border-0 mt-3" id="approval">
+  <div class="card-header ki-card-header"><i class="bi bi-hand-thumbs-up me-2"></i>Online approval</div>
+  <div class="card-body">
+    {% if sh and sh.latest %}
+      {% set l = sh.latest %}
+      <div class="alert {{ 'alert-success' if l.kind == 'accepted' else 'alert-info' }} small py-2">
+        {% if l.kind == 'accepted' %}<i class="bi bi-check-circle-fill me-1"></i><strong>Accepted</strong> by {{ l.name }} on {{ l.created_at|ist_time }}
+          for &#8377;{{ "{:,.2f}".format(l.total or 0) }}{% if l.revision %} (revision {{ l.revision }}){% endif %}.
+        {% else %}<i class="bi bi-chat-dots me-1"></i><strong>Changes requested</strong> on {{ l.created_at|ist_time('%d %b %Y') }}: “{{ l.note }}”{% endif %}
+        {% if not sh.latest_is_current %}<div class="mt-1">The quotation has changed since. The customer can accept the new version from the same link.</div>{% endif %}
+      </div>
+    {% endif %}
+    {% if sh and sh.share %}
+      <p class="small mb-2">Your customer opens this link to see the quotation, download the PDF and tap <strong>Accept</strong>. Accepting moves a pending quotation to Confirmed and notifies you.</p>
+      <div class="input-group input-group-sm mb-2">
+        <input type="text" class="form-control" value="{{ sh.url }}" readonly id="approvalUrl" aria-label="Approval link">
+        <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('approvalUrl').value); this.textContent='Copied!'">Copy</button>
+      </div>
+      {% set wa_text = 'Hello ' ~ project.customer_name ~ ', here is your quotation from ' ~ brand.name ~ '. You can view it and accept it online: ' ~ sh.url %}
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <a class="btn btn-sm btn-success" target="_blank" rel="noopener"
+           href="https://wa.me/{{ q2c.wa_number }}?text={{ wa_text|urlencode }}"><i class="bi bi-whatsapp me-1"></i>Send link on WhatsApp</a>
+        <span class="small text-muted">{% if sh.share.view_count %}Opened {{ sh.share.view_count }} time{{ '' if sh.share.view_count == 1 else 's' }}, last {{ sh.share.last_viewed_at|ist_time('%d %b, %I:%M %p') }}{% else %}Not opened yet{% endif %}</span>
+        <form method="POST" action="{{ url_for('share.disable', project_id=project.id) }}" class="ms-auto"
+              onsubmit="return confirm('Turn off this link? The customer will no longer be able to open it.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-link text-danger p-0" type="submit">Turn off link</button>
+        </form>
+      </div>
+    {% else %}
+      <p class="small text-muted mb-2">Send your customer a link to view this quotation and accept it online, no app or login needed.</p>
+      <form method="POST" action="{{ url_for('share.create', project_id=project.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if current_user.is_admin %}
+<!-- Profit (admins only) -->
+<div class="card shadow-sm border-0 mt-3" id="profit">
+  <div class="card-header ki-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-graph-up-arrow me-2"></i>Estimated profit</span>
+    <span class="small"><i class="bi bi-eye-slash me-1"></i>only admins see this</span>
+  </div>
+  <div class="card-body">
+    {% set pr = q2c.profit %}
+    {% if pr %}
+    <div class="row g-2 text-center">
+      <div class="col-4"><div class="small text-muted">Price</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.selling) }}</div></div>
+      <div class="col-4"><div class="small text-muted">Your cost</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.cost) }}</div></div>
+      <div class="col-4"><div class="small text-muted">Profit</div>
+        <div class="fw-bold {{ 'text-success' if pr.profit >= 0 else 'text-danger' }}">&#8377;{{ "{:,.0f}".format(pr.profit) }} <span class="small">({{ pr.margin }}%)</span></div></div>
+    </div>
+    {% if pr.missing %}
+    <div class="small text-warning-emphasis mt-2"><i class="bi bi-exclamation-circle me-1"></i>No cost set for {{ pr.missing|length }} item{{ '' if pr.missing|length == 1 else 's' }}
+      (counted as zero cost): {{ pr.missing[:4]|join(', ') }}{% if pr.missing|length > 4 %}…{% endif %}. <a href="{{ url_for('admin.costs') }}">Add costs</a></div>
+    {% endif %}
+    {% else %}
+    <p class="small text-muted mb-0">Add what your materials and fittings cost you in <a href="{{ url_for('admin.costs') }}">Admin → Costs &amp; profit</a>,
+      and every quotation shows its estimated profit here.</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Revisions -->
+{% if q2c.history %}
+<div class="card shadow-sm border-0 mt-3" id="revisions">
+  <div class="card-header ki-card-header"><i class="bi bi-layers-half me-2"></i>Revisions</div>
+  <div class="card-body p-0">
+    <div class="list-group list-group-flush">
+      {% for rev, snap, changes in q2c.history %}
+      <a class="list-group-item list-group-item-action small" href="{{ url_for('billing.revision', project_id=project.id, number=rev.number) }}">
+        <div class="d-flex flex-wrap gap-2">
+          <strong>Rev {{ rev.number }}</strong>{% if loop.first %}<span class="badge bg-success">current</span>{% endif %}
+          <span class="text-muted">{{ rev.created_at|ist_time }}{% if rev.user %} · {{ rev.user.display_name }}{% endif %}</span>
+          <span class="ms-auto fw-semibold">&#8377;{{ "{:,.2f}".format(rev.total) }}</span>
+        </div>
+        {% if changes %}<div class="text-muted">{{ changes[:3]|join(' · ') }}{% if changes|length > 3 %} · +{{ changes|length - 3 }} more{% endif %}</div>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
 
 <!-- Record Payment Modal -->
 {% if current_user.is_admin %}

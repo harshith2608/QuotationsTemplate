@@ -176,14 +176,72 @@ STAGE_FLOW_BY_PROJECT = [
 ]
 
 
+def _seed_demo_quote_to_cash(users):
+    """Revisions, an approval link (one accepted, one with changes asked), an invoice and costs for the demo."""
+    import secrets
+    from datetime import date
+    from . import billing
+    from .models import CostRate, ItemRate, QuoteResponse, QuoteShare
+    if not billing.ready():
+        return ''
+    admin = users['demo-admin']
+    projects = {p.customer_name: p for p in Project.query.all()}
+    # Meera's quotation went through two versions: first with a smaller discount
+    meera = projects.get('Meera Test')
+    for p in projects.values():
+        if p is meera:
+            p.discount_value = 5000
+            billing.record_revision(p, admin, when=p.created_at)
+            p.discount_value = 10000
+            billing.record_revision(p, admin, when=p.created_at + timedelta(days=2))
+        else:
+            billing.record_revision(p, p.creator, when=p.created_at)
+    # Approval links
+    now = datetime.utcnow()
+    for name, kind, note, days in (('Priya Example', 'accepted', None, 1), ('Meera Test', 'changes', None, 1)):
+        p = projects.get(name)
+        if not p:
+            continue
+        share = QuoteShare(project_id=p.id, token=secrets.token_urlsafe(24), created_by=admin.id,
+                           created_at=p.created_at, first_viewed_at=p.created_at + timedelta(hours=3),
+                           last_viewed_at=now - timedelta(hours=5), view_count=3 if kind == 'accepted' else 2)
+        db.session.add(share)
+        db.session.flush()
+        if kind == 'accepted':
+            db.session.add(QuoteResponse(share_id=share.id, project_id=p.id, kind='accepted', name=p.customer_name,
+                                         total=p.final_total, revision=billing.latest_revision_number(p),
+                                         created_at=p.created_at + timedelta(days=days)))
+        else:
+            # asked for changes on R1; R2 is the updated quotation, waiting for an answer
+            db.session.add(QuoteResponse(share_id=share.id, project_id=p.id, kind='changes', name=p.customer_name,
+                                         note='Could you do a little better on the price?', revision=1,
+                                         created_at=p.created_at + timedelta(days=days)))
+    # An invoice for the ongoing job (GST included in the quoted price, so the balance stays the same)
+    rahul = projects.get('Rahul Sample')
+    if rahul:
+        billing.issue_invoice(rahul, admin, issued_on=date.today() - timedelta(days=5), gst_rate=18,
+                              prices=billing.PRICES_INCLUSIVE, hsn='9403',
+                              notes='Payment due within 7 days of each stage.')
+    # What things cost Demo Interiors (about 62% of the selling rate)
+    for r in ItemRate.query.all():
+        db.session.add(CostRate(kind='material', name=f'{r.wood_type}|{r.work_type}', cost=round(r.rate_per_sqft * 0.62)))
+    for name, cost in (('Magic Corner', 11500), ('Tandem Drawer', 2900)):
+        db.session.add(CostRate(kind='fitting', name=name, cost=cost))
+    db.session.commit()
+    return 'Quote to cash: revisions, approval links, one invoice and costs.'
+
+
 # Real data that lives in the marketing/demo database and must survive the nightly demo reset
 KEEP_ON_RESET = {'leads', 'demo_stats'}
 
 
 def _clear_all_tables():
     """Delete every row from every app table except KEEP_ON_RESET (keeps the schema and alembic_version)."""
+    from sqlalchemy import inspect
+    from .tenancy import current_schema
+    present = set(inspect(db.session.connection()).get_table_names(schema=current_schema()))
     for table in reversed(db.metadata.sorted_tables):
-        if table.name not in KEEP_ON_RESET:
+        if table.name not in KEEP_ON_RESET and table.name in present:   # tables a pending update adds are skipped
             db.session.execute(table.delete())
     db.session.commit()
 
@@ -250,5 +308,8 @@ def seed_demo(reset=False, password=None):
 
     db.session.commit()
     log.append(f'Projects: {len(DEMO_PROJECTS)} quotations with rooms, items, payments and stage history.')
+    extra = _seed_demo_quote_to_cash(users)
+    if extra:
+        log.append(extra)
     log.append('Company settings: Demo Interiors (fictional address, GSTIN, UPI and bank details).')
     return log

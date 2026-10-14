@@ -588,6 +588,16 @@ and create staff logins in **Admin → Users**.
    `bootstrap` only fills empty reference tables and encrypts any leftover plain values; it never
    changes your data. Then `unset DATABASE_URL DATA_ENCRYPTION_KEY`, merge to `main` and push.
 
+**Quote to cash (invoices, reminders, online approval, revisions, costs)** adds six new tables in one
+database update (`a9d3e7f1c5b2`) and is *safe to update after deploy*: until **Update all** runs, those
+cards and pages stay hidden and everything else works as before. Notes for support:
+- Invoices are numbered `PREFIX/2026-27/001` per financial year (April–March); a cancelled invoice keeps its
+  number. A quotation with invoices can't be deleted. GST is CGST+SGST when the place of supply is the
+  business's state (from its GSTIN), IGST otherwise; no GSTIN on the business means plain invoices without GST.
+- Once invoiced, the balance due uses the invoice total (which may include GST).
+- Approval links (`/q/<token>`) work without a login, even when the business's plan is read-only.
+- Costs & profit are admin-only and never printed or shown to customers.
+
 **Pushes that don't need a build.** Every Vercel project built from this repo (demo, trials, console and
 each customer) skips the build when a push only changes `docs/`, `tools/`, `tests/`, `static/ads/`,
 `ad-videos/` or `.md` files (`tools/vercel_ignore_build.sh`, set as `ignoreCommand` in `vercel.json`).

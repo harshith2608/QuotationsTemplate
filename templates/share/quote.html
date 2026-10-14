@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Quotation for {{ snap.customer.name }} – {{ brand.name }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('main.favicon', v=brand.theme_version) }}">
+  {% if brand.font_url %}<link rel="stylesheet" href="{{ brand.font_url }}">{% endif %}
+  <style>
+    :root { --p: {{ brand.primary }}; --on-p: {{ brand.on_primary }}; --a: {{ brand.accent }}; --bg: {{ brand.background }}; --r: {{ brand.radius_card }}; }
+    body { background: var(--bg); font-family: {{ brand.font_stack|safe }}; color: #1f2937; }
+    .q-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .q-head { background: var(--p); color: var(--on-p); border-radius: var(--r); padding: 20px; }
+    .q-head img { max-height: 54px; max-width: 200px; background: #fff; border-radius: 8px; padding: 4px; }
+    .q-card { background: #fff; border-radius: var(--r); box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 16px; margin-top: 14px; }
+    .q-total { font-size: 1.5rem; font-weight: 700; color: var(--p); }
+    .btn-brand { background: var(--p); color: var(--on-p); border: 0; }
+    .btn-brand:hover { filter: brightness(.95); color: var(--on-p); background: var(--p); }
+    .q-muted { color: #6b7280; }
+    .demo { background: #fef3c7; color: #78350f; text-align: center; padding: 8px; font-size: .9rem; }
+  </style>
+</head>
+<body>
+{% if demo_mode %}<div class="demo"><strong>Demo:</strong> this is a sample quotation from the QuoteRoom demo, not a real offer.</div>{% endif %}
+<div class="q-wrap">
+  <div class="q-head">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      {% if brand.logo_url %}<img src="{{ brand.logo_url }}" alt="">{% endif %}
+      <div>
+        <div class="fs-4 fw-bold">{{ brand.name }}</div>
+        <div class="small" style="opacity:.85">{% if brand.phone %}{{ brand.phone }}{% endif %}{% if brand.phone and brand.email %} · {% endif %}{{ brand.email or '' }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}
+    <div class="alert alert-{{ category }} mt-3 mb-0">{{ message }}</div>
+  {% endfor %}{% endwith %}
+
+  <div class="q-card">
+    <div class="d-flex flex-wrap justify-content-between gap-2">
+      <div>
+        <div class="q-muted small">Quotation for</div>
+        <div class="fs-5 fw-semibold">{{ snap.customer.name }}</div>
+        {% if snap.customer.address %}<div class="small q-muted">{{ snap.customer.address }}</div>{% endif %}
+      </div>
+      <div class="text-end small q-muted">Quotation #{{ project.id }}{% if status.current_revision and status.current_revision > 1 %} · Rev {{ status.current_revision }}{% endif %}<br>
+        {{ project.created_at.strftime('%d %b %Y') }}</div>
+    </div>
+    <hr>
+    <div class="d-flex justify-content-between align-items-end">
+      <div class="q-muted">Total</div>
+      <div class="q-total">&#8377;{{ "{:,.2f}".format(snap.total) }}</div>
+    </div>
+    {% set l = status.latest %}
+    {% if l and status.latest_is_current and l.kind == 'accepted' %}
+      <div class="alert alert-success mt-3 mb-0"><i class="bi bi-check-circle-fill me-1"></i>Accepted by {{ l.name }} on {{ l.created_at|ist_time('%d %b %Y') }}. Thank you!</div>
+    {% elif l and status.latest_is_current and l.kind == 'changes' %}
+      <div class="alert alert-info mt-3 mb-0"><i class="bi bi-chat-dots me-1"></i>You asked for changes on {{ l.created_at|ist_time('%d %b %Y') }}. We'll send you an updated quotation.</div>
+    {% endif %}
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      <a class="btn btn-outline-secondary" href="{{ url_for('share.pdf', token=share.token) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>Download PDF</a>
+      {% if not (l and status.latest_is_current and l.kind == 'accepted') %}
+      <a class="btn btn-brand" href="#respond"><i class="bi bi-check2-circle me-1"></i>Accept quotation</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="q-card">
+    <div class="fw-semibold mb-2">What's included</div>
+    {% for room in snap.rooms %}
+      <div class="fw-semibold small mt-2" style="color:var(--p)">{{ room.name }}</div>
+      <ul class="small mb-1 ps-3">
+        {% for it in room['items'] %}
+        <li>{{ it.name }}{% if it.type == 'fixed' %} × {{ '%g'|format(it.quantity) }}{% else %} <span class="q-muted">({{ it.length|ft_in }} × {{ it.width|ft_in }}, {{ it.material }})</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+  </div>
+
+  <div class="q-card">
+    <div class="fw-semibold mb-2">Price</div>
+    <table class="table table-sm small mb-0">
+      <tbody>
+      {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ "{:,.2f}".format(s.area) }} sqft)</span></td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(s.amount) }}</td></tr>{% endfor %}
+      {% if snap.fittings_total %}<tr><td>{{ snap.fittings_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.fittings_total) }}</td></tr>{% endif %}
+      {% if snap.discount.amount %}
+        <tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>
+        <tr class="text-danger"><td>Discount{% if snap.discount.type == 'percentage' %} ({{ '%g'|format(snap.discount.value) }}%){% endif %}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(snap.discount.amount) }}</td></tr>
+      {% endif %}
+      <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>
+      {% if paid %}<tr class="text-success"><td>Paid</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(paid) }}</td></tr>{% endif %}
+      </tbody>
+    </table>
+    {% if pay.upi_id or pay.account_number %}
+    <div class="small q-muted mt-2">
+      {% if pay.upi_id %}<div><i class="bi bi-phone me-1"></i>UPI: <strong>{{ pay.upi_id }}</strong></div>{% endif %}
+      {% if pay.account_number %}<div><i class="bi bi-bank me-1"></i>{{ pay.bank_name }} · {{ pay.account_name }} · A/C {{ pay.account_number }} · IFSC {{ pay.ifsc_code }}</div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if not (l and status.latest_is_current and l.kind == 'accepted') %}
+  <div class="q-card" id="respond">
+    <div class="fw-semibold mb-2">Happy with this quotation?</div>
+    <form method="POST" action="{{ url_for('share.respond', token=share.token) }}" class="mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="kind" value="accepted">
+      <label class="form-label small" for="accName">Your name</label>
+      <input id="accName" name="name" class="form-control mb-2" maxlength="80" required value="{{ snap.customer.name }}" autocomplete="name">
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" name="agree" value="1" id="accAgree" required>
+        <label class="form-check-label small" for="accAgree">I accept this quotation for &#8377;{{ "{:,.2f}".format(snap.total) }} from {{ brand.name }}.</label>
+      </div>
+      <button class="btn btn-brand w-100" type="submit"><i class="bi bi-check2-circle me-1"></i>Accept quotation</button>
+    </form>
+    <details>
+      <summary class="small">Need changes instead?</summary>
+      <form method="POST" action="{{ url_for('share.respond', token=share.token) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="kind" value="changes">
+        <input type="hidden" name="name" value="{{ snap.customer.name }}">
+        <textarea name="note" class="form-control mb-2" rows="3" maxlength="1000" required placeholder="e.g. Please change the wardrobe to laminate and add a study table."></textarea>
+        <button class="btn btn-outline-secondary w-100" type="submit">Send my changes</button>
+      </form>
+    </details>
+  </div>
+  {% endif %}
+  <p class="text-center small q-muted mt-3">Questions? {% if brand.phone %}Call or WhatsApp {{ brand.phone }}.{% else %}Reply to the message this link came with.{% endif %}</p>
+</div>
+</body>
+</html>

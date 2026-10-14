@@ -148,6 +148,14 @@ def _signatory():
     return escape(brand['signatory_name']), escape(brand['signatory_title'])
 
 
+def _quote_ref(project):
+    """'Quotation #: 12 · Rev 3\nDate: …' for the PDF header (the revision once revisions are kept)."""
+    from .billing import latest_revision_number
+    rev = latest_revision_number(project)
+    return (f'Quotation #: {project.id}' + (f'  ·  Rev {rev}' if rev and rev > 1 else '')
+            + f'\nDate: {project.created_at.strftime("%d %B %Y")}')
+
+
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
     """
     Generate a professional PDF quotation and return a BytesIO buffer.
@@ -207,7 +215,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     # QUOTATION LABEL
     quot_header = Table(
         [['INTERIOR DESIGN QUOTATION',
-          f'Quotation #: {project.id}\nDate: {project.created_at.strftime("%d %B %Y")}']],
+          _quote_ref(project)]],
         colWidths=['65%', '35%']
     )
     quot_header.setStyle(TableStyle([
@@ -631,7 +639,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     # QUOTATION LABEL
     quot_header = Table(
         [['CUSTOMER QUOTATION',
-          f'Quotation #: {project.id}\nDate: {project.created_at.strftime("%d %B %Y")}']],
+          _quote_ref(project)]],
         colWidths=['65%', '35%']
     )
     quot_header.setStyle(TableStyle([
@@ -889,6 +897,146 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     ]))
     elements.append(sig_table2)
 
+    _build(doc, elements)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_invoice_pdf(invoice, data, total_paid=0.0):
+    """Tax invoice PDF from the invoice's frozen data (see billing.build_invoice). Returns a BytesIO buffer."""
+    from datetime import date as _date
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = _palette()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.5 * cm, leftMargin=1.5 * cm,
+                            topMargin=1.5 * cm, bottomMargin=2 * cm)
+    styles = getSampleStyleSheet()
+    page_width = A4[0] - 3 * cm
+    small = ParagraphStyle('InvSmall', parent=styles['Normal'], fontSize=8.5, leading=11)
+    small_b = ParagraphStyle('InvSmallB', parent=small, fontName='Helvetica-Bold', textColor=BRAND_DARK)
+    title_style = ParagraphStyle('InvTitle', parent=styles['Title'], fontSize=20, fontName='Helvetica-Bold',
+                                 textColor=BRAND_DARK, alignment=TA_CENTER, spaceAfter=2)
+    subtitle_style = ParagraphStyle('InvSub', parent=styles['Normal'], fontSize=10,
+                                    textColor=colors.HexColor('#546e7a'), alignment=TA_CENTER, spaceAfter=3)
+    seller, buyer = data['seller'], data['buyer']
+    elements = []
+
+    # Seller (as it was when the invoice was issued)
+    logo = _logo_flowable(get_brand())
+    if logo:
+        elements += [logo, Spacer(1, 4)]
+    elements.append(Paragraph(escape(seller['name']), title_style))
+    parts = [p for p in (seller['address'].replace('\n', ', '), seller['phone'] and f"Ph: {seller['phone']}",
+                         seller['email']) if p]
+    if parts:
+        elements.append(Paragraph(escape('  |  '.join(parts)), subtitle_style))
+    if seller['gstin']:
+        elements.append(Paragraph(escape(f"GSTIN: {seller['gstin']}"
+                                         + (f"  |  State: {seller['state']} ({seller['state_code']})" if seller['state'] else '')),
+                                  subtitle_style))
+    elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
+
+    issued = _date.fromisoformat(data['issued_on'])
+    head = Table([[data['title'] + ('  (CANCELLED)' if invoice.status == 'cancelled' else ''),
+                   f'Invoice No: {invoice.number}\nDate: {issued.strftime("%d %B %Y")}']],
+                 colWidths=[page_width * 0.6, page_width * 0.4])
+    head.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), BRAND_DARK), ('BACKGROUND', (1, 0), (1, 0), BRAND_LIGHT),
+        ('TEXTCOLOR', (0, 0), (0, 0), ON_BRAND), ('TEXTCOLOR', (1, 0), (1, 0), BRAND_DARK),
+        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements += [head, Spacer(1, 10)]
+
+    # Bill to / supply details
+    bill = [Paragraph('<b>Bill to</b>', small_b), Paragraph(escape(buyer['name']), small)]
+    if buyer.get('address'):
+        bill.append(Paragraph(escape(buyer['address']).replace('\n', '<br/>'), small))
+    if buyer.get('mobile'):
+        bill.append(Paragraph(escape(f"Mobile: {buyer['mobile']}"), small))
+    if buyer.get('gstin'):
+        bill.append(Paragraph(escape(f"GSTIN: {buyer['gstin']}"), small))
+    supply = [Paragraph('<b>Details</b>', small_b),
+              Paragraph(escape(f"Quotation #{data['quotation_id']}" + (f" (Rev {data['revision']})" if data.get('revision') else '')), small)]
+    if data['place_of_supply']['state']:
+        supply.append(Paragraph(escape(f"Place of supply: {data['place_of_supply']['state']} ({data['place_of_supply']['code']})"), small))
+    if data['gst_rate']:
+        supply.append(Paragraph('Prices include GST' if data['prices'] == 'inclusive' else 'GST added to quoted prices', small))
+    box = Table([[bill, supply]], colWidths=[page_width * 0.55, page_width * 0.45])
+    box.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
+                             ('LINEAFTER', (0, 0), (0, 0), 0.5, colors.HexColor('#bdbdbd')),
+                             ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('PADDING', (0, 0), (-1, -1), 7)]))
+    elements += [box, Spacer(1, 12)]
+
+    # Lines
+    show_hsn = any(l.get('hsn') for l in data['lines'])
+    header = ['#', 'Description'] + (['HSN/SAC'] if show_hsn else []) + ['Qty', 'Rate (Rs.)', 'Amount (Rs.)']
+    rows = [header]
+    for n, l in enumerate(data['lines'], 1):
+        qty = f"{l['qty']:,.2f} {l['unit']}" if l['unit'] == 'sqft' else f"{l['qty']:g} {l['unit']}"
+        rows.append([str(n), Paragraph(escape(l['description']), small)] + ([l.get('hsn', '')] if show_hsn else [])
+                    + [qty, _money(l['rate']), _money(l['amount'])])
+    widths = [0.06, 0.40, 0.12, 0.14, 0.13, 0.15] if show_hsn else [0.06, 0.48, 0.16, 0.14, 0.16]
+    lines_table = Table(rows, colWidths=[page_width * w for w in widths], repeatRows=1)
+    lines_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')), ('PADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements += [lines_table, Spacer(1, 8)]
+
+    # Totals
+    tot = [['Total of items', f"Rs. {_money(data['gross'])}"]]
+    if data['discount']:
+        tot.append([data['discount_label'], f"- Rs. {_money(data['discount'])}"])
+    if data['gst_rate']:
+        tot.append(['Taxable value', f"Rs. {_money(data['taxable'])}"])
+        for t in data['taxes']:
+            tot.append([t['label'], f"Rs. {_money(t['amount'])}"])
+    if data['round_off']:
+        tot.append(['Round off', f"{'+' if data['round_off'] > 0 else '-'} Rs. {_money(abs(data['round_off']))}"])
+    tot.append(['INVOICE TOTAL', f"Rs. {_money(data['total'])}"])
+    if total_paid:
+        tot.append(['Received', f"Rs. {_money(total_paid)}"])
+        tot.append(['Balance due', f"Rs. {_money(max(data['total'] - total_paid, 0))}"])
+    ti = len(tot) - (3 if total_paid else 1)
+    totals = Table(tot, colWidths=[page_width * 0.25, page_width * 0.22], hAlign='RIGHT')
+    totals.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 9), ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('PADDING', (0, 0), (-1, -1), 5), ('LINEBELOW', (0, 0), (-1, -1), 0.3, colors.HexColor('#e0e0e0')),
+        ('BACKGROUND', (0, ti), (-1, ti), TOTAL_ROW_BG), ('TEXTCOLOR', (0, ti), (-1, ti), TABLE_HEADER_FG),
+        ('FONTNAME', (0, ti), (-1, ti), 'Helvetica-Bold'), ('FONTSIZE', (0, ti), (-1, ti), 11),
+    ]))
+    elements += [totals, Spacer(1, 6)]
+    from .demo import demo_enabled
+    if not demo_enabled():          # demo amounts are altered, so the words would contradict them
+        elements.append(Paragraph(f"<b>Amount in words:</b> {escape(data['total_words'])}", small))
+    if not data['gst_registered']:
+        elements.append(Spacer(1, 4))
+        elements.append(Paragraph('Not registered under GST: no GST is charged on this invoice.', small))
+    if data.get('notes'):
+        elements += [Spacer(1, 10), Paragraph('<b>Notes</b>', small_b)]
+        for line in data['notes'].splitlines():
+            if line.strip():
+                elements.append(Paragraph(escape(line.strip()), small))
+
+    # Signatory
+    elements.append(Spacer(1, 36))
+    sig = data.get('signatory') or {}
+    sig_table = Table([[Paragraph(f"For <b>{escape(seller['name'])}</b>", small)],
+                       [Spacer(1, 30)],
+                       [Paragraph(f"<b>{escape(sig.get('name') or '')}</b>", small)],
+                       [Paragraph(escape(sig.get('title') or 'Authorised Signatory'), small)]],
+                      colWidths=[page_width * 0.4], hAlign='RIGHT')
+    sig_table.setStyle(TableStyle([('LINEABOVE', (0, 2), (0, 2), 0.8, BRAND_DARK), ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                                   ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    elements.append(sig_table)
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph('This is a computer-generated invoice.',
+                              ParagraphStyle('InvFoot', parent=small, textColor=colors.HexColor('#757575'), alignment=TA_CENTER)))
     _build(doc, elements)
     buffer.seek(0)
     return buffer

@@ -192,7 +192,8 @@ def renew_message_url(status, user=None, host_url=''):
 # Still allowed when read-only: signing in/out, and Razorpay recording payments
 # from the business's own customers.
 ALWAYS_ALLOWED = {'auth.login', 'auth.logout', 'projects.razorpay_webhook', 'static',
-                  'main.favicon', 'main.brand_logo'}
+                  'main.favicon', 'main.brand_logo',
+                  'share.view', 'share.pdf', 'share.respond'}   # the business's customers answering a quotation
 # Pages that only exist to edit — redirect away from them when read-only
 EDIT_PAGES = {'projects.create_project', 'projects.edit_project'}
 

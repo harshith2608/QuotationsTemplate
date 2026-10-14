@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from 'projects/_stage_macros.html' import stage_badge with context %}
+{% block title %}Balances due{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mt-3 mb-3 gap-2">
+  <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-cash-coin me-2 text-primary"></i>Balances due</h4>
+  {% if rows %}<div class="fs-5 fw-bold text-danger">&#8377;{{ "{:,.2f}".format(total) }} <span class="small text-muted fw-normal">to collect</span></div>{% endif %}
+</div>
+<p class="small text-muted">Confirmed and invoiced quotations with money still to collect, biggest first.
+  <strong>Remind</strong> opens WhatsApp with a polite message ready to send{% if razorpay %}, with an online payment link if you tick it{% endif %}.</p>
+{% if not ready %}<div class="alert alert-warning small py-2">Reminders are available after the next database update.</div>{% endif %}
+
+{% if not rows %}
+<div class="card shadow-sm border-0"><div class="card-body text-center text-muted py-5">
+  <i class="bi bi-emoji-smile fs-2 d-block mb-2"></i>Nothing to collect right now.</div></div>
+{% else %}
+<div class="d-flex flex-column gap-2">
+{% for r in rows %}{% set p = r.project %}
+  <div class="card shadow-sm border-0">
+    <div class="card-body py-2">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <a class="fw-semibold text-decoration-none" href="{{ url_for('projects.view_project', project_id=p.id) }}">{{ p.customer_name }}</a>
+        <span class="text-muted small">#{{ p.id }}{% if r.invoice %} · {{ r.invoice.number }}{% endif %}</span>
+        {{ stage_badge(p.stage, True) }}
+        <span class="ms-auto fw-bold text-danger">&#8377;{{ "{:,.2f}".format(r.balance) }}</span>
+      </div>
+      <div class="small text-muted mt-1">Total &#8377;{{ "{:,.2f}".format(r.total) }} · paid &#8377;{{ "{:,.2f}".format(r.paid) }}
+        · {% if r.last_reminder %}last reminded {{ r.last_reminder.strftime('%d %b') }}{% else %}not reminded yet{% endif %}</div>
+      {% if ready %}
+      <form method="POST" action="{{ url_for('billing.send_reminder', project_id=p.id) }}" target="_blank"
+            class="d-flex flex-wrap align-items-center gap-2 mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="back" value="due">
+        <div class="input-group input-group-sm" style="max-width:190px"><span class="input-group-text">&#8377;</span>
+          <input type="number" name="amount" class="form-control" min="1" max="{{ '%.2f'|format(r.balance) }}" step="0.01"
+                 value="{{ '%.2f'|format(r.balance) }}" aria-label="Amount to ask for"></div>
+        {% if razorpay %}<label class="small d-flex align-items-center gap-1 mb-0"><input type="checkbox" name="with_link" value="1" checked> payment link</label>{% endif %}
+        <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-whatsapp me-1"></i>Remind</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

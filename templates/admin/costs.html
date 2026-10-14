@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Costs &amp; profit{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mt-3 mb-3 gap-2">
+  <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Costs &amp; profit</h4>
+  <a href="{{ url_for('admin.rates') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-currency-rupee me-1"></i>Selling rates</a>
+</div>
+
+<div class="alert alert-info py-2 small">
+  <i class="bi bi-eye-slash me-1"></i>
+  Enter what each material and fitting <strong>costs you</strong> (materials, labour, everything). Each quotation then shows
+  its estimated profit. <strong>Only admins see this</strong>: it never appears in PDFs, WhatsApp messages or the customer's link.
+  Leave a box empty if you don't want to track it.
+</div>
+
+<form method="POST" action="{{ url_for('admin.costs') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-header ki-card-header"><i class="bi bi-layers me-2"></i>Materials (&#8377;/sqft)</div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0 ki-materials-table">
+          <thead class="ki-table-head"><tr><th class="ps-3">Material</th><th class="text-end">You charge</th><th style="min-width:160px">Your cost</th><th class="text-end">Margin</th></tr></thead>
+          <tbody>
+          {% for key, label in combos %}
+            {% set rate = rates.get(key, 0) %}{% set cost = costs.get(('material', key)) %}
+            <tr>
+              <td class="ps-3 fw-semibold" data-label="Material">{{ label }}</td>
+              <td class="text-end" data-label="You charge">&#8377;{{ "{:,.0f}".format(rate) }}</td>
+              <td data-label="Your cost"><div class="input-group input-group-sm"><span class="input-group-text">&#8377;</span>
+                <input type="number" name="m_{{ loop.index0 }}" class="form-control" min="0" step="0.01" inputmode="decimal"
+                       value="{{ '%g'|format(cost) if cost is not none else '' }}" aria-label="Cost of {{ label }}"></div></td>
+              <td class="text-end small" data-label="Margin">
+                {% if cost is not none and rate %}<span class="{{ 'text-success' if rate > cost else 'text-danger' }} fw-semibold">{{ "{:.0f}".format((rate - cost) / rate * 100) }}%</span>{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-header ki-card-header"><i class="bi bi-tools me-2"></i>Fittings &amp; accessories (&#8377; per unit)</div>
+    <div class="card-body">
+      {% if not fittings and not extra %}<p class="small text-muted">No fittings in your price list yet. Add them in <a href="{{ url_for('admin.rates') }}">Rates</a>, or add a cost by name below.</p>{% endif %}
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-3 ki-materials-table">
+          {% if fittings or extra %}<thead class="ki-table-head"><tr><th class="ps-3">Fitting</th><th class="text-end">You charge</th><th style="min-width:160px">Your cost</th></tr></thead>{% endif %}
+          <tbody>
+          {% for f in fittings %}{% set cost = costs.get(('fitting', f.name)) %}
+            <tr>
+              <td class="ps-3 fw-semibold" data-label="Material">{{ f.name }}</td>
+              <td class="text-end" data-label="You charge">&#8377;{{ "{:,.0f}".format(f.price) }}{% if f.unit %} / {{ f.unit }}{% endif %}</td>
+              <td data-label="Your cost"><div class="input-group input-group-sm"><span class="input-group-text">&#8377;</span>
+                <input type="number" name="f_{{ f.id }}" class="form-control" min="0" step="0.01" inputmode="decimal"
+                       value="{{ '%g'|format(cost) if cost is not none else '' }}" aria-label="Cost of {{ f.name }}"></div></td>
+            </tr>
+          {% endfor %}
+          {% for row in extra %}
+            <tr>
+              <td class="ps-3 fw-semibold" data-label="Material">{{ row.name }} <span class="badge bg-light text-muted border">not on price list</span></td>
+              <td class="text-end" data-label="You charge">—</td>
+              <td data-label="Your cost"><div class="input-group input-group-sm"><span class="input-group-text">&#8377;</span>
+                <input type="number" name="x_{{ row.id }}" class="form-control" min="0" step="0.01" inputmode="decimal"
+                       value="{{ '%g'|format(row.cost) }}" aria-label="Cost of {{ row.name }}"></div>
+                <div class="form-text">Empty the box to remove it.</div></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-6"><label class="form-label small mb-1" for="newFitting">Another fitting (typed on quotations, not on your price list)</label>
+          <input id="newFitting" type="text" name="new_fitting" class="form-control form-control-sm" maxlength="120" placeholder="e.g. Tandem drawer"></div>
+        <div class="col-sm-3"><label class="form-label small mb-1" for="newFittingCost">Your cost</label>
+          <input id="newFittingCost" type="number" name="new_fitting_cost" class="form-control form-control-sm" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+    </div>
+  </div>
+  <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save costs</button></div>
+</form>
+{% endblock %}

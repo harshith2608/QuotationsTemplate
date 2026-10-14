@@ -1,3 +1,5 @@
+import re
+from datetime import date
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
@@ -314,6 +316,7 @@ def _save_materials_and_rates():
                 Item.query.filter(Item.wood_type == m.name).update({'wood_type': new_name}, synchronize_session=False)
                 ItemRate.query.filter(ItemRate.wood_type == m.name).update({'wood_type': new_name},
                                                                           synchronize_session=False)
+                _rename_material_costs(m.name, new_name)
                 taken.pop(m.name.lower(), None)
                 taken[new_name.lower()] = m.id
                 m.name = new_name
@@ -347,17 +350,108 @@ def _material_action(action, mid):
         if m.active and Material.query.filter_by(active=True).count() <= 1:
             return ['Keep at least one material.']
         ItemRate.query.filter(ItemRate.wood_type == m.name).delete(synchronize_session=False)
+        _rename_material_costs(m.name, None)
         db.session.delete(m)
         flash(f'Deleted "{m.name}".', 'success')
         return []
     return ['Unknown action.']
 
 
+def _material_cost_rows(name):
+    from . import billing
+    from .models import CostRate
+    if not billing.ready():
+        return []
+    return [c for c in CostRate.query.filter_by(kind='material') if c.name.split('|', 1)[0] == name]
+
+
+def _rename_material_costs(old, new):
+    """Costs follow a renamed material (new=None: the material was deleted)."""
+    for c in _material_cost_rows(old):
+        if new is None:
+            db.session.delete(c)
+        else:
+            c.name = new + '|' + c.name.split('|', 1)[1]
+
+
+# ── Costs & profit (owner only) ──────────────────────────────────────────────
+
+def _parse_cost(raw):
+    """'' → None (no cost set); otherwise a number ≥ 0, or False if invalid."""
+    raw = (raw or '').strip().replace(',', '')
+    if raw == '':
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return False
+    return value if value >= 0 else False
+
+
+@admin_bp.route('/costs', methods=['GET', 'POST'])
+def costs():
+    """What each material and fitting costs you, so quotations show their estimated profit (admins only)."""
+    from . import billing
+    from . import materials as M
+    from .models import CostRate
+    if not billing.ready():
+        flash('Costs & profit are available after the next database update.', 'warning')
+        return redirect(url_for('admin.rates'))
+    rates = {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in ItemRate.query.all()}
+    existing = {(c.kind, c.name): c for c in CostRate.query.all()}
+    combos = [(M.key(w, k), label) for w, k, label in M.combos(include_hidden=True)]
+    fittings = PriceListItem.query.order_by(PriceListItem.name).all()
+    if request.method == 'POST':
+        errors = []
+
+        def put(kind, name, raw, label):
+            value = _parse_cost(raw)
+            row = existing.get((kind, name))
+            if value is False:
+                errors.append(f'Enter a number for {label}.')
+            elif value is None:
+                if row:
+                    db.session.delete(row)
+            elif row:
+                row.cost = value
+            else:
+                db.session.add(CostRate(kind=kind, name=name, cost=value))
+        for i, (key, label) in enumerate(combos):
+            put('material', key, request.form.get(f'm_{i}'), label)
+        listed = {f.name.lower() for f in fittings}
+        for f in fittings:
+            put('fitting', f.name, request.form.get(f'f_{f.id}'), f.name)
+        # Fittings typed on quotations that aren't on the price list
+        for (kind, name), row in existing.items():
+            if kind == 'fitting' and name.lower() not in listed:
+                put('fitting', name, request.form.get(f'x_{row.id}'), name)
+        extra_name = ' '.join((request.form.get('new_fitting') or '').split())[:120]
+        if extra_name:
+            if any(k == 'fitting' and n.lower() == extra_name.lower() for k, n in existing):
+                errors.append(f'"{extra_name}" already has a cost.')
+            else:
+                put('fitting', extra_name, request.form.get('new_fitting_cost'), extra_name)
+        if errors:
+            db.session.rollback()
+            for e in errors:
+                flash(e, 'danger')
+        else:
+            db.session.commit()
+            flash('Costs saved. Each quotation now shows its estimated profit (only admins see it).', 'success')
+        return redirect(url_for('admin.costs'))
+    listed = {f.name.lower() for f in fittings}
+    extra = sorted([row for (kind, name), row in existing.items() if kind == 'fitting' and name.lower() not in listed],
+                   key=lambda r: r.name.lower())
+    return render_template('admin/costs.html', title='Costs & profit', combos=combos, rates=rates,
+                           fittings=fittings, extra=extra,
+                           costs={k: v.cost for k, v in existing.items()})
+
+
 PAYMENT_KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
                 'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']
 EMAIL_KEYS = ['admin_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']
 SECRET_KEYS = {'razorpay_key_secret', 'webhook_secret', 'smtp_pass'}
-SETTINGS_TABS = ('company', 'appearance', 'documents', 'email')
+SETTINGS_TABS = ('company', 'appearance', 'documents', 'invoices', 'email')
 
 
 def _save_plain_settings(keys):
@@ -504,6 +598,27 @@ def _save_company_fields():
     return errors
 
 
+def _save_invoice_settings():
+    from . import billing
+    errors = []
+    prefix = billing.clean_prefix(request.form.get('invoice_prefix', ''))
+    AppSetting.set('invoice_prefix', prefix or billing.DEFAULT_PREFIX)
+    try:
+        rate = float(request.form.get('invoice_gst_rate', billing.DEFAULT_GST_RATE))
+    except ValueError:
+        rate = -1
+    if rate in billing.GST_RATES:
+        AppSetting.set('invoice_gst_rate', f'{rate:g}')
+    else:
+        errors.append('Choose a GST rate.')
+    AppSetting.set('invoice_hsn', re.sub(r'[^0-9A-Za-z]', '', request.form.get('invoice_hsn', ''))[:10])
+    prices = request.form.get('invoice_prices')
+    AppSetting.set('invoice_prices', prices if prices in (billing.PRICES_EXCLUSIVE, billing.PRICES_INCLUSIVE)
+                   else billing.PRICES_EXCLUSIVE)
+    AppSetting.set('invoice_notes', request.form.get('invoice_notes', '').strip()[:1500])
+    return errors
+
+
 @admin_bp.route('/settings', methods=['GET', 'POST'])
 def settings():
     tab = request.args.get('tab') or request.form.get('section') or 'company'
@@ -539,6 +654,8 @@ def settings():
             # Multi-line fields — preserve newlines, allow blanking
             AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
             AppSetting.set('terms_conditions', request.form.get('terms_conditions', '').strip())
+        elif tab == 'invoices':
+            errors = _save_invoice_settings()
         elif tab == 'email':
             _save_plain_settings(EMAIL_KEYS)
 
@@ -555,13 +672,18 @@ def settings():
     saved['terms_conditions'] = saved['terms_conditions'] or DEFAULT_TERMS
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)
                 for k in branding.COMPANY_KEYS + branding.THEME_KEYS}
+    from . import billing
+    invoice_settings = billing.invoice_settings()
     support_display, support_url = branding.support_contact()
     support_links = {key: branding.support_message_url(what, current_user, request.host_url)
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
-                           support_display=support_display, support_url=support_url)
+                           support_display=support_display, support_url=support_url,
+                           invoice_settings=invoice_settings, gst_rates=billing.GST_RATES,
+                           fy_example=billing.financial_year(date.today()),
+                           business_state=billing.STATES.get(billing.business_state_code(), ''))
 
 
 @admin_bp.route('/notifications')

@@ -11,6 +11,7 @@ from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, Work
 from .decorators import admin_required
 from .catalog import STAGES, FIXED_ITEMS_LABEL
 from .branding import get_brand
+from . import billing
 
 projects_bp = Blueprint('projects', __name__)
 
@@ -345,6 +346,8 @@ def create_project():
         project.status = 'complete'
         _ensure_creator_access(project, current_user)
         db.session.commit()
+        billing.record_revision(project, current_user)       # R1
+        db.session.commit()
 
         flash('Quotation created successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
@@ -400,9 +403,30 @@ def view_project(project_id):
                 .order_by(Payment.recorded_at.desc())
                 .all())
     total_paid = sum(p.amount for p in payments)
-    balance    = max(project.final_total - total_paid, 0)
+    all_invoices = billing.invoices(project)
+    invoice    = next((i for i in all_invoices if i.status == 'issued'), None)
+    amount_due = billing.amount_due_total(project, invoice) if invoice else project.final_total
+    balance    = max(amount_due - total_paid, 0)
     settings   = AppSetting.get_many(['upi_id', 'bank_name', 'account_name',
-                                      'account_number', 'ifsc_code', 'razorpay_key_id'])
+                                      'account_number', 'ifsc_code', 'razorpay_key_id'] + list(billing.INVOICE_KEYS))
+    from .share import share_status
+    history = billing.revision_history(project)
+    q2c = {
+        'ready': billing.ready(),
+        'invoice': invoice,
+        'invoices': all_invoices,
+        'invoice_settings': billing.invoice_settings(settings),
+        'business_state': billing.business_state_code(),
+        'states': billing.STATES,
+        'gst_rates': billing.GST_RATES,
+        'history': history,
+        'share': share_status(project, history[0][0].number if history else None),
+        'last_reminder': billing.last_reminder(project) if balance > 0 else None,
+        'profit': billing.profit(project, rooms) if current_user.is_admin else None,
+        'wa_number': billing.whatsapp_number(project.mobile),
+    }
+    latest_rev = q2c['history'][0][0] if q2c['history'] else None
+    q2c['changed_after_invoice'] = bool(invoice and latest_rev and latest_rev.created_at > invoice.created_at)
     return render_template('projects/view.html',
                            project=project,
                            rooms=rooms,
@@ -412,6 +436,8 @@ def view_project(project_id):
                            payments=payments,
                            total_paid=total_paid,
                            balance=balance,
+                           amount_due=amount_due,
+                           q2c=q2c,
                            settings=settings,
                            stage_history=project.stage_changes.all(),
                            fixed_total=fixed_total,
@@ -516,6 +542,7 @@ def edit_project(project_id):
                                    project=project)
 
         was_draft = project.status == 'draft'
+        billing.ensure_first_revision(project, current_user)   # older quotations: keep how it was as R1
         project.customer_name     = customer_name
         project.mobile            = mobile
         project.email             = email or None
@@ -531,6 +558,10 @@ def edit_project(project_id):
         # Ensure the creator (if employee) has a ProjectAccess entry
         _ensure_creator_access(project, current_user)
         db.session.commit()
+        rev = billing.record_revision(project, current_user)
+        db.session.commit()
+        if rev and rev.number > 1 and not was_draft:
+            flash(f'Saved as revision {rev.number}.', 'info')
 
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
@@ -607,6 +638,9 @@ def set_project_access(project_id):
 @admin_required
 def delete_project(project_id):
     project = Project.query.get_or_404(project_id)
+    if billing.invoices(project):
+        flash('This quotation has invoices, so it can\'t be deleted (invoices must be kept for your records).', 'danger')
+        return redirect(url_for('projects.view_project', project_id=project.id))
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')
@@ -654,8 +688,6 @@ def delete_payment(project_id, payment_id):
 @login_required
 def generate_payment_link(project_id):
     from flask import jsonify
-    import urllib.request, urllib.error
-    import json as _json, base64
 
     project = Project.query.get_or_404(project_id)
     if not current_user.is_admin and project.created_by != current_user.id:
@@ -667,9 +699,7 @@ def generate_payment_link(project_id):
     if not api_key or not api_secret:
         return jsonify({'error': 'Razorpay is not configured. Ask admin to add API keys in Payment Settings.'}), 400
 
-    payments   = Payment.query.filter_by(project_id=project_id).all()
-    total_paid = sum(p.amount for p in payments)
-    remaining  = round(max(project.final_total - total_paid, 0), 2)
+    remaining  = billing.balance(project)
     if remaining <= 0:
         return jsonify({'error': 'This quotation is fully paid — no outstanding balance.'}), 400
     # Amount to collect: the whole balance by default, or a part (advance, stage payment)
@@ -686,6 +716,28 @@ def generate_payment_link(project_id):
         if amount > remaining:
             return jsonify({'error': f'That is more than the balance due (₹{remaining:,.2f}).'}), 400
 
+    try:
+        short_url = create_razorpay_link(project, amount, remaining)
+    except RazorpayLinkError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'payment_link': short_url, 'amount': amount})
+
+
+class RazorpayLinkError(Exception):
+    pass
+
+
+def create_razorpay_link(project, amount, remaining):
+    """Create a Razorpay payment link for `amount` and remember it for the webhook. Returns the short URL."""
+    import urllib.request, urllib.error
+    import json as _json, base64
+    api_key    = AppSetting.get('razorpay_key_id', '')
+    api_secret = AppSetting.get('razorpay_key_secret', '')
+    if not api_key or not api_secret:
+        raise RazorpayLinkError('Razorpay is not configured. Ask admin to add API keys in Payment Settings.')
+    inv = billing.active_invoice(project)
     mobile_clean = project.mobile.lstrip('+').replace(' ', '').replace('-', '')
     if not mobile_clean.startswith('91') and len(mobile_clean) == 10:
         mobile_clean = '91' + mobile_clean
@@ -694,8 +746,8 @@ def generate_payment_link(project_id):
         'amount': int(round(amount * 100)),
         'currency': 'INR',
         'accept_partial': True,
-        'description': f"{get_brand()['name']} – Quotation #{project.id} for {project.customer_name}"
-                       + ('' if amount == remaining else ' (part payment)'),
+        'description': f"{get_brand()['name']} – " + (f'Invoice {inv.number}' if inv else f'Quotation #{project.id}')
+                       + f" for {project.customer_name}" + ('' if amount == remaining else ' (part payment)'),
         'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean,
                      'email': project.email or ''},
         'notify': {'sms': True, 'email': bool(project.email)},
@@ -713,19 +765,6 @@ def generate_payment_link(project_id):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = _json.loads(resp.read())
-            link_id  = data.get('id')
-            short_url = data.get('short_url')
-            # Store link so webhook can resolve the project
-            if link_id:
-                existing = PaymentLink.query.filter_by(razorpay_link_id=link_id).first()
-                if not existing:
-                    db.session.add(PaymentLink(
-                        project_id=project.id,
-                        razorpay_link_id=link_id,
-                        amount=amount
-                    ))
-                    db.session.commit()
-            return jsonify({'payment_link': short_url, 'amount': amount})
     except urllib.error.HTTPError as e:
         try:
             message = _json.loads(e.read()).get('error', {}).get('description') or 'Razorpay error.'
@@ -735,9 +774,13 @@ def generate_payment_link(project_id):
             message = (f'Razorpay won\'t accept ₹{amount:,.0f} in one payment: it is above your Razorpay account\'s '
                        'per-payment limit. Request a smaller amount (e.g. the advance), or ask Razorpay support '
                        'to raise your maximum transaction amount.')
-        return jsonify({'error': message}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise RazorpayLinkError(message)
+    link_id = data.get('id')
+    # Store link so webhook can resolve the project
+    if link_id and not PaymentLink.query.filter_by(razorpay_link_id=link_id).first():
+        db.session.add(PaymentLink(project_id=project.id, razorpay_link_id=link_id, amount=amount))
+        db.session.commit()
+    return data.get('short_url')
 
 
 @projects_bp.route('/projects/<int:project_id>/pdf')
@@ -796,7 +839,9 @@ def whatsapp_share(project_id):
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
-    balance = max(project.final_total - total_paid, 0)
+    balance = billing.balance(project)
+    from .share import active_share_url
+    approval_url = active_share_url(project)
 
     lines = [
         f"Hello {project.customer_name}! 👋",
@@ -856,6 +901,8 @@ def whatsapp_share(project_id):
     if pay_lines:
         lines += ["", "*Payment Details:*"] + pay_lines
 
+    if approval_url:
+        lines += ["", f"👉 *View and accept your quotation online:* {approval_url}"]
     lines += [
         "",
         "_Please find the detailed PDF quotation attached._",
@@ -958,7 +1005,7 @@ def razorpay_webhook():
     # ── 6. Compute updated balance
     all_payments = Payment.query.filter_by(project_id=project.id).all()
     total_paid   = sum(p.amount for p in all_payments) + amount_rupees
-    balance      = max(project.final_total - total_paid, 0)
+    balance      = max(billing.amount_due_total(project) - total_paid, 0)
 
     # ── 7. In-app notification for admin
     notif_msg = (

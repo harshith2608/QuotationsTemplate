@@ -13,7 +13,7 @@
           <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo{{ ' — no signup' if demo_mode }}</a>
         </div>
         <div class="proof">
-          <span>7-day free trial</span><span>No payment to start</span><span>Works on any phone</span><span>Your logo &amp; colours</span>
+          <span>7-day free trial</span><span>One price for your whole team</span><span>Works on any phone</span><span>Your logo &amp; colours</span>
         </div>
       </div>
 
@@ -59,13 +59,13 @@
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">How it works</p>
-        <h2>From tape measure to signed quote in four steps</h2>
+        <h2>From tape measure to payment in four steps</h2>
       </div>
       <div class="steps">
         <div class="step"><span class="n">01</span><h3>Measure</h3><p>Add rooms and items at the site. Enter length and height in ft and in; sqft is calculated for you.</p></div>
         <div class="step"><span class="n">02</span><h3>Price</h3><p>Pick the material and work type for each item. Your saved rates apply automatically, with discounts if you need them.</p></div>
-        <div class="step"><span class="n">03</span><h3>Send</h3><p>Download a branded PDF and share it on WhatsApp straight from your phone.</p></div>
-        <div class="step"><span class="n">04</span><h3>Track</h3><p>Move each job from awaiting confirmation to confirmed, ongoing and completed, and record payments as they come in.</p></div>
+        <div class="step"><span class="n">03</span><h3>Send</h3><p>Share a branded PDF on WhatsApp, or a link your customer opens to accept the quotation online.</p></div>
+        <div class="step"><span class="n">04</span><h3>Get paid</h3><p>Turn the accepted quote into a GST invoice, send payment reminders on WhatsApp and record payments as they come in.</p></div>
       </div>
     </div>
   </section>
@@ -81,9 +81,12 @@
         <div class="feature"><span class="tag">Measurements</span><h3>Feet and inches, room by room</h3><p>Group items by room. Area, room totals and the grand total update as you type.</p></div>
         <div class="feature"><span class="tag">Rates</span><h3>Your rates, per material and work</h3><p>Set rates for acrylic, laminate and veneer, box work and frame work. Change them anytime.</p></div>
         <div class="feature"><span class="tag">Plywood</span><h3>Board estimate included</h3><p>See roughly how many 8×4 boards a job needs and list the plywood used on the quote.</p></div>
-        <div class="feature"><span class="tag">Payments</span><h3>Get paid faster</h3><p>Print your UPI ID and bank details on every PDF, record part payments and send Razorpay payment links.</p></div>
+        <div class="feature"><span class="tag">Payments</span><h3>Get paid faster</h3><p>UPI and bank details on every PDF, Razorpay payment links, part payments, and a list of every balance due with one-tap WhatsApp reminders.</p></div>
         <div class="feature"><span class="tag">Pipeline</span><h3>Know where every job stands</h3><p>Stages from awaiting confirmation to completed, with history and a dashboard showing value at each stage.</p></div>
-        <div class="feature"><span class="tag">Team</span><h3>Staff logins with control</h3><p>Employees create quotes on their phones. You decide who sees which quotation.</p></div>
+        <div class="feature"><span class="tag">Team</span><h3>Your whole team, one price</h3><p>Add as many staff logins as you need, at no extra cost. You decide who sees which quotation.</p></div>
+        <div class="feature"><span class="tag">Invoices</span><h3>GST invoice in one step</h3><p>Turn a confirmed quotation into a tax invoice with CGST/SGST or IGST, numbered by financial year, with payments shown against it.</p></div>
+        <div class="feature"><span class="tag">Approval</span><h3>Customers accept online</h3><p>Send a link: your customer views the quotation, downloads the PDF and taps Accept. Every change is kept as a revision.</p></div>
+        <div class="feature"><span class="tag">Profit</span><h3>See your margin on every quote</h3><p>Enter what materials and fittings cost you, and each quotation shows its estimated profit. Only you see it.</p></div>
       </div>
     </div>
   </section>
@@ -153,8 +156,9 @@
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">Pricing</p>
-        <h2>Try it free. Then pay once for 6 or 12 months.</h2>
-        <p>Every plan includes unlimited quotations, staff logins, both PDFs, payment tracking, your own branding, hosting, updates and support.
+        <h2>One price for your whole team. No per-user fees.</h2>
+        <p>Try it free, then pay once for 6 or 12 months. Every plan includes unlimited quotations, unlimited staff logins, both PDFs,
+           GST invoices, online approval, payment tracking, your own branding, hosting, updates and support.
            A one-time quotation website typically costs ₹30,000–40,000 and still needs hosting and fixes.</p>
       </div>
       <div class="plans">
@@ -168,20 +172,20 @@
         <div class="plan">
           <h3>6 months</h3>
           <div class="price"><span class="amount">₹7,999</span><span class="per">/6 months</span></div>
-          <p class="sub">About ₹1,333 a month, paid once.</p>
-          <ul><li>Everything in the app</li><li>Hosting, updates &amp; support</li><li>Renewal reminders, no auto-charge</li></ul>
+          <p class="sub">About ₹1,333 a month for your whole team, paid once.</p>
+          <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li><li>Renewal reminders, no auto-charge</li></ul>
           <a class="btn btn-ghost" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27m%20interested%20in%20the%20{{ product|urlencode }}%206-month%20plan" target="_blank" rel="noopener" data-cta>Choose 6 months</a>
         </div>
         <div class="plan featured">
           <span class="badge">Best value · save ₹1,999</span>
           <h3>12 months</h3>
           <div class="price"><span class="amount">₹13,999</span><span class="per">/year</span></div>
-          <p class="sub">About ₹1,167 a month, paid once.</p>
-          <ul><li>Everything in the app</li><li>Hosting, updates &amp; support</li><li>Priority support</li></ul>
+          <p class="sub">About ₹1,167 a month for your whole team, paid once.</p>
+          <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li><li>Priority support</li></ul>
           <a class="btn btn-primary" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27m%20interested%20in%20the%20{{ product|urlencode }}%2012-month%20plan" target="_blank" rel="noopener" data-cta>Choose 12 months</a>
         </div>
       </div>
-      <p class="price-note">The price you see is the price you pay. Plans don't renew automatically; we remind you before yours ends.</p>
+      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.</p>
     </div>
   </section>
 
@@ -190,11 +194,11 @@
       <div class="section-head"><p class="eyebrow">FAQ</p><h2>Questions owners ask us</h2></div>
       <div class="faq">
         <details><summary>Do I need a computer?</summary><p>No. {{ product }} runs in the browser on any smartphone, tablet or laptop. There is nothing to install.</p></details>
-        <details><summary>Do my customers need to install anything?</summary><p>No. They receive a PDF on WhatsApp or email, like any other document.</p></details>
+        <details><summary>Do my customers need to install anything?</summary><p>No. They receive a PDF on WhatsApp or email, or a link to view and accept the quotation in their browser.</p></details>
         <details><summary>How does the free trial work?</summary><p>Request a free trial and we'll set up your own {{ product }} within a day, at your own web address. Use it on real jobs for 7 days, with every feature. No payment details needed. If you subscribe, everything you've set up stays exactly where it is.</p></details>
         <details><summary>How is this different from getting a website made?</summary><p>A custom quotation website usually costs ₹30,000–40,000 up front, and hosting, fixes and new features cost extra. {{ product }} costs less per year and includes hosting, updates, new features and support, and you can try it free before paying anything.</p></details>
         <details><summary>Is my data private?</summary><p>Yes. Paying customers get their own app and their own separate database, and trials are kept in their own separate space. Other {{ product }} customers never see your quotations or customers.</p></details>
-        <details><summary>Can my staff use it?</summary><p>Yes. Create logins for your team. Staff see the quotations you give them access to; admins see everything.</p></details>
+        <details><summary>Can my staff use it?</summary><p>Yes, as many as you need, at no extra cost: the price is for your whole business, not per user. Staff see the quotations you give them access to; admins see everything, including costs and profit.</p></details>
         <details><summary>Can I change my rates and terms later?</summary><p>Anytime. Rates, terms and conditions, material specifications, payment details and branding are all editable from the admin settings.</p></details>
         <details><summary>What happens when my plan or trial ends?</summary><p>We remind you before it ends. Paid plans get 7 extra days to renew. After that your app becomes read-only: you can still sign in, view quotations and download PDFs. If you don't renew, your data is permanently deleted 30 days after your plan or trial ended.</p></details>
         <details><summary>Can I get a refund?</summary><p>Plans are prepaid and not refundable, which is why the 7-day trial is free. Try everything first and only pay when you're sure.</p></details>

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Quotation #{{ project.id }} – Rev {{ rev.number }}{% endblock %}
+
+{% block content %}
+<div class="mt-3 mb-3">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb mb-1">
+    <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">Quotations</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="text-decoration-none">Quotation #{{ project.id }}</a></li>
+    <li class="breadcrumb-item active">Revision {{ rev.number }}</li>
+  </ol></nav>
+  <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-clock-history me-2 text-primary"></i>{{ snap.customer.name }} · Revision {{ rev.number }}
+    {% if rev.number == latest %}<span class="badge bg-success align-middle small">current</span>{% else %}<span class="badge bg-secondary align-middle small">older version</span>{% endif %}</h4>
+  <div class="small text-muted">Saved {{ rev.created_at|ist_time }}{% if rev.user %} by {{ rev.user.display_name }}{% endif %}
+    · Total <strong>&#8377;{{ "{:,.2f}".format(snap.total) }}</strong></div>
+</div>
+
+{% if changes %}
+<div class="card shadow-sm border-0 mb-3"><div class="card-header ki-card-header"><i class="bi bi-arrow-left-right me-2"></i>Changes from revision {{ rev.number - 1 }}</div>
+  <div class="card-body"><ul class="small mb-0">{% for c in changes %}<li>{{ c }}</li>{% endfor %}</ul></div></div>
+{% endif %}
+
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-house-door me-2"></i>Rooms</div>
+  <div class="card-body p-2 p-md-3">
+    {% for room in snap.rooms %}
+    <div class="fw-semibold mt-2">{{ room.name }}</div>
+    <div class="table-responsive"><table class="table table-sm small mb-2">
+      <tbody>
+      {% for it in room['items'] %}
+        <tr><td>{{ it.name }}</td>
+          {% if it.type == 'fixed' %}<td>{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}</td><td></td>
+          {% else %}<td>{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ "%.2f"|format(it.area) }} sqft</td><td>{{ it.material }}</td>{% endif %}
+          <td class="text-end">&#8377;{{ "{:,.2f}".format(it.amount) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% endfor %}
+    <div class="d-flex justify-content-between border-top pt-2 small">
+      <span>Subtotal</span><span>&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</span></div>
+    {% if snap.discount.amount %}<div class="d-flex justify-content-between small text-danger"><span>Discount</span><span>− &#8377;{{ "{:,.2f}".format(snap.discount.amount) }}</span></div>{% endif %}
+    <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>&#8377;{{ "{:,.2f}".format(snap.total) }}</span></div>
+  </div>
+</div>
+<p class="small text-muted">Amounts are as they were saved in this revision.</p>
+{% endblock %}

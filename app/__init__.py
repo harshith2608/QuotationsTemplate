@@ -76,6 +76,10 @@ def create_app(config_name='default'):
     app.register_blueprint(api_bp)
     app.register_blueprint(marketing_bp)
     app.register_blueprint(demo_bp)
+    from .share import share_bp
+    from .billing_bp import billing_bp
+    app.register_blueprint(share_bp)
+    app.register_blueprint(billing_bp)
     app.before_request(block_demo_writes)
     from .demo import count_demo_use
     app.after_request(count_demo_use)
@@ -110,6 +114,12 @@ def create_app(config_name='default'):
                 version = _asset_versions.pop(filename)  # re-hash on every request while developing
                 return url_for('static', filename=filename, v=version)
         return url_for('static', filename=filename, v=_asset_versions[filename])
+
+    @app.template_filter('ist_time')
+    def ist_time_filter(dt, fmt='%d %b %Y, %I:%M %p'):
+        """A stored (UTC) time shown in Indian time."""
+        from datetime import timedelta
+        return (dt + timedelta(hours=5, minutes=30)).strftime(fmt) if dt else ''
 
     @app.template_filter('ft_in')
     def ft_in_filter(decimal_ft):

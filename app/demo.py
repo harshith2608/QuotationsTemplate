@@ -32,6 +32,7 @@ demo_bp = Blueprint('demo', __name__)
 # Endpoints that change data and are off-limits to demo visitors
 BLOCKED_ENDPOINTS = {
     'admin.settings', 'admin.payment_settings', 'admin.rates',
+    'admin.costs',
     'admin.create_user', 'admin.delete_user', 'admin.rename_user', 'admin.change_user_password',
     'admin.clear_notifications',
     'admin.test_razorpay', 'admin.test_email',

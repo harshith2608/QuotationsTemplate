@@ -415,6 +415,111 @@ class Lead(db.Model):
         return f'<Lead {self.id}>'
 
 
+# ── Quote to cash: revisions, online approval, invoices, reminders, costs ─────
+# All in their own tables (nothing added to existing ones), so a deploy works before the database update;
+# see app/billing.py ready().
+
+class QuoteRevision(db.Model):
+    """A saved version of a quotation (R1, R2…): a snapshot of what the customer was quoted at the time."""
+    __tablename__ = 'quote_revisions'
+    id         = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    number     = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    total      = db.Column(EncryptedFloat, nullable=False, default=0.0)
+    snapshot   = db.Column(EncryptedText, nullable=False)          # JSON, see billing.quotation_snapshot
+
+    user = db.relationship('User')
+    __table_args__ = (db.UniqueConstraint('project_id', 'number', name='uq_quote_revision'),)
+
+    def __repr__(self):
+        return f'<QuoteRevision project={self.project_id} R{self.number}>'
+
+
+class QuoteShare(db.Model):
+    """A private link the customer opens to view and accept a quotation online."""
+    __tablename__ = 'quote_shares'
+    id         = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    token      = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    active     = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    first_viewed_at = db.Column(db.DateTime, nullable=True)
+    last_viewed_at  = db.Column(db.DateTime, nullable=True)
+    view_count      = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<QuoteShare project={self.project_id}>'
+
+
+class QuoteResponse(db.Model):
+    """The customer's answer on the online quotation: accepted, or asked for changes."""
+    __tablename__ = 'quote_responses'
+    id          = db.Column(db.Integer, primary_key=True)
+    share_id    = db.Column(db.Integer, db.ForeignKey('quote_shares.id', ondelete='CASCADE'), nullable=False)
+    project_id  = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind        = db.Column(db.String(12), nullable=False)           # 'accepted' | 'changes'
+    name        = db.Column(EncryptedText, nullable=True)            # typed by the customer
+    note        = db.Column(EncryptedText, nullable=True)
+    total       = db.Column(EncryptedFloat, nullable=True)           # quotation total they saw
+    revision    = db.Column(db.Integer, nullable=True)               # revision number they saw
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f'<QuoteResponse project={self.project_id} {self.kind}>'
+
+
+class Invoice(db.Model):
+    """A tax invoice issued from a quotation. Everything printed is frozen in `data` when it is issued."""
+    __tablename__ = 'invoices'
+    id           = db.Column(db.Integer, primary_key=True)
+    project_id   = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    number       = db.Column(db.String(20), unique=True, nullable=False)    # e.g. INV/2026-27/001
+    fy           = db.Column(db.String(7), nullable=False)                   # financial year, e.g. 2026-27
+    seq          = db.Column(db.Integer, nullable=False)
+    issued_on    = db.Column(db.Date, nullable=False)
+    status       = db.Column(db.String(12), nullable=False, default='issued')   # 'issued' | 'cancelled'
+    total        = db.Column(EncryptedFloat, nullable=False, default=0.0)
+    data         = db.Column(EncryptedText, nullable=False)                  # JSON, see billing.build_invoice
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_by   = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+
+    project = db.relationship('Project')
+    __table_args__ = (db.UniqueConstraint('fy', 'seq', name='uq_invoice_seq'),)
+
+    def __repr__(self):
+        return f'<Invoice {self.number}>'
+
+
+class PaymentReminder(db.Model):
+    """A payment reminder sent on WhatsApp (for "last reminded" on Balances due)."""
+    __tablename__ = 'payment_reminders'
+    id         = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    sent_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    sent_by    = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    amount     = db.Column(EncryptedFloat, nullable=True)
+
+    def __repr__(self):
+        return f'<PaymentReminder project={self.project_id}>'
+
+
+class CostRate(db.Model):
+    """What a material (per sqft) or a fitting (per unit) costs the business. Admin-only, never printed."""
+    __tablename__ = 'cost_rates'
+    id   = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)       # 'material' (name = 'Material|Work') | 'fitting'
+    name = db.Column(db.String(120), nullable=False)
+    cost = db.Column(EncryptedFloat, nullable=False, default=0.0)
+    __table_args__ = (db.UniqueConstraint('kind', 'name', name='uq_cost_rate'),)
+
+    def __repr__(self):
+        return f'<CostRate {self.kind} {self.name}>'
+
+
 class DemoStat(db.Model):
     """Anonymous daily counts for the public demo (no personal data). Survives the nightly demo reset."""
     __tablename__ = 'demo_stats'
