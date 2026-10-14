@@ -55,6 +55,19 @@ ok('the same code can\'t be used twice', 'already used' in r.text)
 
 # Dashboard shows the request; create a trial from it
 t = c.get('/').text
+ok('live demo card says counting starts after the update (no demo_stats table yet)', 'Counting starts after the database update' in t)
+from datetime import date, timedelta as _td
+from app.models import DemoStat
+DemoStat.__table__.create(le, checkfirst=True)
+with le.begin() as conn:
+    conn.execute(DemoStat.__table__.insert(), [dict(day=datetime.utcnow().date(), starts=4, quotations=2, pdfs=3),
+                                               dict(day=datetime.utcnow().date() - _td(days=3), starts=6, quotations=1, pdfs=0),
+                                               dict(day=datetime.utcnow().date() - _td(days=20), starts=10, quotations=0, pdfs=1)])
+t = c.get('/').text
+ok('live demo card: today 4, last 7 days 10, last 30 days 20 visitors', '<h2>Live demo</h2>' in t
+   and '<td>Today</td><td><strong>4</strong></td><td>2</td><td>3</td>' in t
+   and '<td>Last 7 days</td><td><strong>10</strong></td><td>3</td><td>3</td>' in t
+   and '<td>Last 30 days</td><td><strong>20</strong></td><td>3</td><td>4</td>' in t)
 ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
    and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
    and 'name="company" value="Kumar Woodcraft"' in t)

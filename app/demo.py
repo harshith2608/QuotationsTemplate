@@ -97,6 +97,54 @@ def demo_username():
     return (os.environ.get('DEMO_USER') or 'demo-admin').strip()
 
 
+# endpoint → (counter, methods, counts when the response status is in this range)
+COUNTED = {
+    'projects.create_project':        ('quotations', 'POST', range(300, 400)),   # saved → redirect to it
+    'projects.download_pdf':          ('pdfs', 'GET', range(200, 300)),
+    'projects.download_customer_pdf': ('pdfs', 'GET', range(200, 300)),
+}
+
+
+_BOT = ('bot', 'crawl', 'spider', 'slurp', 'facebookexternalhit', 'preview', 'whatsapp', 'headless', 'lighthouse')
+
+
+def _is_bot():
+    ua = (request.headers.get('User-Agent') or '').lower()
+    return not ua or any(b in ua for b in _BOT)
+
+
+def count(field):
+    """Add one to today's anonymous demo counter. Never breaks the request (e.g. before the table exists)."""
+    if _is_bot():
+        return
+    from datetime import datetime
+    from sqlalchemy.exc import IntegrityError
+    from . import db
+    from .models import DemoStat
+    t = DemoStat.__table__
+    today = datetime.utcnow().date()
+    for _ in range(2):                 # second try if another request created today's row at the same moment
+        try:
+            done = db.session.execute(t.update().where(t.c.day == today).values({field: t.c[field] + 1})).rowcount
+            if not done:
+                db.session.execute(t.insert().values({'day': today, 'starts': 0, 'quotations': 0, 'pdfs': 0, field: 1}))
+            db.session.commit()
+            return
+        except IntegrityError:
+            db.session.rollback()
+        except Exception:
+            db.session.rollback()
+            return
+
+
+def count_demo_use(response):
+    """after_request hook: count quotations created and PDFs opened in the demo."""
+    rule = COUNTED.get(request.endpoint)
+    if rule and demo_enabled() and request.method == rule[1] and response.status_code in rule[2]:
+        count(rule[0])
+    return response
+
+
 def block_demo_writes():
     """before_request hook: refuse data-changing requests that are blocked in the demo."""
     if not demo_enabled() or request.method in ('GET', 'HEAD', 'OPTIONS'):
@@ -128,6 +176,7 @@ def start():
                 '<body style="font-family:system-ui;padding:3rem;text-align:center"><h2>The demo is being reset</h2>'
                 '<p>Please try again in a minute.</p><p><a href="/demo">Try again</a></p></body>', 503)
     login_user(user, remember=True)     # stays signed in after the browser is closed
+    count('starts')                     # once per browser: later visits are already signed in
     flash('Welcome to the demo! Explore freely — everything resets every night.', 'success')
     return redirect(safe_next())
 

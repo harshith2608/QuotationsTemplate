@@ -177,7 +177,7 @@ STAGE_FLOW_BY_PROJECT = [
 
 
 # Real data that lives in the marketing/demo database and must survive the nightly demo reset
-KEEP_ON_RESET = {'leads'}
+KEEP_ON_RESET = {'leads', 'demo_stats'}
 
 
 def _clear_all_tables():

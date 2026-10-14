@@ -90,6 +90,28 @@ ok('scrambled amounts are always wrong, deterministic, positive',
 wa = unquote(c.get('/projects/1/whatsapp').headers['Location'])
 ok('WhatsApp summary marked as demo', 'DEMO — NOT A VALID QUOTATION' in wa)
 
+# Anonymous usage counts
+import json as _json
+from app.models import DemoStat
+UA = {'User-Agent': 'Mozilla/5.0 (iPhone) Safari'}
+with app.app_context():
+    DemoStat.query.delete(); db.session.commit()
+v = app.test_client()
+v.get('/demo', headers=UA)
+v.get('/demo', headers=UA)                                   # same browser again: already signed in
+app.test_client().get('/demo', headers={'User-Agent': 'facebookexternalhit/1.1'})   # link preview
+v.post('/projects/new', headers=UA, data={'customer_name': 'Count Me', 'mobile': '9000000077', 'discount_type': 'none',
+       'discount_value': '0', 'rooms_data': _json.dumps([{'name': 'Hall', 'items': [
+           {'name': 'TV Unit', 'length': 8, 'width': 6, 'wood_type': 'Laminates', 'work_type': 'Box Work'}]}])})
+v.post('/projects/new', headers=UA, data={'customer_name': '', 'mobile': ''})     # invalid: not saved, not counted
+with app.app_context():
+    pid = Project.query.order_by(Project.id.desc()).first().id
+v.get(f'/projects/{pid}/pdf', headers=UA); v.get(f'/projects/{pid}/pdf/customer', headers=UA)
+with app.app_context():
+    st = DemoStat.query.one()
+    ok(f'demo counts: 1 visitor (no repeat, no bot), 1 quotation, 2 PDFs ({st.starts}, {st.quotations}, {st.pdfs})',
+       (st.starts, st.quotations, st.pdfs) == (1, 1, 2))
+
 # Nightly reset
 anon = app.test_client()
 ok('reset without secret → 404', anon.get('/demo/reset').status_code == 404)
@@ -100,7 +122,19 @@ with app.app_context():
     ok('reset with secret restores demo data', r.status_code == 200 and p3.stage == 'pending' and p3.payments.count() == 0
        and Project.query.count() == 5)
 ok('visitor can sign in again after reset', anon.get('/demo').status_code == 302)
+with app.app_context():
+    ok('nightly reset keeps the demo counts', DemoStat.query.count() == 1)
 
 # DEMO_MODE on but no CRON_SECRET → reset impossible
 app2 = make(DEMO_MODE='1')
 ok('no CRON_SECRET → reset disabled', app2.test_client().get('/demo/reset', headers={'Authorization': 'Bearer '}).status_code == 404)
+
+
+# Before the database update adds demo_stats: the demo works, nothing is counted
+from sqlalchemy import text as _text
+app3 = make(DEMO_MODE='1')
+with app3.app_context():
+    db.session.execute(_text('DROP TABLE demo_stats')); db.session.commit()
+w = app3.test_client()
+r = w.get('/demo', headers=UA)
+ok('before the update: /demo still signs in', r.status_code == 302 and w.get('/projects', headers=UA).status_code == 200)

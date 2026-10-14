@@ -268,6 +268,27 @@ def load_leads(limit=100):
     return rows
 
 
+def load_demo_stats(days=30):
+    """Anonymous live-demo counts from the demo database: totals for today / 7 / 30 days and daily rows.
+    None if not connected; {'pending': True} before the database update that adds the table."""
+    from sqlalchemy import inspect, select
+    from .models import DemoStat
+    engine = _leads_engine_or_none()
+    if engine is None:
+        return None
+    t = DemoStat.__table__
+    today = datetime.utcnow().date()
+    with engine.connect() as conn:
+        if not inspect(conn).has_table('demo_stats'):
+            return {'pending': True}
+        rows = [dict(r) for r in conn.execute(select(t).where(t.c.day > today - timedelta(days=days))
+                                              .order_by(t.c.day.desc())).mappings()]
+    def total(n):
+        picked = [r for r in rows if r['day'] > today - timedelta(days=n)]
+        return {k: sum(r[k] for r in picked) for k in ('starts', 'quotations', 'pdfs')}
+    return {'pending': False, 'today': total(1), 'week': total(7), 'month': total(30), 'days': rows[:14]}
+
+
 def _link_lead(lead_id, status, slug=None):
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.console_lead_links WHERE lead_id = :i'), {'i': lead_id})
@@ -331,7 +352,11 @@ def dashboard():
     trials = _with_badges(ops.list_trials())
     leads = load_leads()
     new_leads = [l for l in (leads or []) if not l['link_status']]
-    return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads,
+    try:
+        demo_stats = load_demo_stats()
+    except Exception as exc:                 # the demo database being unreachable shouldn't break the dashboard
+        demo_stats = {'error': str(exc)}
+    return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain())
 
 

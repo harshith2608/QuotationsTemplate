@@ -77,6 +77,8 @@ def create_app(config_name='default'):
     app.register_blueprint(marketing_bp)
     app.register_blueprint(demo_bp)
     app.before_request(block_demo_writes)
+    from .demo import count_demo_use
+    app.after_request(count_demo_use)
     from .plan import enforce_read_only
     app.before_request(enforce_read_only)
     from .activity import touch

@@ -47,6 +47,31 @@
   </div>
 {% endif %}
 
+{% if demo_stats %}
+<h2>Live demo</h2>
+<div class="card">
+  {% if demo_stats.error %}<p class="small" style="color:var(--bad)">Couldn't read the demo numbers: {{ demo_stats.error }}</p>
+  {% elif demo_stats.pending %}<p class="muted small">Counting starts after the database update (Updates → Update all).</p>
+  {% else %}
+  <table>
+    <tr><th></th><th>Visitors</th><th>Quotations made</th><th>PDFs opened</th></tr>
+    {% for label, k in [('Today', 'today'), ('Last 7 days', 'week'), ('Last 30 days', 'month')] %}
+    <tr><td>{{ label }}</td><td><strong>{{ demo_stats[k].starts }}</strong></td><td>{{ demo_stats[k].quotations }}</td><td>{{ demo_stats[k].pdfs }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if demo_stats.days %}
+  <details style="margin-top:10px"><summary class="small">By day</summary>
+    <table class="small">
+      {% for d in demo_stats.days %}<tr><td>{{ d.day.strftime('%a %d %b') }}</td><td>{{ d.starts }} visitors</td><td>{{ d.quotations }} quotations</td><td>{{ d.pdfs }} PDFs</td></tr>{% endfor %}
+    </table>
+  </details>
+  {% endif %}
+  <p class="muted small" style="margin-top:8px">Anonymous counts, no personal data. A visitor is a browser opening the demo for the first time
+    (returning visitors stay signed in and aren't counted again); bots and link previews are left out. Days are UTC.</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <h2>New trial (without a request)</h2>
 <div class="card">
   <form method="post" action="{{ url_for('console.create_trial') }}" class="row" data-confirm="Create this trial?">

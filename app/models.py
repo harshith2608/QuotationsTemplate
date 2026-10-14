@@ -415,6 +415,18 @@ class Lead(db.Model):
         return f'<Lead {self.id}>'
 
 
+class DemoStat(db.Model):
+    """Anonymous daily counts for the public demo (no personal data). Survives the nightly demo reset."""
+    __tablename__ = 'demo_stats'
+    day        = db.Column(db.Date, primary_key=True)            # UTC date
+    starts     = db.Column(db.Integer, nullable=False, default=0)   # visitors who opened the demo
+    quotations = db.Column(db.Integer, nullable=False, default=0)   # quotations they created
+    pdfs       = db.Column(db.Integer, nullable=False, default=0)   # PDFs they opened
+
+    def __repr__(self):
+        return f'<DemoStat {self.day}>'
+
+
 class Material(db.Model):
     """A material a business quotes per sqft (Acrylic, Laminates, Glass, PU, Wallpaper…), managed in Admin → Rates.
     With work types, it is priced per (material, Box/Frame Work); without, one rate per sqft (work_type '').
