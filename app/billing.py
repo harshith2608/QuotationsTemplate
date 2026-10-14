@@ -469,7 +469,25 @@ def active_invoice(project):
 
 
 def invoice_data(invoice):
-    return json.loads(invoice.data)
+    data = json.loads(invoice.data)
+    data.setdefault('gst', data.get('gst_registered', bool(data.get('taxes'))))   # invoices made before 'gst' existed
+    return data
+
+
+def invoice_message(project, invoice, url):
+    """WhatsApp / email text sending the invoice link."""
+    from .branding import get_brand
+    from .demo import demo_enabled
+    brand = get_brand()
+    due = balance(project, invoice) if invoice.status == 'issued' else 0
+    lines = [f'Hello {project.customer_name},', '',
+             f'Here is your invoice {invoice.number} from {brand["name"]} for Rs.{invoice.total:,.2f}.']
+    if due and due < invoice.total:
+        lines.append(f'Amount due: Rs.{due:,.2f}')
+    lines += ['', 'View and download it here:', url, '', 'Thank you for your business!']
+    if demo_enabled():
+        lines = ['*DEMO — NOT A REAL INVOICE*', ''] + lines
+    return '\n'.join(lines)
 
 
 # ── Amount due, payments, reminders ──────────────────────────────────────────

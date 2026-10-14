@@ -33,12 +33,13 @@ class EmailNotConfigured(Exception):
     pass
 
 
-def _send_email(to_address, subject, body, raise_errors=False):
+def _send_email(to_address, subject, body, raise_errors=False, attachments=None):
     """
     Send a plain-text email via the SMTP settings in Admin → Settings → Email.
     Returns True on success. With raise_errors=True (used by "Send test email"),
     failures raise instead of returning False so the admin sees the reason.
     Port 465 uses SSL; any other port (normally 587) uses STARTTLS.
+    attachments: [(filename, bytes, mime subtype e.g. 'pdf')]
     """
     import smtplib
     from email.mime.text import MIMEText
@@ -53,7 +54,17 @@ def _send_email(to_address, subject, body, raise_errors=False):
             raise EmailNotConfigured('Fill in SMTP host, username, password and admin email first.')
         return False
     try:
-        msg = MIMEText(body, 'plain', 'utf-8')
+        if attachments:
+            from email.mime.application import MIMEApplication
+            from email.mime.multipart import MIMEMultipart
+            msg = MIMEMultipart()
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+            for filename, data, subtype in attachments:
+                part = MIMEApplication(data, _subtype=subtype)
+                part.add_header('Content-Disposition', 'attachment', filename=filename)
+                msg.attach(part)
+        else:
+            msg = MIMEText(body, 'plain', 'utf-8')
         msg['Subject'] = subject
         msg['From']    = formataddr((get_brand()['name'], from_addr))
         msg['To']      = to_address
@@ -425,6 +436,8 @@ def view_project(project_id):
         'profit': billing.profit(project, rooms) if current_user.is_admin else None,
         'wa_number': billing.whatsapp_number(project.mobile),
     }
+    from .share import invoice_url
+    invoice_links = {i.id: invoice_url(i) for i in all_invoices if i.status == 'issued'}
     latest_rev = q2c['history'][0][0] if q2c['history'] else None
     q2c['changed_after_invoice'] = bool(invoice and latest_rev and latest_rev.created_at > invoice.created_at)
     return render_template('projects/view.html',
@@ -438,6 +451,7 @@ def view_project(project_id):
                            balance=balance,
                            amount_due=amount_due,
                            q2c=q2c,
+                           invoice_links=invoice_links,
                            settings=settings,
                            stage_history=project.stage_changes.all(),
                            fixed_total=fixed_total,

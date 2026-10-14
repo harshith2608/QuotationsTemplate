@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Invoice {{ inv.number }} – {{ brand.name }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('main.favicon', v=brand.theme_version) }}">
+  {% if brand.font_url %}<link rel="stylesheet" href="{{ brand.font_url }}">{% endif %}
+  <style>
+    :root { --p: {{ brand.primary }}; --on-p: {{ brand.on_primary }}; --a: {{ brand.accent }}; --bg: {{ brand.background }}; --r: {{ brand.radius_card }}; }
+    body { background: var(--bg); font-family: {{ brand.font_stack|safe }}; color: #1f2937; }
+    .q-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .q-head { background: var(--p); color: var(--on-p); border-radius: var(--r); padding: 20px; }
+    .q-head img { max-height: 54px; max-width: 200px; background: #fff; border-radius: 8px; padding: 4px; }
+    .q-card { background: #fff; border-radius: var(--r); box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 16px; margin-top: 14px; }
+    .q-total { font-size: 1.5rem; font-weight: 700; color: var(--p); }
+    .btn-brand { background: var(--p); color: var(--on-p); border: 0; }
+    .btn-brand:hover { filter: brightness(.95); color: var(--on-p); background: var(--p); }
+    .q-muted { color: #6b7280; }
+    .demo { background: #fef3c7; color: #78350f; text-align: center; padding: 8px; font-size: .9rem; }
+  </style>
+</head>
+<body>
+{% if demo_mode %}<div class="demo"><strong>Demo:</strong> this is a sample invoice from the QuoteRoom demo, not a real bill.</div>{% endif %}
+<div class="q-wrap">
+  <div class="q-head">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      {% if brand.logo_url %}<img src="{{ brand.logo_url }}" alt="">{% endif %}
+      <div>
+        <div class="fs-4 fw-bold">{{ d.seller.name }}</div>
+        <div class="small" style="opacity:.85">{{ d.seller.phone }}{% if d.seller.phone and d.seller.email %} · {% endif %}{{ d.seller.email }}</div>
+        {% if d.gst and d.seller.gstin %}<div class="small" style="opacity:.85">GSTIN: {{ d.seller.gstin }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="q-card">
+    <div class="d-flex flex-wrap justify-content-between gap-2">
+      <div>
+        <div class="q-muted small">{{ 'Tax invoice' if d.gst else 'Invoice' }} for</div>
+        <div class="fs-5 fw-semibold">{{ d.buyer.name }}</div>
+        {% if d.buyer.address %}<div class="small q-muted">{{ d.buyer.address }}</div>{% endif %}
+        {% if d.gst and d.buyer.gstin %}<div class="small q-muted">GSTIN: {{ d.buyer.gstin }}</div>{% endif %}
+      </div>
+      <div class="text-sm-end small q-muted">{{ inv.number }}<br>{{ issued.strftime('%d %b %Y') }}
+        {% if d.gst and d.place_of_supply.state %}<br>Place of supply: {{ d.place_of_supply.state }}{% endif %}</div>
+    </div>
+    {% if inv.status == 'cancelled' %}<div class="alert alert-secondary mt-3 mb-0">This invoice has been cancelled.</div>{% endif %}
+    <hr>
+    <div class="d-flex justify-content-between align-items-end">
+      <div class="q-muted">Invoice total</div>
+      <div class="q-total">&#8377;{{ "{:,.2f}".format(d.total) }}</div>
+    </div>
+    {% if inv.status == 'issued' and paid %}
+    <div class="d-flex justify-content-between small mt-1"><span class="text-success">Paid</span><span class="text-success">&#8377;{{ "{:,.2f}".format(paid) }}</span></div>
+    <div class="d-flex justify-content-between fw-semibold"><span>Amount due</span><span>&#8377;{{ "{:,.2f}".format(due) }}</span></div>
+    {% endif %}
+    <div class="mt-3">
+      <a class="btn btn-brand" href="{{ url_for('share.invoice_pdf', token=token) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>Download PDF</a>
+    </div>
+  </div>
+
+  <div class="q-card">
+    <div class="fw-semibold mb-2">Details</div>
+    <table class="table table-sm small mb-0">
+      <tbody>
+      {% set ns = namespace(room=None) %}
+      {% for l in d.lines %}
+        {% if l.room is defined and l.room != ns.room %}{% set ns.room = l.room %}
+          <tr><td colspan="2" class="fw-semibold pt-3" style="color:var(--p)">{{ l.room }}</td></tr>
+        {% endif %}
+        <tr>
+          <td>{{ l.description }}<div class="q-muted">{% if l.detail %}{{ l.detail }} · {% endif %}{{ "{:,.2f}".format(l.qty) if l.unit == 'sqft' else '%g'|format(l.qty) }} {{ l.unit }} × &#8377;{{ "{:,.2f}".format(l.rate) }}</div></td>
+          <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(l.amount) }}</td>
+        </tr>
+      {% endfor %}
+      <tr><td class="pt-3">Total of items</td><td class="text-end text-nowrap pt-3">&#8377;{{ "{:,.2f}".format(d.gross) }}</td></tr>
+      {% if d.discount %}<tr class="text-danger"><td>{{ d.discount_label }}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(d.discount) }}</td></tr>{% endif %}
+      {% if d.gst %}
+        <tr><td>Taxable value</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(d.taxable) }}</td></tr>
+        {% for t in d.taxes %}<tr><td>{{ t.label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(t.amount) }}</td></tr>{% endfor %}
+      {% endif %}
+      {% if d.round_off %}<tr><td>Round off</td><td class="text-end text-nowrap">{{ '+' if d.round_off > 0 else '−' }} &#8377;{{ "{:,.2f}".format(d.round_off|abs) }}</td></tr>{% endif %}
+      <tr class="fw-bold"><td>Invoice total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(d.total) }}</td></tr>
+      </tbody>
+    </table>
+    {% if not demo_mode %}<div class="small q-muted mt-2">{{ d.total_words }}</div>{% endif %}
+    {% if d.notes %}<div class="small mt-2">{{ d.notes }}</div>{% endif %}
+  </div>
+
+  {% if inv.status == 'issued' and due and (pay.upi_id or pay.account_number) %}
+  <div class="q-card">
+    <div class="fw-semibold mb-2">How to pay</div>
+    <div class="small">
+      {% if pay.upi_id %}<div><i class="bi bi-phone me-1"></i>UPI: <strong>{{ pay.upi_id }}</strong></div>{% endif %}
+      {% if pay.account_number %}<div class="mt-1"><i class="bi bi-bank me-1"></i>{{ pay.bank_name }} · {{ pay.account_name }} · A/C {{ pay.account_number }} · IFSC {{ pay.ifsc_code }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+  <p class="text-center small q-muted mt-3">This is a computer-generated invoice and needs no signature.{% if d.seller.phone %} Questions? Call or WhatsApp {{ d.seller.phone }}.{% endif %}</p>
+</div>
+</body>
+</html>

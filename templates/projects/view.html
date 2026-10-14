@@ -550,6 +550,17 @@
           <td class="text-end text-nowrap">
             <a class="btn btn-sm btn-outline-primary py-0" target="_blank" rel="noopener"
                href="{{ url_for('billing.invoice_pdf', project_id=project.id, invoice_id=inv.id) }}"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>
+            {% if inv.status == 'issued' %}
+            <a class="btn btn-sm btn-outline-success py-0" target="_blank" rel="noopener" title="Send on WhatsApp"
+               href="{{ url_for('billing.invoice_whatsapp', project_id=project.id, invoice_id=inv.id) }}"><i class="bi bi-whatsapp me-1"></i>WhatsApp</a>
+            <form method="POST" action="{{ url_for('billing.invoice_email', project_id=project.id, invoice_id=inv.id) }}" class="d-inline"
+                  {% if not project.email %}onsubmit="const e = prompt('Customer email address'); if (!e) return false; this.to.value = e;"{% endif %}>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="to" value="{{ project.email or '' }}">
+              <button class="btn btn-sm btn-outline-secondary py-0" type="submit" title="Email the invoice"><i class="bi bi-envelope me-1"></i>Email</button>
+            </form>
+            <button class="btn btn-sm btn-outline-secondary py-0" type="button" title="Copy the customer's link"
+                    onclick="navigator.clipboard.writeText('{{ invoice_links[inv.id] }}'); this.textContent='Copied!'"><i class="bi bi-link-45deg"></i></button>
+            {% endif %}
             {% if current_user.is_admin and inv.status == 'issued' %}
             <form method="POST" action="{{ url_for('billing.cancel_invoice', project_id=project.id, invoice_id=inv.id) }}" class="d-inline"
                   onsubmit="return confirm('Cancel invoice {{ inv.number }}? It stays on record as cancelled and its number is not reused.')">

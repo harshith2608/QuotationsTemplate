@@ -1046,19 +1046,11 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
             if line.strip():
                 elements.append(Paragraph(escape(line.strip()), small))
 
-    # Signatory
-    elements.append(Spacer(1, 36))
-    sig = data.get('signatory') or {}
-    sig_table = Table([[Paragraph(f"For <b>{escape(seller['name'])}</b>", small)],
-                       [Spacer(1, 30)],
-                       [Paragraph(f"<b>{escape(sig.get('name') or '')}</b>", small)],
-                       [Paragraph(escape(sig.get('title') or 'Authorised Signatory'), small)]],
-                      colWidths=[page_width * 0.4], hAlign='RIGHT')
-    sig_table.setStyle(TableStyle([('LINEABOVE', (0, 2), (0, 2), 0.8, BRAND_DARK), ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                                   ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
-    elements.append(sig_table)
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph('This is a computer-generated invoice.',
+    elements.append(Spacer(1, 24))
+    elements.append(Paragraph(f"Thank you for your business. — <b>{escape(seller['name'])}</b>",
+                              ParagraphStyle('InvThanks', parent=small, textColor=BRAND_DARK, alignment=TA_CENTER)))
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph('This is a computer-generated invoice and needs no signature.',
                               ParagraphStyle('InvFoot', parent=small, textColor=colors.HexColor('#757575'), alignment=TA_CENTER)))
     _build(doc, elements)
     buffer.seek(0)

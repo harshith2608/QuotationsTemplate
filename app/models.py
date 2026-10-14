@@ -493,8 +493,8 @@ class Invoice(db.Model):
 
     @property
     def with_gst(self):
-        import json
-        return bool(json.loads(self.data).get('gst'))
+        from .billing import invoice_data
+        return bool(invoice_data(self)['gst'])
 
     def __repr__(self):
         return f'<Invoice {self.number}>'

@@ -115,6 +115,50 @@ def cancel_invoice(project_id, invoice_id):
     return _back(project, '#invoice')
 
 
+@billing_bp.route('/projects/<int:project_id>/invoices/<int:invoice_id>/whatsapp')
+@login_required
+def invoice_whatsapp(project_id, invoice_id):
+    project = _project_or_403(project_id)
+    if not billing.ready():
+        abort(404)
+    inv = _invoice_or_404(project, invoice_id)
+    from .share import invoice_url
+    message = billing.invoice_message(project, inv, invoice_url(inv))
+    return redirect(f'https://wa.me/{billing.whatsapp_number(project.mobile)}?text={quote(message)}')
+
+
+@billing_bp.route('/projects/<int:project_id>/invoices/<int:invoice_id>/email', methods=['POST'])
+@login_required
+def invoice_email(project_id, invoice_id):
+    """Email the invoice (link + PDF attached) from the business's own email; without email set up,
+    open the phone's / computer's mail app with the message ready."""
+    from .models import AppSetting
+    from .projects import _send_email
+    from .share import invoice_url
+    project = _project_or_403(project_id)
+    if not billing.ready():
+        return _not_ready(project)
+    inv = _invoice_or_404(project, invoice_id)
+    to = (request.form.get('to') or project.email or '').strip()
+    if not to or '@' not in to:
+        flash('Add the customer\'s email address first.', 'warning')
+        return _back(project, '#invoice')
+    from .branding import get_brand
+    subject = f'Invoice {inv.number} from {get_brand()["name"]}'
+    body = billing.invoice_message(project, inv, invoice_url(inv)).replace('*', '')
+    configured = all((AppSetting.get(k, '') or '').strip() for k in ('smtp_host', 'smtp_user', 'smtp_pass'))
+    if not configured:
+        return redirect(f'mailto:{quote(to, safe="@")}?subject={quote(subject)}&body={quote(body)}')
+    from .pdf_utils import generate_invoice_pdf
+    paid = billing.paid_total(project) if inv.status == 'issued' else 0
+    pdf = generate_invoice_pdf(inv, billing.invoice_data(inv), total_paid=paid).getvalue()
+    if _send_email(to, subject, body, attachments=[('Invoice_' + inv.number.replace('/', '-') + '.pdf', pdf, 'pdf')]):
+        flash(f'Invoice {inv.number} emailed to {to}.', 'success')
+    else:
+        flash('The email could not be sent. Check Admin → Settings → Email.', 'danger')
+    return _back(project, '#invoice')
+
+
 # ── Payment reminders ────────────────────────────────────────────────────────
 
 @billing_bp.route('/projects/<int:project_id>/remind', methods=['POST'])

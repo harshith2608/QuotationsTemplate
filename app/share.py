@@ -16,7 +16,7 @@ share_bp = Blueprint('share', __name__)
 DETAILS = {'summary': 'Material breakdown', 'full': 'Full detailed quotation'}
 
 # Public pages: allowed even when the business's plan has ended (see plan.ALWAYS_ALLOWED)
-PUBLIC_ENDPOINTS = {'share.view', 'share.pdf', 'share.respond'}
+PUBLIC_ENDPOINTS = {'share.view', 'share.pdf', 'share.respond', 'share.invoice_view', 'share.invoice_pdf'}
 
 
 def _active_share(project):
@@ -214,3 +214,60 @@ def _email_admin(title, message, project):
     if to:
         link = url_for('projects.view_project', project_id=project.id, _external=True)
         _send_email(to, title, f'{message}\n\nOpen the quotation: {link}')
+
+
+# ── Invoices: a private link the customer opens to view and download the invoice ──
+
+def _invoice_signer():
+    from flask import current_app
+    from itsdangerous import URLSafeSerializer
+    return URLSafeSerializer(current_app.secret_key, salt='invoice-link')
+
+
+def invoice_url(invoice):
+    """Unguessable link for one invoice (signed; tied to this business and the invoice number)."""
+    from . import tenancy
+    token = _invoice_signer().dumps([tenancy.current_slug() or '', invoice.id, invoice.number])
+    return url_for('share.invoice_view', token=token, _external=True)
+
+
+def _invoice_or_404(token):
+    from itsdangerous import BadSignature
+    from . import tenancy
+    from .models import Invoice
+    if not billing.ready() or len(token or '') > 200:
+        abort(404)
+    try:
+        slug, invoice_id, number = _invoice_signer().loads(token)
+    except (BadSignature, ValueError, TypeError):
+        abort(404)
+    inv = db.session.get(Invoice, invoice_id) if isinstance(invoice_id, int) else None
+    if not inv or inv.number != number or slug != (tenancy.current_slug() or ''):
+        abort(404)
+    return inv
+
+
+@share_bp.route('/i/<token>')
+def invoice_view(token):
+    inv = _invoice_or_404(token)
+    from .models import AppSetting, Project
+    project = db.session.get(Project, inv.project_id)
+    data = billing.invoice_data(inv)
+    paid = billing.paid_total(project) if inv.status == 'issued' else 0
+    pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
+    from datetime import date as _date
+    return _private(render_template('share/invoice.html', inv=inv, d=data, token=token, paid=paid,
+                                    due=max(round(inv.total - paid, 2), 0), pay=pay,
+                                    issued=_date.fromisoformat(data['issued_on'])))
+
+
+@share_bp.route('/i/<token>/pdf')
+def invoice_pdf(token):
+    inv = _invoice_or_404(token)
+    from .models import Project
+    from .pdf_utils import generate_invoice_pdf
+    project = db.session.get(Project, inv.project_id)
+    paid = billing.paid_total(project) if inv.status == 'issued' else 0
+    buf = generate_invoice_pdf(inv, billing.invoice_data(inv), total_paid=paid)
+    return _private(send_file(buf, mimetype='application/pdf', as_attachment=False,
+                              download_name='Invoice_' + inv.number.replace('/', '-') + '.pdf'))

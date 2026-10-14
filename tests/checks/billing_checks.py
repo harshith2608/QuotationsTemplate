@@ -180,6 +180,49 @@ ok('staff only see balances of their own quotations', 'Rahul Sample' not in ts a
 r = c.get(f'/projects/{pid}').text
 ok('quotation page has the reminder form and last-sent date', 'Payment reminder' in r and 'Last sent' in r)
 
+# ── Sharing invoices online (WhatsApp, email, link) ──
+with app.app_context():
+    active = Invoice.query.filter_by(project_id=pid, status='issued').one()
+    act_id, act_no = active.id, active.number
+txt = pdftext(c, f'/projects/{pid}/invoices/{act_id}/pdf')
+ok('invoice PDF has no signature block', 'Signatory' not in txt and 'Proprietor' not in txt and 'needs no signature' in txt)
+r = c.get(f'/projects/{pid}/invoices/{act_id}/whatsapp')
+wa = unquote(r.headers.get('Location', ''))
+link = re.search(r'(http://[^\s]+/i/[^\s]+)', wa)
+ok('WhatsApp: invoice number, total and a link to view it', wa.startswith('https://wa.me/919000000111?text=') and act_no in wa
+   and link is not None)
+ilink = link.group(1).replace('http://localhost', '')
+anon_i = app.test_client()
+r = anon_i.get(ilink)
+ok('customer opens the invoice link without logging in', r.status_code == 200 and act_no in r.text and 'IGST @ 18%' in r.text
+   and r.headers.get('X-Robots-Tag', '').startswith('noindex') and 'needs no signature' in r.text)
+ok('…and downloads the PDF', anon_i.get(ilink + '/pdf').mimetype == 'application/pdf')
+ok('a tampered invoice link → 404', anon_i.get(ilink[:-3] + 'abc').status_code == 404 and anon_i.get('/i/nonsense').status_code == 404)
+t = c.get(f'/projects/{pid}').text
+ok('quotation page: WhatsApp, Email and copy-link for the invoice', f'/invoices/{act_id}/whatsapp' in t and f'/invoices/{act_id}/email' in t
+   and ilink.split('/i/')[1] in t)
+r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': ''}, follow_redirects=True)
+ok('email without an address asks for one', "customer&#39;s email address" in r.text or "customer's email address" in r.text)
+r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': 'buyer@example.com'})
+ok('email without email settings opens the mail app with the message ready', r.status_code == 302
+   and r.headers['Location'].startswith('mailto:buyer@example.com?subject=Invoice') and '/i/' in r.headers['Location'])
+import app.projects as _projects
+sent = []
+_orig_send = _projects._send_email
+_projects._send_email = lambda to, subject, body, raise_errors=False, attachments=None: sent.append((to, subject, body, attachments)) or True
+with app.app_context():
+    for k, v in (('smtp_host', 'smtp.example.com'), ('smtp_user', 'me@example.com'), ('smtp_pass', 'test-only')):
+        AppSetting.set(k, v)
+    db.session.commit()
+r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': 'buyer@example.com'}, follow_redirects=True)
+ok('with email set up: sent with the PDF attached and the link in the message', sent and sent[0][0] == 'buyer@example.com'
+   and act_no in sent[0][1] and '/i/' in sent[0][2] and sent[0][3][0][1][:4] == b'%PDF' and 'emailed to buyer@example.com' in r.text)
+_projects._send_email = _orig_send
+with app.app_context():
+    for k in ('smtp_host', 'smtp_user', 'smtp_pass'):
+        AppSetting.set(k, '')
+    db.session.commit()
+
 # ── Online approval ──
 mid = new_quote('Approval Customer', '9000000113')
 c.post(f'/projects/{mid}/share')
