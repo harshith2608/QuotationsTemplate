@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
-from . import db, tenancy
+from . import activity, db, tenancy
 from . import plan as plan_mod
 
 
@@ -207,6 +207,7 @@ def list_trials():
             try:
                 with tenancy.tenant_context(r['slug'], r['schema_name']):
                     item['status_obj'] = plan_mod.load_status(on=plan_mod.today())
+                    item['usage'] = activity.usage()
             except Exception as exc:          # a half-created trial shouldn't break the whole list
                 item['error'] = str(exc)
         out.append(item)

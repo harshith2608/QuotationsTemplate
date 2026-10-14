@@ -23,6 +23,20 @@
 </div>
 {% endif %}
 
+{% set u = t.usage %}
+{% if u %}
+<h2>Usage</h2>
+<div class="card"><table>
+  <tr><td>Quotations</td><td><strong>{{ u.quotations }}</strong>{% if u.last_quotation_at %} · last created or edited {{ u.last_quotation_at|ist }}{% endif %}</td></tr>
+  <tr><td>Last sign-in</td><td>{{ u.last_login_at|ist if u.last_login_at else 'none recorded' }}</td></tr>
+  <tr><td>Last used</td><td>{{ u.last_seen_at|ist if u.last_seen_at else 'never' }}{% if u.last_seen_at %} ({{ u.last_seen_at|ago }}){% endif %}</td></tr>
+  <tr><td>Company details</td><td>{{ 'added' if u.company_set else 'not yet' }} · logo {{ 'uploaded' if u.logo_set else 'not yet' }}</td></tr>
+  <tr><td>Users</td><td>{{ u.users }}</td></tr>
+  <tr><td>Payments recorded</td><td>{{ u.payments }}</td></tr>
+</table>
+<p class="muted small">Sign-ins and daily use are recorded from 14 Oct 2026; before that, only quotations and company details show use.</p></div>
+{% endif %}
+
 {% if t.status == 'active' %}
 <h2>Admin login</h2>
 <div class="card stack">

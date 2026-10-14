@@ -79,6 +79,24 @@ with app.app_context():
 t = c.get('/').text
 ok('request no longer "new"; shown as handled → trial', 'Not interested' not in t and 'trial <a href="/trials/ravi-modular">' in t)
 ok('running trial shows "running"', '>running<' in t)
+ok('a fresh trial shows "Not used yet"', 'Not used yet' in t)
+
+# The customer signs in to their trial and makes a quotation → the console shows it was used
+os.environ['TENANT_MODE'] = '1'; os.environ.pop('CONSOLE_MODE')
+trial_app = create_app('development'); trial_app.config['WTF_CSRF_ENABLED'] = False
+tc_ = trial_app.test_client(); TB = 'http://ravi-modular.quote-room.test'
+tc_.post('/login', base_url=TB, data={'username': 'admin', 'password': password})
+import json as _json
+tc_.post('/projects/new', base_url=TB, data={'customer_name': 'First Client', 'mobile': '9000000001', 'discount_type': 'none',
+         'discount_value': '0', 'rooms_data': _json.dumps([{'name': 'Hall', 'items': [
+             {'name': 'TV Unit', 'length': 8, 'width': 6, 'wood_type': 'Laminates', 'work_type': 'Box Work'}]}])})
+os.environ['CONSOLE_MODE'] = '1'; os.environ.pop('TENANT_MODE')
+t = c.get('/').text
+ok('dashboard shows usage after sign-in + a quotation', 'Not used yet' not in t and '1 quotation</strong>' in t
+   and 'last used today' in t and 'no company details' in t)
+t = c.get('/trials/ravi-modular').text
+ok('trial page shows usage details (sign-in time, quotations)', '<h2>Usage</h2>' in t and 'none recorded' not in t
+   and '<strong>1</strong>' in t and '(today)' in t)
 
 r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7'}, follow_redirects=True)
 ok('duplicate address refused with a message', 'already exists' in r.text)

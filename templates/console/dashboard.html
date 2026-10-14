@@ -80,6 +80,16 @@
       {% endif %}
     </div>
     {% if t.error %}<div class="small" style="color:var(--bad)">{{ t.error }}</div>{% endif %}
+    {% set u = t.usage %}
+    {% if u %}
+    <div class="small {{ '' if u.used else 'muted' }}">
+      {% if not u.used %}Not used yet: no sign-in, quotations or company details.
+      {% else %}<strong>{{ u.quotations }} quotation{{ '' if u.quotations == 1 else 's' }}</strong>
+        · last used {{ u.last_seen_at|ago }}
+        · {{ 'company details added' if u.company_set else 'no company details' }}{{ ' + logo' if u.logo_set }}
+      {% endif %}
+    </div>
+    {% endif %}
     <div class="item-actions">
       {% if t.status == 'active' %}
       <a class="btn btn-sm" href="{{ t.url }}" target="_blank" rel="noopener">Open</a>

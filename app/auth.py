@@ -28,6 +28,8 @@ def login():
         user = User.query.filter_by(username=form.username.data.strip()).first()
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=True)
+            from .activity import record_login
+            record_login()
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(safe_next())
         flash('Invalid username or password.', 'danger')

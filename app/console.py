@@ -478,6 +478,15 @@ def activity():
     return render_template('console/activity.html', rows=rows)
 
 
+@console_bp.app_template_filter('ago')
+def ago(dt):
+    """'today', 'yesterday', '5 days ago' (IST calendar days)."""
+    if not isinstance(dt, datetime):
+        return 'never'
+    days = ((datetime.utcnow() + timedelta(hours=5, minutes=30)).date() - (dt + timedelta(hours=5, minutes=30)).date()).days
+    return 'today' if days <= 0 else 'yesterday' if days == 1 else f'{days} days ago'
+
+
 @console_bp.app_template_filter('ist')
 def ist(dt):
     return (dt + timedelta(hours=5, minutes=30)).strftime('%d %b %Y, %I:%M %p') if isinstance(dt, datetime) else '—'

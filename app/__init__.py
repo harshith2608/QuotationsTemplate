@@ -79,6 +79,8 @@ def create_app(config_name='default'):
     app.before_request(block_demo_writes)
     from .plan import enforce_read_only
     app.before_request(enforce_read_only)
+    from .activity import touch
+    app.before_request(touch)
 
     # Serve static files efficiently in production (Gunicorn doesn't serve them)
     # autorefresh=True in development so edited JS/CSS is served without restart
