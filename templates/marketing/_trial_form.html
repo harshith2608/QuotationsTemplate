@@ -58,5 +58,7 @@
   <div class="done-tick" aria-hidden="true">✓</div>
   <h2 tabindex="-1" data-done-title>Thanks{% if name %}, {{ name }}{% endif %}! Request received.</h2>
   <p>We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.</p>
+  <p class="done-skip"><strong>While you wait, have a look around:</strong></p>
+  <a class="btn btn-primary done-demo" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo</a>
 </div>
 {%- endmacro %}

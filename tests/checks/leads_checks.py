@@ -56,8 +56,8 @@ ok('rate limit: max 5 per visitor per hour', r.status_code == 429 and 'try again
 # No-JS form post → thank-you page with the WhatsApp button
 app2 = create_app('development'); c2 = app2.test_client()
 t = c2.post('/trial-request', data=dict(good, phone='9811111111'), environ_base={'REMOTE_ADDR': '10.9.9.9'}).text
-ok('no-JS post → thank-you page without a WhatsApp button', 'Thanks, Ravi Kumar!' in t and 'Skip the wait' not in t
-   and 'data-trial-wa' not in t)
+ok('no-JS post → thank-you page with the live demo button, no WhatsApp button', 'Thanks, Ravi Kumar!' in t
+   and 'Skip the wait' not in t and 'data-trial-wa' not in t and 'Try the live demo' in t and 'data-demo' in t)
 t = c2.get('/').text
 ok('pop-up form asks for the company name, no WhatsApp follow-up', 'name="company_name"' in t and 'Skip the wait' not in t)
 t = c2.post('/trial-request', data={'name': '', 'phone': ''}, environ_base={'REMOTE_ADDR': '10.9.9.8'}).text
