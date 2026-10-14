@@ -622,9 +622,29 @@ def cost_rates():
     return {(c.kind, c.name if c.kind == 'material' else c.name.lower()): c.cost for c in CostRate.query.all()}
 
 
-def profit(project, rooms=None):
-    """Estimated cost and profit of a quotation, from Admin → Costs. None when no costs are set."""
-    costs = cost_rates()
+def revenue_before_gst(project, invoice=None, settings=None, gst_registered=None):
+    """What the business earns from a quotation, without GST (GST is collected for the government).
+    Invoiced: the invoice's taxable value. Not invoiced yet: the quoted total, with GST taken out when
+    the business usually quotes GST-inclusive prices and issues GST invoices.
+    Returns (amount, gst_included_in_quote)."""
+    if invoice is not None:
+        data = invoice_data(invoice)
+        if data.get('gst') and data.get('gst_rate'):
+            return round(data['taxable'], 2), data.get('prices') == PRICES_INCLUSIVE
+        return project.final_total, False
+    settings = settings or invoice_settings()
+    if gst_registered is None:
+        gst_registered = bool(business_state_code())
+    rate = settings['gst_rate']
+    if gst_registered and settings['with_gst'] and settings['prices'] == PRICES_INCLUSIVE and rate:
+        return round(project.final_total / (1 + rate / 100), 2), True
+    return project.final_total, False
+
+
+def profit(project, rooms=None, invoice=False, costs=None, settings=None, gst_registered=None):
+    """Estimated cost and profit of a quotation, before GST, from Admin → Costs. None when no costs are set.
+    invoice: its active invoice if known (None = not invoiced); left as False, it is looked up."""
+    costs = costs if costs is not None else cost_rates()
     if not costs:
         return None
     rooms = rooms if rooms is not None else project.rooms_with_items()
@@ -643,7 +663,10 @@ def profit(project, rooms=None):
                     missing.append(f'{room.name}: {i.name} ({i.wood_type}{" – " + i.work_type if i.work_type else ""})')
                 else:
                     total_cost += i.area * c
-    selling = project.final_total
+    if invoice is False:
+        invoice = active_invoice(project)
+    selling, gst_removed = revenue_before_gst(project, invoice, settings, gst_registered)
     profit_ = round(selling - total_cost, 2)
-    return {'selling': selling, 'cost': round(total_cost, 2), 'profit': profit_,
+    return {'selling': selling, 'quoted': project.final_total, 'gst_removed': gst_removed,
+            'invoiced': invoice is not None, 'cost': round(total_cost, 2), 'profit': profit_,
             'margin': round(profit_ / selling * 100, 1) if selling else 0.0, 'missing': missing}

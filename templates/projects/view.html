@@ -704,18 +704,23 @@
 <!-- Profit (admins only) -->
 <div class="card shadow-sm border-0 mt-3" id="profit">
   <div class="card-header ki-card-header d-flex justify-content-between align-items-center">
-    <span><i class="bi bi-graph-up-arrow me-2"></i>Estimated profit</span>
+    <span><i class="bi bi-graph-up-arrow me-2"></i>Estimated profit <span class="fw-normal">(before GST)</span></span>
     <span class="small"><i class="bi bi-eye-slash me-1"></i>only admins see this</span>
   </div>
   <div class="card-body">
     {% set pr = q2c.profit %}
     {% if pr %}
     <div class="row g-2 text-center">
-      <div class="col-4"><div class="small text-muted">Price</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.selling) }}</div></div>
+      <div class="col-4"><div class="small text-muted">Price before GST</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.selling) }}</div></div>
       <div class="col-4"><div class="small text-muted">Your cost</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.cost) }}</div></div>
       <div class="col-4"><div class="small text-muted">Profit</div>
         <div class="fw-bold {{ 'text-success' if pr.profit >= 0 else 'text-danger' }}">&#8377;{{ "{:,.0f}".format(pr.profit) }} <span class="small">({{ pr.margin }}%)</span></div></div>
     </div>
+    <div class="small text-muted mt-2">
+      {% if pr.gst_removed %}The quoted &#8377;{{ "{:,.2f}".format(pr.quoted) }} includes GST, so GST is taken out: &#8377;{{ "{:,.2f}".format(pr.selling) }}{% if pr.invoiced %} (the invoice's taxable value){% endif %}.
+      {% elif pr.invoiced %}Based on the invoice{% if pr.selling != pr.quoted %} (taxable value){% endif %}, without GST.
+      {% else %}Quoted prices are before GST, so GST isn't part of this.{% endif %}
+      Profit = price before GST − your costs.</div>
     {% if pr.missing %}
     <div class="small text-warning-emphasis mt-2"><i class="bi bi-exclamation-circle me-1"></i>No cost set for {{ pr.missing|length }} item{{ '' if pr.missing|length == 1 else 's' }}
       (counted as zero cost): {{ pr.missing[:4]|join(', ') }}{% if pr.missing|length > 4 %}…{% endif %}. <a href="{{ url_for('admin.costs') }}">Add costs</a></div>

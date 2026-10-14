@@ -293,6 +293,59 @@ with app.app_context():
     ok('reports: won value adds up the confirmed quotations', abs(rep['total']['won_value'] - sum(p.final_total for p in won)) < 0.01
        and rep['total']['collected'] == round(sum(x.amount for x in Payment.query.all()), 2))
 
+# ── Profit is before GST, with exact amounts ──
+def expected_cost(project):
+    costs = billing.cost_rates(); total = 0.0
+    for room in project.rooms_with_items():
+        for i in room.item_list:
+            if i.is_fixed:
+                total += (i.quantity or 0) * costs.get(('fitting', i.name.lower()), 0)
+            else:
+                total += i.area * costs.get(('material', f'{i.wood_type}|{i.work_type}'), 0)
+    return round(total, 2)
+with app.app_context():
+    rahul = next(p for p in Project.query.all() if p.customer_name == 'Rahul Sample')
+    rinv = billing.active_invoice(rahul)
+    rd = billing.invoice_data(rinv)
+    pr = billing.profit(rahul)
+    ok(f'GST-inclusive invoice: profit uses the taxable value, not the quoted total ({pr["selling"]})',
+       rd['prices'] == 'inclusive' and rd['taxable'] == round(175500 / 1.18, 2) == 148728.81 and pr['selling'] == 148728.81
+       and pr['gst_removed'] and pr['quoted'] == 175500)
+    ok(f'…profit = taxable value − costs, to the paisa ({pr["profit"]})', pr['cost'] == expected_cost(rahul)
+       and pr['profit'] == round(148728.81 - expected_cost(rahul), 2) and pr['margin'] == round(pr['profit'] / 148728.81 * 100, 1))
+    priya = next(p for p in Project.query.all() if p.customer_name == 'Priya Example')
+    ok('not invoiced, prices before GST: profit on the quoted total', billing.active_invoice(priya) is None
+       and billing.profit(priya)['selling'] == priya.final_total and not billing.profit(priya)['gst_removed'])
+    for k, v in (('invoice_prices', 'inclusive'), ('invoice_with_gst', 'yes'), ('invoice_gst_rate', '18')):
+        AppSetting.set(k, v)
+    db.session.commit()
+    pi = billing.profit(priya)
+    ok(f'not invoiced, quotes include 18% GST: GST taken out ({pi["selling"]})', pi['selling'] == round(priya.final_total / 1.18, 2)
+       and pi['gst_removed'] and pi['profit'] == round(pi['selling'] - expected_cost(priya), 2))
+    AppSetting.set('invoice_with_gst', 'no'); db.session.commit()
+    ok('…but businesses that usually invoice without GST keep the quoted total', billing.profit(priya)['selling'] == priya.final_total)
+    AppSetting.set('company_gstin', ''); AppSetting.set('invoice_with_gst', 'yes'); db.session.commit()
+    from flask import g as _g; _g.pop('brand', None)          # business details are read once per request
+    ok('…and so do businesses without a GSTIN', billing.profit(priya)['selling'] == priya.final_total)
+    AppSetting.set('company_gstin', '29ABCDE1234F1Z5'); AppSetting.set('invoice_prices', 'exclusive'); db.session.commit()
+    _g.pop('brand', None)
+    plain_inv = Invoice.query.filter_by(project_id=old_id, status='issued').one()      # the "without GST" invoice
+    kav = db.session.get(Project, old_id)
+    ok('invoice without GST: profit on its total (no GST in it)', billing.profit(kav)['selling'] == kav.final_total
+       and not billing.invoice_data(plain_inv)['taxes'])
+    rep = R.build()
+    won = [p for p in Project.query.all() if p.status != 'draft' and p.stage in R.WON]
+    exp_rev = round(sum(billing.profit(p)['selling'] for p in won), 2)
+    exp_profit = round(sum(billing.profit(p)['profit'] for p in won), 2)
+    ok(f'reports: profit and revenue are the sum of the quotations, before GST ({rep["total"]["profit"]} / {rep["total"]["revenue"]})',
+       abs(rep['total']['profit'] - exp_profit) < 0.01 and abs(rep['total']['revenue'] - exp_rev) < 0.01
+       and rep['total']['margin'] == round(exp_profit / exp_rev * 100, 1))
+    ok('reports: GST column = GST on issued invoices', abs(rep['total']['gst'] - round(sum(
+        sum(t['amount'] for t in billing.invoice_data(i)['taxes']) for i in Invoice.query.filter_by(status='issued')), 2)) < 0.01)
+t = c.get(f'/projects/{rahul.id}').text
+ok('quotation page: "Price before GST" and how GST was taken out', 'Price before GST' in t and '&#8377;1,48,729' not in t
+   and '&#8377;148,729' in t and 'includes GST, so GST is taken out' in t)
+
 # ── Costs & profit ──
 t = c.get('/admin/costs').text
 ok('costs page lists materials with selling rates', 'Laminates – Box Work' in t and 'You charge' in t)

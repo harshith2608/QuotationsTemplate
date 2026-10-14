@@ -26,7 +26,7 @@ def fy_bounds(fy):
 
 def _blank():
     return {'made': 0, 'made_value': 0.0, 'won': 0, 'won_value': 0.0, 'invoiced': 0.0, 'gst': 0.0,
-            'collected': 0.0, 'profit': 0.0, 'cost': 0.0, 'profit_jobs': 0, 'missing_costs': 0}
+            'collected': 0.0, 'profit': 0.0, 'cost': 0.0, 'revenue': 0.0, 'profit_jobs': 0, 'missing_costs': 0}
 
 
 def build(today=None):
@@ -53,7 +53,15 @@ def build(today=None):
 
     years, months = {}, {}
     total = _blank()
-    has_costs = bool(billing.cost_rates())
+    costs = billing.cost_rates()
+    has_costs = bool(costs)
+    settings = billing.invoice_settings()
+    gst_registered = bool(billing.business_state_code())
+    issued = Invoice.query.filter_by(status='issued').all() if billing.ready() else []
+    active = {}
+    for inv in issued:                       # the latest issued invoice of each quotation
+        if inv.project_id not in active or inv.created_at > active[inv.project_id].created_at:
+            active[inv.project_id] = inv
     pending_value, pending_count = 0.0, 0
 
     def bucket(day):
@@ -72,7 +80,8 @@ def build(today=None):
         if p.stage in WON:
             when = _day(won_at.get(p.id, p.created_at))
             y, fy = bucket(when)
-            pr = billing.profit(p, rooms_by_project.get(p.id, [])) if has_costs else None
+            pr = billing.profit(p, rooms_by_project.get(p.id, []), invoice=active.get(p.id), costs=costs,
+                                settings=settings, gst_registered=gst_registered) if has_costs else None
             targets = [y, total]
             if fy == current_fy:
                 targets.append(months.setdefault((when.year, when.month), _blank()))
@@ -82,11 +91,12 @@ def build(today=None):
                 if pr:
                     b['profit'] += pr['profit']
                     b['cost'] += pr['cost']
+                    b['revenue'] += pr['selling']
                     b['profit_jobs'] += 1
                     b['missing_costs'] += 1 if pr['missing'] else 0
 
     if billing.ready():
-        for inv in Invoice.query.filter_by(status='issued'):
+        for inv in issued:
             data = billing.invoice_data(inv)
             gst = sum(t['amount'] for t in data.get('taxes', []))
             y, fy = bucket(inv.issued_on)
@@ -105,7 +115,9 @@ def build(today=None):
     for b in list(years.values()) + list(months.values()) + [total]:
         decided = b['made']
         b['conversion'] = round(b['won'] / decided * 100, 1) if decided else 0.0
-        b['margin'] = round(b['profit'] / b['won_value'] * 100, 1) if b['profit_jobs'] and b['won_value'] else None
+        b['margin'] = round(b['profit'] / b['revenue'] * 100, 1) if b['profit_jobs'] and b['revenue'] else None
+        for k in ('made_value', 'won_value', 'invoiced', 'gst', 'collected', 'profit', 'cost', 'revenue'):
+            b[k] = round(b[k], 2)
 
     # Current financial year: months April → March, and a projection to 31 March
     start, end = fy_bounds(current_fy)

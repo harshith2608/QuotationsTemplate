@@ -434,7 +434,8 @@ def view_project(project_id):
         'history': history,
         'share': share_status(project, history[0][0].number if history else None),
         'last_reminder': billing.last_reminder(project) if balance > 0 else None,
-        'profit': billing.profit(project, rooms) if current_user.is_admin else None,
+        'profit': billing.profit(project, rooms, invoice=invoice, settings=billing.invoice_settings(settings))
+                  if current_user.is_admin else None,
         'wa_number': billing.whatsapp_number(project.mobile),
         'email_ready': billing.email_ready(settings),
     }
