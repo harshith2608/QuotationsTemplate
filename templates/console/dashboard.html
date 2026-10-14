@@ -13,7 +13,8 @@
   {% for l in new_leads %}
     <div class="item">
       <div class="item-head">
-        <strong>{{ l.name }}</strong><span class="muted">{{ l.business }}</span>
+        <strong>{{ l.company_name or l.name }}</strong>{% if l.company_name %}<span>{{ l.name }}</span>{% endif %}
+        <span class="muted">{{ l.business }}</span>
         <span class="muted small" style="margin-left:auto">{{ l.created_at|ist }}</span>
       </div>
       <div class="small"><a href="https://wa.me/{{ l.phone }}" target="_blank" rel="noopener">+{{ l.phone }}</a>
@@ -25,6 +26,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="lead_id" value="{{ l.id }}">
           <input type="hidden" name="name" value="{{ l.name }}">
+          <input type="hidden" name="company" value="{{ l.company_name or '' }}">
           <input type="hidden" name="phone" value="{{ l.phone }}">
           <div class="grow"><label>Address name</label>
             <input type="text" name="slug" value="{{ l.suggested_slug }}" required pattern="[a-z][a-z0-9-]{1,29}"
@@ -100,7 +102,7 @@
   <div class="card"><table>
     <tr><th>Request</th><th>Outcome</th><th></th></tr>
     {% for l in done[:30] %}
-    <tr><td>{{ l.name }} <span class="muted small">· {{ l.created_at|ist }}</span></td>
+    <tr><td>{{ l.name }}{% if l.company_name %} ({{ l.company_name }}){% endif %} <span class="muted small">· {{ l.created_at|ist }}</span></td>
         <td>{% if l.link_status == 'trial' %}trial <a href="{{ url_for('console.trial_detail', slug=l.link_slug) }}">{{ l.link_slug }}</a>{% else %}<span class="muted">not interested</span>{% endif %}</td>
         <td>{% if l.link_status == 'dismissed' %}
           <form method="post" action="{{ url_for('console.restore_lead', lead_id=l.id) }}" style="margin:0">

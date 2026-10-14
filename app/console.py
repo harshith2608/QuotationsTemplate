@@ -250,9 +250,12 @@ def load_leads(limit=100):
     engine = _leads_engine_or_none()
     if engine is None:
         return None
+    from sqlalchemy import inspect, select
     t = Lead.__table__
     with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
-        rows = [dict(r) for r in conn.execute(t.select().order_by(t.c.created_at.desc()).limit(limit)).mappings()]
+        present = {c['name'] for c in inspect(conn).get_columns('leads')}   # company_name arrives with an update
+        cols = [c for c in t.c if c.name in present]
+        rows = [dict(r) for r in conn.execute(select(*cols).order_by(t.c.created_at.desc()).limit(limit)).mappings()]
     with db.engine.connect() as conn:
         links = {r.lead_id: r for r in conn.execute(text('SELECT lead_id, status, slug FROM public.console_lead_links'))}
     for r in rows:
@@ -260,7 +263,8 @@ def load_leads(limit=100):
             else BUSINESS_TYPES.get(r['business_type'], r['business_type'])
         link = links.get(r['id'])
         r['link_status'], r['link_slug'] = (link.status, link.slug) if link else (None, None)
-        r['suggested_slug'] = suggest_slug(r['business_other'] or r['name'])
+        r.setdefault('company_name', None)
+        r['suggested_slug'] = suggest_slug(r['company_name'] or r['business_other'] or r['name'])
     return rows
 
 
@@ -286,9 +290,10 @@ def _product():
     return _env('MARKETING_PRODUCT_NAME', 'QuoteRoom')
 
 
-def _welcome_message(name, url, username, password, ends_on):
+def _welcome_message(name, url, username, password, ends_on, company=''):
     hello = f'Hi {name}!' if name else 'Hi!'
-    return (f"{hello} Your {_product()} free trial is ready.\n\n"
+    whose = f' for {company}' if company else ''
+    return (f"{hello} Your {_product()} free trial{whose} is ready.\n\n"
             f"Open: {url}\nUsername: {username}\nPassword: {password}\n\n"
             f"Your trial runs until {ends_on.strftime('%d %b %Y')}. On your phone, add the page to your home screen "
             "for one-tap access. Reply here if you need any help!")
@@ -338,6 +343,7 @@ def create_trial():
     days = request.form.get('days', '7')
     lead_id = request.form.get('lead_id', type=int)
     name = request.form.get('name', '').strip()[:80]
+    company = request.form.get('company', '').strip()[:80]
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
     try:
         days = int(days)
@@ -348,7 +354,7 @@ def create_trial():
     if lead_id:
         _link_lead(lead_id, 'trial', t['slug'])
     audit('trial_create', t['slug'], f'{days} days' + (f', lead #{lead_id}' if lead_id else ''))
-    message = _welcome_message(name, t['url'], t['username'], t['password'], t['ends_on'])
+    message = _welcome_message(name, t['url'], t['username'], t['password'], t['ends_on'], company)
     return render_template('console/result.html', title=f'Trial "{t["slug"]}" is ready', trial=t,
                            message=message, wa_url=_wa_link(phone, message), phone=phone)
 

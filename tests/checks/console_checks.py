@@ -23,7 +23,7 @@ le = create_engine(f'sqlite:///{leads_db}')
 Lead.__table__.create(le, checkfirst=True)
 with crypto.using_key(LEADS_KEY), le.begin() as c:
     c.execute(Lead.__table__.insert(), [dict(name='Ravi Kumar', phone='919876543210', business_type='other',
-              business_other='Ravi Modular Kitchens', source='facebook', created_at=datetime.utcnow())])
+              business_other='Ravi Modular Kitchens', company_name='Kumar Woodcraft', source='facebook', created_at=datetime.utcnow())])
 
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client()
@@ -55,16 +55,19 @@ ok('the same code can\'t be used twice', 'already used' in r.text)
 
 # Dashboard shows the request; create a trial from it
 t = c.get('/').text
-ok('dashboard shows new trial request with suggested address', 'Ravi Kumar' in t and 'Ravi Modular Kitchens' in t
-   and 'value="ravi-modular"' in t)
+ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
+   and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
+   and 'name="company" value="Kumar Woodcraft"' in t)
 with crypto.using_key(LEADS_KEY), le.connect() as conn:
     lead_id = conn.execute(Lead.__table__.select()).first().id
-r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7', 'lead_id': lead_id, 'name': 'Ravi Kumar', 'phone': '919876543210'})
+r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7', 'lead_id': lead_id, 'name': 'Ravi Kumar', 'company': 'Kumar Woodcraft',
+                            'phone': '919876543210'})
 m = re.search(r'Password:</strong> <span class="secret">([^<]+)</span>', r.text)
 password = m.group(1) if m else ''
 wa = re.search(r'href="(https://wa\.me/919876543210\?text=[^"]+)"', r.text)
 ok('create trial → credentials shown once + WhatsApp message to the lead', r.status_code == 200 and password
-   and wa and 'https://ravi-modular.quote-room.test' in unquote(wa.group(1)) and password in unquote(wa.group(1)))
+   and wa and 'https://ravi-modular.quote-room.test' in unquote(wa.group(1)) and password in unquote(wa.group(1))
+   and 'free trial for Kumar Woodcraft is ready' in unquote(wa.group(1)))
 with app.app_context():
     from app import ops
     trial = [x for x in ops.list_trials() if x['slug'] == 'ravi-modular']

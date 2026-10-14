@@ -406,6 +406,8 @@ class Lead(db.Model):
     phone         = db.Column(EncryptedText, nullable=False)       # normalised: 91XXXXXXXXXX
     business_type = db.Column(db.String(20), nullable=False)       # interiors / furniture / other
     business_other = db.Column(EncryptedText, nullable=True)       # free text when "other"
+    # Deferred: not part of normal SELECTs, so the form keeps working right after a deploy, before the update adds it
+    company_name  = db.deferred(db.Column(EncryptedText, nullable=True))
     source        = db.Column(db.String(200), nullable=True)       # utm_source / utm_campaign, page
     ip_hash       = db.Column(db.String(64), nullable=True, index=True)  # for rate limiting only
 

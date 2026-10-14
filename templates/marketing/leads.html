@@ -45,12 +45,13 @@ tr:last-child td { border-bottom: 0; }
   </header>
   {% if items %}
   <table>
-    <thead><tr><th>Received</th><th>Name</th><th>Phone</th><th>Business</th><th>Source</th><th></th></tr></thead>
+    <thead><tr><th>Received</th><th>Name</th><th>Company</th><th>Phone</th><th>Business</th><th>Source</th><th></th></tr></thead>
     <tbody>
     {% for it in items %}
       <tr>
         <td data-label="Received">{{ (it.lead.created_at + ist_offset).strftime('%d %b %Y, %I:%M %p') }}</td>
         <td><strong>{{ it.lead.name }}</strong></td>
+        <td data-label="Company">{{ it.company or '—' }}</td>
         <td data-label="Phone"><a href="tel:+{{ it.lead.phone }}">{{ it.phone_display }}</a></td>
         <td data-label="Business">{{ it.business }}</td>
         <td data-label="Source" class="muted">{{ it.lead.source or '—' }}</td>

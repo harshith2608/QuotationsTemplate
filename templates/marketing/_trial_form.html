@@ -8,6 +8,13 @@
     <p class="field-error" data-error-for="name" {% if not errors.name %}hidden{% endif %}>{{ errors.name }}</p>
   </div>
   <div class="field">
+    <label for="{{ prefix }}Company">Company name</label>
+    <input id="{{ prefix }}Company" name="company_name" type="text" autocomplete="organization" maxlength="80" required
+           placeholder="e.g. Sharma Interiors" value="{{ form.get('company_name', '') }}"
+           {% if errors.company_name %}aria-invalid="true"{% endif %}>
+    <p class="field-error" data-error-for="company_name" {% if not errors.company_name %}hidden{% endif %}>{{ errors.company_name }}</p>
+  </div>
+  <div class="field">
     <label for="{{ prefix }}Phone">WhatsApp / mobile number</label>
     <div class="phone-input">
       <span aria-hidden="true">+91</span>
@@ -46,15 +53,10 @@
 </form>
 {%- endmacro %}
 
-{% macro trial_done(name='', whatsapp_url='#') -%}
+{% macro trial_done(name='') -%}
 <div class="trial-done" data-trial-done {% if not name %}hidden{% endif %}>
   <div class="done-tick" aria-hidden="true">✓</div>
   <h2 tabindex="-1" data-done-title>Thanks{% if name %}, {{ name }}{% endif %}! Request received.</h2>
-  <p>We'll message you on WhatsApp shortly to set up your free {{ product }} app.</p>
-  <p class="done-skip"><strong>Don't want to wait?</strong></p>
-  <a class="btn btn-wa" data-trial-wa data-cta="followup" href="{{ whatsapp_url }}" target="_blank" rel="noopener">
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2 .7 2.8.6.4-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.3Z"/></svg>
-    Skip the wait — chat with us on WhatsApp
-  </a>
+  <p>We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.</p>
 </div>
 {%- endmacro %}

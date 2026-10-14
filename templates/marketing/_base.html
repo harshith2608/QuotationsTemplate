@@ -298,7 +298,6 @@ footer nav { display: flex; gap: 1.2rem; }
 .trial-done { text-align: center; padding: 6px 0 4px; }
 .trial-done h2 { padding-right: 0; outline: none; }
 .trial-done p { color: var(--muted); margin-top: .5rem; }
-.trial-done .done-skip { margin-top: 1.3rem; color: var(--ink); }
 .done-tick { width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 50%; background: var(--pine-soft); color: var(--pine);
   display: grid; place-items: center; font-size: 1.7rem; font-weight: 800; }
 .btn-wa { background: #25d366; color: #0b2e17; justify-content: center; width: 100%; margin-top: .7rem; }
@@ -463,7 +462,6 @@ footer nav { display: flex; gap: 1.2rem; }
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
-        done.querySelector('[data-trial-wa]').href = data.whatsapp_url;
         done.hidden = false;
         done.querySelector('[data-done-title]').focus();
       } catch (err) {
