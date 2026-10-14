@@ -22,7 +22,7 @@ ok('display number formatted', '+91 98765 43210' in t)
 ok('product name applied everywhere', 'QuoteRoom' not in t and t.count('Sitequote') >= 8 and 'Sitequote%206-month' in t)
 ok('demo button → this site login', 'href="/login" data-demo>Try the live demo' in t)
 ok('click events: StartTrialClick on trial buttons, DemoClick on demo, Lead on submit',
-   "track('StartTrialClick')" in t and "track('DemoClick')" in t and "track('Lead', true)" in t and "'trackCustom'" in t)
+   "track('StartTrialClick')" in t and "track('DemoClick')" in t and "track('Lead', true, { value: T.leadValue, currency: 'INR' })" in t and "'trackCustom'" in t)
 ok('no cookie notice or tag config unless ads configured', 'id="cookieBanner"' not in t and 'pixel: ""' in t and 'type="button" data-cookie-settings' not in t)
 ok('footer links to built-in legal pages', 'href="/privacy">Privacy policy' in t and 'href="/terms">Terms of service' in t)
 ok('full HTML document', t.lstrip().startswith('<!doctype html>') or t.lstrip().startswith('{#') is False and '<!doctype html>' in t[:200])

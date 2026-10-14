@@ -366,7 +366,7 @@ footer nav { display: flex; gap: 1.2rem; }
 <script>
 (function () {
   'use strict';
-  const T = { pixel: {{ meta_pixel_id|tojson }}, gads: {{ google_ads_id|tojson }}, gconv: {{ google_ads_conversion|tojson }} };
+  const T = { leadValue: {{ lead_value|tojson }}, pixel: {{ meta_pixel_id|tojson }}, gads: {{ google_ads_id|tojson }}, gconv: {{ google_ads_conversion|tojson }} };
   const KEY = 'qr_cookie_consent';
   const store = {
     get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } },
@@ -393,8 +393,8 @@ footer nav { display: flex; gap: 1.2rem; }
   }
   // Meta standard events use 'track'; our own names (StartTrialClick, DemoClick) use 'trackCustom'
   const STANDARD = new Set(['PageView', 'Lead', 'Contact']);
-  function track(metaEvent, googleConversion) {
-    try { if (window.fbq) fbq(STANDARD.has(metaEvent) ? 'track' : 'trackCustom', metaEvent); } catch (e) {}
+  function track(metaEvent, googleConversion, params) {
+    try { if (window.fbq) fbq(STANDARD.has(metaEvent) ? 'track' : 'trackCustom', metaEvent, params || {}); } catch (e) {}
     try { if (googleConversion && window.gtag && T.gconv) gtag('event', 'conversion', { send_to: T.gconv }); } catch (e) {}
   }
 
@@ -460,7 +460,7 @@ footer nav { display: flex; gap: 1.2rem; }
         const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         const data = await res.json();
         if (!data.ok) { showErrors(data.errors || { form: 'Something went wrong. Please try again.' }); return; }
-        track('Lead', true);
+        track('Lead', true, { value: T.leadValue, currency: 'INR' });   // Meta wants a value + currency on Lead
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;

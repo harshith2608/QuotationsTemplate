@@ -8,6 +8,7 @@ returns 404. Turn it on only on your own demo/marketing deployment:
     MARKETING_PRODUCT_NAME=QuoteRoom
     MARKETING_WHATSAPP=919876543210          # country code + number, digits only
     META_PIXEL_ID=...                        # optional
+    META_LEAD_VALUE=1000                     # optional: ₹ value sent with each trial request (Lead event)
     GOOGLE_ADS_ID=AW-...                     # optional
     GOOGLE_ADS_CONVERSION=AW-.../label       # optional, fired on WhatsApp clicks
     MARKETING_LEGAL_NAME, MARKETING_CONTACT_EMAIL, MARKETING_ADDRESS,
@@ -68,6 +69,7 @@ def _context():
         wa_number=wa_number,
         wa_display=_display_number(wa_number),
         meta_pixel_id=re.sub(r'\D', '', _env('META_PIXEL_ID')),
+        lead_value=_lead_value(),
         google_ads_id=google_ads_id if re.fullmatch(r'AW-\d+', google_ads_id) else '',
         google_ads_conversion=google_conv if re.fullmatch(r'AW-\d+/[\w-]+', google_conv) else '',
         privacy_url=_env('MARKETING_PRIVACY_URL') or url_for('marketing.privacy'),
@@ -166,6 +168,15 @@ def _ip_hash():
     ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
     key = (current_app.config.get('SECRET_KEY') or '').encode()
     return hmac.new(key, ip.encode(), hashlib.sha256).hexdigest()
+
+
+def _lead_value():
+    """₹ value Meta gets with each trial request: roughly plan price × the share of requests that subscribe."""
+    try:
+        value = float(_env('META_LEAD_VALUE', '1000'))
+    except ValueError:
+        value = 1000.0
+    return value if value > 0 else 1000.0
 
 
 @marketing_bp.route('/free-trial')
