@@ -688,6 +688,13 @@ def settings():
                            business_state=billing.STATES.get(billing.business_state_code(), ''))
 
 
+@admin_bp.route('/reports')
+def reports():
+    """Sales, collections, invoices and estimated profit by financial year, with a projection (admins only)."""
+    from . import reports as R
+    return render_template('admin/reports.html', title='Reports', r=R.build())
+
+
 @admin_bp.route('/notifications')
 def notifications():
     all_notifs = Notification.query.order_by(Notification.created_at.desc()).all()

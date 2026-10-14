@@ -490,6 +490,28 @@ def invoice_message(project, invoice, url):
     return '\n'.join(lines)
 
 
+def email_ready(values=None):
+    """True when Admin → Settings → Email has an SMTP server, username and password."""
+    from .models import AppSetting
+    keys = ('smtp_host', 'smtp_user', 'smtp_pass')
+    vals = values if values is not None else AppSetting.get_many(list(keys))
+    return all((vals.get(k) or '').strip() for k in keys)
+
+
+def quotation_email_text(project, link=''):
+    from .branding import get_brand
+    brand = get_brand()
+    lines = [f'Hello {project.customer_name},', '',
+             f'Thank you for considering {brand["name"]}. Please find your quotation #{project.id} attached '
+             f'(total Rs.{project.final_total:,.2f}).']
+    if link:
+        lines += ['', 'You can also view it and accept it online:', link]
+    lines += ['', 'Please reply to this email if you have any questions.', '', f'Regards,', brand['name']]
+    if brand.get('phone'):
+        lines.append(brand['phone'])
+    return '\n'.join(lines)
+
+
 # ── Amount due, payments, reminders ──────────────────────────────────────────
 
 def amount_due_total(project, invoice=None):

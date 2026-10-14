@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% macro rs(v) %}&#8377;{{ "{:,.0f}".format(v or 0) }}{% endmacro %}
+
+{% block content %}
+{% set c = r.current %}{% set pj = r.projection %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mt-3 mb-1 gap-2">
+  <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Reports</h4>
+  <span class="badge bg-light text-dark border">Financial year {{ r.current_fy }} · day {{ pj.days_elapsed }} of {{ pj.days_in_year }}</span>
+</div>
+<p class="small text-muted mb-3">Won = quotations confirmed (or later) and not cancelled, counted on the day they were confirmed.
+  {% if r.has_costs %}Profit is estimated with today's <a href="{{ url_for('admin.costs') }}">costs</a>.{% else %}
+  <a href="{{ url_for('admin.costs') }}">Add your costs</a> to see profit.{% endif %}</p>
+
+<!-- This financial year -->
+<div class="row g-2 mb-3">
+  {% for label, value, sub, cls in [
+      ('Won this year', rs(c.won_value), c.won ~ ' jobs · ' ~ c.conversion ~ '% of quotes', 'text-dark'),
+      ('Collected', rs(c.collected), 'payments received', 'text-success'),
+      ('Invoiced', rs(c.invoiced), (rs(c.gst) ~ ' GST') if c.gst else 'issued invoices', 'text-dark'),
+      ('Estimated profit', rs(c.profit) if c.profit_jobs else '—', (c.margin ~ '% margin') if c.margin is not none else 'add costs to see', 'text-success' if (c.profit or 0) >= 0 else 'text-danger'),
+      ('To collect now', rs(r.outstanding), 'all balances due', 'text-danger')] %}
+  <div class="col-6 col-md">
+    <div class="card shadow-sm border-0 h-100"><div class="card-body py-3">
+      <div class="small text-muted">{{ label }}</div>
+      <div class="fs-5 fw-bold {{ cls }}">{{ value }}</div>
+      <div class="small text-muted">{{ sub }}</div>
+    </div></div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Projection -->
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-graph-up me-2"></i>Projected for {{ r.current_fy }} (to 31 March)</div>
+  <div class="card-body">
+    <div class="row g-3 text-center">
+      <div class="col-6 col-md-3"><div class="small text-muted">Won work</div><div class="fs-5 fw-bold">{{ rs(pj.won_value) }}</div></div>
+      <div class="col-6 col-md-3"><div class="small text-muted">Collections</div><div class="fs-5 fw-bold">{{ rs(pj.collected) }}</div></div>
+      <div class="col-6 col-md-3"><div class="small text-muted">Profit</div><div class="fs-5 fw-bold text-success">{{ rs(pj.profit) if pj.profit is not none else '—' }}</div></div>
+      <div class="col-6 col-md-3"><div class="small text-muted">From open quotations</div><div class="fs-5 fw-bold">{{ rs(pj.pipeline_expected) }}</div>
+        <div class="small text-muted">{{ pj.pipeline_count }} awaiting · {{ rs(pj.pipeline_value) }} × {{ pj.win_rate }}% win rate</div></div>
+    </div>
+    <p class="small text-muted mb-0 mt-3">At this year's pace so far ({{ pj.days_elapsed }} of {{ pj.days_in_year }} days). Open quotations are
+      the ones awaiting confirmation, weighted by how many quotations you won in the last 12 months. It's an estimate, not a forecast.</p>
+  </div>
+</div>
+
+<!-- Months of this year -->
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-calendar3 me-2"></i>{{ r.current_fy }} month by month</div>
+  <div class="card-body">
+    <div class="d-flex gap-3 small mb-2"><span><span class="ki-rep-key" style="background:var(--ki-primary)"></span>Won</span>
+      <span><span class="ki-rep-key bg-success"></span>Collected</span></div>
+    <div class="table-responsive"><table class="table table-sm align-middle small mb-0">
+      <thead class="table-light"><tr><th>Month</th><th style="min-width:160px"></th><th class="text-end">Won</th><th class="text-end">Collected</th><th class="text-end">Invoiced</th><th class="text-end">Est. profit</th></tr></thead>
+      <tbody>
+      {% for m in r.months %}
+        <tr class="{{ 'text-muted' if m.future }}">
+          <td class="text-nowrap">{{ m.label }}</td>
+          <td>
+            {% if m.won_value %}<div class="ki-rep-bar" style="width:{{ (m.won_value / r.max_month * 100)|round(1) }}%;background:var(--ki-primary)"></div>{% endif %}
+            {% if m.collected %}<div class="ki-rep-bar bg-success mt-1" style="width:{{ (m.collected / r.max_month * 100)|round(1) }}%"></div>{% endif %}</td>
+          <td class="text-end text-nowrap">{{ rs(m.won_value) if m.won_value else '—' }}</td>
+          <td class="text-end text-nowrap">{{ rs(m.collected) if m.collected else '—' }}</td>
+          <td class="text-end text-nowrap">{{ rs(m.invoiced) if m.invoiced else '—' }}</td>
+          <td class="text-end text-nowrap">{{ rs(m.profit) if m.profit_jobs else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- By financial year + till date -->
+<div class="card shadow-sm border-0 mb-5">
+  <div class="card-header ki-card-header"><i class="bi bi-table me-2"></i>By financial year</div>
+  <div class="card-body p-0">
+    <div class="table-responsive"><table class="table table-sm table-hover align-middle small mb-0">
+      <thead class="table-light"><tr><th class="ps-3">Year</th><th class="text-end">Quotes</th><th class="text-end">Quoted value</th><th class="text-end">Won</th>
+        <th class="text-end">Win rate</th><th class="text-end">Won value</th><th class="text-end">Invoiced</th><th class="text-end">GST</th>
+        <th class="text-end">Collected</th><th class="text-end pe-3">Est. profit</th></tr></thead>
+      <tbody>
+      {% for fy, y in r.years %}
+        <tr{% if fy == r.current_fy %} class="fw-semibold"{% endif %}>
+          <td class="ps-3 text-nowrap">{{ fy }}{% if fy == r.current_fy %} <span class="badge bg-success">current</span>{% endif %}</td>
+          <td class="text-end">{{ y.made }}</td><td class="text-end text-nowrap">{{ rs(y.made_value) }}</td>
+          <td class="text-end">{{ y.won }}</td><td class="text-end">{{ y.conversion }}%</td>
+          <td class="text-end text-nowrap">{{ rs(y.won_value) }}</td><td class="text-end text-nowrap">{{ rs(y.invoiced) }}</td>
+          <td class="text-end text-nowrap">{{ rs(y.gst) }}</td><td class="text-end text-nowrap">{{ rs(y.collected) }}</td>
+          <td class="text-end text-nowrap pe-3">{% if y.profit_jobs %}{{ rs(y.profit) }}{% if y.margin is not none %} <span class="text-muted">({{ y.margin }}%)</span>{% endif %}{% else %}—{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="text-center text-muted py-4">No quotations yet.</td></tr>
+      {% endfor %}
+      {% set t = r.total %}
+      {% if r.years %}
+        <tr class="table-light fw-bold">
+          <td class="ps-3">Till date</td><td class="text-end">{{ t.made }}</td><td class="text-end text-nowrap">{{ rs(t.made_value) }}</td>
+          <td class="text-end">{{ t.won }}</td><td class="text-end">{{ t.conversion }}%</td><td class="text-end text-nowrap">{{ rs(t.won_value) }}</td>
+          <td class="text-end text-nowrap">{{ rs(t.invoiced) }}</td><td class="text-end text-nowrap">{{ rs(t.gst) }}</td>
+          <td class="text-end text-nowrap">{{ rs(t.collected) }}</td>
+          <td class="text-end text-nowrap pe-3">{% if t.profit_jobs %}{{ rs(t.profit) }}{% if t.margin is not none %} <span class="text-muted">({{ t.margin }}%)</span>{% endif %}{% else %}—{% endif %}</td>
+        </tr>
+      {% endif %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

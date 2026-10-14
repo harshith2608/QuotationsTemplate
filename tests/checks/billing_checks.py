@@ -199,13 +199,11 @@ ok('customer opens the invoice link without logging in', r.status_code == 200 an
 ok('…and downloads the PDF', anon_i.get(ilink + '/pdf').mimetype == 'application/pdf')
 ok('a tampered invoice link → 404', anon_i.get(ilink[:-3] + 'abc').status_code == 404 and anon_i.get('/i/nonsense').status_code == 404)
 t = c.get(f'/projects/{pid}').text
-ok('quotation page: WhatsApp, Email and copy-link for the invoice', f'/invoices/{act_id}/whatsapp' in t and f'/invoices/{act_id}/email' in t
-   and ilink.split('/i/')[1] in t)
-r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': ''}, follow_redirects=True)
-ok('email without an address asks for one', "customer&#39;s email address" in r.text or "customer's email address" in r.text)
-r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': 'buyer@example.com'})
-ok('email without email settings opens the mail app with the message ready', r.status_code == 302
-   and r.headers['Location'].startswith('mailto:buyer@example.com?subject=Invoice') and '/i/' in r.headers['Location'])
+ok('quotation page: WhatsApp and copy-link for the invoice', f'/invoices/{act_id}/whatsapp' in t and ilink.split('/i/')[1] in t
+   and "copyText(" in t)
+ok('no email settings → no Email buttons', 'emailQuoteModal' not in t and f'/invoices/{act_id}/email' not in t)
+r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': 'buyer@example.com'}, follow_redirects=True)
+ok('no email settings → nothing sent, explains where to set it up', 'Set up email in Admin' in r.text)
 import app.projects as _projects
 sent = []
 _orig_send = _projects._send_email
@@ -214,9 +212,19 @@ with app.app_context():
     for k, v in (('smtp_host', 'smtp.example.com'), ('smtp_user', 'me@example.com'), ('smtp_pass', 'test-only')):
         AppSetting.set(k, v)
     db.session.commit()
+t = c.get(f'/projects/{pid}').text
+ok('with email set up: Email buttons for the quotation and the invoice', 'emailQuoteModal' in t and f'/invoices/{act_id}/email' in t)
+r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': 'not-an-email'}, follow_redirects=True)
+ok('invalid address refused', 'Enter a valid customer email address' in r.text)
 r = c.post(f'/projects/{pid}/invoices/{act_id}/email', data={'to': 'buyer@example.com'}, follow_redirects=True)
 ok('with email set up: sent with the PDF attached and the link in the message', sent and sent[0][0] == 'buyer@example.com'
    and act_no in sent[0][1] and '/i/' in sent[0][2] and sent[0][3][0][1][:4] == b'%PDF' and 'emailed to buyer@example.com' in r.text)
+r = c.post(f'/projects/{pid}/email', data={'to': 'buyer@example.com', 'pdf': 'full', 'with_link': '1'}, follow_redirects=True)
+q = sent[-1]
+ok('quotation emailed: full PDF attached, link to accept online', 'Quotation emailed to buyer@example.com' in r.text
+   and q[3][0][0].startswith('Quotation_') and q[3][0][1][:4] == b'%PDF' and '/q/' in q[2] and f'Quotation #{pid}' in q[1])
+c.post(f'/projects/{pid}/email', data={'to': 'buyer@example.com', 'pdf': 'initial'})
+ok('…or the Initial Quotation without a link', sent[-1][3][0][0].startswith('CustomerQuotation_') and '/q/' not in sent[-1][2])
 _projects._send_email = _orig_send
 with app.app_context():
     for k in ('smtp_host', 'smtp_user', 'smtp_pass'):
@@ -272,6 +280,18 @@ with app.app_context():
 ok('customer sees their change request noted', 'You asked for changes' in r.text)
 c.post(f'/projects/{mid}/share/off')
 ok('turned-off link no longer opens', anon.get(f'/q/{token}').status_code == 404)
+
+# ── Reports ──
+t = c.get('/admin/reports').text
+ok('reports: this year, projection, months and years', 'Won this year' in t and 'Projected for' in t and 'month by month' in t
+   and f'>{FY}' in t and 'Till date' in t)
+ok("employees can't open reports", staff.get('/admin/reports').status_code == 403)
+from app import reports as R
+with app.app_context():
+    rep = R.build()
+    won = [p for p in Project.query.all() if p.status != 'draft' and p.stage in R.WON]
+    ok('reports: won value adds up the confirmed quotations', abs(rep['total']['won_value'] - sum(p.final_total for p in won)) < 0.01
+       and rep['total']['collected'] == round(sum(x.amount for x in Payment.query.all()), 2))
 
 # ── Costs & profit ──
 t = c.get('/admin/costs').text

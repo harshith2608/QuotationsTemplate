@@ -127,36 +127,84 @@ def invoice_whatsapp(project_id, invoice_id):
     return redirect(f'https://wa.me/{billing.whatsapp_number(project.mobile)}?text={quote(message)}')
 
 
+def _email_target(project):
+    to = (request.form.get('to') or project.email or '').strip()
+    import re as _re
+    return to if _re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', to) else ''
+
+
 @billing_bp.route('/projects/<int:project_id>/invoices/<int:invoice_id>/email', methods=['POST'])
 @login_required
 def invoice_email(project_id, invoice_id):
-    """Email the invoice (link + PDF attached) from the business's own email; without email set up,
-    open the phone's / computer's mail app with the message ready."""
-    from .models import AppSetting
+    """Email the invoice from the business's own email account (Admin → Settings → Email), PDF attached."""
+    from .branding import get_brand
+    from .pdf_utils import generate_invoice_pdf
     from .projects import _send_email
     from .share import invoice_url
     project = _project_or_403(project_id)
     if not billing.ready():
         return _not_ready(project)
     inv = _invoice_or_404(project, invoice_id)
-    to = (request.form.get('to') or project.email or '').strip()
-    if not to or '@' not in to:
-        flash('Add the customer\'s email address first.', 'warning')
+    if not billing.email_ready():
+        flash('Set up email in Admin → Settings → Email to send invoices by email.', 'warning')
         return _back(project, '#invoice')
-    from .branding import get_brand
+    to = _email_target(project)
+    if not to:
+        flash('Enter a valid customer email address.', 'warning')
+        return _back(project, '#invoice')
     subject = f'Invoice {inv.number} from {get_brand()["name"]}'
     body = billing.invoice_message(project, inv, invoice_url(inv)).replace('*', '')
-    configured = all((AppSetting.get(k, '') or '').strip() for k in ('smtp_host', 'smtp_user', 'smtp_pass'))
-    if not configured:
-        return redirect(f'mailto:{quote(to, safe="@")}?subject={quote(subject)}&body={quote(body)}')
-    from .pdf_utils import generate_invoice_pdf
     paid = billing.paid_total(project) if inv.status == 'issued' else 0
     pdf = generate_invoice_pdf(inv, billing.invoice_data(inv), total_paid=paid).getvalue()
     if _send_email(to, subject, body, attachments=[('Invoice_' + inv.number.replace('/', '-') + '.pdf', pdf, 'pdf')]):
         flash(f'Invoice {inv.number} emailed to {to}.', 'success')
     else:
-        flash('The email could not be sent. Check Admin → Settings → Email.', 'danger')
+        flash('The email could not be sent. Check Admin → Settings → Email (use "Send test email").', 'danger')
     return _back(project, '#invoice')
+
+
+@billing_bp.route('/projects/<int:project_id>/email', methods=['POST'])
+@login_required
+def quotation_email(project_id):
+    """Email the quotation PDF (initial or full) from the business's email, optionally with the approval link."""
+    import secrets
+    from .branding import get_brand
+    from .models import AppSetting, QuoteShare
+    from .pdf_utils import generate_customer_pdf, generate_pdf
+    from .projects import _send_email
+    from .share import DETAILS, _active_share
+    project = _project_or_403(project_id)
+    if project.status == 'draft':
+        flash('Save the quotation first.', 'warning')
+        return _back(project)
+    if not billing.email_ready():
+        flash('Set up email in Admin → Settings → Email to send quotations by email.', 'warning')
+        return _back(project)
+    to = _email_target(project)
+    if not to:
+        flash('Enter a valid customer email address.', 'warning')
+        return _back(project)
+    full = request.form.get('pdf') == 'full'
+    link = ''
+    if request.form.get('with_link') and billing.ready():
+        share = _active_share(project)
+        if not share:
+            billing.ensure_first_revision(project, current_user)
+            share = QuoteShare(project_id=project.id, token=secrets.token_urlsafe(24), created_by=current_user.id,
+                               detail='full' if full else 'summary')
+            db.session.add(share)
+            db.session.commit()
+        link = url_for('share.view', token=share.token, _external=True)
+    pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
+    pdf = (generate_pdf if full else generate_customer_pdf)(project, payment_settings=pay,
+                                                            total_paid=billing.paid_total(project)).getvalue()
+    name = ('Quotation_' if full else 'CustomerQuotation_') + project.customer_name.replace(' ', '_') + f'_{project.id}.pdf'
+    subject = f'Quotation #{project.id} from {get_brand()["name"]}'
+    if _send_email(to, subject, billing.quotation_email_text(project, link), attachments=[(name, pdf, 'pdf')]):
+        flash(f'Quotation emailed to {to}.', 'success')
+    else:
+        flash('The email could not be sent. Check Admin → Settings → Email (use "Send test email").', 'danger')
+    return _back(project)
 
 
 # ── Payment reminders ────────────────────────────────────────────────────────

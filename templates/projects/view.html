@@ -35,6 +35,11 @@
        class="btn btn-outline-primary btn-sm fw-semibold">
       <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
     </a>
+    {% if q2c.email_ready and project.status != 'draft' %}
+    <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#emailQuoteModal">
+      <i class="bi bi-envelope me-1"></i>Email
+    </button>
+    {% endif %}
     {% if current_user.is_admin %}
     <button type="button" class="btn btn-danger btn-sm fw-semibold"
             data-bs-toggle="modal" data-bs-target="#deleteModal">
@@ -553,13 +558,15 @@
             {% if inv.status == 'issued' %}
             <a class="btn btn-sm btn-outline-success py-0" target="_blank" rel="noopener" title="Send on WhatsApp"
                href="{{ url_for('billing.invoice_whatsapp', project_id=project.id, invoice_id=inv.id) }}"><i class="bi bi-whatsapp me-1"></i>WhatsApp</a>
+            {% if q2c.email_ready %}
             <form method="POST" action="{{ url_for('billing.invoice_email', project_id=project.id, invoice_id=inv.id) }}" class="d-inline"
-                  {% if not project.email %}onsubmit="const e = prompt('Customer email address'); if (!e) return false; this.to.value = e;"{% endif %}>
+                  onsubmit="{% if project.email %}return confirm('Email invoice {{ inv.number }} to {{ project.email }}?'){% else %}const e = prompt('Customer email address'); if (!e) return false; this.to.value = e;{% endif %}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="to" value="{{ project.email or '' }}">
-              <button class="btn btn-sm btn-outline-secondary py-0" type="submit" title="Email the invoice"><i class="bi bi-envelope me-1"></i>Email</button>
+              <button class="btn btn-sm btn-outline-secondary py-0" type="submit" title="Email the invoice with the PDF attached"><i class="bi bi-envelope me-1"></i>Email</button>
             </form>
+            {% endif %}
             <button class="btn btn-sm btn-outline-secondary py-0" type="button" title="Copy the customer's link"
-                    onclick="navigator.clipboard.writeText('{{ invoice_links[inv.id] }}'); this.textContent='Copied!'"><i class="bi bi-link-45deg"></i></button>
+                    onclick="copyText('{{ invoice_links[inv.id] }}', this)"><i class="bi bi-link-45deg"></i></button>
             {% endif %}
             {% if current_user.is_admin and inv.status == 'issued' %}
             <form method="POST" action="{{ url_for('billing.cancel_invoice', project_id=project.id, invoice_id=inv.id) }}" class="d-inline"
@@ -661,7 +668,7 @@
       </form>
       <div class="input-group input-group-sm mb-2">
         <input type="text" class="form-control" value="{{ sh.url }}" readonly id="approvalUrl" aria-label="Approval link">
-        <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('approvalUrl').value); this.textContent='Copied!'">Copy</button>
+        <button class="btn btn-outline-secondary" type="button" onclick="copyText(document.getElementById('approvalUrl').value, this)">Copy</button>
       </div>
       {% set wa_text = 'Hello ' ~ project.customer_name ~ ',\n\nHere is your quotation from ' ~ brand.name ~ '. Tap the link to view it, download the PDF and accept it online:\n\n' ~ sh.url ~ '\n\nThank you!' %}
       <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -807,6 +814,42 @@
 </div>
 {% endif %}
 
+{% if q2c.email_ready and project.status != 'draft' %}
+<div class="modal fade" id="emailQuoteModal" tabindex="-1" aria-labelledby="emailQuoteTitle">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content border-0" method="POST" action="{{ url_for('billing.quotation_email', project_id=project.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header ki-card-header">
+        <h6 class="modal-title fw-bold" id="emailQuoteTitle"><i class="bi bi-envelope me-2"></i>Email quotation</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small fw-semibold" for="eqTo">To</label>
+        <input id="eqTo" type="email" name="to" class="form-control mb-3" required value="{{ project.email or '' }}" placeholder="customer@example.com">
+        <label class="form-label small fw-semibold d-block">Attach</label>
+        <div class="btn-group btn-group-sm mb-3" role="group" aria-label="PDF to attach">
+          <input type="radio" class="btn-check" name="pdf" id="eqInit" value="initial" checked>
+          <label class="btn btn-outline-primary" for="eqInit">Initial Quotation (by material)</label>
+          <input type="radio" class="btn-check" name="pdf" id="eqFull" value="full">
+          <label class="btn btn-outline-primary" for="eqFull">Full Quotation</label>
+        </div>
+        {% if q2c.ready %}
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="with_link" value="1" id="eqLink" checked>
+          <label class="form-check-label small" for="eqLink">Include the link to view and accept it online</label>
+        </div>
+        {% endif %}
+        <div class="form-text">Sent from your email account in Admin → Settings → Email.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>Send</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <!-- Delete Modal -->
 {% if current_user.is_admin %}
 <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -873,7 +916,7 @@ async function generatePaymentLink(projectId) {
       a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.className = 'text-break'; a.textContent = link;
       const copy = document.createElement('button');
       copy.type = 'button'; copy.className = 'btn btn-sm btn-outline-success ms-2 py-0'; copy.textContent = 'Copy';
-      copy.addEventListener('click', () => { navigator.clipboard.writeText(link); copy.textContent = 'Copied!'; });
+      copy.addEventListener('click', () => copyText(link, copy));
       box.append(title, document.createElement('br'), a, copy);
       resultDiv.replaceChildren(box);
     }

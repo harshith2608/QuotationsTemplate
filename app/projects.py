@@ -419,7 +419,8 @@ def view_project(project_id):
     amount_due = billing.amount_due_total(project, invoice) if invoice else project.final_total
     balance    = max(amount_due - total_paid, 0)
     settings   = AppSetting.get_many(['upi_id', 'bank_name', 'account_name',
-                                      'account_number', 'ifsc_code', 'razorpay_key_id'] + list(billing.INVOICE_KEYS))
+                                      'account_number', 'ifsc_code', 'razorpay_key_id', 'smtp_host', 'smtp_user',
+                                      'smtp_pass'] + list(billing.INVOICE_KEYS))
     from .share import share_status
     history = billing.revision_history(project)
     q2c = {
@@ -435,6 +436,7 @@ def view_project(project_id):
         'last_reminder': billing.last_reminder(project) if balance > 0 else None,
         'profit': billing.profit(project, rooms) if current_user.is_admin else None,
         'wa_number': billing.whatsapp_number(project.mobile),
+        'email_ready': billing.email_ready(settings),
     }
     from .share import invoice_url
     invoice_links = {i.id: invoice_url(i) for i in all_invoices if i.status == 'issued'}

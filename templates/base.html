@@ -49,107 +49,94 @@
 {% endif %}
 {% if current_user.is_authenticated %}
 <!-- ===== NAVBAR ===== -->
+{% set admin_links = [('admin.dashboard', 'speedometer2', 'Dashboard'), ('admin.reports', 'bar-chart-line', 'Reports'),
+                       ('admin.users', 'people', 'Users'), ('admin.rates', 'currency-rupee', 'Rates'),
+                       ('admin.costs', 'graph-up-arrow', 'Costs & Profit'), ('admin.payment_settings', 'credit-card', 'Payment Settings'),
+                       ('admin.settings', 'sliders', 'Settings'), ('admin.notifications', 'bell', 'Notifications')] %}
 <nav class="navbar navbar-expand-lg {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar sticky-top" id="ki-navbar">
   <div class="container-fluid px-3">
-    <a class="navbar-brand fw-bold" href="{{ url_for('projects.list_projects') }}">
+    <a class="navbar-brand fw-bold text-truncate" href="{{ url_for('projects.list_projects') }}">
       {% if brand.logo_url %}
       <img src="{{ brand.logo_url }}" alt="" class="ki-navbar-logo me-2">
       {% else %}
       <i class="bi bi-house-heart-fill me-2"></i>
       {% endif %}{{ brand.name }}
     </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarMain">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+    <div class="d-flex align-items-center gap-2 d-lg-none">
+      {% if current_user.is_admin %}
+      <a class="nav-link ki-nav-bell position-relative" href="{{ url_for('admin.notifications') }}" aria-label="Notifications">
+        <i class="bi bi-bell fs-5"></i>
+        {% if unread_notifications_count > 0 %}<span class="ki-nav-badge">{{ unread_notifications_count }}</span>{% endif %}
+      </a>
+      {% endif %}
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain"
+              aria-controls="navbarMain" aria-expanded="false" aria-label="Menu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+    </div>
+    <div class="collapse navbar-collapse ki-mnav" id="navbarMain">
+      <ul class="navbar-nav me-auto mb-lg-0">
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'projects.list_projects' %}active{% endif %}"
              href="{{ url_for('projects.list_projects') }}">
-            <i class="bi bi-clipboard-data me-1"></i>Quotations
+            <i class="bi bi-clipboard-data"></i><span>Quotations</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'projects.create_project' %}active{% endif %}"
              href="{{ url_for('projects.create_project') }}">
-            <i class="bi bi-plus-circle me-1"></i>New Quote
+            <i class="bi bi-plus-circle"></i><span>New Quote</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'billing.balances_due' %}active{% endif %}"
              href="{{ url_for('billing.balances_due') }}">
-            <i class="bi bi-cash-coin me-1"></i>Balances
+            <i class="bi bi-cash-coin"></i><span>Balances</span>
           </a>
         </li>
         {% if current_user.is_admin %}
-        <li class="nav-item dropdown">
+        {# Desktop: Admin dropdown #}
+        <li class="nav-item dropdown d-none d-lg-block">
           <button class="nav-link dropdown-toggle btn btn-link {% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}"
                   id="adminDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-shield-lock me-1"></i>Admin
+            <i class="bi bi-shield-lock"></i><span>Admin</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="adminDropdown">
+            {% for ep, icon, label in admin_links %}
             <li>
-              <a class="dropdown-item" href="{{ url_for('admin.dashboard') }}">
-                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+              <a class="dropdown-item" href="{{ url_for(ep) }}">
+                <i class="bi bi-{{ icon }} me-2"></i>{{ label }}
+                {% if ep == 'admin.notifications' and unread_notifications_count > 0 %}<span class="badge bg-danger ms-1">{{ unread_notifications_count }}</span>{% endif %}
               </a>
             </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('admin.users') }}">
-                <i class="bi bi-people me-2"></i>Users
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('admin.rates') }}">
-                <i class="bi bi-currency-rupee me-2"></i>Wood Rates
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('admin.costs') }}">
-                <i class="bi bi-graph-up-arrow me-2"></i>Costs &amp; Profit
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('admin.payment_settings') }}">
-                <i class="bi bi-credit-card me-2"></i>Payment Settings
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('admin.settings') }}">
-                <i class="bi bi-sliders me-2"></i>Settings
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('admin.notifications') }}">
-                <i class="bi bi-bell me-2"></i>Notifications
-                {% if unread_notifications_count > 0 %}
-                <span class="badge bg-danger ms-1">{{ unread_notifications_count }}</span>
-                {% endif %}
-              </a>
-            </li>
+            {% endfor %}
           </ul>
         </li>
+        {# Phone: Admin links as a section of the menu #}
+        <li class="nav-item d-lg-none ki-mnav-heading">Admin</li>
+        {% for ep, icon, label in admin_links if ep != 'admin.notifications' %}
+        <li class="nav-item d-lg-none">
+          <a class="nav-link {% if request.endpoint == ep %}active{% endif %}" href="{{ url_for(ep) }}">
+            <i class="bi bi-{{ icon }}"></i><span>{{ label }}</span>
+          </a>
+        </li>
+        {% endfor %}
         {% endif %}
       </ul>
-      <ul class="navbar-nav ms-auto">
+      {# Desktop: bell + account dropdown #}
+      <ul class="navbar-nav ms-auto d-none d-lg-flex align-items-lg-center">
         {% if current_user.is_admin %}
         <li class="nav-item">
-          <a class="nav-link position-relative" href="{{ url_for('admin.notifications') }}"
-             title="Notifications">
+          <a class="nav-link ki-nav-bell position-relative" href="{{ url_for('admin.notifications') }}" title="Notifications">
             <i class="bi bi-bell fs-5"></i>
-            {% if unread_notifications_count > 0 %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style="font-size:0.6rem;">
-              {{ unread_notifications_count }}
-            </span>
-            {% endif %}
+            {% if unread_notifications_count > 0 %}<span class="ki-nav-badge">{{ unread_notifications_count }}</span>{% endif %}
           </a>
         </li>
         {% endif %}
         <li class="nav-item dropdown">
           <button class="nav-link dropdown-toggle btn btn-link" id="userDropdown"
                   data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-person-circle me-1"></i>
-            {{ current_user.username }}
+            <i class="bi bi-person-circle"></i><span>{{ current_user.username }}</span>
             <span class="badge {% if current_user.is_admin %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1">
               {{ current_user.role|title }}
             </span>
@@ -165,6 +152,15 @@
           </ul>
         </li>
       </ul>
+      {# Phone: who is signed in + logout #}
+      <div class="d-lg-none ki-mnav-account">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-person-circle fs-4"></i>
+          <div class="lh-sm"><div class="fw-semibold">{{ current_user.display_name }}</div>
+            <div class="small ki-mnav-muted">{{ current_user.username }} · {{ current_user.role|title }}</div></div>
+        </div>
+        <a class="btn btn-sm ki-mnav-logout" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+      </div>
     </div>
   </div>
 </nav>
@@ -215,6 +211,23 @@
   if (window.ResizeObserver) new ResizeObserver(sync).observe(bar);
   window.addEventListener('resize', sync);
 })();
+</script>
+
+<!-- Global: copy text (also on plain-http addresses, where the Clipboard API isn't available) -->
+<script>
+function copyText(text, btn) {
+  const done = () => { if (btn) { const t = btn.innerHTML; btn.textContent = 'Copied!'; setTimeout(() => { btn.innerHTML = t; }, 1600); } };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.readOnly = true; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+    if (ok) done(); else window.prompt('Copy this link:', text);
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+  else fallback();
+}
 </script>
 
 <!-- Global: PDF share/download helper -->
