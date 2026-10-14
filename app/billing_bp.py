@@ -55,9 +55,13 @@ def create_invoice(project_id):
     prices = request.form.get('prices', settings['prices'])
     if prices not in (billing.PRICES_EXCLUSIVE, billing.PRICES_INCLUSIVE):
         prices = settings['prices']
+    with_gst = request.form.get('with_gst', '1' if settings['with_gst'] else '0') == '1'
+    if not with_gst:
+        gst_rate = 0
     billing.ensure_first_revision(project, current_user)
     try:
         inv = billing.issue_invoice(project, current_user, issued_on=issued_on, gst_rate=gst_rate, prices=prices,
+                                    with_gst=with_gst,
                                     customer_gstin=request.form.get('customer_gstin', ''),
                                     place_code=request.form.get('place_code', ''),
                                     hsn=(request.form.get('hsn', settings['hsn']) or '').strip()[:10],

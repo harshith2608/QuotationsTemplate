@@ -490,6 +490,11 @@ class Invoice(db.Model):
     project = db.relationship('Project')
     __table_args__ = (db.UniqueConstraint('fy', 'seq', name='uq_invoice_seq'),)
 
+    @property
+    def with_gst(self):
+        import json
+        return bool(json.loads(self.data).get('gst'))
+
     def __repr__(self):
         return f'<Invoice {self.number}>'
 

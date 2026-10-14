@@ -218,7 +218,7 @@ GST_RATES = (0, 5, 12, 18, 28)
 GSTIN_RE = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$')
 
 # Invoice settings (Admin → Settings → Invoices), stored in app_settings
-INVOICE_KEYS = ('invoice_prefix', 'invoice_gst_rate', 'invoice_hsn', 'invoice_prices', 'invoice_notes')
+INVOICE_KEYS = ('invoice_prefix', 'invoice_gst_rate', 'invoice_hsn', 'invoice_prices', 'invoice_notes', 'invoice_with_gst')
 DEFAULT_PREFIX = 'INV'
 DEFAULT_GST_RATE = 18
 PRICES_EXCLUSIVE = 'exclusive'      # quotation amounts are before GST (GST added on top)
@@ -239,6 +239,7 @@ def invoice_settings(values=None):
         'hsn': (s['invoice_hsn'] or '').strip()[:10],
         'prices': s['invoice_prices'] if s['invoice_prices'] in (PRICES_EXCLUSIVE, PRICES_INCLUSIVE) else PRICES_EXCLUSIVE,
         'notes': (s['invoice_notes'] or '').strip(),
+        'with_gst': s['invoice_with_gst'] != 'no',          # the usual choice; each invoice can still pick
     }
 
 
@@ -338,19 +339,23 @@ def invoice_lines(snapshot, hsn=''):
     return lines
 
 
-def build_invoice(project, issued_on, gst_rate, prices, customer_gstin='', place_code='', hsn='', notes=''):
-    """Work out an invoice for the quotation as it is now. Returns the frozen data dict."""
+def build_invoice(project, issued_on, gst_rate, prices, customer_gstin='', place_code='', hsn='', notes='',
+                  with_gst=True):
+    """Work out an invoice for the quotation as it is now. Returns the frozen data dict.
+    Without GST (chosen, or no GSTIN on the business) the invoice carries no GST details at all."""
     from .branding import get_brand
     brand = get_brand()
     snap = quotation_snapshot(project)
     seller_state = business_state_code()
-    gst_registered = bool(seller_state)
+    gst_registered = bool(seller_state) and with_gst
+    if not gst_registered:
+        customer_gstin, place_code, hsn = '', '', ''
     customer_gstin = (customer_gstin or '').strip().upper().replace(' ', '')
     if customer_gstin and not GSTIN_RE.match(customer_gstin):
         raise InvoiceError(f'"{customer_gstin}" doesn\'t look like a valid GSTIN (15 characters, e.g. 29ABCDE1234F1Z5).')
     if customer_gstin:
         place_code = customer_gstin[:2]
-    place_code = place_code if place_code in STATES else seller_state
+    place_code = (place_code if place_code in STATES else seller_state) if gst_registered else ''
     rate = float(gst_rate) if gst_registered else 0.0
     if rate not in GST_RATES:
         raise InvoiceError('Choose a GST rate.')
@@ -376,12 +381,13 @@ def build_invoice(project, issued_on, gst_rate, prices, customer_gstin='', place
     total = float(round(after_discount if rate and prices == PRICES_INCLUSIVE else before_round))
     return {
         'seller': {'name': brand['name'], 'address': brand.get('address') or '', 'phone': brand.get('phone') or '',
-                   'email': brand.get('email') or '', 'gstin': brand.get('gstin') or '',
-                   'state_code': seller_state, 'state': STATES.get(seller_state, '')},
+                   'email': brand.get('email') or '', 'gstin': (brand.get('gstin') or '') if gst_registered else '',
+                   'state_code': seller_state if gst_registered else '',
+                   'state': STATES.get(seller_state, '') if gst_registered else ''},
         'buyer': dict(snap['customer'], gstin=customer_gstin),
         'place_of_supply': {'code': place_code, 'state': STATES.get(place_code, '')},
         'title': 'TAX INVOICE' if gst_registered else 'INVOICE',
-        'gst_registered': gst_registered,
+        'gst': gst_registered,
         'issued_on': issued_on.isoformat(),
         'quotation_id': project.id,
         'revision': latest_revision_number(project),

@@ -1014,9 +1014,6 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
     from .demo import demo_enabled
     if not demo_enabled():          # demo amounts are altered, so the words would contradict them
         elements.append(Paragraph(f"<b>Amount in words:</b> {escape(data['total_words'])}", small))
-    if not data['gst_registered']:
-        elements.append(Spacer(1, 4))
-        elements.append(Paragraph('Not registered under GST: no GST is charged on this invoice.', small))
     if data.get('notes'):
         elements += [Spacer(1, 10), Paragraph('<b>Notes</b>', small_b)]
         for line in data['notes'].splitlines():

@@ -456,6 +456,20 @@
           <label class="form-label small fw-semibold" for="invHsn">HSN / SAC code <span class="text-muted fw-normal">(optional)</span></label>
           <input id="invHsn" name="invoice_hsn" class="form-control" maxlength="10" value="{{ invoice_settings.hsn }}" placeholder="e.g. 9403 or 9954">
         </div>
+        {% if business_state %}
+        <div class="col-12">
+          <label class="form-label small fw-semibold d-block">Usually issue invoices</label>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="invoice_with_gst" id="wgYes" value="yes" {% if invoice_settings.with_gst %}checked{% endif %}>
+            <label class="form-check-label small" for="wgYes">with GST (tax invoice)</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="invoice_with_gst" id="wgNo" value="no" {% if not invoice_settings.with_gst %}checked{% endif %}>
+            <label class="form-check-label small" for="wgNo">without GST (plain invoice)</label>
+          </div>
+          <div class="form-text">You can still choose for each invoice.</div>
+        </div>
+        {% endif %}
         <div class="col-12">
           <label class="form-label small fw-semibold d-block">Your quotation prices are</label>
           <div class="form-check form-check-inline">

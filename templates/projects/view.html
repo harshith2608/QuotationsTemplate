@@ -543,7 +543,8 @@
       <tbody>
       {% for inv in q2c.invoices %}
         <tr class="{{ 'text-muted' if inv.status == 'cancelled' }}">
-          <td class="fw-semibold">{{ inv.number }}{% if inv.status == 'cancelled' %} <span class="badge bg-secondary">cancelled</span>{% endif %}</td>
+          <td class="fw-semibold">{{ inv.number }}{% if inv.status == 'cancelled' %} <span class="badge bg-secondary">cancelled</span>{% endif %}
+            {% if not inv.with_gst %}<span class="badge bg-light text-muted border">without GST</span>{% endif %}</td>
           <td>{{ inv.issued_on.strftime('%d %b %Y') }}</td>
           <td class="text-end">&#8377;{{ "{:,.2f}".format(inv.total) }}</td>
           <td class="text-end text-nowrap">
@@ -575,24 +576,35 @@
         <div class="col-6 col-md-3"><label class="form-label small mb-1">Invoice date</label>
           <input type="date" name="issued_on" class="form-control form-control-sm" value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}"></div>
         {% if q2c.business_state %}
-        <div class="col-6 col-md-3"><label class="form-label small mb-1">GST rate</label>
-          <select name="gst_rate" class="form-select form-select-sm">{% for r in q2c.gst_rates %}<option value="{{ r }}" {% if r == st.gst_rate %}selected{% endif %}>{{ r }}%</option>{% endfor %}</select></div>
-        <div class="col-12 col-md-6"><label class="form-label small mb-1">Quoted prices are</label>
-          <select name="prices" class="form-select form-select-sm">
-            <option value="exclusive" {% if st.prices == 'exclusive' %}selected{% endif %}>before GST (add GST on top)</option>
-            <option value="inclusive" {% if st.prices == 'inclusive' %}selected{% endif %}>including GST</option></select></div>
-        <div class="col-12 col-md-6"><label class="form-label small mb-1">Customer GSTIN <span class="text-muted">(business customers)</span></label>
-          <input name="customer_gstin" class="form-control form-control-sm text-uppercase" maxlength="15" placeholder="optional"></div>
-        <div class="col-12 col-md-6"><label class="form-label small mb-1">Place of supply</label>
-          <select name="place_code" class="form-select form-select-sm">
-            {% for code, name in q2c.states.items()|sort(attribute='1') %}<option value="{{ code }}" {% if code == q2c.business_state %}selected{% endif %}>{{ name }}</option>{% endfor %}
-          </select></div>
+        <div class="col-12">
+          <div class="btn-group btn-group-sm" role="group" aria-label="GST">
+            <input type="radio" class="btn-check" name="with_gst" id="gstYes" value="1" {% if st.with_gst %}checked{% endif %} data-gst-toggle>
+            <label class="btn btn-outline-primary" for="gstYes">With GST</label>
+            <input type="radio" class="btn-check" name="with_gst" id="gstNo" value="0" {% if not st.with_gst %}checked{% endif %} data-gst-toggle>
+            <label class="btn btn-outline-primary" for="gstNo">Without GST</label>
+          </div>
+          <div class="form-text" data-gst-off {% if st.with_gst %}hidden{% endif %}>A plain invoice: no GSTIN, tax, HSN or place of supply is printed. The total is the quoted total.</div>
+        </div>
+        <div class="col-12" data-gst-on {% if not st.with_gst %}hidden{% endif %}><div class="row g-2">
+          <div class="col-6 col-md-3"><label class="form-label small mb-1">GST rate</label>
+            <select name="gst_rate" class="form-select form-select-sm">{% for r in q2c.gst_rates %}<option value="{{ r }}" {% if r == st.gst_rate %}selected{% endif %}>{{ r }}%</option>{% endfor %}</select></div>
+          <div class="col-12 col-md-6"><label class="form-label small mb-1">Quoted prices are</label>
+            <select name="prices" class="form-select form-select-sm">
+              <option value="exclusive" {% if st.prices == 'exclusive' %}selected{% endif %}>before GST (add GST on top)</option>
+              <option value="inclusive" {% if st.prices == 'inclusive' %}selected{% endif %}>including GST</option></select></div>
+          <div class="col-6 col-md-3"><label class="form-label small mb-1">HSN / SAC</label>
+            <input name="hsn" class="form-control form-control-sm" maxlength="10" value="{{ st.hsn }}" placeholder="optional"></div>
+          <div class="col-12 col-md-6"><label class="form-label small mb-1">Customer GSTIN <span class="text-muted">(business customers)</span></label>
+            <input name="customer_gstin" class="form-control form-control-sm text-uppercase" maxlength="15" placeholder="optional"></div>
+          <div class="col-12 col-md-6"><label class="form-label small mb-1">Place of supply</label>
+            <select name="place_code" class="form-select form-select-sm">
+              {% for code, name in q2c.states.items()|sort(attribute='1') %}<option value="{{ code }}" {% if code == q2c.business_state %}selected{% endif %}>{{ name }}</option>{% endfor %}
+            </select></div>
+        </div></div>
         {% else %}
-        <input type="hidden" name="gst_rate" value="0">
-        <div class="col-12 col-md-9 small text-muted d-flex align-items-end">No GSTIN in Company settings, so this will be an invoice without GST.</div>
+        <input type="hidden" name="with_gst" value="0">
+        <div class="col-12 col-md-9 small text-muted d-flex align-items-end">No GSTIN in Company settings, so this will be a plain invoice without GST.</div>
         {% endif %}
-        <div class="col-6 col-md-3"><label class="form-label small mb-1">HSN / SAC</label>
-          <input name="hsn" class="form-control form-control-sm" maxlength="10" value="{{ st.hsn }}" placeholder="optional"></div>
         <div class="col-12"><label class="form-label small mb-1">Notes on the invoice</label>
           <textarea name="notes" class="form-control form-control-sm" rows="2" maxlength="1500">{{ st.notes }}</textarea></div>
         <div class="col-12"><button class="btn btn-sm btn-primary" type="submit"
@@ -837,6 +849,13 @@ async function generatePaymentLink(projectId) {
     btn.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Payment Link';
   }
 }
+
+// Invoice form: show the GST fields only for "With GST"
+document.querySelectorAll('[data-gst-toggle]').forEach(r => r.addEventListener('change', () => {
+  const on = document.getElementById('gstYes').checked;
+  document.querySelector('[data-gst-on]').hidden = !on;
+  document.querySelector('[data-gst-off]').hidden = on;
+}));
 
 function showPayLinkError(resultDiv, message) {
   const box = document.createElement('div');

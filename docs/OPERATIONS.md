@@ -377,7 +377,7 @@ made-up customer on Hobby is fine; delete it afterwards.
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
 
-Prices: **6 months ₹7,999 · 12 months ₹13,999**, with no GST added (not GST-registered for now; check
+Prices: **6 months ₹4,999 · 12 months ₹8,999**, with no GST added (not GST-registered for now; check
 with your CA as revenue grows). No auto-renewal, no refunds (the trial is free).
 
 What the app does by itself:

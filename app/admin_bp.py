@@ -616,6 +616,7 @@ def _save_invoice_settings():
     AppSetting.set('invoice_prices', prices if prices in (billing.PRICES_EXCLUSIVE, billing.PRICES_INCLUSIVE)
                    else billing.PRICES_EXCLUSIVE)
     AppSetting.set('invoice_notes', request.form.get('invoice_notes', '').strip()[:1500])
+    AppSetting.set('invoice_with_gst', 'no' if request.form.get('invoice_with_gst') == 'no' else 'yes')
     return errors
 
 

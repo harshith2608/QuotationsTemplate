@@ -124,13 +124,34 @@ with app.app_context():
     kavya = db.session.get(Project, old_id)
     ok('GST-inclusive prices: invoice total = quoted total, tax worked out inside it',
        inc.total == round(kavya.final_total) and abs(dinc['taxable'] * 1.18 - kavya.final_total) < 1)
+c.post(f'/projects/{old_id}/invoices/{inc.id}/cancel')
+r = c.post(f'/projects/{old_id}/invoice', data={'with_gst': '0', 'gst_rate': '18', 'customer_gstin': '27AAPFU0939F1ZV',
+                                                'hsn': '9403', 'notes': 'Thank you for your business.'}, follow_redirects=True)
+with app.app_context():
+    plain = Invoice.query.filter_by(project_id=old_id, status='issued').one()
+    dpl = billing.invoice_data(plain)
+    kavya = db.session.get(Project, old_id)
+    ok('"Without GST" invoice: no tax, total = quoted total', not dpl['gst'] and not dpl['taxes'] and dpl['total'] == round(kavya.final_total)
+       and dpl['title'] == 'INVOICE' and not plain.with_gst)
+    plain_id = plain.id
+ptxt = pdftext(c, f'/projects/{old_id}/invoices/{plain_id}/pdf')
+ok('"Without GST" invoice PDF never mentions GST, GSTIN, HSN or tax', 'GST' not in ptxt and 'HSN' not in ptxt
+   and 'tax' not in ptxt.lower() and 'Place of supply' not in ptxt and 'INVOICE' in ptxt and 'Thank you for your business.' in ptxt)
+ok('quotation page marks it "without GST"', 'without GST</span>' in c.get(f'/projects/{old_id}').text)
+c.post('/admin/settings', data={'section': 'invoices', 'invoice_prefix': 'QR9X', 'invoice_gst_rate': '18', 'invoice_prices': 'exclusive',
+                                'invoice_with_gst': 'no'})
+with app.app_context():
+    ok('setting: usually without GST', billing.invoice_settings()['with_gst'] is False)
+c.post('/admin/settings', data={'section': 'invoices', 'invoice_prefix': 'QR9X', 'invoice_gst_rate': '18', 'invoice_prices': 'exclusive',
+                                'invoice_with_gst': 'yes'})
+with app.app_context():
     # A business without a GSTIN issues plain invoices
     AppSetting.set('company_gstin', ''); db.session.commit()
 pid_plain = new_quote('No GST Customer', '9000000112')
 c.post(f'/projects/{pid_plain}/invoice', data={'gst_rate': '18'})
 with app.app_context():
     dp = billing.invoice_data(Invoice.query.filter_by(project_id=pid_plain).one())
-    ok('no GSTIN → plain INVOICE without GST', dp['title'] == 'INVOICE' and not dp['taxes'] and dp['total'] == 50 * 850 + 7500)
+    ok('no GSTIN → plain INVOICE without GST', dp['title'] == 'INVOICE' and not dp['taxes'] and not dp['gst'] and dp['total'] == 50 * 850 + 7500)
     AppSetting.set('company_gstin', '29ABCDE1234F1Z5'); db.session.commit()
 
 # ── Payment reminders & balances due ──
