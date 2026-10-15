@@ -16,7 +16,8 @@ CUSTOMER_PDF = Image.open(f'{ADS}/05-customer-quotation-pdf.png').convert('RGB')
 
 
 # Avenir has no ₹ or →: draw those from fonts that do
-FALLBACK = {'₹': '/System/Library/Fonts/SFNS.ttf', '→': '/System/Library/Fonts/Supplemental/Arial Unicode.ttf'}
+FALLBACK = {'₹': '/System/Library/Fonts/SFNS.ttf', '→': '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+            '✓': '/System/Library/Fonts/Supplemental/Arial Unicode.ttf'}
 SPECIAL = set(FALLBACK)
 
 

@@ -95,7 +95,7 @@ def frame(t):
     brand(img, 60, 110, 46)
     d.text((60, 230), 'STEP 1', font=font(34, 'bold'), fill=TAPE)
     d.text((60, 280), 'Measure on site.', font=font(84), fill=PAPER)
-    d.text((60, 390), 'In feet and inches, like you always do.', font=font(40, 'demi'), fill=MUTED)
+    d.text((60, 390), 'QuoteRoom does the maths.', font=font(40, 'demi'), fill=MUTED)
 
     out = phase(t, 4.6, 5.4)                       # drawing makes way for the phone
     if out < 1:
