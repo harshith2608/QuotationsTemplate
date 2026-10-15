@@ -154,7 +154,7 @@ def closing():
     img = frame(TOTAL)
     d = ImageDraw.Draw(img)
     y = text_lines(d, 60, 200, [[('QuoteRoom ', TAPE), ('fixes', PAPER)], [('all 5.', PAPER)]], 96, gap=1.08)
-    items = ['Quote on site, before you leave', 'Sqft and totals worked out for you', 'Branded PDF with your logo',
+    items = ['Quote on site, before you leave', 'Sqft, price and total calculated for you', 'Branded PDF with your logo',
              'Customers accept online + WhatsApp reminders', 'Initial quote by material, full detail later']
     y += 30
     for i, t in enumerate(items, 1):
@@ -175,7 +175,7 @@ SLIDES = [
                          'Measure on site and send the quotation before you leave.',
                          put_phone(S_ADD, crop_bottom=1300)),
     lambda: reason_slide(3, 2, 'A mistake in the sqft or the total.', 'One wrong number and they stop trusting the rest.',
-                         'Enter feet & inches. Sqft, rates and totals are worked out.', put_card(ROOM_TABLE)),
+                         'Type the size in feet and inches. QuoteRoom calculates the sqft, price and total for you.', put_card(ROOM_TABLE)),
     lambda: reason_slide(4, 3, 'The quote looked unprofessional.', 'A plain text message or a messy sheet looks small-time.',
                          'A branded PDF with your logo, every room and every size.',
                          put_card(DOC, crop=(0, 0, DOC.width, int(DOC.width * 0.82)), border=None, r=12)),
