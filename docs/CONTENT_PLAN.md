@@ -70,8 +70,8 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > #interiordesigner #interiordesign #excel #modularkitchen #interiordesignbusiness #smallbusinessindia
 
 **Stop chasing payments** (reel)
-> Still calling customers again and again for the balance? 📞
-> QuoteRoom shows every balance due in one list. One tap sends a polite WhatsApp reminder with the amount, your UPI and a payment link, and online payments update the balance by themselves.
+> Who still owes you money? If the answer is in a notebook, bank SMS and old WhatsApp chats… 📒
+> QuoteRoom keeps every payment against its job and shows every balance due in one list. One tap sends the customer the amount, your UPI and a payment link, and online payments update the balance by themselves.
 > Stop chasing. Start collecting. Free 7-day trial, link in bio.
 > #interiordesigner #interiordesignbusiness #smallbusinessindia #payments #modularkitchen
 

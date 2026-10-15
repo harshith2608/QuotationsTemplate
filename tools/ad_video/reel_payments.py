@@ -47,26 +47,43 @@ def app_bar(d, title):
     d.text((34, 160), title, font=font(42, 'bold'), fill=NAVY, anchor='lm')
 
 
-def call_log(t):
-    """Phone call log: the same customers called again and again, no answer."""
-    s = Image.new('RGB', (SW, SH), (250, 250, 250))
-    d = ImageDraw.Draw(s)
-    d.text((40, 70), 'Recents', font=font(52, 'bold'), fill=(20, 20, 20))
-    calls = [('Arjun Placeholder', 'Outgoing · no answer', 'Today'), ('Priya Example', 'Outgoing · busy', 'Today'),
-             ('Arjun Placeholder', 'Outgoing · no answer', 'Yesterday'), ('Rahul Sample', 'Outgoing · 0:12', 'Yesterday'),
-             ('Arjun Placeholder', 'Outgoing · no answer', 'Mon'), ('Priya Example', 'Outgoing · no answer', 'Mon'),
-             ('Arjun Placeholder', 'Outgoing · no answer', 'Sat')]
-    y = 170
-    shown = int(min(len(calls), max(0, (t - 0.2) / 0.22)))
-    for name, kind, when in calls[:shown]:
-        d.ellipse([36, y + 14, 126, y + 104], fill=(225, 228, 232))
-        d.text((81, y + 59), name[0], font=font(40, 'bold'), fill=(90, 96, 104), anchor='mm')
-        d.text((150, y + 26), name, font=font(40, 'demi'), fill=RED if 'no answer' in kind else (20, 20, 20))
-        d.text((150, y + 76), kind, font=font(30, 'regular'), fill=GREY)
-        d.text((714, y + 58), when, font=font(30, 'regular'), fill=GREY, anchor='rm')
-        d.line([(150, y + 128), (SW, y + 128)], fill=(230, 230, 230), width=2)
-        y += 140
-    return s
+HAND = '/System/Library/Fonts/Supplemental/Bradley Hand Bold.ttf'
+NOTEBOOK = [('Priya - 50k advance recd', None), ('Arjun 30k ... balance??', None), ('Rahul 75k + 40k = 1,25,000', 'strike'),
+            ('Rahul 75k + 40k = 1,15,000 ?', None), ('Meera - advance pending', None), ('Kavya paid full? check', None)]
+SMS = [('A/c XX4321 credited Rs.40,000.00', 'by UPI on 07-Oct. Ref 6281…  -Bank'),
+       ('Rs.20,000.00 received via UPI', 'from K D****  on 12-Oct  -Bank')]
+
+
+def payments_mess(t):
+    """A payments notebook with scribbles, and bank SMS that don't say which job they were for."""
+    from PIL import ImageFont
+    w, h = 820, 860
+    page = Image.new('RGBA', (w, h), (250, 247, 236, 255))
+    d = ImageDraw.Draw(page)
+    for yy in range(96, h, 62):
+        d.line([(0, yy), (w, yy)], fill=(196, 214, 232), width=2)
+    d.line([(78, 0), (78, h)], fill=(232, 160, 160), width=3)
+    hand = ImageFont.truetype(HAND, 40)
+    d.text((100, 30), 'PAYMENTS', font=ImageFont.truetype(HAND, 46), fill=(30, 40, 90))
+    yy = 104
+    shown = int(min(len(NOTEBOOK), max(0, (t - 0.2) / 0.3)))
+    for text, mark in NOTEBOOK[:shown]:
+        d.text((100, yy), text, font=hand, fill=(40, 60, 120))
+        if mark == 'strike':
+            d.line([(100, yy + 26), (100 + hand.getlength(text), yy + 22)], fill=(170, 40, 40), width=4)
+        yy += 62
+    return page.rotate(-2.5, expand=True, resample=Image.BICUBIC, fillcolor=(0, 0, 0, 0))
+
+
+def sms_card(title, body):
+    c = Image.new('RGBA', (760, 150), (0, 0, 0, 0))
+    d = ImageDraw.Draw(c)
+    d.rounded_rectangle([0, 0, 759, 149], radius=26, fill=(255, 255, 255, 245))
+    d.rounded_rectangle([24, 30, 84, 90], radius=14, fill=(52, 199, 89))
+    d.text((54, 60), 'SMS', font=font(18, 'bold'), fill='white', anchor='mm')
+    d.text((104, 34), title, font=font(30, 'bold'), fill=INK)
+    d.text((104, 82), body, font=font(24, 'regular'), fill=(90, 100, 96))
+    return c
 
 
 def balances_screen(t):
@@ -198,26 +215,34 @@ def _inr(v):
 
 def scene_hook(t):
     img = BG.copy()
-    heading(img, 'SOUND FAMILIAR?', 'Chasing payments?', 'Calling the same customers, again and again.', t)
-    put_phone(img, call_log(t), t, 'up')
-    chip(img, '₹2.6 lakh stuck with customers', t, 2.2, bg=(220, 53, 69), fg='white')
+    heading(img, 'SOUND FAMILIAR?', 'Who still owes you?', 'Notebook, bank SMS, WhatsApp… all over the place.', t)
+    page = payments_mess(t)
+    y = PHONE_TOP + 20 + int(700 * (1 - ease(t / 0.45)))
+    img.alpha_composite(page, ((W - page.width) // 2, y))
+    for i, (title, body) in enumerate(SMS):                # bank alerts pop in, saying nothing about which job
+        at = 1.6 + i * 0.45
+        if t > at:
+            k = min(1.0, back_out((t - at) / 0.35))
+            card = sms_card(title, body)
+            img.alpha_composite(card, ((W - card.width) // 2 + (40 if i else -40), int(PHONE_TOP + 560 + i * 175 + 60 * (1 - k))))
+    chip(img, '₹2.6 lakh due… but who owes what?', t, 2.7, bg=(220, 53, 69), fg='white')
     return img
 
 
 def scene_balances(t):
     img = BG.copy()
-    heading(img, 'STEP 1', 'See who owes what.', 'Every balance due, biggest first.', t)
+    heading(img, 'STEP 1', 'Every payment, one place.', 'Who owes what, biggest first.', t)
     put_phone(img, balances_screen(t), t, 'right')
-    caption(img, 'Tap Remind.', t, 1.9)
+    caption(img, 'Payments recorded against each job.', t, 1.9)
     return img
 
 
 def scene_remind(t):
     img = BG.copy()
-    heading(img, 'STEP 2', 'One polite reminder.', 'Amount due, UPI and a payment link.', t)
+    heading(img, 'STEP 2', 'Make it easy to pay.', 'Amount due, UPI and a payment link.', t)
     put_phone(img, reminder_chat(t), t, 'up')
     chip(img, 'Sent on WhatsApp  ✓✓', t, 2.4, bg=(37, 211, 102), fg=(8, 40, 20))
-    caption(img, 'No awkward calls.', t, 3.0)
+    caption(img, 'One tap for you. One tap for them.', t, 3.0)
     return img
 
 
