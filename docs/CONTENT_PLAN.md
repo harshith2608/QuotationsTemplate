@@ -15,6 +15,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "What your customer receives" | Carousel, 6 slides 4:5 | **Scheduled** | `carousel-customer-sees-1…6.png` | `tools/ad_video/profile_posts.py` |
 | "One price. Your whole team." | Single image 4:5 | **Scheduled** | `post-one-price.png` | `tools/ad_video/profile_posts.py` |
 | "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Ready to post** | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
+| "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Ready to post** | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
 
@@ -61,6 +62,12 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > One price for your whole team. Free 7-day trial, link in bio.
 > #interiordesigner #interiordesign #modularkitchen #wardrobe #interiordesignbusiness #smallbusinessindia
 
+**Excel vs QuoteRoom** (reel)
+> Same quote. Two ways. ⏱ 40 minutes of formulas, #VALUE! errors and 8.6 instead of 8 ft 6 in… or 3 minutes and it's sent.
+> QuoteRoom works out the sqft and totals, makes a branded PDF and sends it on WhatsApp. Your customer accepts online.
+> Free 7-day trial, link in bio.
+> #interiordesigner #interiordesign #excel #modularkitchen #interiordesignbusiness #smallbusinessindia
+
 Reel tips: cover frame ≈ 4 s (the "51 sqft" chip); keep the built-in music (timed to scene changes); post on a day
 without a scheduled image post.
 
@@ -86,7 +93,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 | # | Idea | Hook / content | Needs from owner |
 |---|---|---|---|
 | 1 | Quote before you leave the site | "Your competitor sends the quote tomorrow. You send it before you leave." Measure → total → WhatsApp → sent | Best with a 5-sec real clip of measuring at a site (or reuse the animated tape opener) |
-| 2 | Excel vs QuoteRoom (split screen) | Left: Excel fight, #VALUE!, 40 min. Right: same quote in 3 min. End: "Same job. 37 minutes back." | Nothing (can be drawn/animated) |
+| 2 | ~~Excel vs QuoteRoom~~ | **Done** (see section 1) | — |
 | 3 | "The customer accepted while I was driving" ★ | Approval link → customer taps Accept → "Quotation accepted" notification → Confirmed | Nothing, or record 2–3 voice lines |
 | 4 | "Stop chasing payments on calls" ★ | Balances page "₹3.2 lakh to collect" → Remind → polite WhatsApp with UPI → payment recorded | Nothing, or voice |
 | 5 | "Do you know your profit on this kitchen?" ★ | Quote ₹1.72L → profit card (before GST) → "Only you see this" | Nothing |
