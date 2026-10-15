@@ -60,8 +60,9 @@ ok('no-JS post → thank-you page with the live demo button, no WhatsApp button'
    and 'Skip the wait' not in t and 'data-trial-wa' not in t and 'Try the live demo' in t and 'data-demo' in t)
 t = c2.get('/').text
 ok('pop-up form asks for the company name, no WhatsApp follow-up', 'name="company_name"' in t and 'Skip the wait' not in t)
+ok('only interior designers / furniture works count as a Lead; Others → LeadOther', "btype === 'interiors' || btype === 'furniture'" in t and "track('LeadOther')" in t)
 ok('Lead event sends a value and INR currency (Meta asks for both)', 'leadValue: 1000.0' in t
-   and "track('Lead', true, { value: T.leadValue, currency: 'INR' })" in t)
+   and "track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype })" in t)
 t = c2.post('/trial-request', data={'name': '', 'phone': ''}, environ_base={'REMOTE_ADDR': '10.9.9.8'}).text
 ok('no-JS post with errors → form again with messages', 'Please enter your name.' in t and 'data-trial-form' in t)
 

@@ -460,7 +460,11 @@ footer nav { display: flex; gap: 1.2rem; }
         const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         const data = await res.json();
         if (!data.ok) { showErrors(data.errors || { form: 'Something went wrong. Please try again.' }); return; }
-        track('Lead', true, { value: T.leadValue, currency: 'INR' });   // Meta wants a value + currency on Lead
+        // Only real target businesses count as a Lead, so the ads learn to find more of them;
+        // "Others" requests are still recorded, as a separate event that ads don't optimise for
+        const btype = (new FormData(form).get('business_type') || '');
+        if (btype === 'interiors' || btype === 'furniture') track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype });
+        else track('LeadOther');
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
