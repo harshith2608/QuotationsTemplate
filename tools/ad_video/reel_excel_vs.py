@@ -1,4 +1,4 @@
-"""Reel 'Excel vs QuoteRoom': the same quote two ways (stacked split screen), then 'Same job. 37 minutes back.'
+"""Reel 'Excel vs QuoteRoom': the same quote two ways (stacked split screen), then 'Same job. 37 minutes saved.'
 
     python tools/ad_video/reel_excel_vs.py          → ad-videos/reel-excel-vs-9x16.mp4 and -4x5.mp4
     python tools/ad_video/reel_excel_vs.py stills   → ad-videos/reel-excel-vs-frames.png
@@ -189,7 +189,7 @@ def end_frame(t):
     a = phase(t, 0.3, 0.7)
     col = lambda c: tuple(int(v * a + 14 * (1 - a)) for v in c)
     d.text((W / 2, 780), 'Same job.', font=font(96), fill=col(PAPER), anchor='mm')
-    d.text((W / 2, 900), '37 minutes back.', font=font(96), fill=col(TAPE), anchor='mm')
+    d.text((W / 2, 900), '37 minutes saved.', font=font(96), fill=col(TAPE), anchor='mm')
     if t > 0.9:
         b = phase(t, 0.9, 1.3)
         d.text((W / 2, 1030), 'On every quote. Every day.', font=font(42, 'demi'),
