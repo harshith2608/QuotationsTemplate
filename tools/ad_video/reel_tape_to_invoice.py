@@ -50,8 +50,15 @@ def heading(img, step, title, sub, t):
     shift = int(30 * (1 - a))
     col = lambda c: tuple(int(v * a + 14 * (1 - a)) for v in c)
     d.text((60, 230 + shift), step, font=font(34, 'bold'), fill=col(TAPE))
-    d.text((60, 280 + shift), title, font=font(84), fill=col(PAPER))
-    d.text((60, 390 + shift), sub, font=font(40, 'demi'), fill=col(MUTED))
+    d.text((60, 280 + shift), title, font=font(_fit(title, 84, 'heavy')), fill=col(PAPER))
+    d.text((60, 390 + shift), sub, font=font(_fit(sub, 40, 'demi'), 'demi'), fill=col(MUTED))
+
+
+def _fit(text, size, weight):
+    """Largest size ≤ size at which the text fits the frame width (60 px margins)."""
+    while size > 20 and font(size, weight).getlength(text) > W - 120:
+        size -= 2
+    return size
 
 
 def put_phone(img, screen, t, slide_from=None):
