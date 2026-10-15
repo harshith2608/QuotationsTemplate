@@ -16,6 +16,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "One price. Your whole team." | Single image 4:5 | **Scheduled** | `post-one-price.png` | `tools/ad_video/profile_posts.py` |
 | "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Ready to post** | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
 | "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Ready to post** | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
+| "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Ready to post** | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
 
@@ -68,6 +69,12 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > Free 7-day trial, link in bio.
 > #interiordesigner #interiordesign #excel #modularkitchen #interiordesignbusiness #smallbusinessindia
 
+**Stop chasing payments** (reel)
+> Still calling customers again and again for the balance? 📞
+> QuoteRoom shows every balance due in one list. One tap sends a polite WhatsApp reminder with the amount, your UPI and a payment link, and online payments update the balance by themselves.
+> Stop chasing. Start collecting. Free 7-day trial, link in bio.
+> #interiordesigner #interiordesignbusiness #smallbusinessindia #payments #modularkitchen
+
 Reel tips: cover frame ≈ 4 s (the "51 sqft" chip); keep the built-in music (timed to scene changes); post on a day
 without a scheduled image post.
 
@@ -95,7 +102,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 | 1 | Quote before you leave the site | "Your competitor sends the quote tomorrow. You send it before you leave." Measure → total → WhatsApp → sent | Best with a 5-sec real clip of measuring at a site (or reuse the animated tape opener) |
 | 2 | ~~Excel vs QuoteRoom~~ | **Done** (see section 1) | — |
 | 3 | "The customer accepted while I was driving" ★ | Approval link → customer taps Accept → "Quotation accepted" notification → Confirmed | Nothing, or record 2–3 voice lines |
-| 4 | "Stop chasing payments on calls" ★ | Balances page "₹3.2 lakh to collect" → Remind → polite WhatsApp with UPI → payment recorded | Nothing, or voice |
+| 4 | ~~Stop chasing payments~~ | **Done** (see section 1) | — |
 | 5 | "Do you know your profit on this kitchen?" ★ | Quote ₹1.72L → profit card (before GST) → "Only you see this" | Nothing |
 | 6 | Your brand, not ours | Same app switching logos/colours → branded PDF → `yourname.quote-room.co.in` | Nothing |
 | 7 | ~~Tape measure to GST invoice~~ | **Done** (see section 1) | — |
@@ -119,6 +126,9 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 
 ## 5. How the files are made (for regenerating or editing)
 
+- **Reels: 9:16 only** from now on (owner's preference). Older reels also have a 4:5 version.
+- **Scratch environment:** the temp folder is cleaned periodically; if imports fail, recreate a venv with
+  `pip install pillow numpy imageio-ffmpeg pymupdf` (plus the app's requirements for screenshots).
 - **Run any generator** from the repo with the scratch venv that has Pillow/numpy/imageio-ffmpeg, e.g.
   `python tools/ad_video/reel_tape_to_invoice.py` (add `stills` to get a frame sheet first). Outputs go to `ad-videos/` (git-ignored).
 - **Style:** pine-green gradient background, tape-yellow accents, Avenir Next; helpers in `static_ads.py`
