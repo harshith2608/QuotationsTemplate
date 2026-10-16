@@ -193,3 +193,45 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 - **Using an Instagram post as an ad:** Ads Manager → ad set → Create ad → *Use existing post* (not the Boost button,
   which ignores our targeting and Lead tracking).
 - Review results ~5 days after each change: check trial requests in the console (business type, company name).
+
+---
+
+## 7. YouTube: tutorial titles & descriptions
+
+Playlist: **QuoteRoom tutorials**. Audience: not made for kids. Tags (all): `interior design quotation, quotation app,
+interior designer software, modular kitchen quotation, wardrobe quotation, GST invoice, QuoteRoom`.
+Upload order and `TUTORIAL_YOUTUBE` order: full, 1, 2, 3, 4, 5.
+
+**Full walkthrough** — *QuoteRoom full walkthrough: from setup to getting paid (4 min)*
+> Everything you need to start using QuoteRoom, the quotation app for interior designers and modular furniture firms, on your phone.
+>
+> 0:00 Your company details & logo
+> 0:59 Your rates & materials
+> 1:29 Your first quotation
+> 3:01 Send it & get it accepted online
+> 3:29 Get paid: payments, GST invoice & reminders
+>
+> Measure on site, send a branded quotation on WhatsApp in minutes, let your customer accept online, then invoice and get paid. One price for your whole team.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+> Questions? Message us on WhatsApp from the website.
+
+**Part 1** — *QuoteRoom tutorial 1: add your company details & logo*
+> Set up QuoteRoom in about a minute: log in, add your company name, phone, address and GSTIN, then upload your logo and pick your colours. They appear on your app and on every quotation PDF.
+> Tip: check your company name and GSTIN carefully, they lock once saved (message us if you need a change).
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+**Part 2** — *QuoteRoom tutorial 2: set your rates & materials*
+> Set your own rate per sqft for each material and work type, add any material you use (wallpaper, PU, glass…) and keep a price list of fittings like Magic Corners and tandem drawers. Every new quotation uses your rates.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+**Part 3** — *QuoteRoom tutorial 3: make your first quotation*
+> Make a complete interior quotation on your phone: add the customer, add rooms, enter each item's length and width in feet and inches, pick the material, add fittings from your price list and give a discount. QuoteRoom works out the sqft and the totals for you.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+**Part 4** — *QuoteRoom tutorial 4: send it & get it accepted online*
+> Share the Initial Quotation (amounts by material) or the Full Quotation (every room and size) as a PDF, or send a link on WhatsApp. Your customer opens it with no app or login, taps Accept, and the job moves to Confirmed.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+**Part 5** — *QuoteRoom tutorial 5: payments, GST invoice & reminders*
+> Record advances and part payments, turn the confirmed quotation into a GST invoice in one step (CGST + SGST or IGST worked out), send a polite WhatsApp reminder and see everyone who still owes you on the Balances page.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
