@@ -296,7 +296,7 @@ def frame_at(T):
 
 
 def render(path):
-    music = make_music(TOTAL + 0.5, os.path.join(OUT, 'music-payments.wav'))
+    music = make_music(TOTAL + 0.5, os.path.join(OUT, 'music-payments.wav'), style='tropical')
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS),
            '-i', '-', '-i', music, '-filter_complex', '[1:a]volume=0.9,loudnorm=I=-16:TP=-1.5,aresample=48000[a]',
            '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p',

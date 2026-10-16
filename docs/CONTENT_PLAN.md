@@ -152,7 +152,9 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
   (background, phone mockup, cards, pills, footer CTA "Start your free 7-day trial").
 - **Missing glyphs:** Avenir has no ₹, → or ✓. `carousel_lost_jobs.py` (`rich_text`, `rich_pill`) draws those from
   SF (₹) and Arial Unicode (→, ✓). Use these helpers for any text containing them.
-- **Music:** `tools/ad_video/music.py` composes an upbeat 112 bpm track in code (free to use); reels mix it with loudnorm −16 LUFS.
+- **Music:** `tools/ad_video/music.py` composes tracks in code (free to use), in five styles so reels don't all sound
+  the same: `pop` (tape-to-invoice), `funk` (Excel vs QuoteRoom), `tropical` (payments), `cinematic` (profit), and
+  `lofi` (unused, for the next reel). Pick a style no recent reel used. Reels mix it with loudnorm −16 LUFS.
 - **Screens:** real app screenshots of a fictional business, **Nest & Grain Interiors** (Hyderabad, fictional Telangana GSTIN),
   stored in `static/ads/` (01–08: list, add item, stage, room totals, initial PDF, full PDF, approval accepted, GST invoice).
   New screenshots come from a local app started with the "ad-shots" preview config (demo data renamed to Nest & Grain).

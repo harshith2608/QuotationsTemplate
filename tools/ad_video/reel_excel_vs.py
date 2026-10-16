@@ -213,7 +213,7 @@ def frame_at(T):
 
 def render(path, fmt):
     size = (1080, 1920) if fmt == '9x16' else (1080, 1350)
-    music = make_music(TOTAL + 0.5, os.path.join(OUT, 'music-excel.wav'))
+    music = make_music(TOTAL + 0.5, os.path.join(OUT, 'music-excel.wav'), style='funk')
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}',
            '-r', str(FPS), '-i', '-', '-i', music,
            '-filter_complex', '[1:a]volume=0.9,loudnorm=I=-16:TP=-1.5,aresample=48000[a]',
@@ -238,5 +238,4 @@ if __name__ == '__main__':
         sheet.save(os.path.join(OUT, 'reel-excel-vs-frames.png'))
         print('stills done')
     else:
-        for fmt in ('9x16', '4x5'):
-            render(os.path.join(OUT, f'reel-excel-vs-{fmt}.mp4'), fmt)
+        render(os.path.join(OUT, 'reel-excel-vs-9x16.mp4'), '9x16')          # reels: 9:16 only
