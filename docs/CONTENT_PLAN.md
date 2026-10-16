@@ -33,6 +33,28 @@ Files in `ad-videos/tutorials/`, recorded from the real app (fictional "Sharma I
 Re-record after UI changes: start the "tutorial" preview server on a fresh database, then run
 `tools/tutorials/part1_company.py`, `parts2to5.py` and `make_videos.py` (see each file's docstring).
 
+### Tutorial series: everything the app does (plan, 16 Oct 2026)
+Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the website. Record in this order.
+
+| # | Title | What it shows | Screens | Length |
+|---|---|---|---|---|
+| ✅ | Full walkthrough | Parts 1–5 in one video | – | 4 min |
+| ✅ 1 | Your company details | Login, company name, GSTIN, logo, colours | Settings → Company, Appearance | 1 min |
+| ✅ 2 | Your rates & materials | Rates per sqft, own materials, fittings price list | Admin → Rates | 33 s |
+| ✅ 3 | Your first quotation | Customer, rooms, items in ft/in, fittings, discount | New quotation | 1.5 min |
+| ✅ 4 | Send it & get it accepted | Initial / Full PDF, approval link, customer accepts | Quotation page, `/q/` link | 31 s |
+| ✅ 5 | Get paid | Payments, GST invoice, reminders, Balances | Quotation page, Balances | 38 s |
+| 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
+| 7 | Change a quotation | Edit after the customer asks, Rev 2 with what changed, send the new link, customer accepts the new version | Edit, Revisions card | ~1 min |
+| 8 | Track every job | Stages (Pending → Confirmed → Ongoing → Completed, On hold, Cancelled), search, filter by stage, notifications | Quotations list, stage menu, bell | ~45 s |
+| 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
+| 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
+| 11 | Online payments (Razorpay) | Test mode keys, webhook, send a payment link, payment records itself | Admin → Payment settings, Payment link | ~1.5 min |
+| 12 | Your PDFs & invoice settings | Terms & conditions and notes on quotations; invoice prefix/numbering, GST or not, HSN, room-by-room or summary | Settings → Quotation PDFs, Invoices | ~1 min |
+| 13 | QuoteRoom on your home screen | Add to home screen on Android & iPhone for one-tap access | Browser menu | ~20 s |
+
+Later: a second "full walkthrough" for 6–9 ("Run your business"), and short Reels cut from 6, 7 and 11.
+
 ## 2. Captions & ad copy (ready to paste)
 
 Use **"Link in bio"** for organic posts. If a post is later used as an ad, swap that line for
