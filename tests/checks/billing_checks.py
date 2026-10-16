@@ -68,6 +68,51 @@ with app.app_context():
 r = staff.get(f'/projects/{pid}/revisions/1')
 ok("staff can't open revisions of quotations they can't see", r.status_code == 403)
 
+# ── Restore an older revision ──
+rid = new_quote(name='Restore Test', mobile='9000000222')                     # Rev 1: 50 × 850 + 7,500 = 50,000
+c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': json.dumps(rooms2),
+       'discount_type': 'fixed', 'discount_value': '1000'})                     # Rev 2
+t = c.get(f'/projects/{rid}').text
+ok('quotation page says older revisions can be restored', 'Open an older revision to restore it' in t)
+t = c.get(f'/projects/{rid}/revisions/1').text
+ok('older revision offers Restore, saved as a new revision, with both totals', 'Restore revision 1' in t and '(Rev 3)' in t
+   and 'After restoring' in t and '50,000.00' in t and 'rates have changed' not in t)
+ok('the current revision has no Restore button', 'Restore revision' not in c.get(f'/projects/{rid}/revisions/2').text)
+ok('staff can\'t restore', 'Restore revision' not in staff.get(f'/projects/{rid}/revisions/1').text
+   and staff.post(f'/projects/{rid}/revisions/1/restore').status_code in (302, 403))
+with app.app_context():
+    ok('…and nothing changed when they tried', QuoteRevision.query.filter_by(project_id=rid).count() == 2)
+r = c.post(f'/projects/{rid}/revisions/1/restore', follow_redirects=True)
+with app.app_context():
+    p_ = db.session.get(Project, rid)
+    revs = QuoteRevision.query.filter_by(project_id=rid).order_by(QuoteRevision.number).all()
+    s1, s3 = json.loads(revs[0].snapshot), json.loads(revs[-1].snapshot)
+    ok('restore → Rev 3 with exactly Rev 1\'s rooms, items and discount; history kept',
+       [r_.number for r_ in revs] == [1, 2, 3] and s3['rooms'] == s1['rooms'] and s3['discount'] == s1['discount']
+       and s3['restored_from'] == 1 and p_.final_total == 50000 and revs[-1].total == 50000)
+ok('flash says which revision it is now', 'saved as revision 3' in r.text and 'restored from Rev 1' in r.text)
+ok('revision page shows where it came from', 'restored from Rev 1' in c.get(f'/projects/{rid}/revisions/3').text)
+r = c.post(f'/projects/{rid}/revisions/3/restore', follow_redirects=True)
+ok('restoring the current version does nothing', 'already the current version' in r.text)
+c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': c.get(f'/projects/{rid}/edit').text
+       .split('id="existing-rooms-data"', 1)[1].split('>', 1)[1].split('</script>', 1)[0], 'discount_type': 'none', 'discount_value': '0'})
+with app.app_context():
+    ok('saving a restored quotation unchanged adds no revision', QuoteRevision.query.filter_by(project_id=rid).count() == 3)
+    from app.models import ItemRate
+    lam = ItemRate.query.filter_by(wood_type='Laminates', work_type='Box Work').first(); lam.rate_per_sqft = 900; db.session.commit()
+t = c.get(f'/projects/{rid}/revisions/2').text
+ok('restore preview warns about changed rates and shows the total at today\'s rates',
+   'rates have changed' in t and 'Laminates – Box Work &#8377;850 → &#8377;900/sqft' in t)
+with app.app_context():
+    s2 = json.loads(QuoteRevision.query.filter_by(project_id=rid, number=2).first().snapshot)
+    expect = round(sum(round(i['length'] * i['width'], 4) * (900 if i['wood_type'] == 'Laminates' else i['rate']) if i['type'] == 'measured'
+                       else i['quantity'] * i['unit_price'] for i in s2['rooms'][0]['items']) - 1000, 2)
+c.post(f'/projects/{rid}/revisions/2/restore')
+with app.app_context():
+    p_ = db.session.get(Project, rid)
+    ok('restore at today\'s rates: total matches the preview', p_.final_total == expect and f"{expect:,.2f}" in t)
+    lam = ItemRate.query.filter_by(wood_type='Laminates', work_type='Box Work').first(); lam.rate_per_sqft = 850; db.session.commit()
+
 # ── GST invoice ──
 c.post('/admin/settings', data={'section': 'invoices', 'invoice_prefix': 'qr-9x!', 'invoice_gst_rate': '18',
                                 'invoice_hsn': '9403', 'invoice_prices': 'exclusive', 'invoice_notes': 'Pay within 7 days.'})
@@ -102,6 +147,11 @@ t = c.get(f'/projects/{pid}').text
 ok('balance now uses the invoice total (incl. GST)', 'Invoice total' in t and '84,842.00' in t)
 r = c.post(f'/projects/{pid}/invoice', data={'gst_rate': '18'}, follow_redirects=True)
 ok('a second invoice is refused while one is active', 'already has an invoice' in r.text)
+r = c.post(f'/projects/{pid}/revisions/1/restore', follow_redirects=True)
+with app.app_context():
+    ok('restore is blocked while an invoice is active', 'Cancel it first' in r.text
+       and QuoteRevision.query.filter_by(project_id=pid).count() == 2)
+ok('…and the revision page says why', 'Cancel it first' in c.get(f'/projects/{pid}/revisions/1').text)
 r = c.post(f'/projects/{pid}/delete', follow_redirects=True)
 with app.app_context():
     ok('a quotation with invoices can\'t be deleted', db.session.get(Project, pid) is not None and "can&#39;t be deleted" in r.text)

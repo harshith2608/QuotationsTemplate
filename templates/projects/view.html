@@ -742,7 +742,7 @@
       {% for rev, snap, changes in q2c.history %}
       <a class="list-group-item list-group-item-action small" href="{{ url_for('billing.revision', project_id=project.id, number=rev.number) }}">
         <div class="d-flex flex-wrap gap-2">
-          <strong>Rev {{ rev.number }}</strong>{% if loop.first %}<span class="badge bg-success">current</span>{% endif %}
+          <strong>Rev {{ rev.number }}</strong>{% if loop.first %}<span class="badge bg-success">current</span>{% endif %}{% if snap.restored_from %}<span class="badge bg-light text-dark border">restored from Rev {{ snap.restored_from }}</span>{% endif %}
           <span class="text-muted">{{ rev.created_at|ist_time }}{% if rev.user %} · {{ rev.user.display_name }}{% endif %}</span>
           <span class="ms-auto fw-semibold">&#8377;{{ "{:,.2f}".format(rev.total) }}</span>
         </div>
@@ -751,6 +751,9 @@
       {% endfor %}
     </div>
   </div>
+  {% if current_user.is_admin and q2c.history|length > 1 %}
+  <div class="card-footer bg-transparent small text-muted"><i class="bi bi-arrow-counterclockwise me-1"></i>Open an older revision to restore it.</div>
+  {% endif %}
 </div>
 {% endif %}
 {% endif %}

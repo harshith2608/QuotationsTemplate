@@ -111,7 +111,12 @@ def latest_revision_number(project):
     return last.number if last else None
 
 
-def record_revision(project, user, when=None):
+def _content(snap):
+    """A snapshot without its bookkeeping (restored_from), for 'did anything change?' checks."""
+    return {k: v for k, v in snap.items() if k != 'restored_from'}
+
+
+def record_revision(project, user, when=None, restored_from=None):
     """Save the quotation as it is now as the next revision, unless nothing changed since the last one.
     Returns the revision (new or unchanged latest) or None when the feature isn't ready."""
     from .models import QuoteRevision
@@ -120,8 +125,10 @@ def record_revision(project, user, when=None):
     snap = quotation_snapshot(project)
     last = (QuoteRevision.query.filter_by(project_id=project.id)
             .order_by(QuoteRevision.number.desc()).first())
-    if last and json.loads(last.snapshot) == json.loads(json.dumps(snap)):
+    if last and _content(json.loads(last.snapshot)) == _content(json.loads(json.dumps(snap))):
         return last
+    if restored_from:
+        snap['restored_from'] = restored_from
     rev = QuoteRevision(project_id=project.id, number=(last.number + 1) if last else 1,
                         created_by=user.id if user else None, created_at=when or datetime.utcnow(),
                         total=snap['total'], snapshot=json.dumps(snap))
@@ -134,6 +141,49 @@ def ensure_first_revision(project, user):
     """Before a quotation made before revisions existed is edited, keep how it was as R1."""
     if ready() and project.status != 'draft' and latest_revision_number(project) is None:
         record_revision(project, project.creator or user, when=project.updated_at or project.created_at)
+
+
+def restore_preview(project, snap):
+    """What restoring a revision would give, at today's rates (measured items are always priced at the
+    current rates, like the quotation itself): {'rooms', 'subtotal', 'discount', 'total', 'rate_changes', 'missing'}.
+    rate_changes: [(material label, rate then, rate now)]; missing: materials that no longer exist."""
+    from . import materials as M
+    rates = _item_rates()
+    valid = {f'{w}|{k}' for w, k, _ in M.combos(include_hidden=True)}
+    rooms, subtotal, changes, missing = [], 0.0, {}, []
+    for room in snap.get('rooms', []):
+        items = []
+        for it in room['items']:
+            if it['type'] == 'fixed':
+                items.append({'name': it['name'], 'type': 'fixed', 'quantity': it['quantity'], 'unit_price': it['unit_price']})
+                subtotal += it['quantity'] * it['unit_price']
+                continue
+            key = f"{it['wood_type']}|{it['work_type']}"
+            if key not in valid:
+                missing.append(it['material'])
+            rate = rates.get(key, 0.0)
+            if round(rate, 2) != round(it.get('rate', rate), 2):
+                changes[it['material']] = (it['material'], it['rate'], rate)
+            items.append({'name': it['name'], 'type': 'measured', 'length': it['length'], 'width': it['width'],
+                          'wood_type': it['wood_type'], 'work_type': it['work_type']})
+            subtotal += round(it['length'] * it['width'], 4) * rate
+        rooms.append({'name': room['name'], 'items': items})
+    subtotal = round(subtotal, 2)
+    d = snap.get('discount') or {}
+    dtype, dval = d.get('type') or 'none', d.get('value') or 0
+    discount = (round(subtotal * dval / 100, 2) if dtype == 'percentage' else
+                round(min(dval, subtotal), 2) if dtype == 'fixed' else 0.0)
+    return {'rooms': rooms, 'subtotal': subtotal, 'discount': discount, 'total': round(max(subtotal - discount, 0), 2),
+            'rate_changes': list(changes.values()), 'missing': sorted(set(missing))}
+
+
+def restore_blocker(project):
+    """Why a revision can't be restored right now, or None."""
+    inv = active_invoice(project)
+    if inv:
+        return (f'Invoice {inv.number} was issued for this quotation. Cancel it first (on the quotation page), '
+                'restore, then issue a new invoice.')
+    return None
 
 
 def _fmt_dim(feet):

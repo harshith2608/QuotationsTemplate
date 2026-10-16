@@ -269,6 +269,58 @@ def revision(project_id, number):
     prev = QuoteRevision.query.filter_by(project_id=project.id, number=number - 1).first()
     snap = json.loads(rev.snapshot)
     changes = billing.diff_snapshots(json.loads(prev.snapshot), snap) if prev else []
+    latest = billing.latest_revision_number(project)
+    restore = None
+    if current_user.is_admin and rev.number != latest:
+        restore = dict(billing.restore_preview(project, snap), blocker=billing.restore_blocker(project),
+                       current_total=project.final_total)
     return render_template('billing/revision.html', title=f'Quotation #{project.id} – Rev {number}', project=project,
-                           rev=rev, snap=snap, changes=changes,
-                           latest=billing.latest_revision_number(project))
+                           rev=rev, snap=snap, changes=changes, latest=latest, restore=restore)
+
+
+@billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/restore', methods=['POST'])
+@login_required
+@admin_required
+def restore_revision(project_id, number):
+    """Make an older revision the current quotation again. Saved as a NEW revision ("restored from Rev N"),
+    so nothing in the history is lost and the customer sees (and accepts) it like any edit."""
+    from .models import ProjectEditLog, QuoteRevision
+    from .projects import _save_project_data
+    project = _project_or_403(project_id)
+    if not billing.ready():
+        abort(404)
+    rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
+    back = redirect(url_for('billing.revision', project_id=project.id, number=number))
+    blocker = billing.restore_blocker(project)
+    if blocker:
+        flash(blocker, 'danger')
+        return back
+    latest = billing.latest_revision_number(project)
+    if rev.number == latest:
+        flash('This is already the current version.', 'info')
+        return back
+    snap = json.loads(rev.snapshot)
+    preview = billing.restore_preview(project, snap)
+    if preview['missing']:
+        flash(f'Can\'t restore: {", ".join(preview["missing"])} is no longer in your Rates. Add it back (Admin → Rates), '
+              'or edit the quotation instead.', 'danger')
+        return back
+    cust, d = snap.get('customer') or {}, snap.get('discount') or {}
+    project.customer_name = cust.get('name') or project.customer_name
+    project.mobile = cust.get('mobile') or project.mobile
+    project.email = cust.get('email') or None
+    project.address = cust.get('address') or None
+    project.discount_type = d.get('type') if d.get('type') in ('percentage', 'fixed') else 'none'
+    project.discount_value = d.get('value') or 0
+    project.plywood_thickness = snap.get('plywood', project.plywood_thickness or '')
+    project.grand_total = _save_project_data(project, preview['rooms'])
+    db.session.add(ProjectEditLog(project_id=project.id, edited_by=current_user.id))
+    db.session.commit()
+    new = billing.record_revision(project, current_user, restored_from=rev.number)
+    db.session.commit()
+    if new and new.number > latest:
+        flash(f'Restored revision {number}: it is now the current quotation, saved as revision {new.number}. '
+              'If you shared an approval link, your customer will see this version.', 'success')
+    else:
+        flash('The quotation already matched this version, so nothing changed.', 'info')
+    return redirect(url_for('projects.view_project', project_id=project.id))

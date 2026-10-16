@@ -9,10 +9,45 @@
     <li class="breadcrumb-item active">Revision {{ rev.number }}</li>
   </ol></nav>
   <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-clock-history me-2 text-primary"></i>{{ snap.customer.name }} · Revision {{ rev.number }}
-    {% if rev.number == latest %}<span class="badge bg-success align-middle small">current</span>{% else %}<span class="badge bg-secondary align-middle small">older version</span>{% endif %}</h4>
+    {% if rev.number == latest %}<span class="badge bg-success align-middle small">current</span>{% else %}<span class="badge bg-secondary align-middle small">older version</span>{% endif %}
+    {% if snap.restored_from %}<span class="badge bg-light text-dark border align-middle small">restored from Rev {{ snap.restored_from }}</span>{% endif %}</h4>
   <div class="small text-muted">Saved {{ rev.created_at|ist_time }}{% if rev.user %} by {{ rev.user.display_name }}{% endif %}
     · Total <strong>&#8377;{{ "{:,.2f}".format(snap.total) }}</strong></div>
 </div>
+
+{% if restore %}
+<div class="card shadow-sm border-0 mb-3" id="restore">
+  <div class="card-header ki-card-header"><i class="bi bi-arrow-counterclockwise me-2"></i>Restore this version</div>
+  <div class="card-body small">
+    {% if restore.blocker %}
+      <p class="mb-0 text-danger-emphasis"><i class="bi bi-lock me-1"></i>{{ restore.blocker }}</p>
+    {% elif restore.missing %}
+      <p class="mb-0 text-danger-emphasis"><i class="bi bi-exclamation-triangle me-1"></i>{{ restore.missing|join(', ') }}
+        {{ 'is' if restore.missing|length == 1 else 'are' }} no longer in your <a href="{{ url_for('admin.rates') }}">Rates</a>.
+        Add {{ 'it' if restore.missing|length == 1 else 'them' }} back to restore this version, or edit the quotation instead.</p>
+    {% else %}
+      <p class="mb-2">Make revision {{ rev.number }} the current quotation again. It's saved as a <strong>new revision
+        (Rev {{ latest + 1 }})</strong>, so nothing is deleted and you can switch back any time.</p>
+      <div class="d-flex flex-wrap gap-3 mb-2">
+        <div><div class="text-muted">Current quotation (Rev {{ latest }})</div><div class="fw-bold">&#8377;{{ "{:,.2f}".format(restore.current_total) }}</div></div>
+        <div><div class="text-muted">After restoring</div><div class="fw-bold">&#8377;{{ "{:,.2f}".format(restore.total) }}</div></div>
+      </div>
+      {% if restore.rate_changes %}
+      <p class="mb-2 text-warning-emphasis"><i class="bi bi-info-circle me-1"></i>Your rates have changed since this version, and quotations
+        are always priced at today's rates:
+        {% for label, then, now in restore.rate_changes %}{{ label }} &#8377;{{ "{:,.0f}".format(then) }} → &#8377;{{ "{:,.0f}".format(now) }}/sqft{{ '; ' if not loop.last }}{% endfor %}.
+        (This version showed &#8377;{{ "{:,.2f}".format(snap.total) }}.)</p>
+      {% endif %}
+      <form method="POST" action="{{ url_for('billing.restore_revision', project_id=project.id, number=rev.number) }}"
+            onsubmit="return confirm('Make revision {{ rev.number }} the current quotation? It will be saved as revision {{ latest + 1 }}.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary ki-btn-primary btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Restore revision {{ rev.number }}</button>
+      </form>
+      <div class="text-muted mt-2">Shared an approval link? Your customer will see the restored version and can accept it again.</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 {% if changes %}
 <div class="card shadow-sm border-0 mb-3"><div class="card-header ki-card-header"><i class="bi bi-arrow-left-right me-2"></i>Changes from revision {{ rev.number - 1 }}</div>

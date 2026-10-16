@@ -77,6 +77,9 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 - **Auto-save.** A half-filled quotation is saved as a draft, so nothing is lost if the phone locks.
 - **★ Revisions.** Every saved change becomes Rev 2, Rev 3…, with a list of what changed ("TV Unit 10 ft × 5 ft → 12 ft × 5 ft").
   The PDF shows the revision number.
+  **Restore**: open any older revision → *Restore revision N* makes it the current quotation again, saved as a new
+  revision ("restored from Rev 1"), so nothing is lost. Priced at today's rates (it warns if a rate changed). Admins only;
+  not while an invoice is active (cancel it first).
 
 ### Sending
 - **Two PDFs.**
