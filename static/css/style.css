@@ -556,3 +556,6 @@ body > main { flex: 1 0 auto; }
 /* Reports: month bars */
 .ki-rep-bar { height: 7px; border-radius: 4px; min-width: 2px; }
 .ki-rep-key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+/* Wide report tables scroll sideways on phones; the month / year column stays put so every number keeps its label */
+.ki-rep-table th:first-child, .ki-rep-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--bs-body-bg, #fff); box-shadow: 1px 0 0 var(--bs-border-color, #dee2e6); }
+.ki-rep-table thead th:first-child { background: var(--bs-light, #f8f9fa); }
