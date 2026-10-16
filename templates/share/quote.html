@@ -48,7 +48,7 @@
         {% if snap.customer.address %}<div class="small q-muted">{{ snap.customer.address }}</div>{% endif %}
       </div>
       <div class="text-end small q-muted">Quotation #{{ project.id }}{% if status.current_revision and status.current_revision > 1 %} · Rev {{ status.current_revision }}{% endif %}<br>
-        {{ project.created_at.strftime('%d %b %Y') }}</div>
+        {{ project.created_at|ist_time('%d %b %Y') }}</div>
     </div>
     <hr>
     <div class="d-flex justify-content-between align-items-end">

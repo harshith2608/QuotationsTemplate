@@ -17,9 +17,10 @@ PARTS = [
     (4, 'send-and-accept', 'Share the PDFs and let your customer accept online.', 'Accepted online. No chasing.'),
     (5, 'get-paid', 'Record payments, issue a GST invoice and see who owes you.', 'From quote to paid, in one app.'),
     (6, 'profit', 'Add your costs and see the profit on every job and every year.', 'Know what you make on every job.'),
+    (7, 'change-a-quotation', 'Your customer asks for a change, then changes their mind.', 'Every version kept. Nothing re-typed.'),
 ]
 WALKTHROUGH = (1, 2, 3, 4, 5)
-STYLE = {6: 'pop'}            # parts 1–5 and the walkthrough: lo-fi; later parts vary, since they're also posted as Reels
+STYLE = {6: 'pop', 7: 'funk'}            # parts 1–5 and the walkthrough: lo-fi; later parts vary, since they're also posted as Reels
 SUB = {n: s for n, _, s, _ in PARTS}
 
 if __name__ == '__main__':

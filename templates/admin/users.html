@@ -46,7 +46,7 @@
           <td class="text-center">
             <span class="badge bg-primary rounded-pill">{{ user.projects.count() }}</span>
           </td>
-          <td class="text-center text-muted small">{{ user.created_at.strftime('%d %b %Y') if user.created_at else '—' }}</td>
+          <td class="text-center text-muted small">{{ user.created_at|ist_time('%d %b %Y') if user.created_at else '—' }}</td>
           <td class="text-center">
             <div class="btn-group btn-group-sm">
               <button type="button" class="btn btn-outline-primary"

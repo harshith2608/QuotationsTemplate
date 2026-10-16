@@ -36,7 +36,7 @@
         {% endif %}
       </div>
       <small class="text-muted text-nowrap ms-3">
-        {{ n.created_at.strftime('%d %b %Y, %I:%M %p') }}
+        {{ n.created_at|ist_time('%d %b %Y, %I:%M %p') }}
       </small>
     </div>
   </div>

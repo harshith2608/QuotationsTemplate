@@ -29,9 +29,9 @@ Scheduled posts were set up by the owner in Instagram (not by these tools).
 ### Customer tutorials (for trial customers, phone size, captions + lo-fi music)
 Files in `ad-videos/tutorials/`, recorded from the real app (fictional "Sharma Interiors", fresh database):
 `quoteroom-tutorial-1-company.mp4` (61 s) · `-2-rates.mp4` (33 s) · `-3-first-quotation.mp4` (94 s) ·
-`-4-send-and-accept.mp4` (31 s) · `-5-get-paid.mp4` (38 s) · `-6-profit.mp4` (49 s, pop music) · `quoteroom-tutorial-full.mp4` (4 min, all five).
+`-4-send-and-accept.mp4` (31 s) · `-5-get-paid.mp4` (38 s) · `-6-profit.mp4` (49 s, pop music) · `-7-change-a-quotation.mp4` (72 s, funk) · `quoteroom-tutorial-full.mp4` (4 min, all five).
 Re-record after UI changes: start the "tutorial" preview server on a fresh database, then run
-`tools/tutorials/part1_company.py`, `parts2to5.py`, `part6_profit.py` and `make_videos.py` (see each file's docstring).
+`tools/tutorials/part1_company.py`, `parts2to5.py`, `part6_profit.py`, `part7_revisions.py` and `make_videos.py` (see each file's docstring).
 
 ### Tutorial series: everything the app does (plan, 16 Oct 2026)
 Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the website. Record in this order. 🎬 = recorded, not uploaded yet.
@@ -45,7 +45,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | ✅ 4 | Send it & get it accepted | Initial / Full PDF, approval link, customer accepts | Quotation page, `/q/` link | 31 s |
 | ✅ 5 | Get paid | Payments, GST invoice, reminders, Balances | Quotation page, Balances | 38 s |
 | 🎬 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
-| 7 | Change a quotation | Edit after the customer asks, Rev 2 with what changed, send the new link, customer accepts the new version | Edit, Revisions card | ~1 min |
+| 🎬 7 | Change a quotation | Customer asks for a change → edit → Rev 2 with what changed → they change their mind → restore Rev 1 → they accept | Edit, Revisions card | ~1 min |
 | 8 | Track every job | Stages (Pending → Confirmed → Ongoing → Completed, On hold, Cancelled), search, filter by stage, notifications | Quotations list, stage menu, bell | ~45 s |
 | 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
 | 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
@@ -268,3 +268,12 @@ Console → Tutorials → Add a tutorial: title `6 · Know your profit`, length 
 "Add your costs once: profit on every job, plus yearly reports." Instagram Reel caption:
 > Do you know your profit on every job? 💰 Add what your materials cost you once, and QuoteRoom shows the profit on every quotation, plus your profit for the year. Only you see it. Link in bio for a free 7-day trial.
 > #interiordesign #interiordesigner #modularkitchen #interiorbusiness #quoteroom
+
+**Part 7** — *QuoteRoom tutorial 7: change a quotation (revisions & restore)*
+> Your customer asks for a change on the approval link, you edit the quotation and it's saved as Rev 2 with exactly what changed. They change their mind? Open Rev 1 and tap Restore: it's back, saved as Rev 3, and nothing is lost. Their link always shows the latest version, ready to accept.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Console → Tutorials → Add a tutorial: title `7 · Change a quotation`, length `1 min`,
+"Edit after the customer asks, every version kept, restore an older one." Instagram Reel caption:
+> Customer wants the loft removed… then wants it back? 🙃 With QuoteRoom every version of your quotation is kept. Restore an older one in one tap, no re-typing, and they accept it online. Link in bio for a free 7-day trial.
+> #interiordesign #interiordesigner #modularkitchen #wardrobedesign #quoteroom

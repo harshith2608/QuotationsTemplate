@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from io import BytesIO
 from xml.sax.saxutils import escape
 from flask import current_app
@@ -153,7 +154,7 @@ def _quote_ref(project):
     from .billing import latest_revision_number
     rev = latest_revision_number(project)
     return (f'Quotation #: {project.id}' + (f'  ·  Rev {rev}' if rev and rev > 1 else '')
-            + f'\nDate: {project.created_at.strftime("%d %B %Y")}')
+            + f'\nDate: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
 
 
 def generate_pdf(project, payment_settings=None, total_paid=0.0):

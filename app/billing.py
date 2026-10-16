@@ -229,6 +229,9 @@ def diff_snapshots(old, new):
                     changes.append(f'{name}: {item_name} changed from {_describe(prev[idx])} to {_describe(it)}')
             for it in prev[len(items):]:
                 changes.append(f'{name}: removed {item_name}')
+        for item_name, prev in before.items():            # items gone completely (none left with that name)
+            if item_name not in after:
+                changes += [f'{name}: removed {item_name}'] * len(prev)
     od, nd = old.get('discount', {}), new.get('discount', {})
     if round(od.get('amount', 0), 2) != round(nd.get('amount', 0), 2):
         changes.append(f"Discount ₹{od.get('amount', 0):,.0f} → ₹{nd.get('amount', 0):,.0f}")

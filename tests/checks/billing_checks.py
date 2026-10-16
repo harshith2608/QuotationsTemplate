@@ -68,6 +68,14 @@ with app.app_context():
 r = staff.get(f'/projects/{pid}/revisions/1')
 ok("staff can't open revisions of quotations they can't see", r.status_code == 403)
 
+# Times on the quotation page are Indian time (stored as UTC)
+from datetime import datetime as _dt
+with app.app_context():
+    p_ = db.session.get(Project, pid); saved = p_.created_at; p_.created_at = _dt(2026, 1, 1, 20, 0); db.session.commit()
+ok('quotation page shows times in IST (20:00 UTC → 01:30 AM next day)', '02 January 2026, 01:30 AM' in c.get(f'/projects/{pid}').text)
+with app.app_context():
+    p_ = db.session.get(Project, pid); p_.created_at = saved; db.session.commit()
+
 # ── Restore an older revision ──
 rid = new_quote(name='Restore Test', mobile='9000000222')                     # Rev 1: 50 × 850 + 7,500 = 50,000
 c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': json.dumps(rooms2),
@@ -90,6 +98,11 @@ with app.app_context():
     ok('restore → Rev 3 with exactly Rev 1\'s rooms, items and discount; history kept',
        [r_.number for r_ in revs] == [1, 2, 3] and s3['rooms'] == s1['rooms'] and s3['discount'] == s1['discount']
        and s3['restored_from'] == 1 and p_.final_total == 50000 and revs[-1].total == 50000)
+ok('removing an item completely is listed as removed', billing.diff_snapshots(
+    {'rooms': [{'name': 'Bedroom', 'items': [{'name': 'Wardrobe', 'type': 'fixed', 'quantity': 1, 'unit_price': 5},
+                                             {'name': 'Loft', 'type': 'fixed', 'quantity': 1, 'unit_price': 3}]}], 'total': 8},
+    {'rooms': [{'name': 'Bedroom', 'items': [{'name': 'Wardrobe', 'type': 'fixed', 'quantity': 1, 'unit_price': 5}]}], 'total': 5})
+   [:1] == ['Bedroom: removed Loft'])
 ok('flash says which revision it is now', 'saved as revision 3' in r.text and 'restored from Rev 1' in r.text)
 ok('revision page shows where it came from', 'restored from Rev 1' in c.get(f'/projects/{rid}/revisions/3').text)
 r = c.post(f'/projects/{rid}/revisions/3/restore', follow_redirects=True)

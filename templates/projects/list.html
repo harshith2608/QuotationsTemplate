@@ -94,7 +94,7 @@
             {% endif %}
           </td>
           <td class="text-center text-muted small">
-            {{ project.created_at.strftime('%d %b %Y') }}
+            {{ project.created_at|ist_time('%d %b %Y') }}
           </td>
           <td class="text-center">
             <div class="btn-group btn-group-sm" role="group">
@@ -167,7 +167,7 @@
             <span class="text-success">&#8377;{{ "{:,.0f}".format(project.final_total) }}</span>
             {% endif %}
           </div>
-          <small class="text-muted">{{ project.created_at.strftime('%d %b %Y') }}</small>
+          <small class="text-muted">{{ project.created_at|ist_time('%d %b %Y') }}</small>
         </div>
       </div>
       <div class="d-flex gap-2 mt-2 flex-wrap">

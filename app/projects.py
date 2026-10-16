@@ -867,7 +867,7 @@ def whatsapp_share(project_id):
         f"Here is your interior design quotation summary:",
         f"",
         f"📋 *Quotation #{project.id}*",
-        f"📅 Date: {project.created_at.strftime('%d %b %Y')}",
+        f"📅 Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime('%d %b %Y')}",
     ]
     if project.address:
         lines.append(f"📍 Address: {project.address}")

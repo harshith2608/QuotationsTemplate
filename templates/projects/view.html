@@ -62,7 +62,7 @@
   <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
     <span><i class="bi bi-signpost-split me-2"></i>Project Stage</span>
     {% if project.stage_changed_at %}
-    <small class="fw-normal" style="opacity:.8">updated {{ project.stage_changed_at.strftime('%d %b %Y') }}</small>
+    <small class="fw-normal" style="opacity:.8">updated {{ project.stage_changed_at|ist_time('%d %b %Y') }}</small>
     {% endif %}
   </div>
   <div class="card-body">
@@ -119,7 +119,7 @@
         <span class="dot" style="background:{{ st[2] }}"></span>
         <strong>{{ st[0] }}</strong>
         {% if ch.from_stage %}<span class="text-muted">from {{ catalog.STAGES.get(ch.from_stage, ['?'])[0] }}</span>{% endif %}
-        <span class="text-muted">· {{ ch.user.display_name if ch.user else ('the customer, online' if (ch.note or '').startswith('Accepted online') else 'Unknown') }} · {{ ch.changed_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+        <span class="text-muted">· {{ ch.user.display_name if ch.user else ('the customer, online' if (ch.note or '').startswith('Accepted online') else 'Unknown') }} · {{ ch.changed_at|ist_time('%d %b %Y, %I:%M %p') }}</span>
         {% if ch.note %}<div class="text-body-secondary fst-italic">“{{ ch.note }}”</div>{% endif %}
       </li>
       {% endfor %}
@@ -169,12 +169,12 @@
           </tr>
           <tr>
             <td class="fw-semibold text-muted ps-0">Date</td>
-            <td>{{ project.created_at.strftime('%d %B %Y, %I:%M %p') }}</td>
+            <td>{{ project.created_at|ist_time('%d %B %Y, %I:%M %p') }}</td>
           </tr>
           {% if project.updated_at and project.updated_at != project.created_at %}
           <tr>
             <td class="fw-semibold text-muted ps-0">Updated</td>
-            <td>{{ project.updated_at.strftime('%d %B %Y, %I:%M %p') }}</td>
+            <td>{{ project.updated_at|ist_time('%d %B %Y, %I:%M %p') }}</td>
           </tr>
           {% endif %}
         </table>
@@ -442,7 +442,7 @@
       <tbody>
         {% for p in payments %}
         <tr>
-          <td class="text-muted">{{ p.recorded_at.strftime('%d %b %Y') }}</td>
+          <td class="text-muted">{{ p.recorded_at|ist_time('%d %b %Y') }}</td>
           <td class="fw-semibold text-success">&#8377;{{ "{:,.2f}".format(p.amount) }}</td>
           <td class="text-muted">{{ p.note or '—' }}</td>
           <td>
@@ -521,7 +521,7 @@
                value="{{ '%.2f'|format(balance) }}" aria-label="Amount to ask for"></div>
       {% if settings.razorpay_key_id %}<label class="small d-flex align-items-center gap-1 mb-0"><input type="checkbox" name="with_link" value="1" checked> with payment link</label>{% endif %}
       <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-whatsapp me-1"></i>Send on WhatsApp</button>
-      {% if q2c.last_reminder %}<span class="small text-muted">Last sent {{ q2c.last_reminder.sent_at.strftime('%d %b %Y') }}</span>{% endif %}
+      {% if q2c.last_reminder %}<span class="small text-muted">Last sent {{ q2c.last_reminder.sent_at|ist_time('%d %b %Y') }}</span>{% endif %}
     </form>
     {% endif %}
   </div>
@@ -813,7 +813,7 @@
         <tr>
           <td class="ps-3 text-muted">{{ loop.revindex }}</td>
           <td><span class="badge bg-secondary">{{ log.editor.username }}</span></td>
-          <td class="text-muted">{{ log.edited_at.strftime('%d %b %Y, %I:%M %p') }}</td>
+          <td class="text-muted">{{ log.edited_at|ist_time('%d %b %Y, %I:%M %p') }}</td>
         </tr>
         {% endfor %}
       </tbody>
