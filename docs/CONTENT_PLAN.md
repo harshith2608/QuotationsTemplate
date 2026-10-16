@@ -200,7 +200,9 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 
 Playlist: **QuoteRoom tutorials**. Audience: not made for kids. Tags (all): `interior design quotation, quotation app,
 interior designer software, modular kitchen quotation, wardrobe quotation, GST invoice, QuoteRoom`.
-Upload order and `TUTORIAL_YOUTUBE` order: full, 1, 2, 3, 4, 5.
+Upload order: full, 1, 2, 3, 4, 5. Then add each link in the ops console → **Tutorials**
+(first time: press **Add the first six tutorials**, paste each YouTube link, Save). New videos later: **Add a tutorial**
+on the same page; they appear on www.quote-room.co.in/tutorials within a minute, no deploy needed.
 
 **Full walkthrough** — *QuoteRoom full walkthrough: from setup to getting paid (4 min)*
 > Everything you need to start using QuoteRoom, the quotation app for interior designers and modular furniture firms, on your phone.

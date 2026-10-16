@@ -9,6 +9,9 @@ Runs as its OWN Vercel project (never inside a customer or trials app):
     CONSOLE_PASSWORD_HASH=...  CONSOLE_TOTP_SECRET=...   (from `flask console-setup`)
     LEADS_DATABASE_URL=<demo pooled URL>      LEADS_DATA_ENCRYPTION_KEY=<demo key>   (optional: trial requests)
     MARKETING_PRODUCT_NAME=QuoteRoom          (optional, used in the welcome message)
+    MARKETING_SITE_URL=https://www.quote-room.co.in   (optional, for "View on the site" links)
+
+Tutorials (the marketing site's videos) live in the demo database too, so they need LEADS_DATABASE_URL.
 
 Sign-in needs the password AND a 6-digit code from an authenticator app (TOTP, RFC 6238).
 5 failed sign-ins in 15 minutes lock sign-in for 15 minutes. Every action is written to
@@ -289,6 +292,59 @@ def load_demo_stats(days=30):
     return {'pending': False, 'today': total(1), 'week': total(7), 'month': total(30), 'days': rows[:14]}
 
 
+# ── Tutorials on the marketing site (stored in the demo database) ──────────
+
+def _tutorials_table():
+    """(engine, table) or (None, reason) when not connected / before the database update."""
+    from sqlalchemy import inspect
+    from .models import Tutorial
+    engine = _leads_engine_or_none()
+    if engine is None:
+        return None, 'not_connected'
+    with engine.connect() as conn:
+        if not inspect(conn).has_table('tutorials'):
+            return None, 'pending'
+    return engine, Tutorial.__table__
+
+
+STARTER_TUTORIALS = [   # the first videos (tools/tutorials), offered when the list is empty
+    ('Full walkthrough', 'Everything from setup to getting paid, in one video.', '4 min'),
+    ('1 · Your company details', 'Log in, add your company name, contact details, logo and colours.', '1 min'),
+    ('2 · Your rates & materials', 'Set your rates, add your own materials and fittings.', '33 sec'),
+    ('3 · Your first quotation', 'Rooms, items in feet and inches, fittings and a discount.', '1.5 min'),
+    ('4 · Send it & get it accepted', 'Share the PDFs and let your customer accept online.', '31 sec'),
+    ('5 · Get paid', 'Record payments, issue a GST invoice and see who owes you.', '38 sec'),
+]
+
+
+def load_tutorials():
+    engine, t = _tutorials_table()
+    if engine is None:
+        return t, []
+    from sqlalchemy import select
+    with engine.connect() as conn:
+        return None, [dict(r) for r in conn.execute(select(t).order_by(t.c.position, t.c.id)).mappings()]
+
+
+def _tutorial_values(form):
+    """(values, error) from the add/edit form."""
+    from .marketing import youtube_id
+    title = ' '.join((form.get('title') or '').split())[:120]
+    link = (form.get('youtube') or '').strip()
+    vid = youtube_id(link) if link else ''
+    if len(title) < 2:
+        return None, 'Give the video a title.'
+    if link and not vid:
+        return None, "That doesn't look like a YouTube link (e.g. https://youtu.be/AbCdEfGhIjK)."
+    return dict(title=title, about=' '.join((form.get('about') or '').split())[:300],
+                length=' '.join((form.get('length') or '').split())[:20], youtube_id=vid or None,
+                hidden=form.get('shown') != 'on', updated_at=datetime.utcnow()), None
+
+
+def _site_url():
+    return _env('MARKETING_SITE_URL', 'https://www.quote-room.co.in').rstrip('/')
+
+
 def _link_lead(lead_id, status, slug=None):
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.console_lead_links WHERE lead_id = :i'), {'i': lead_id})
@@ -492,6 +548,112 @@ def restore_lead(lead_id):
         conn.execute(text('DELETE FROM public.console_lead_links WHERE lead_id = :i'), {'i': lead_id})
     audit('lead_restore', f'lead #{lead_id}')
     return redirect(url_for('console.dashboard'))
+
+
+@console_bp.route('/tutorials')
+@login_required
+def tutorials():
+    problem, rows = load_tutorials()
+    return render_template('console/tutorials.html', problem=problem, rows=rows, site_url=_site_url(),
+                           live=sum(1 for r in rows if r['youtube_id'] and not r['hidden']))
+
+
+def _tutorial_or_404(engine, t, tid):
+    with engine.connect() as conn:
+        row = conn.execute(t.select().where(t.c.id == tid)).mappings().first()
+    if not row:
+        abort(404)
+    return row
+
+
+@console_bp.route('/tutorials/add', methods=['POST'])
+@login_required
+def tutorial_add():
+    engine, t = _tutorials_table()
+    if engine is None:
+        abort(404)
+    values, error = _tutorial_values(request.form)
+    if error:
+        flash(error, 'error')
+        return redirect(url_for('console.tutorials'))
+    from sqlalchemy import func, select
+    with engine.begin() as conn:
+        values['position'] = (conn.execute(select(func.max(t.c.position))).scalar() or 0) + 1   # at the end
+        conn.execute(t.insert().values(**values))
+    audit('tutorial_add', values['title'][:80], values['youtube_id'] or 'no link yet')
+    flash(f'Added "{values["title"]}".' + ('' if values['youtube_id'] and not values['hidden'] else
+                                          ' It shows on the site once it has a YouTube link and "Show" is ticked.'), 'ok')
+    return redirect(url_for('console.tutorials'))
+
+
+@console_bp.route('/tutorials/starters', methods=['POST'])
+@login_required
+def tutorial_starters():
+    """Fill an empty list with the first six videos (no links yet: paste them in after uploading)."""
+    engine, t = _tutorials_table()
+    if engine is None:
+        abort(404)
+    from sqlalchemy import func, select
+    with engine.begin() as conn:
+        if not conn.execute(select(func.count()).select_from(t)).scalar():
+            now = datetime.utcnow()
+            conn.execute(t.insert(), [dict(position=i, title=a, about=b, length=n, youtube_id=None, hidden=False, updated_at=now)
+                                      for i, (a, b, n) in enumerate(STARTER_TUTORIALS)])
+            audit('tutorial_starters', None, f'{len(STARTER_TUTORIALS)} videos')
+            flash('Added the first six videos. Paste each YouTube link and press Save.', 'ok')
+    return redirect(url_for('console.tutorials'))
+
+
+@console_bp.route('/tutorials/<int:tid>', methods=['POST'])
+@login_required
+def tutorial_save(tid):
+    engine, t = _tutorials_table()
+    if engine is None:
+        abort(404)
+    _tutorial_or_404(engine, t, tid)
+    values, error = _tutorial_values(request.form)
+    if error:
+        flash(error, 'error')
+        return redirect(url_for('console.tutorials') + f'#t{tid}')
+    with engine.begin() as conn:
+        conn.execute(t.update().where(t.c.id == tid).values(**values))
+    audit('tutorial_save', values['title'][:80], ('hidden' if values['hidden'] else 'shown') + f', {values["youtube_id"] or "no link"}')
+    flash(f'Saved "{values["title"]}". The site shows changes within a minute.', 'ok')
+    return redirect(url_for('console.tutorials') + f'#t{tid}')
+
+
+@console_bp.route('/tutorials/<int:tid>/move', methods=['POST'])
+@login_required
+def tutorial_move(tid):
+    engine, t = _tutorials_table()
+    if engine is None:
+        abort(404)
+    from sqlalchemy import select
+    with engine.begin() as conn:
+        ids = [r.id for r in conn.execute(select(t.c.id).order_by(t.c.position, t.c.id))]
+        if tid not in ids:
+            abort(404)
+        i = ids.index(tid)
+        j = i - 1 if request.form.get('dir') == 'up' else i + 1
+        if 0 <= j < len(ids):
+            ids[i], ids[j] = ids[j], ids[i]
+            for pos, rid in enumerate(ids):            # renumber, so the order is always clean
+                conn.execute(t.update().where(t.c.id == rid).values(position=pos))
+    return redirect(url_for('console.tutorials') + f'#t{tid}')
+
+
+@console_bp.route('/tutorials/<int:tid>/delete', methods=['POST'])
+@login_required
+def tutorial_delete(tid):
+    engine, t = _tutorials_table()
+    if engine is None:
+        abort(404)
+    row = _tutorial_or_404(engine, t, tid)
+    with engine.begin() as conn:
+        conn.execute(t.delete().where(t.c.id == tid))
+    audit('tutorial_delete', row['title'][:80])
+    flash(f'Removed "{row["title"]}" from the site. (The video stays on YouTube.)', 'ok')
+    return redirect(url_for('console.tutorials'))
 
 
 @console_bp.route('/activity')

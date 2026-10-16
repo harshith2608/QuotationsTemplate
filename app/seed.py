@@ -233,7 +233,7 @@ def _seed_demo_quote_to_cash(users):
 
 
 # Real data that lives in the marketing/demo database and must survive the nightly demo reset
-KEEP_ON_RESET = {'leads', 'demo_stats'}
+KEEP_ON_RESET = {'leads', 'demo_stats', 'tutorials'}
 
 
 def _clear_all_tables():

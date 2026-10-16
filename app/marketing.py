@@ -15,14 +15,15 @@ returns 404. Turn it on only on your own demo/marketing deployment:
     MARKETING_JURISDICTION, MARKETING_LEGAL_UPDATED  # used on /privacy and /terms
     MARKETING_PRIVACY_URL / MARKETING_TERMS_URL      # optional: link to externally hosted policies instead
     LEADS_PASSWORD=...                       # opens /leads (free-trial requests); unset → /leads is 404
-    TUTORIAL_YOUTUBE=...                     # YouTube links or IDs, comma-separated, in this order: full, 1, 2, 3, 4, 5
-                                             # (blank ones are skipped; no links → no Tutorials page or header link)
 
 Ad tags (Meta Pixel, Google) load only after the visitor accepts the cookie notice.
 "Start free trial" opens a short form (name, phone, business type); requests are stored
 encrypted in the leads table, which survives the nightly demo reset.
 
 With MARKETING_SITE=1, signed-out visitors to / also see the landing page.
+
+Tutorial videos (YouTube) are kept in the tutorials table and managed from the ops console
+(Tutorials). No video with a YouTube link → no Tutorials page or header link.
 """
 import csv
 import hashlib
@@ -84,15 +85,9 @@ def _context():
 
 # ── Tutorials (videos hosted on YouTube, so the site stays light) ────────────
 
-TUTORIALS = [  # (title, what it covers, length)
-    ('Full walkthrough', 'Everything from setup to getting paid, in one video.', '4 min'),
-    ('1 · Your company details', 'Log in, add your company name, contact details, logo and colours.', '1 min'),
-    ('2 · Your rates & materials', 'Set your rates, add your own materials and fittings.', '33 sec'),
-    ('3 · Your first quotation', 'Rooms, items in feet and inches, fittings and a discount.', '1.5 min'),
-    ('4 · Send it & get it accepted', 'Share the PDFs and let your customer accept online.', '31 sec'),
-    ('5 · Get paid', 'Record payments, issue a GST invoice and see who owes you.', '38 sec'),
-]
-_YT_ID = re.compile(r'(?:v=|youtu\.be/|shorts/|embed/)?([A-Za-z0-9_-]{11})(?:[?&#].*)?$')
+_YT_ID = re.compile(r'(?:v=|youtu\.be/|shorts/|embed/|live/)?([A-Za-z0-9_-]{11})(?:[?&#].*)?$')
+TUTORIALS_CACHE_SECONDS = 60          # console edits show on the site within a minute
+_tutorials_cache = {}
 
 
 def youtube_id(value):
@@ -103,9 +98,22 @@ def youtube_id(value):
 
 
 def tutorials():
-    """[{title, about, length, id}] for the videos that have a YouTube link (TUTORIAL_YOUTUBE)."""
-    ids = [youtube_id(v) for v in _env('TUTORIAL_YOUTUBE').split(',')]
-    return [dict(title=t, about=a, length=n, id=i) for (t, a, n), i in zip(TUTORIALS, ids) if i]
+    """[{title, about, length, id}] for the shown videos that have a YouTube link, in page order.
+    [] until the database update that adds the tutorials table has run."""
+    import time
+    hit = _tutorials_cache.get('v')
+    if hit and time.time() - hit[0] < TUTORIALS_CACHE_SECONDS:
+        return hit[1]
+    from sqlalchemy import inspect
+    from . import db
+    from .models import Tutorial
+    rows = []
+    if inspect(db.session.connection()).has_table('tutorials'):
+        q = select(Tutorial).where(Tutorial.hidden.is_(False), Tutorial.youtube_id.isnot(None), Tutorial.youtube_id != '') \
+            .order_by(Tutorial.position, Tutorial.id)
+        rows = [dict(title=t.title, about=t.about, length=t.length, id=t.youtube_id) for t in db.session.scalars(q)]
+    _tutorials_cache['v'] = (time.time(), rows)
+    return rows
 
 
 def render_landing():

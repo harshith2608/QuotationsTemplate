@@ -1,0 +1,101 @@
+{% extends "console/_layout.html" %}
+{% block title %}Tutorials{% endblock %}
+{% block content %}
+<style>
+.tut { display: grid; grid-template-columns: 96px 1fr; gap: 14px; }
+.tut .thumb { width: 96px; aspect-ratio: 9 / 16; border-radius: 10px; background: var(--pine-soft) center / cover no-repeat;
+  display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .75rem; text-align: center; padding: 6px; }
+.tut .fields { display: grid; gap: 8px; }
+.tut .two { display: grid; grid-template-columns: 1fr 120px; gap: 8px; }
+.tut textarea { min-height: 64px; font-family: system-ui, sans-serif; font-size: .95rem; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin: 0; }
+.check input { width: 20px; height: 20px; }
+@media (max-width: 560px) { .tut { grid-template-columns: 1fr; } .tut .thumb { width: 72px; } .tut .two { grid-template-columns: 1fr; } }
+</style>
+
+<h1>Tutorials</h1>
+<p class="muted small">The videos on the website's <a href="{{ site_url }}/tutorials" target="_blank" rel="noopener">Tutorials page</a>.
+  Upload a video to YouTube, then add it here with its link. A video shows on the site when it has a link and <strong>Show on the site</strong>
+  is ticked. The first one is the big one at the top. Changes appear within a minute.</p>
+
+{% if problem == 'not_connected' %}
+<div class="card"><p class="small" style="color:var(--bad)">The demo database isn't connected (set LEADS_DATABASE_URL on the console).</p></div>
+{% elif problem == 'pending' %}
+<div class="card"><p class="muted small">Run the database update first (<a href="{{ url_for('console.updates') }}">Updates → Update all</a>).
+  That adds the tutorials list.</p></div>
+{% else %}
+
+<p class="small"><span class="badge b-active">{{ live }} on the site</span> <span class="muted">of {{ rows|length }}</span>
+  {% if not live %}<span class="muted">· the Tutorials page and header link appear once one video is on the site.</span>{% endif %}</p>
+
+<div class="list">
+  {% for r in rows %}
+  {% set on_site = r.youtube_id and not r.hidden %}
+  <div class="item" id="t{{ r.id }}">
+    <div class="tut">
+      <div class="thumb" {% if r.youtube_id %}style="background-image:url('https://i.ytimg.com/vi/{{ r.youtube_id }}/hqdefault.jpg')"{% endif %}>
+        {% if not r.youtube_id %}No video yet{% endif %}</div>
+      <form method="post" action="{{ url_for('console.tutorial_save', tid=r.id) }}" class="fields">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="item-head">
+          <strong>{{ r.title }}</strong>
+          {% if on_site %}<span class="badge b-active">on the site</span>
+          {% elif r.hidden %}<span class="badge b-other">hidden</span>
+          {% else %}<span class="badge b-reminder">needs a YouTube link</span>{% endif %}
+        </div>
+        <div class="two">
+          <div><label for="title{{ r.id }}">Title</label><input type="text" id="title{{ r.id }}" name="title" value="{{ r.title }}" maxlength="120" required></div>
+          <div><label for="len{{ r.id }}">Length</label><input type="text" id="len{{ r.id }}" name="length" value="{{ r.length }}" maxlength="20" placeholder="1 min"></div>
+        </div>
+        <div><label for="about{{ r.id }}">What it shows</label><textarea id="about{{ r.id }}" name="about" maxlength="300">{{ r.about }}</textarea></div>
+        <div><label for="yt{{ r.id }}">YouTube link</label>
+          <input type="text" id="yt{{ r.id }}" name="youtube" inputmode="url" placeholder="https://youtu.be/…"
+                 value="{{ 'https://youtu.be/' ~ r.youtube_id if r.youtube_id else '' }}"></div>
+        <div class="row" style="align-items:center">
+          <label class="check"><input type="checkbox" name="shown" {{ 'checked' if not r.hidden }}> Show on the site</label>
+          <button class="btn btn-primary btn-sm" type="submit">Save</button>
+          {% if r.youtube_id %}<a class="small" href="https://youtu.be/{{ r.youtube_id }}" target="_blank" rel="noopener">Open on YouTube</a>{% endif %}
+        </div>
+      </form>
+    </div>
+    <div class="item-actions">
+      <form method="post" action="{{ url_for('console.tutorial_move', tid=r.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm" type="submit" name="dir" value="up" {{ 'disabled' if loop.first }} aria-label="Move up">↑ Up</button>
+        <button class="btn btn-sm" type="submit" name="dir" value="down" {{ 'disabled' if loop.last }} aria-label="Move down">↓ Down</button>
+      </form>
+      <form method="post" action="{{ url_for('console.tutorial_delete', tid=r.id) }}" data-confirm="Remove &quot;{{ r.title }}&quot; from the site? (The video stays on YouTube.)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm" type="submit">Remove</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="card stack">
+    <p class="muted small" style="margin:0">No tutorials yet. Start with the six QuoteRoom tutorials (full walkthrough and parts 1–5),
+      then paste each YouTube link, or add your own below.</p>
+    <form method="post" action="{{ url_for('console.tutorial_starters') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary" type="submit">Add the first six tutorials</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Add a tutorial</h2>
+<form method="post" action="{{ url_for('console.tutorial_add') }}" class="card stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row">
+    <div class="grow"><label for="new_title">Title</label><input type="text" id="new_title" name="title" maxlength="120" required placeholder="6 · Your team and logins"></div>
+    <div style="flex:0 1 140px"><label for="new_len">Length</label><input type="text" id="new_len" name="length" maxlength="20" placeholder="1 min"></div>
+  </div>
+  <div><label for="new_about">What it shows</label><textarea id="new_about" name="about" maxlength="300" style="min-height:64px;font-family:system-ui,sans-serif"></textarea></div>
+  <div><label for="new_yt">YouTube link</label><input type="text" id="new_yt" name="youtube" inputmode="url" placeholder="https://youtu.be/… (you can add it later)"></div>
+  <div class="row" style="align-items:center">
+    <label class="check"><input type="checkbox" name="shown" checked> Show on the site</label>
+    <button class="btn btn-primary" type="submit">Add tutorial</button>
+  </div>
+  <p class="muted small" style="margin:0">New videos go at the end; use ↑ Up to move them.</p>
+</form>
+{% endif %}
+{% endblock %}

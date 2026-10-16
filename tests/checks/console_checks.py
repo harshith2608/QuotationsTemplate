@@ -159,8 +159,50 @@ ok('"Not interested" moves a request to handled, with Undo', 'not interested' in
 c.post(f'/leads/{spam_id}/restore')
 ok('Undo brings it back', 'Spam Person' in c.get('/').text.split('Handled requests')[0])
 
+# Tutorials for the marketing site (in the demo database)
+t = c.get('/tutorials').text
+ok('tutorials page asks for the database update before the table exists', 'Run the database update first' in t
+   and '/tutorials">Tutorials</a>' in t)
+from app.models import Tutorial
+Tutorial.__table__.create(le, checkfirst=True)
+ok('empty list offers the first six', 'Add the first six tutorials' in c.get('/tutorials').text)
+r = c.post('/tutorials/starters', follow_redirects=True)
+ok('one button adds the six starter videos, none on the site yet', r.text.count('needs a YouTube link') == 6
+   and '0 on the site' in r.text and '1 · Your company details' in r.text)
+c.post('/tutorials/starters')
+with le.begin() as conn:
+    ok('starters only fill an empty list', conn.execute(text('select count(*) from tutorials')).scalar() == 6)
+    conn.execute(text('delete from tutorials'))
+r = c.post('/tutorials/add', data={'title': 'Full walkthrough', 'about': 'Everything.', 'length': '4 min', 'youtube': 'https://youtu.be/AAAAAAAAAAA', 'shown': 'on'}, follow_redirects=True)
+ok('add a tutorial with a YouTube link → on the site', 'Added &#34;Full walkthrough&#34;' in r.text and '1 on the site' in r.text
+   and 'i.ytimg.com/vi/AAAAAAAAAAA/' in r.text)
+r = c.post('/tutorials/add', data={'title': '6 · Your team', 'youtube': '', 'shown': 'on'}, follow_redirects=True)
+ok('add without a link → listed, flagged as needing one, not on the site', 'needs a YouTube link' in r.text and '1 on the site' in r.text)
+r = c.post('/tutorials/add', data={'title': 'Bad', 'youtube': 'https://example.com/x'}, follow_redirects=True)
+ok('a link that isn\'t YouTube is refused', 'look like a YouTube link' in r.text and r.text.count('class="item" id="t') == 2)
+r = c.post('/tutorials/add', data={'title': 'x'}, follow_redirects=True)
+ok('a title is required', 'Give the video a title' in r.text)
+with le.connect() as conn:
+    ids = [x.id for x in conn.execute(text('select id from tutorials order by position, id'))]
+r = c.post(f'/tutorials/{ids[1]}', data={'title': '6 · Your team & logins', 'length': '1 min',
+           'youtube': 'https://www.youtube.com/watch?v=BBBBBBBBBBB&t=2', 'shown': 'on'}, follow_redirects=True)
+with le.connect() as conn:
+    row = conn.execute(text('select title, youtube_id, hidden from tutorials where id = :i'), {'i': ids[1]}).first()
+ok('edit saves title and the ID from a watch link', row.title == '6 · Your team & logins' and row.youtube_id == 'BBBBBBBBBBB'
+   and not row.hidden and '2 on the site' in r.text)
+c.post(f'/tutorials/{ids[1]}/move', data={'dir': 'up'})
+with le.connect() as conn:
+    order = [x.id for x in conn.execute(text('select id from tutorials order by position, id'))]
+ok('↑ Up moves a video earlier', order == [ids[1], ids[0]])
+r = c.post(f'/tutorials/{ids[0]}', data={'title': 'Full walkthrough', 'youtube': 'https://youtu.be/AAAAAAAAAAA'}, follow_redirects=True)
+ok('unticking Show hides it from the site', 'hidden</span>' in r.text and '1 on the site' in r.text)
+r = c.post(f'/tutorials/{ids[0]}/delete', follow_redirects=True)
+with le.connect() as conn:
+    left = conn.execute(text('select count(*) from tutorials')).scalar()
+ok('remove deletes it from the list', 'Removed &#34;Full walkthrough&#34;' in r.text and left == 1)
+
 t = c.get('/activity').text
-ok('activity log lists sign-ins and actions', all(w in t for w in ['login failed', 'trial create', 'trial delete', 'lead dismiss']))
+ok('activity log lists sign-ins and actions', all(w in t for w in ['login failed', 'trial create', 'trial delete', 'lead dismiss', 'tutorial add', 'tutorial delete']))
 
 # Changing the password signs every session out
 os.environ['CONSOLE_PASSWORD_HASH'] = generate_password_hash('a-new-console-pass', method='pbkdf2:sha256')

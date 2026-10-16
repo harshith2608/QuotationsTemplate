@@ -48,12 +48,30 @@ ok('YouTube links and IDs are understood', _mk.youtube_id('https://youtu.be/AbCd
    and _mk.youtube_id('https://www.youtube.com/watch?v=AbCdEfGhIjK&t=3') == 'AbCdEfGhIjK'
    and _mk.youtube_id('https://youtube.com/shorts/AbCdEfGhIjK?si=x') == 'AbCdEfGhIjK' and _mk.youtube_id('AbCdEfGhIjK') == 'AbCdEfGhIjK'
    and _mk.youtube_id('') == '')
-_os.environ.pop('TUTORIAL_YOUTUBE', None)
+from app import db as _db
+from app.models import Tutorial as _Tut
+from datetime import datetime as _dt
+with c.application.app_context():
+    _db.session.add_all([_Tut(position=i, title=t, about='About ' + t, length='1 min', updated_at=_dt.utcnow())
+                         for i, t in enumerate(['Full walkthrough', '1 · Your company details', '2 · Your rates', '3 · Hidden one'])])
+    _db.session.commit()
+_mk._tutorials_cache.clear()
 ok('no links → no Tutorials page or header link', c.get('/tutorials').status_code == 404 and 'Tutorials</a>' not in c.get('/').text)
-_os.environ['TUTORIAL_YOUTUBE'] = 'https://youtu.be/AAAAAAAAAAA, ,https://youtube.com/shorts/BBBBBBBBBBB'
+with c.application.app_context():
+    rows = _db.session.scalars(_db.select(_Tut).order_by(_Tut.position)).all()
+    rows[0].youtube_id, rows[2].youtube_id = 'AAAAAAAAAAA', 'BBBBBBBBBBB'
+    rows[3].youtube_id, rows[3].hidden = 'CCCCCCCCCCC', True
+    _db.session.commit()
+ok('changes show after the short cache', c.get('/tutorials').status_code == 404)
+_mk._tutorials_cache.clear()
 t = c.get('/tutorials').text
-ok('tutorials page lists the linked videos (blank entries skipped), click-to-play', 'data-yt="AAAAAAAAAAA"' in t
-   and 'data-yt="BBBBBBBBBBB"' in t and 'Full walkthrough' in t and '2 · Your rates' in t and '1 · Your company' not in t
+ok('tutorials page lists linked, shown videos in order (no link / hidden skipped), click-to-play', 'data-yt="AAAAAAAAAAA"' in t
+   and 'data-yt="BBBBBBBBBBB"' in t and 'CCCCCCCCCCC' not in t and t.index('AAAAAAAAAAA') < t.index('BBBBBBBBBBB')
+   and 'Full walkthrough' in t and '2 · Your rates' in t and '1 · Your company' not in t
    and 'youtube-nocookie.com/embed/' in t and '<iframe' not in t)
 ok('header and footer link to Tutorials', c.get('/').text.count('/tutorials">Tutorials</a>') == 2)
-_os.environ.pop('TUTORIAL_YOUTUBE')
+with c.application.app_context():
+    for r in _db.session.scalars(_db.select(_Tut)):
+        r.youtube_id = None
+    _db.session.commit()
+_mk._tutorials_cache.clear()

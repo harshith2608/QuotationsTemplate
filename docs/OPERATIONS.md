@@ -410,6 +410,17 @@ Trials use `trial extend` instead (section 5).
 > section: new requests, creating, extending and deleting trials are buttons there. The terminal
 > commands below still work and are kept for reference.
 
+### Tutorial videos on the website
+The website's **Tutorials** page (and its header link) shows the videos listed in the console under
+**Tutorials**. They're stored in the demo database, so the console needs `LEADS_DATABASE_URL` (already set).
+1. Upload the video to YouTube (Public or Unlisted).
+2. Console → **Tutorials** → **Add a tutorial**: title, length, one line on what it shows, the YouTube link.
+   Or edit an existing one and paste its link. Tick **Show on the site** → Save.
+3. It's on www.quote-room.co.in/tutorials within a minute (no deploy). Use ↑ Up / ↓ Down to change the order:
+   the first video is the big one at the top. **Remove** only takes it off the site; it stays on YouTube.
+- A video without a link, or with **Show** unticked, isn't shown. No shown videos → no Tutorials page or link.
+- The list is marketing-only: it isn't copied into customers' databases.
+
 ### New trial requests (check daily)
 Every "Start free trial" button on the website opens a short form (name, mobile, business type).
 To see who asked:

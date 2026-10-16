@@ -538,6 +538,23 @@ class DemoStat(db.Model):
         return f'<DemoStat {self.day}>'
 
 
+class Tutorial(db.Model):
+    """A how-to video on the marketing site's Tutorials page (hosted on YouTube), managed from the ops console.
+    Public content, so not encrypted. Survives the nightly demo reset."""
+    __tablename__ = 'tutorials'
+    id         = db.Column(db.Integer, primary_key=True)
+    position   = db.Column(db.Integer, nullable=False, default=0)       # order on the page, lowest first
+    title      = db.Column(db.String(120), nullable=False)
+    about      = db.Column(db.String(300), nullable=False, default='')
+    length     = db.Column(db.String(20), nullable=False, default='')   # e.g. '4 min'
+    youtube_id = db.Column(db.String(11))                               # none yet → not shown
+    hidden     = db.Column(db.Boolean, nullable=False, default=False)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Tutorial {self.title}>'
+
+
 class Material(db.Model):
     """A material a business quotes per sqft (Acrylic, Laminates, Glass, PU, Wallpaper…), managed in Admin → Rates.
     With work types, it is priced per (material, Box/Frame Work); without, one rate per sqft (work_type '').

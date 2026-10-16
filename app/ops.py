@@ -65,6 +65,10 @@ def engine_for(url):
     return create_engine(normalize_url(url), pool_pre_ping=True)
 
 
+# Tables only the marketing (demo) database uses: never copied into a customer's database
+MARKETING_TABLES = {'leads', 'demo_stats', 'tutorials'}
+
+
 def copy_trial(slug, target_url, to_key, plan_name):
     """Copy a trial into a customer's own, migrated, EMPTY database, re-encrypting with the customer's key,
     and start their paid plan there. Returns ({table: rows}, start, end). Doesn't change the trial."""
@@ -81,6 +85,7 @@ def copy_trial(slug, target_url, to_key, plan_name):
     schema = schema_of(slug, active_only=False)
     target = engine_for(target_url)
     tables = db.metadata.sorted_tables
+    copy_tables = [t for t in tables if t.name not in MARKETING_TABLES]
     with target.connect() as tc:
         names = set(inspect(tc).get_table_names())
         if [t.name for t in tables if t.name not in names] or 'alembic_version' not in names:
@@ -91,7 +96,7 @@ def copy_trial(slug, target_url, to_key, plan_name):
     with tenancy.tenant_context(slug, schema):
         src = db.session.connection()                 # schema-mapped to the trial
         with target.begin() as tc:
-            for table in tables:
+            for table in copy_tables:
                 # Read decrypts with the trials key; insert re-encrypts with the customer's own key
                 rows = [dict(r) for r in src.execute(table.select()).mappings()]
                 if table.name == 'app_settings':
