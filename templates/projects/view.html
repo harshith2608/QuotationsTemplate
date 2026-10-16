@@ -21,10 +21,12 @@
     </h4>
   </div>
   <div class="d-flex gap-2 flex-wrap">
+    {% if current_user.is_admin or project.created_by == current_user.id %}
     <a href="{{ url_for('projects.edit_project', project_id=project.id) }}"
        class="btn btn-warning btn-sm fw-semibold">
       <i class="bi bi-pencil me-1"></i>Edit
     </a>
+    {% endif %}
     <!-- Full Quotation: internal PDF with every room, item and measurement. Opens to view (share/save from the viewer) -->
     <a href="{{ url_for('projects.download_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
        class="btn btn-primary btn-sm fw-semibold">

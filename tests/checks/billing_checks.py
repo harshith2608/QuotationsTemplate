@@ -76,6 +76,19 @@ ok('quotation page shows times in IST (20:00 UTC → 01:30 AM next day)', '02 Ja
 with app.app_context():
     p_ = db.session.get(Project, pid); p_.created_at = saved; db.session.commit()
 
+# Shared access is view-only: no Edit button for staff who didn't make the quotation
+with app.app_context():
+    st_id = User.query.filter_by(username='demo-staff').first().id
+    db.session.add(ProjectAccess(project_id=pid, user_id=st_id, granted_by=User.query.filter_by(username='demo-admin').first().id))
+    db.session.commit()
+t = staff.get(f'/projects/{pid}').text
+ok('staff with shared access can view, but see no Edit button and can\'t edit',
+   'Billing Test' in t and f'/projects/{pid}/edit' not in t and f'/projects/{pid}/edit' not in staff.get('/projects').text
+   and staff.get(f'/projects/{pid}/edit').status_code == 403)
+ok('admin still sees Edit', f'/projects/{pid}/edit' in c.get(f'/projects/{pid}').text)
+with app.app_context():
+    ProjectAccess.query.filter_by(project_id=pid, user_id=st_id).delete(); db.session.commit()
+
 # ── Restore an older revision ──
 rid = new_quote(name='Restore Test', mobile='9000000222')                     # Rev 1: 50 × 850 + 7,500 = 50,000
 c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': json.dumps(rooms2),

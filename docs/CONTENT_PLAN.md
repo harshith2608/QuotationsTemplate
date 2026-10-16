@@ -29,9 +29,9 @@ Scheduled posts were set up by the owner in Instagram (not by these tools).
 ### Customer tutorials (for trial customers, phone size, captions + lo-fi music)
 Files in `ad-videos/tutorials/`, recorded from the real app (fictional "Sharma Interiors", fresh database):
 `quoteroom-tutorial-1-company.mp4` (61 s) · `-2-rates.mp4` (33 s) · `-3-first-quotation.mp4` (94 s) ·
-`-4-send-and-accept.mp4` (31 s) · `-5-get-paid.mp4` (38 s) · `-6-profit.mp4` (49 s, pop music) · `-7-change-a-quotation.mp4` (72 s, funk) · `-8-track-every-job.mp4` (61 s, tropical) · `quoteroom-tutorial-full.mp4` (4 min, all five).
+`-4-send-and-accept.mp4` (31 s) · `-5-get-paid.mp4` (38 s) · `-6-profit.mp4` (49 s, pop music) · `-7-change-a-quotation.mp4` (72 s, funk) · `-8-track-every-job.mp4` (61 s, tropical) · `-9-your-team.mp4` (63 s, cinematic) · `quoteroom-tutorial-full.mp4` (4 min, all five).
 Re-record after UI changes: start the "tutorial" preview server on a fresh database, then run
-`tools/tutorials/part1_company.py`, `parts2to5.py`, `part6_profit.py`, `part7_revisions.py`, `part8_track_jobs.py` and `make_videos.py` (see each file's docstring).
+`tools/tutorials/part1_company.py`, `parts2to5.py`, `part6_profit.py`, `part7_revisions.py`, `part8_track_jobs.py`, `part9_team.py` and `make_videos.py` (see each file's docstring).
 
 ### Tutorial series: everything the app does (plan, 16 Oct 2026)
 Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the website. Record in this order. 🎬 = recorded, not uploaded yet.
@@ -47,7 +47,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | ✅ 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
 | ✅ 7 | Change a quotation | Customer asks for a change → edit → Rev 2 with what changed → they change their mind → restore Rev 1 → they accept | Edit, Revisions card | ~1 min |
 | 🎬 8 | Track every job | Stages (Pending → Confirmed → Ongoing → Completed, On hold, Cancelled), search, filter by stage, notifications | Quotations list, stage menu, bell | ~45 s |
-| 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
+| 🎬 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
 | 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
 | 11 | Online payments (Razorpay) | Test mode keys, webhook, send a payment link, payment records itself | Admin → Payment settings, Payment link | ~1.5 min |
 | 12 | Your PDFs & invoice settings | Material specs and terms & conditions on quotations; invoice prefix/numbering, GST or not, GST rate, prices incl./excl. GST, HSN, room-by-room or summary, invoice notes | Settings → Quotation PDFs, Invoices | ~1 min |
@@ -285,4 +285,13 @@ Console → Tutorials → Add a tutorial: title `7 · Change a quotation`, lengt
 Console → Tutorials → Add a tutorial: title `8 · Track every job`, length `1 min`,
 "Stages, filters, search and notifications." Instagram Reel caption:
 > Which jobs are confirmed, which are on site, which are waiting? 📋 QuoteRoom keeps every job's stage and history in one list, with a note for your team at each step. Link in bio for a free 7-day trial.
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
+
+**Part 9** — *QuoteRoom tutorial 9: your team (staff logins & sharing jobs)*
+> Give everyone in your team their own login: one price, however many people. Add a staff login, set a new password if they forget it, and share a job with them using Access. Staff see only the jobs shared with them and the ones they make; your costs, profit, reports and settings stay admin-only.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Console → Tutorials → Add a tutorial: title `9 · Your team`, length `1 min`,
+"Staff logins, passwords and sharing a job." Instagram Reel caption:
+> Your whole team on QuoteRoom, one price 👷‍♂️ Give your site supervisor his own login, share only the jobs he needs, and keep your costs and profit to yourself. Link in bio for a free 7-day trial.
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
