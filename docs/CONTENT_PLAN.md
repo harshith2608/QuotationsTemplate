@@ -44,8 +44,8 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | ✅ 3 | Your first quotation | Customer, rooms, items in ft/in, fittings, discount | New quotation | 1.5 min |
 | ✅ 4 | Send it & get it accepted | Initial / Full PDF, approval link, customer accepts | Quotation page, `/q/` link | 31 s |
 | ✅ 5 | Get paid | Payments, GST invoice, reminders, Balances | Quotation page, Balances | 38 s |
-| 🎬 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
-| 🎬 7 | Change a quotation | Customer asks for a change → edit → Rev 2 with what changed → they change their mind → restore Rev 1 → they accept | Edit, Revisions card | ~1 min |
+| ✅ 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
+| ✅ 7 | Change a quotation | Customer asks for a change → edit → Rev 2 with what changed → they change their mind → restore Rev 1 → they accept | Edit, Revisions card | ~1 min |
 | 8 | Track every job | Stages (Pending → Confirmed → Ongoing → Completed, On hold, Cancelled), search, filter by stage, notifications | Quotations list, stage menu, bell | ~45 s |
 | 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
 | 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
