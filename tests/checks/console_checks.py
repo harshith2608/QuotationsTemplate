@@ -81,6 +81,7 @@ wa = re.search(r'href="(https://wa\.me/919876543210\?text=[^"]+)"', r.text)
 ok('create trial → credentials shown once + WhatsApp message to the lead', r.status_code == 200 and password
    and wa and 'https://ravi-modular.quote-room.test' in unquote(wa.group(1)) and password in unquote(wa.group(1))
    and 'free trial for Kumar Woodcraft is ready' in unquote(wa.group(1)))
+ok('no tutorials on the site yet → welcome message has no tutorials link', '/tutorials' not in unquote(wa.group(1)))
 with app.app_context():
     from app import ops
     trial = [x for x in ops.list_trials() if x['slug'] == 'ravi-modular']
@@ -190,6 +191,11 @@ with le.connect() as conn:
     row = conn.execute(text('select title, youtube_id, hidden from tutorials where id = :i'), {'i': ids[1]}).first()
 ok('edit saves title and the ID from a watch link', row.title == '6 · Your team & logins' and row.youtube_id == 'BBBBBBBBBBB'
    and not row.hidden and '2 on the site' in r.text)
+from app.console import _tutorials_line, _welcome_message
+from datetime import date as _date
+msg = _welcome_message('Ravi', 'https://x.quote-room.test', 'admin', 'pw', _date(2026, 10, 23))
+ok('with videos on the site, the welcome message links the Tutorials page', 'New here? Short setup videos' in msg
+   and 'https://www.quote-room.co.in/tutorials' in msg and msg.index('Password: pw') < msg.index('/tutorials') < msg.index('trial runs until'))
 c.post(f'/tutorials/{ids[1]}/move', data={'dir': 'up'})
 with le.connect() as conn:
     order = [x.id for x in conn.execute(text('select id from tutorials order by position, id'))]
@@ -199,6 +205,11 @@ ok('unticking Show hides it from the site', 'hidden</span>' in r.text and '1 on 
 r = c.post(f'/tutorials/{ids[0]}/delete', follow_redirects=True)
 with le.connect() as conn:
     left = conn.execute(text('select count(*) from tutorials')).scalar()
+with le.begin() as conn:
+    conn.execute(text('update tutorials set hidden = :h'), {'h': True})
+ok('all videos hidden → no tutorials line', _tutorials_line() == '')
+with le.begin() as conn:
+    conn.execute(text('update tutorials set hidden = :h'), {'h': False})
 ok('remove deletes it from the list', 'Removed &#34;Full walkthrough&#34;' in r.text and left == 1)
 
 t = c.get('/activity').text

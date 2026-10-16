@@ -420,6 +420,8 @@ The website's **Tutorials** page (and its header link) shows the videos listed i
    the first video is the big one at the top. **Remove** only takes it off the site; it stays on YouTube.
 - A video without a link, or with **Show** unticked, isn't shown. No shown videos → no Tutorials page or link.
 - The list is marketing-only: it isn't copied into customers' databases.
+- While at least one video is on the site, the console's welcome messages (new trial, new customer) include
+  "New here? Short setup videos …: www.quote-room.co.in/tutorials".
 
 ### New trial requests (check daily)
 Every "Start free trial" button on the website opens a short form (name, mobile, business type).

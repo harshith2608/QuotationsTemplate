@@ -367,11 +367,23 @@ def _product():
     return _env('MARKETING_PRODUCT_NAME', 'QuoteRoom')
 
 
+def _tutorials_line():
+    """'New here? …/tutorials' for welcome messages, only while the website shows at least one video."""
+    try:
+        problem, rows = load_tutorials()
+    except Exception:                         # the demo database being unreachable mustn't block a welcome
+        return ''
+    if problem or not any(r['youtube_id'] and not r['hidden'] for r in rows):
+        return ''
+    return f"New here? Short setup videos (start with the 4-minute walkthrough): {_site_url()}/tutorials\n\n"
+
+
 def _welcome_message(name, url, username, password, ends_on, company=''):
     hello = f'Hi {name}!' if name else 'Hi!'
     whose = f' for {company}' if company else ''
     return (f"{hello} Your {_product()} free trial{whose} is ready.\n\n"
             f"Open: {url}\nUsername: {username}\nPassword: {password}\n\n"
+            + _tutorials_line() +
             f"Your trial runs until {ends_on.strftime('%d %b %Y')}. On your phone, add the page to your home screen "
             "for one-tap access. Reply here if you need any help!")
 
@@ -747,7 +759,7 @@ def customer_detail(slug):
     message = ''
     if password:
         message = (f"Hi! Your {_product()} app is ready.\n\nOpen: {c.app_url(slug)}\nUsername: {username}\n"
-                   f"Password: {password}\n\nOn your phone, add the page to your home screen for one-tap access. "
+                   f"Password: {password}\n\n" + _tutorials_line() + "On your phone, add the page to your home screen for one-tap access. "
                    "Reply here if you need any help!")
     elif row['status'] == 'active' and row['source_trial']:
         message = (f"Hi! Thank you for subscribing to {_product()}. Your app is now on your paid plan: same address "
