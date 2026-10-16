@@ -181,8 +181,32 @@ def customer_sees():
     return slides
 
 
+# ── 4. Checklist: does your quotation have all 6? ──────────────────────────
+
+CHECKLIST = ['Your logo and company details', 'Room-by-room items and sizes', 'Your rates for every material',
+             'UPI and bank details to pay you', 'A GST invoice once confirmed', 'A link to accept it online']
+
+
+def checklist():
+    img = base()
+    d = ImageDraw.Draw(img)
+    y = headline(d, 170, [[('Does your quotation', PAPER)], [('have all ', PAPER), ('6?', TAPE)]], 80)
+    d.text((60, y + 4), 'Check yours against this list.', font=font(34, 'demi'), fill=MUTED)
+    y += 76
+    for i, item in enumerate(CHECKLIST, 1):
+        d.rounded_rectangle([60, y, W - 60, y + 92], radius=20, fill=(27, 62, 51), outline=(70, 104, 92), width=2)
+        d.rounded_rectangle([88, y + 22, 136, y + 70], radius=10, outline=TAPE, width=4)      # an empty box to tick
+        d.text((166, y + 46), item, font=font(36, 'demi'), fill=PAPER, anchor='lm')
+        d.text((W - 92, y + 46), str(i), font=font(32, 'bold'), fill=(120, 150, 138), anchor='rm')
+        y += 106
+    d.text((W / 2, y + 30), 'QuoteRoom gives you all 6, on every quote.', font=font(38, 'bold'), fill=TAPE, anchor='mm')
+    footer(img, W, H - 115, 40, 26)
+    return img.convert('RGB')
+
+
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
+    checklist().save(os.path.join(OUT, 'post-checklist.png'))
     one_price().save(os.path.join(OUT, 'post-one-price.png'))
     before_after().save(os.path.join(OUT, 'post-before-after.png'))
     for i, s in enumerate(customer_sees(), 1):

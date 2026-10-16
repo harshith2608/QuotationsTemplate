@@ -17,6 +17,8 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Ready to post** | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
 | "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Ready to post** | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
 | "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Ready to post** | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
+| "Do you know your profit?" | Reel 22 s, 9:16, music | **Ready to post** | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
+| "Does your quotation have all 6?" | Single image 4:5 | **Ready to post** | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
 
@@ -75,6 +77,21 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > Stop chasing. Start collecting. Free 7-day trial, link in bio.
 > #interiordesigner #interiordesignbusiness #smallbusinessindia #payments #modularkitchen
 
+**Do you know your profit?** (reel)
+> You know the quote. Do you know what you actually make on it? 🤔
+> Enter what your materials and fittings cost you, once. Every quotation then shows its profit and margin, and Reports show the whole year. Only you see it, never your staff or customers.
+> Free 7-day trial, link in bio.
+> #interiordesigner #interiordesignbusiness #smallbusinessindia #profit #modularkitchen
+
+**Does your quotation have all 6?** (post)
+> Save this and check your next quotation 🔖 Logo, room-by-room sizes, your rates, payment details, a GST invoice and a link to accept online.
+> QuoteRoom gives you all 6 on every quote. Free 7-day trial, link in bio.
+> #interiordesigner #interiordesign #quotation #modularkitchen #interiordesignbusiness
+
+**Suggested posting order (from 16 Oct):** 16 Oct before/after (11 AM, scheduled) · 17 Oct customer-receives carousel (11 AM, scheduled)
++ tape-to-invoice reel (7 PM) · 18 Oct one-price (11 AM, scheduled) · 19 Oct Excel reel · 21 Oct payments reel ·
+22 Oct checklist post · 23 Oct profit reel.
+
 Reel tips: cover frame ≈ 4 s (the "51 sqft" chip); keep the built-in music (timed to scene changes); post on a day
 without a scheduled image post.
 
@@ -103,7 +120,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 | 2 | ~~Excel vs QuoteRoom~~ | **Done** (see section 1) | — |
 | 3 | "The customer accepted while I was driving" ★ | Approval link → customer taps Accept → "Quotation accepted" notification → Confirmed | Nothing, or record 2–3 voice lines |
 | 4 | ~~Stop chasing payments~~ | **Done** (see section 1) | — |
-| 5 | "Do you know your profit on this kitchen?" ★ | Quote ₹1.72L → profit card (before GST) → "Only you see this" | Nothing |
+| 5 | ~~Do you know your profit?~~ | **Done** (see section 1) | — |
 | 6 | Your brand, not ours | Same app switching logos/colours → branded PDF → `yourname.quote-room.co.in` | Nothing |
 | 7 | ~~Tape measure to GST invoice~~ | **Done** (see section 1) | — |
 | 8 | Founder talking-head (20 s) | "I built QuoteRoom because interior quotes are still made in Excel and notebooks…" | Owner films it on a phone; we add captions, screens, music |
@@ -116,7 +133,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 | 3 | ~~Price comparison~~ | **Done** ("One price. Your whole team.") — names no competitors |
 | 4 | Big number: "₹750/month · unlimited staff · your own brand · GST invoices" | Simple, bold |
 | 5 | ~~Before/after (paper vs PDF)~~ | **Done** |
-| 6 | Checklist: "Does your quotation have…?" ✔ logo ✔ room-wise sizes ✔ rates ✔ payment details ✔ GST invoice ✔ online accept | |
+| 6 | ~~Checklist "Does your quotation have all 6?"~~ | **Done** |
 | 7 | Testimonial | Only with a real customer's permission — never invent one |
 | 8 | Tip carousel: "How to price a wardrobe per sqft" | Educational (box vs frame work, laminate vs acrylic, hardware); last slide "Do this automatically in QuoteRoom" |
 
