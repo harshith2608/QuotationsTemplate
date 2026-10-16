@@ -93,7 +93,15 @@ header.nav { position: sticky; top: 0; padding-top: env(safe-area-inset-top, 0px
 .nav-links a { text-decoration: none; color: var(--muted); }
 .nav-links a:hover { color: var(--ink); }
 .nav-links .btn { color: var(--on-pine); padding: .55rem 1rem; }
-@media (max-width: 760px) { .nav-links a:not(.btn) { display: none; } }
+.nav-links .btn, .nav-links .nav-keep { white-space: nowrap; }
+.nav-links .show-sm { display: none; }
+@media (max-width: 420px) { .nav-links .show-sm { display: inline; } }
+@media (max-width: 420px) {
+  .nav-links .btn { padding: .5rem .8rem; font-size: .9rem; } .nav-links { gap: .7rem; }
+  .nav-links .hide-sm { display: none; }
+  .nav .brand { font-size: 1.05rem; }
+}
+@media (max-width: 760px) { .nav-links a:not(.btn):not(.nav-keep) { display: none; } .nav-links { gap: .9rem; } }
 
 /* Hero */
 .hero { padding-block: 64px 56px; }
@@ -317,10 +325,11 @@ footer nav { display: flex; gap: 1.2rem; }
       <a href="{{ home_url }}#features">Features</a>
       <a href="{{ home_url }}#pricing">Pricing</a>
       <a href="{{ home_url }}#faq">FAQ</a>
+      {% if has_tutorials %}<a class="nav-keep" href="{{ url_for('marketing.tutorials_page') }}">Tutorials</a>{% endif %}
       {% if current_user.is_authenticated %}
       <a class="btn btn-primary" href="{{ url_for('projects.list_projects') }}">Open app</a>
       {% else %}
-      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start free trial</a>
+      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial><span class="hide-sm">Start free trial</span><span class="show-sm">Free trial</span></a>
       {% endif %}
     </nav>
   </div>
@@ -333,7 +342,7 @@ footer nav { display: flex; gap: 1.2rem; }
 <footer>
   <div class="wrap">
     <span>© {{ year }} {{ legal_name }}</span>
-    <nav aria-label="Legal"><a href="{{ privacy_url }}">Privacy policy</a><a href="{{ terms_url }}">Terms of service</a>{% if tracking %}<button class="linklike" type="button" data-cookie-settings>Cookie settings</button>{% endif %}</nav>
+    <nav aria-label="Legal">{% if has_tutorials %}<a href="{{ url_for('marketing.tutorials_page') }}">Tutorials</a>{% endif %}<a href="{{ privacy_url }}">Privacy policy</a><a href="{{ terms_url }}">Terms of service</a>{% if tracking %}<button class="linklike" type="button" data-cookie-settings>Cookie settings</button>{% endif %}</nav>
   </div>
 </footer>
 

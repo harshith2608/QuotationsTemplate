@@ -1,0 +1,66 @@
+{% extends "marketing/_base.html" %}
+{% block title %}Tutorials – {{ product }}{% endblock %}
+{% block description %}Short videos showing how to set up {{ product }} and go from your first quotation to getting paid.{% endblock %}
+{% block canonical %}{{ url_for('marketing.tutorials_page', _external=True) }}{% endblock %}
+{% block content %}
+<style>
+.tut { padding-block: 40px 72px; }
+.tut .lede { color: var(--muted); margin-top: .6rem; max-width: 60ch; }
+.tut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 22px; margin-top: 28px; }
+.tut-main { max-width: 380px; }
+.tut-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.tut-card h2, .tut-card h3 { font-size: 1.1rem; margin: 0; }
+.tut-card p { color: var(--muted); font-size: .92rem; margin-top: .35rem; }
+.tut-card .meta { padding: 14px 16px 18px; }
+.tut-len { font: 500 .72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pine); }
+/* click-to-play: only a thumbnail loads until someone taps (no YouTube scripts or cookies before that) */
+.yt { position: relative; aspect-ratio: 9 / 16; background: #0e221c center / cover no-repeat; border: 0; width: 100%; padding: 0; cursor: pointer; display: block; }
+.yt::after { content: ''; position: absolute; inset: 0; margin: auto; width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(242,183,5,.95) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5v14l11-7z' fill='%2316231f'/%3E%3C/svg%3E") center / 34px no-repeat;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.yt.playing::after { display: none; }
+.yt iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.tut-cta { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+</style>
+<section class="tut">
+  <div class="wrap">
+    <p class="eyebrow">Tutorials</p>
+    <h1 style="margin-top:.6rem">Set up {{ product }} in minutes</h1>
+    <p class="lede">Short videos on a phone, step by step: your company details, your rates, your first quotation, sending it
+      and getting paid. Watch the full walkthrough or jump to the part you need.</p>
+
+    {% set first = videos[0] %}
+    <div class="tut-grid">
+      {% for v in videos %}
+      <article class="tut-card {{ 'tut-main' if loop.first }}">
+        <button class="yt" type="button" data-yt="{{ v.id }}" aria-label="Play: {{ v.title }}"
+                style="background-image:url('https://i.ytimg.com/vi/{{ v.id }}/hqdefault.jpg')"></button>
+        <div class="meta">
+          <span class="tut-len">{{ v.length }}</span>
+          {% if loop.first %}<h2>{{ v.title }}</h2>{% else %}<h3>{{ v.title }}</h3>{% endif %}
+          <p>{{ v.about }}</p>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+
+    <div class="tut-cta">
+      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start your 7-day free trial</a>
+      <span style="color:var(--muted)">Questions? <a href="https://wa.me/{{ wa_number }}" target="_blank" rel="noopener">Message us on WhatsApp</a>.</span>
+    </div>
+  </div>
+</section>
+<script>
+// Load the YouTube player only when someone taps play (privacy-enhanced mode)
+document.querySelectorAll('.yt').forEach(b => b.addEventListener('click', () => {
+  const f = document.createElement('iframe');
+  f.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(b.dataset.yt) + '?autoplay=1&rel=0&playsinline=1';
+  f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+  f.title = b.getAttribute('aria-label');
+  const box = document.createElement('div');
+  box.className = 'yt playing';
+  box.appendChild(f);
+  b.replaceWith(box);
+}, { once: true }));
+</script>
+{% endblock %}

@@ -40,3 +40,20 @@ ok('privacy link rendered', 'href="https://example.com/privacy">Privacy policy' 
 c = client(MARKETING_SITE='1', META_PIXEL_ID="1');alert(1);//", GOOGLE_ADS_ID='AW-1"><script>x', GOOGLE_ADS_CONVERSION='bad')
 t = c.get('/landingpage').text
 ok('malformed IDs ignored / sanitised', 'alert(1)' not in t and '<script>x' not in t and 'gads: ""' in t and 'gconv: ""' in t)
+
+# Tutorials page: hidden until YouTube links are set; then a click-to-play page and header link
+import os as _os
+from app import marketing as _mk
+ok('YouTube links and IDs are understood', _mk.youtube_id('https://youtu.be/AbCdEfGhIjK') == 'AbCdEfGhIjK'
+   and _mk.youtube_id('https://www.youtube.com/watch?v=AbCdEfGhIjK&t=3') == 'AbCdEfGhIjK'
+   and _mk.youtube_id('https://youtube.com/shorts/AbCdEfGhIjK?si=x') == 'AbCdEfGhIjK' and _mk.youtube_id('AbCdEfGhIjK') == 'AbCdEfGhIjK'
+   and _mk.youtube_id('') == '')
+_os.environ.pop('TUTORIAL_YOUTUBE', None)
+ok('no links → no Tutorials page or header link', c.get('/tutorials').status_code == 404 and 'Tutorials</a>' not in c.get('/').text)
+_os.environ['TUTORIAL_YOUTUBE'] = 'https://youtu.be/AAAAAAAAAAA, ,https://youtube.com/shorts/BBBBBBBBBBB'
+t = c.get('/tutorials').text
+ok('tutorials page lists the linked videos (blank entries skipped), click-to-play', 'data-yt="AAAAAAAAAAA"' in t
+   and 'data-yt="BBBBBBBBBBB"' in t and 'Full walkthrough' in t and '2 · Your rates' in t and '1 · Your company' not in t
+   and 'youtube-nocookie.com/embed/' in t and '<iframe' not in t)
+ok('header and footer link to Tutorials', c.get('/').text.count('/tutorials">Tutorials</a>') == 2)
+_os.environ.pop('TUTORIAL_YOUTUBE')
