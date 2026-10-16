@@ -50,7 +50,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
 | 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
 | 11 | Online payments (Razorpay) | Test mode keys, webhook, send a payment link, payment records itself | Admin → Payment settings, Payment link | ~1.5 min |
-| 12 | Your PDFs & invoice settings | Terms & conditions and notes on quotations; invoice prefix/numbering, GST or not, HSN, room-by-room or summary | Settings → Quotation PDFs, Invoices | ~1 min |
+| 12 | Your PDFs & invoice settings | Material specs and terms & conditions on quotations; invoice prefix/numbering, GST or not, GST rate, prices incl./excl. GST, HSN, room-by-room or summary, invoice notes | Settings → Quotation PDFs, Invoices | ~1 min |
 | 13 | QuoteRoom on your home screen | Add to home screen on Android & iPhone for one-tap access | Browser menu | ~20 s |
 
 Later: a second "full walkthrough" for 6–9 ("Run your business"), and short Reels cut from 6, 7 and 11.
