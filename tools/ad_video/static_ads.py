@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 ADS = os.path.join(ROOT, 'static', 'ads')
 OUT = os.path.join(ROOT, 'ad-videos')
-PDF2 = sys.argv[1] if len(sys.argv) > 1 else None          # optional: page 2 of the full quotation (for the total)
+PDF2 = sys.argv[1] if __name__ == '__main__' and len(sys.argv) > 1 else None   # optional: page 2 of the full quotation
 
 PINE = (31, 77, 63)
 PINE_DARK = (14, 34, 28)

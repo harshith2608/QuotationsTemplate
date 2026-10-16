@@ -40,7 +40,19 @@ class Recorder:
         os.makedirs(workdir, exist_ok=True)
 
     # ── capture ──
+    PUBLIC = 'https://sharma.quote-room.co.in'     # what a real business's links look like
+
+    def _mask_local(self):
+        """The recording runs on a local copy; show the business's real web address in links and boxes instead."""
+        self.page.evaluate("""pub => {
+            const re = /https?:\\/\\/(localhost|127\\.0\\.0\\.1):\\d+/g;
+            document.querySelectorAll('input, textarea').forEach(el => { if (re.test(el.value)) el.value = el.value.replace(re, pub); });
+            const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            while (walk.nextNode()) { const n = walk.currentNode; if (re.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(re, pub); }
+        }""", self.PUBLIC)
+
     def _snap(self, caption, hold, tap=None):
+        self._mask_local()
         path = os.path.join(self.dir, f'{len(self.items):04d}.png')
         self.page.screenshot(path=path)
         self.items.append({'png': path, 'hold': hold, 'caption': caption, 'tap': tap})
@@ -72,6 +84,8 @@ class Recorder:
         self.items[-1]['hold'] = hold
 
     def scroll_to(self, locator, caption, offset=180, steps=6):
+        # leave any text/number box first: the wheel would otherwise change a focused number (e.g. 5% → 4.94%)
+        self.page.evaluate('document.activeElement && document.activeElement.blur()')
         box = locator.bounding_box()
         if not box:
             return
@@ -80,6 +94,26 @@ class Recorder:
             self.page.mouse.wheel(0, delta / steps)
             self.page.wait_for_timeout(60)
             self._snap(caption, 0.06)
+
+    def image(self, png, caption, hold=2.2):
+        """Show a prepared image (e.g. a PDF page) in the phone, same size as a screenshot."""
+        self.items.append({'png': png, 'hold': hold, 'caption': caption, 'tap': None})
+
+    def pdf(self, url, caption, pages=((0, 0.0),), hold=2.4):
+        """Fetch a PDF with the logged-in session and show its pages (page index, scroll fraction) in the phone."""
+        import fitz
+        data = self.page.request.get(url).body()
+        doc = fitz.open(stream=data, filetype='pdf')
+        sw, sh = VIEW['width'] * DPR, VIEW['height'] * DPR
+        for i, (pg, frac) in enumerate(pages):
+            pix = doc[pg].get_pixmap(matrix=fitz.Matrix(sw / doc[pg].rect.width, sw / doc[pg].rect.width))
+            full = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
+            top = int((full.height - sh) * frac) if full.height > sh else 0
+            canvas = Image.new('RGB', (sw, sh), (82, 86, 89))
+            canvas.paste(full.crop((0, top, sw, min(full.height, top + sh))), (0, 0))
+            path = os.path.join(self.dir, f'{len(self.items):04d}-pdf.png')
+            canvas.save(path)
+            self.image(path, caption, hold)
 
     def save(self):
         with open(os.path.join(self.dir, 'timeline.json'), 'w') as f:

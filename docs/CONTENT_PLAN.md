@@ -26,6 +26,13 @@ Scheduled posts were set up by the owner in Instagram (not by these tools).
 
 ---
 
+### Customer tutorials (for trial customers, phone size, captions + lo-fi music)
+Files in `ad-videos/tutorials/`, recorded from the real app (fictional "Sharma Interiors", fresh database):
+`quoteroom-tutorial-1-company.mp4` (61 s) · `-2-rates.mp4` (33 s) · `-3-first-quotation.mp4` (94 s) ·
+`-4-send-and-accept.mp4` (31 s) · `-5-get-paid.mp4` (38 s) · `quoteroom-tutorial-full.mp4` (4 min, all five).
+Re-record after UI changes: start the "tutorial" preview server on a fresh database, then run
+`tools/tutorials/part1_company.py`, `parts2to5.py` and `make_videos.py` (see each file's docstring).
+
 ## 2. Captions & ad copy (ready to paste)
 
 Use **"Link in bio"** for organic posts. If a post is later used as an ad, swap that line for
