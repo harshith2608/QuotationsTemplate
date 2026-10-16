@@ -34,7 +34,7 @@ Re-record after UI changes: start the "tutorial" preview server on a fresh datab
 `tools/tutorials/part1_company.py`, `parts2to5.py`, `part6_profit.py` and `make_videos.py` (see each file's docstring).
 
 ### Tutorial series: everything the app does (plan, 16 Oct 2026)
-Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the website. Record in this order.
+Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the website. Record in this order. 🎬 = recorded, not uploaded yet.
 
 | # | Title | What it shows | Screens | Length |
 |---|---|---|---|---|
@@ -44,7 +44,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | ✅ 3 | Your first quotation | Customer, rooms, items in ft/in, fittings, discount | New quotation | 1.5 min |
 | ✅ 4 | Send it & get it accepted | Initial / Full PDF, approval link, customer accepts | Quotation page, `/q/` link | 31 s |
 | ✅ 5 | Get paid | Payments, GST invoice, reminders, Balances | Quotation page, Balances | 38 s |
-| ✅ 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
+| 🎬 6 | **Know your profit** | Enter what each material/fitting costs you → profit & margin on every quotation (before GST), "costs missing" hint → Reports: this year, past years, projected | Admin → Costs, quotation page, Admin → Reports | ~1.5 min |
 | 7 | Change a quotation | Edit after the customer asks, Rev 2 with what changed, send the new link, customer accepts the new version | Edit, Revisions card | ~1 min |
 | 8 | Track every job | Stages (Pending → Confirmed → Ongoing → Completed, On hold, Cancelled), search, filter by stage, notifications | Quotations list, stage menu, bell | ~45 s |
 | 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
