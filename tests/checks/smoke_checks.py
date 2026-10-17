@@ -52,8 +52,8 @@ try:
     for u in ['/projects/1/pdf', '/projects/1/pdf/customer']:
         r = c.get(u)
         pdf = PdfReader(BytesIO(r.data)); txt = '\n'.join(p.extract_text() for p in pdf.pages)
-        ok(f'{u}: branding, GSTIN, signatory, logo', r.status_code == 200 and 'Demo Interiors' in txt
-           and 'GSTIN: 29ABCDE1234F1Z5' in txt and 'A. Demo' in txt and 'Director' in txt
+        ok(f'{u}: branding, GSTIN, logo, no signature block', r.status_code == 200 and 'Demo Interiors' in txt
+           and 'GSTIN: 29ABCDE1234F1Z5' in txt and 'A. Demo' not in txt and 'Director' not in txt
            and sum(len(p.images) for p in pdf.pages) == 1)
     r = c.get('/projects/1/whatsapp')
     ok('WhatsApp share uses company name', r.status_code == 302 and 'Demo Interiors' in unquote(r.headers.get('Location', '')))

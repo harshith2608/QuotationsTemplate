@@ -136,11 +136,6 @@ def _thank_you_text():
             "We look forward to transforming your space!")
 
 
-def _signatory():
-    brand = get_brand()
-    return escape(brand['signatory_name']), escape(brand['signatory_title'])
-
-
 def _quote_ref(project):
     """'Quotation #: 12 · Rev 3\nDate: …' for the PDF header (the revision once revisions are kept)."""
     from .billing import latest_revision_number
@@ -600,42 +595,6 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ] + span_cmds_pay))
             elements.append(pay_table)
 
-    # ------- SIGNATURE SECTION -------
-    elements.append(Spacer(1, 36))
-    elements.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#bdbdbd'), spaceAfter=24))
-    _sig_name_style = ParagraphStyle('SigName', parent=styles['Normal'],
-                                     fontSize=9, fontName='Helvetica-Bold', textColor=BRAND_DARK)
-    _sig_role_style = ParagraphStyle('SigRole', parent=styles['Normal'],
-                                     fontSize=8, textColor=colors.HexColor('#757575'))
-    sig_col = page_width * 0.42
-    sig_gap = page_width * 0.16
-    _sig_name, _sig_title = _signatory()
-    sig_table = Table(
-        [
-            ['', '', ''],
-            [Paragraph(project.customer_name, _sig_name_style), '',
-             Paragraph(_sig_name, _sig_name_style)],
-            [Paragraph('Customer', _sig_role_style), '',
-             Paragraph(_sig_title, _sig_role_style)],
-        ],
-        colWidths=[sig_col, sig_gap, sig_col]
-    )
-    sig_table.setStyle(TableStyle([
-        ('TOPPADDING',    (0, 0), (-1, 0), 42),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 0),
-        ('LINEABOVE', (0, 1), (0, 1), 0.8, BRAND_DARK),
-        ('LINEABOVE', (2, 1), (2, 1), 0.8, BRAND_DARK),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-        ('TOPPADDING',    (0, 1), (-1, 1), 5),
-        ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
-        ('TOPPADDING',    (0, 2), (-1, 2), 1),
-        ('BOTTOMPADDING', (0, 2), (-1, 2), 0),
-        ('LEFTPADDING',  (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(sig_table)
-
     _build(doc, elements)
     buffer.seek(0)
     return buffer
@@ -897,42 +856,6 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                 ('TEXTCOLOR', (2, 0), (2, -1), BRAND_DARK),
             ] + span_cmds_pay))
             elements.append(pay_table)
-
-    # ------- SIGNATURE SECTION -------
-    elements.append(Spacer(1, 36))
-    elements.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#bdbdbd'), spaceAfter=24))
-    _sig_name_style2 = ParagraphStyle('SigName2', parent=styles['Normal'],
-                                      fontSize=9, fontName='Helvetica-Bold', textColor=BRAND_DARK)
-    _sig_role_style2 = ParagraphStyle('SigRole2', parent=styles['Normal'],
-                                      fontSize=8, textColor=colors.HexColor('#757575'))
-    sig_col2 = page_width * 0.42
-    sig_gap2 = page_width * 0.16
-    _sig_name2, _sig_title2 = _signatory()
-    sig_table2 = Table(
-        [
-            ['', '', ''],
-            [Paragraph(project.customer_name, _sig_name_style2), '',
-             Paragraph(_sig_name2, _sig_name_style2)],
-            [Paragraph('Customer', _sig_role_style2), '',
-             Paragraph(_sig_title2, _sig_role_style2)],
-        ],
-        colWidths=[sig_col2, sig_gap2, sig_col2]
-    )
-    sig_table2.setStyle(TableStyle([
-        ('TOPPADDING',    (0, 0), (-1, 0), 42),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 0),
-        ('LINEABOVE', (0, 1), (0, 1), 0.8, BRAND_DARK),
-        ('LINEABOVE', (2, 1), (2, 1), 0.8, BRAND_DARK),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-        ('TOPPADDING',    (0, 1), (-1, 1), 5),
-        ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
-        ('TOPPADDING',    (0, 2), (-1, 2), 1),
-        ('BOTTOMPADDING', (0, 2), (-1, 2), 0),
-        ('LEFTPADDING',  (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(sig_table2)
 
     _build(doc, elements)
     buffer.seek(0)

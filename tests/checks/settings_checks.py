@@ -65,7 +65,8 @@ ok(f'logo served as PNG resized to {im.size}', lr.mimetype == 'image/png' and ma
 ok('logo on login page (logged out)', app.test_client().get(m.group(1)).status_code == 200)
 for u in ['/projects/1/pdf', '/projects/1/pdf/customer']:
     pdf = PdfReader(io.BytesIO(c.get(u).data)); txt = '\n'.join(p.extract_text() for p in pdf.pages)
-    ok(f'{u}: logo + company + signatory', sum(len(p.images) for p in pdf.pages) == 1 and 'Acme Interiors' in txt and 'R. Acme' in txt and 'Director' in txt)
+    ok(f'{u}: logo + company, no signature block', sum(len(p.images) for p in pdf.pages) == 1 and 'Acme Interiors' in txt
+       and 'R. Acme' not in txt and 'Customer\n' not in txt)
 ok('themed PDF still renders', c.get('/projects/1/pdf').mimetype == 'application/pdf')
 
 # Non-image upload rejected

@@ -88,7 +88,8 @@ FIELDS = {
     'font':            ('theme_font',       'BRAND_FONT',       'system', FONTS),
 }
 
-COMPANY_KEYS = ['name', 'address', 'phone', 'email', 'gstin', 'tagline', 'signatory_name', 'signatory_title']
+# (signatory_name / signatory_title stay in FIELDS for older data; quotations and invoices no longer print a signature)
+COMPANY_KEYS = ['name', 'address', 'phone', 'email', 'gstin', 'tagline']
 THEME_KEYS = ['primary', 'secondary', 'accent', 'background', 'header_style', 'corners', 'buttons', 'font']
 
 LOGO_DATA_KEY = 'logo_png'        # base64 PNG — loaded only by the logo route and PDFs

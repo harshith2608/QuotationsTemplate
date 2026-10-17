@@ -1,7 +1,13 @@
 #!/bin/bash
 # Vercel "Ignored Build Step" (vercel.json → ignoreCommand), used by every project built from this repo.
 # Exit 0 = skip the build, exit 1 = build. When in doubt, build.
-# Skips only when every change since the last deployment is in docs, tools, tests, ad images or Markdown files.
+# Skips branches other than main, and main when every change since the last deployment is in docs, tools, tests,
+# ad images or Markdown files.
+
+# Work happens on branches (e.g. dev); only main deploys. Branch pushes would otherwise build a preview of every project.
+if [ -n "$VERCEL_GIT_COMMIT_REF" ] && [ "$VERCEL_GIT_COMMIT_REF" != "main" ]; then
+  echo "Branch $VERCEL_GIT_COMMIT_REF (not main): skipping the build."; exit 0
+fi
 
 BASE="$VERCEL_GIT_PREVIOUS_SHA"
 if [ -z "$BASE" ]; then
