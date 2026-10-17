@@ -49,8 +49,6 @@ def run():
                 ('company_gstin', '36ABCDE1234F1Z5', 'Your GSTIN, only if you want GST tax invoices.')):
             rec.type(page.locator(f'[name={name}]'), value, caption)
         rec.type(page.locator('[name=company_address]'), 'Plot 21, Madhapur, Hyderabad 500081', 'Your address.')
-        rec.type(page.locator('[name=signatory_name]'), 'Ravi Sharma', 'Who signs your quotations.')
-        rec.type(page.locator('[name=signatory_title]'), 'Proprietor', 'Who signs your quotations.')
         rec.scroll_to(page.locator('#confirm_identity'), 'Check your company name and GSTIN carefully.')
         rec.shot('Check your company name and GSTIN carefully: they lock once saved.', 2.4)
         rec.tap(page.locator('#confirm_identity'), 'Tick "These details are correct".')

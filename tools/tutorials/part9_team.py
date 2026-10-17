@@ -50,7 +50,10 @@ def part9(page, browser):
     page.goto(BASE + '/projects?q=Vikram')
     rec.shot('Want Rahul to see a job? Share it with him.', 2.0)
     rec.tap(page.locator('button', has_text='Access').first, 'Tap Access on the quotation.', wait=900)
-    rec.tap(page.locator(f'#accessModal label', has_text=STAFF), 'Tick Rahul.')
+    sel = page.locator('#accessModal select').first
+    rec.tap(sel, 'Choose Can view, or Can edit. Only admins can delete.', after_hold=0.4)
+    sel.select_option('view')
+    rec.shot('Choose Can view, or Can edit. Only admins can delete.', 2.2)
     rec.tap(page.locator('#accessModal button[type=submit]'), 'Tap Save Access.', wait=1200)
     rec.shot('Done. Rahul can now open this quotation.', 2.0)
 

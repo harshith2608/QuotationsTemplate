@@ -14,6 +14,14 @@ from recorder import DPR, VIEW, Recorder
 BASE, WORK, PASSWORD = sys.argv[1], sys.argv[2], sys.argv[3]
 
 
+def show(page, selector, block='center'):
+    """Bring an element into view (exactly, unlike a wheel scroll on a long page)."""
+    page.locator(selector).first.evaluate(f"el => el.scrollIntoView({{block: '{block}'}})")
+    if block == 'start':
+        page.evaluate('window.scrollBy(0, -76)')         # clear of the sticky top bar
+    page.wait_for_timeout(250)
+
+
 def open_menu_item(rec, page, label, caption):
     rec.tap(page.locator('.navbar-toggler'), caption)
     rec.tap(page.locator('#navbarMain a.nav-link', has_text=label).last, caption, wait=900)
@@ -39,15 +47,27 @@ def part2(page):
     price = page.locator('#price-list input[name=pl_price][placeholder="0"]').first
     rec.type(price, '350', 'Add your own fittings with their price.')
     rec.tap(page.locator('button[name=price_list_submit]'), 'Tap Save Price List.', wait=900)
-    rec.shot('Your rates are set. Every new quotation uses them.', 2.4)
+    show(page, '#plywood', 'start')
+    rec.shot('Your rates are for your default plywood. Offer others too.', 2.4)
+    show(page, 'input[name=ply_new_name]')
+    rec.type(page.locator('input[name=ply_new_name]'), '18mm BWP', 'Add a plywood, e.g. 18mm BWP.')
+    rec.type(page.locator('input[name=ply_new_adj]'), '150', 'It costs ₹150 more per sqft.', per_frame=1)
+    rec.type(page.locator('input[name=ply_new_details]'), '12-year warranty Century Sainik 710 BWP, 16mm',
+             'Its details, for your Material Specifications.', per_frame=4)
+    rec.tap(page.locator('button[name=plywood_submit]'), 'Tap Save Plywood.', wait=1000)
+    show(page, 'input[value="18mm BWP"]')
+    rec.shot('Saved: quotations on 18mm BWP cost ₹150/sqft more.', 2.4)
+    rec.shot('Your rates are set. Every new quotation uses them.', 2.0)
     rec.save()
 
 
-def add_measured(rec, page, room_key, name, l_ft, l_in, w_ft, w_in, combo, caption):
+def add_measured(rec, page, room_key, name, l_ft, l_in, w_ft, w_in, combo, caption, count=None):
     rec.tap(page.locator(f'#room_card_{room_key} button', has_text='Add Item'), caption, wait=700)
     rec.type(page.locator('#modal_item_name'), name, caption)
     for sel, val in (('#modal_item_lft', l_ft), ('#modal_item_lin', l_in), ('#modal_item_wft', w_ft), ('#modal_item_win', w_in)):
         rec.type(page.locator(sel), val, 'Enter the length and width in feet and inches.', per_frame=1)
+    if count:
+        rec.type(page.locator('#modal_item_count'), count, f"{count} identical pieces? Set No's to {count}.", per_frame=1)
     page.locator('#modal_item_combo').select_option(combo)
     page.wait_for_timeout(300)
     rec.shot('Pick the material and work type. The area is worked out for you.', 2.0)
@@ -79,6 +99,10 @@ def part3(page):
     page.locator('#room_name_room_2').press('Escape')
     add_measured(rec, page, 'room_2', 'Wardrobe', '8', '0', '7', '0', 'Laminates|Box Work', 'Add the wardrobe.')
     add_measured(rec, page, 'room_2', 'Loft', '8', '0', '2', '0', 'Laminates|Box Work', 'And the loft.')
+    add_measured(rec, page, 'room_2', 'Dressing Drawer', '3', '0', '1', '6', 'Laminates|Box Work',
+                 'Two identical drawers? One line.', count='2')
+    rec.scroll_to(page.locator('.ply-options'), 'Your default plywood is already chosen.', offset=160)
+    rec.shot('Your default plywood is already chosen. Pick another and the prices update.', 2.6)
     rec.scroll_to(page.locator('#discount_type_select'), 'Give a discount if you like.')
     page.locator('#discount_type_select').select_option('percentage')
     page.wait_for_timeout(300)
@@ -96,7 +120,7 @@ def part4(page, browser, quote_url):
     page.goto(quote_url)
     rec.shot('Two PDFs, ready to send.', 1.8)
     pid = re.search(r'/projects/(\d+)', quote_url).group(1)
-    rec.pdf(f'{BASE}/projects/{pid}/pdf/customer', 'Initial Quotation: amounts by material, no measurements.')
+    rec.pdf(f'{BASE}/projects/{pid}/pdf/customer', 'Initial Quotation: room by room, with sizes and one amount per room.')
     rec.pdf(f'{BASE}/projects/{pid}/pdf', 'Full Quotation: every room, item and size.', pages=((0, 0.0), (1, 0.0)), hold=2.0)
     page.goto(quote_url)
     rec.scroll_to(page.locator('#approval'), 'Even better: let them accept online.')
