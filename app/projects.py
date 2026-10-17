@@ -153,7 +153,9 @@ def _save_project_data(project, rooms_data):
     grand_total = 0.0
     from . import materials as M
     from . import plywood
+    from . import layout
     ply_ready = plywood.table_ready()
+    desc_ready = layout.description_ready()
     project_ply = plywood.project_plywood(project)
     valid_combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     fallback_combo = M.default_combo()
@@ -163,6 +165,8 @@ def _save_project_data(project, rooms_data):
         if not room_name:
             continue
         room = Room(project_id=project.id, name=room_name)
+        if desc_ready:                         # only once the database has the column
+            room.description = ' '.join(str(rd.get('description') or '').split())[:500] or None
         db.session.add(room)
         db.session.flush()
 
@@ -195,7 +199,11 @@ def _save_project_data(project, rooms_data):
                 continue
             if length <= 0 or width <= 0:
                 continue
-            area = round(length * width, 4)
+            try:
+                count = min(max(int(float(id_.get('count') or 1)), 1), 999)   # "No's": identical pieces
+            except (ValueError, TypeError):
+                count = 1
+            area = round(length * width * count, 4)
             wood_type = str(id_.get('wood_type') or '')
             work_type = str(id_.get('work_type') or '')       # '' = a material with one rate (e.g. Glass)
             if (wood_type, work_type) not in valid_combos:
@@ -208,7 +216,8 @@ def _save_project_data(project, rooms_data):
                 width=width,
                 area=area,
                 wood_type=wood_type,
-                work_type=work_type
+                work_type=work_type,
+                quantity=count if count > 1 else None
             )
             item_ply = None
             if ply_ready:                      # only once the database has the column
@@ -649,6 +658,7 @@ def edit_project(project_id):
 
 def _build_rooms_json(project):
     from . import plywood
+    from . import layout
     rooms_data = []
     for room in project.rooms_with_items():
         room_dict = {
@@ -665,9 +675,11 @@ def _build_rooms_json(project):
                     'quantity': item.quantity,
                     'unit_price': item.unit_price,
                     'plywood': plywood.item_plywood(item),
+                    'count': item.count,
                 }
                 for item in room.item_list
-            ]
+            ],
+            'description': layout.room_description(room),
         }
         rooms_data.append(room_dict)
     return json.dumps(rooms_data)
@@ -934,7 +946,8 @@ def whatsapp_share(project_id):
             else:
                 own_ply = plywood.item_plywood(item)
                 ply_note = f", {own_ply}" if own_ply and item.wood_type in plywood.context()['materials'] else ''
-                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {units.area(item.area)} ({item.wood_type}{ply_note})")
+                count_note = f" × {item.count}" if item.count > 1 else ''
+                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)}{count_note} = {units.area(item.area)} ({item.wood_type}{ply_note})")
 
     lines += ["", "*Material Summary:*"]
     from . import materials as M

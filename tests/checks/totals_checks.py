@@ -35,5 +35,6 @@ with app.app_context():
 #  and which materials are priced on plywood: a fixed few more, never one per room or item)
 for url, budget in [(f'/projects/{priya.id}', 24), ('/projects', 15), ('/admin/dashboard', 20),
                     (f'/projects/{priya.id}/edit', 20)]:
+    c.get(url)                         # warm: one-time checks (does a new column exist yet?) aren't per-page cost
     stmts.clear(); r = c.get(url)
     ok(f'{url}: {len(stmts)} queries (budget {budget})', r.status_code == 200 and len(stmts) <= budget)

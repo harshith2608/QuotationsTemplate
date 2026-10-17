@@ -350,7 +350,7 @@
               </tr>
               {% else %}
               <tr>
-                <td class="fw-medium">{{ item.name }}</td>
+                <td class="fw-medium">{{ item.name }}{% if item.count > 1 %} <span class="badge bg-light text-dark border">× {{ item.count }}</span>{% endif %}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.length | ft_in }}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.width | ft_in }}</td>
                 <td class="text-center fw-semibold">{{ "{:,.2f}".format(units.area_value(item.area)) }}</td>

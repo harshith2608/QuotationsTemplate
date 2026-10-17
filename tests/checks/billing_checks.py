@@ -314,8 +314,8 @@ with app.app_context():
     token = QuoteShare.query.filter_by(project_id=mid, active=True).one().token
 anon = app.test_client()
 r = anon.get(f'/q/{token}')
-ok('link shows the material breakdown by default: no sizes, no per-item amounts', "What's included" in r.text
-   and '10 ft × 5 ft' not in r.text and 'Laminates – Box Work' in r.text)
+ok('link shows the Initial (room by room) view by default: sizes and room amounts, no rates or per-item amounts',
+   'Room by room' in r.text and '10 ft × 5 ft' in r.text and 'Laminates – Box Work' in r.text and '= 50.00 sqft' not in r.text)
 ok('…and its PDF is the Initial (customer) quotation', 'Room-by-Room' not in pdftext(anon, f'/q/{token}/pdf'))
 c.post(f'/projects/{mid}/share/detail', data={'detail': 'full'})
 rf = anon.get(f'/q/{token}')

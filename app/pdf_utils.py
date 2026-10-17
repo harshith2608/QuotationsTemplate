@@ -149,6 +149,88 @@ def _quote_ref(project):
             + f'\nDate: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
 
 
+def _section_elements(styles, dark):
+    """Material Specifications, Payment Terms, Delivery Terms, Important Notes and Terms & Conditions
+    (Settings → Quotation PDFs): each a numbered list, empty ones left out."""
+    from . import layout
+    head = ParagraphStyle('SecHead', parent=styles['Normal'], fontSize=9, textColor=dark,
+                          fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+    body = ParagraphStyle('SecBody', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#333333'),
+                          leading=12, leftIndent=12, firstLineIndent=-12, spaceAfter=1.5)
+    settings = AppSetting.get_many([k for k, _ in layout.SECTION_KEYS])
+    out = []
+    for title, lines in layout.sections(settings, _get_terms_lines()):
+        out.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6))
+        out.append(Paragraph(escape(title), head))
+        for i, line in enumerate(lines, 1):
+            out.append(Paragraph(f'{i}.&nbsp;&nbsp;{escape(line)}', body))
+        out.append(Spacer(1, 10))
+    return out
+
+
+def _room_rows_elements(project, page_width, palette, styles):
+    """The room-by-room table of the Initial Quotation (layout.room_rows), then Basic Total, discount and Total."""
+    from . import billing, layout
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
+    snap = billing.quotation_snapshot(project)
+    rows = layout.room_rows(snap)
+    small = ParagraphStyle('RR', parent=styles['Normal'], fontSize=8, leading=10)
+    bold = ParagraphStyle('RRB', parent=small, fontName='Helvetica-Bold')
+    muted = ParagraphStyle('RRM', parent=small, textColor=colors.HexColor('#455a64'))
+    cw = [page_width * f for f in (0.05, 0.15, 0.21, 0.22, 0.10, 0.10, 0.06, 0.11)]
+    head = Table([['#', 'Room', 'Material Description', 'Item', 'Length', 'Width', "No's", 'Amount (Rs.)']], colWidths=cw)
+    head.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, -1), TABLE_HEADER_FG),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (4, 0), (-1, -1), 'CENTER'), ('ALIGN', (7, 0), (7, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd'))]))
+    out = [head]
+    for r in rows:
+        data = []
+        for i, it in enumerate(r['items']):
+            size = (lambda v: units.length(v) if v else '—')
+            data.append([str(r['no']) if i == 0 else '',
+                         Paragraph(escape(r['title']), bold) if i == 0 else '',
+                         Paragraph(escape(r['description']), muted) if i == 0 and r['description'] else '',
+                         Paragraph(escape(it['name']), small), size(it['length']), size(it['width']),
+                         layout.count_text(it['count']), _money(r['amount']) if i == 0 else ''])
+        n = len(data)
+        t = Table(data, colWidths=cw)
+        cmds = [('FONTSIZE', (0, 0), (-1, -1), 8), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (2, -1), 'TOP'), ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                ('ALIGN', (4, 0), (6, -1), 'CENTER'), ('ALIGN', (7, 0), (7, -1), 'RIGHT'),
+                ('FONTNAME', (7, 0), (7, -1), 'Helvetica-Bold'), ('PADDING', (0, 0), (-1, -1), 5),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
+                ('LINEBEFORE', (1, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
+                ('LINEBELOW', (3, 0), (6, -2), 0.25, colors.HexColor('#e0e0e0'))]
+        if n > 1:
+            cmds += [('SPAN', (c, 0), (c, n - 1)) for c in (0, 1, 2, 7)]
+        if r['hardware']:
+            cmds.append(('BACKGROUND', (0, 0), (-1, -1), BRAND_LIGHT))
+        t.setStyle(TableStyle(cmds))
+        out.append(t)
+    # Totals
+    tot = [['Basic Total', f'Rs. {_money(snap["subtotal"])}']]
+    cmds = [('FONTSIZE', (0, 0), (-1, -1), 10), ('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('PADDING', (0, 0), (-1, -1), 7),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('BACKGROUND', (0, 0), (-1, 0), BRAND_LIGHT),
+            ('TEXTCOLOR', (0, 0), (-1, 0), BRAND_DARK)]
+    disc = snap['discount']
+    if disc.get('amount'):
+        label = f"Discount ({disc['value']:g}%)" if disc.get('type') == 'percentage' else 'Discount'
+        tot.append([label, f'- Rs. {_money(disc["amount"])}'])
+        cmds += [('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#b91c1c')), ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold')]
+    tot.append(['TOTAL', f'Rs. {_money(snap["total"])}'])
+    k = len(tot) - 1
+    cmds += [('BACKGROUND', (0, k), (-1, k), TOTAL_ROW_BG), ('TEXTCOLOR', (0, k), (-1, k), TABLE_HEADER_FG),
+             ('FONTNAME', (0, k), (-1, k), 'Helvetica-Bold'), ('FONTSIZE', (0, k), (-1, k), 12)]
+    tt = Table(tot, colWidths=[page_width * 0.72, page_width * 0.28])
+    tt.setStyle(TableStyle(cmds))
+    out += [Spacer(1, 6), tt]
+    return out
+
+
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
     """
     Generate a professional PDF quotation and return a BytesIO buffer.
@@ -307,7 +389,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             room_total_area += item.area
             room_total_cost += subtotal
             item_rows.append([
-                item.name,
+                item.name + (f' × {item.count}' if item.count > 1 else ''),
                 ft_in(item.length),
                 ft_in(item.width),
                 plywood.label(_key, project),
@@ -454,33 +536,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             elements.append(Paragraph(f"• {ply}", ply_body_style))
         elements.append(Spacer(1, 14))
 
-    # ------- MATERIAL SPECIFICATIONS -------
-    _specs = AppSetting.get('material_specs', '')
-    if _specs and _specs.strip():
-        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-        spec_header_style = ParagraphStyle('SpecHeader', parent=styles['Normal'],
-                                           fontSize=9, textColor=BRAND_DARK,
-                                           fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
-        spec_body_style = ParagraphStyle('SpecBody', parent=styles['Normal'],
-                                         fontSize=8, textColor=colors.HexColor('#333333'),
-                                         leading=13, spaceAfter=1)
-        elements.append(Paragraph("Material Specifications:", spec_header_style))
-        elements.append(Spacer(1, 4))
-        for line in _specs.splitlines():
-            line = line.strip()
-            if line:
-                # Replace bullet character ● with a PDF-safe bullet
-                display = line.replace('●', '\u2022')
-                elements.append(Paragraph(display, spec_body_style))
-        elements.append(Spacer(1, 14))
-
-    # ------- TERMS & CONDITIONS -------
-    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-    tc_style = ParagraphStyle('TC', parent=styles['Normal'],
-                              fontSize=7.5, textColor=colors.HexColor('#757575'))
-    elements.append(Paragraph("<b>Terms &amp; Conditions:</b>", tc_style))
-    for term in _get_terms_lines():
-        elements.append(Paragraph(term, tc_style))
+    # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
+    elements += _section_elements(styles, BRAND_DARK)
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
         _thank_you_text(),
@@ -586,8 +643,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
 
 def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     """
-    Generate a customer-facing PDF: total costs only, no measurements.
-    Shows material type → amount, final total, material specs, and T&C.
+    The Initial Quotation (customer copy). Room by room (default, Settings → Quotation PDFs): each room with what it's
+    made of, its items with sizes and No's, and one amount; fittings as a Hardware row per room. Or by material:
+    amount per material. Then the sections (specifications, terms, notes) and payment details.
     """
     (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = _palette()
@@ -681,93 +739,103 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(cust_table)
     elements.append(Spacer(1, 18))
 
-    # ------- COST SUMMARY -------
-    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-    elements.append(Paragraph("Cost Summary", section_style))
-    elements.append(Spacer(1, 8))
-
-    from . import plywood
-    _item_rates_map2 = plywood.rate_map()
-    _project_ply2 = plywood.project_plywood(project)
+    from . import layout, plywood
     _rooms2 = project.rooms_with_items()
-    item_totals2 = project.get_item_totals(_rooms2)  # { price key: area }
+    if layout.initial_layout() == layout.LAYOUT_ROOMS:
+        # ------- ROOM BY ROOM: items with sizes and No's, one amount per room, a Hardware row per room -------
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        elements.append(Paragraph("Quotation", section_style))
+        elements.append(Spacer(1, 8))
+        elements += _room_rows_elements(project, page_width, (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG,
+                                                              ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND), styles)
+        elements.append(Spacer(1, 20))
+    else:
+        # ------- COST SUMMARY -------
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        elements.append(Paragraph("Cost Summary", section_style))
+        elements.append(Spacer(1, 8))
 
-    # Cost summary — show material+work combo and amount only (no area, no rate)
-    cost_cw   = [page_width * p for p in [0.60, 0.40]]
-    cost_data = [['Material & Work Type', 'Amount (Rs.)']]
-    mat_total = 0.0
-    total_area_all = 0.0
-    for key in M.ordered_keys(item_totals2):
-        area = item_totals2.get(key, 0.0)
-        if area > 0:
-            subtotal      = area * _item_rates_map2.get(key, 0.0)
-            mat_total    += subtotal
-            total_area_all += area
-            cost_data.append([plywood.label(key, project), f'{_money(subtotal)}'])
-    # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
-    fixed_total2 = project.fixed_items_total()
-    if fixed_total2 > 0:
-        mat_total += fixed_total2
-        cost_data.append([FIXED_ITEMS_LABEL, f'{_money(fixed_total2)}'])
-    cost_data.append(['Total', f'Rs. {_money(mat_total)}'])
+        from . import plywood
+        _item_rates_map2 = plywood.rate_map()
+        _project_ply2 = plywood.project_plywood(project)
+        item_totals2 = project.get_item_totals(_rooms2)  # { price key: area }
 
-    cost_table = Table(cost_data, colWidths=cost_cw)
-    cost_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
-        ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
-        ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
-        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
-        ('PADDING', (0, 0), (-1, -1), 8),
-    ]))
-    elements.append(cost_table)
-    elements.append(Spacer(1, 10))
+        # Cost summary — show material+work combo and amount only (no area, no rate)
+        cost_cw   = [page_width * p for p in [0.60, 0.40]]
+        cost_data = [['Material & Work Type', 'Amount (Rs.)']]
+        mat_total = 0.0
+        total_area_all = 0.0
+        for key in M.ordered_keys(item_totals2):
+            area = item_totals2.get(key, 0.0)
+            if area > 0:
+                subtotal      = area * _item_rates_map2.get(key, 0.0)
+                mat_total    += subtotal
+                total_area_all += area
+                cost_data.append([plywood.label(key, project), f'{_money(subtotal)}'])
+        # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
+        fixed_total2 = project.fixed_items_total()
+        if fixed_total2 > 0:
+            mat_total += fixed_total2
+            cost_data.append([FIXED_ITEMS_LABEL, f'{_money(fixed_total2)}'])
+        cost_data.append(['Total', f'Rs. {_money(mat_total)}'])
 
-    # Discount + Final total
-    discount_amount = getattr(project, 'discount_amount', 0.0)
-    final_total     = getattr(project, 'final_total', project.grand_total)
-    total_rows      = []
-    total_style_cmds = []
-
-    if discount_amount > 0:
-        dtype = getattr(project, 'discount_type', 'none')
-        dval  = getattr(project, 'discount_value', 0) or 0
-        disc_label = f'Discount ({dval:.0f}%)' if dtype == 'percentage' else 'Discount (Fixed)'
-        total_rows.append([disc_label, f'- Rs. {_money(discount_amount)}'])
-        total_style_cmds += [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#b91c1c')),
+        cost_table = Table(cost_data, colWidths=cost_cw)
+        cost_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
+            ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('ALIGN', (1, 0), (-1, 0), 'RIGHT'),
-            ('PADDING', (0, 0), (-1, 0), 8),
-        ]
+            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
+            ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+            ('PADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(cost_table)
+        elements.append(Spacer(1, 10))
 
-    fi = len(total_rows)
-    total_rows.append([f'FINAL TOTAL  ({units.area(total_area_all)})', f'Rs. {_money(final_total)}'])
-    ft_cw = cost_cw
-    total_style_cmds += [
-        ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
-        ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
-        ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, fi), (-1, fi), 12),
-        ('ALIGN', (1, fi), (-1, fi), 'RIGHT'),
-        ('PADDING', (0, fi), (-1, fi), 9),
-        ('TOPPADDING', (0, fi), (-1, fi), 10),
-        ('BOTTOMPADDING', (0, fi), (-1, fi), 10),
-    ]
-    grand_total_table = Table(total_rows, colWidths=ft_cw)
-    grand_total_table.setStyle(TableStyle(total_style_cmds))
-    elements.append(grand_total_table)
-    elements.append(Spacer(1, 20))
+        # Discount + Final total
+        discount_amount = getattr(project, 'discount_amount', 0.0)
+        final_total     = getattr(project, 'final_total', project.grand_total)
+        total_rows      = []
+        total_style_cmds = []
+
+        if discount_amount > 0:
+            dtype = getattr(project, 'discount_type', 'none')
+            dval  = getattr(project, 'discount_value', 0) or 0
+            disc_label = f'Discount ({dval:.0f}%)' if dtype == 'percentage' else 'Discount (Fixed)'
+            total_rows.append([disc_label, f'- Rs. {_money(discount_amount)}'])
+            total_style_cmds += [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#b91c1c')),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('ALIGN', (1, 0), (-1, 0), 'RIGHT'),
+                ('PADDING', (0, 0), (-1, 0), 8),
+            ]
+
+        fi = len(total_rows)
+        total_rows.append([f'FINAL TOTAL  ({units.area(total_area_all)})', f'Rs. {_money(final_total)}'])
+        ft_cw = cost_cw
+        total_style_cmds += [
+            ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
+            ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
+            ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, fi), (-1, fi), 12),
+            ('ALIGN', (1, fi), (-1, fi), 'RIGHT'),
+            ('PADDING', (0, fi), (-1, fi), 9),
+            ('TOPPADDING', (0, fi), (-1, fi), 10),
+            ('BOTTOMPADDING', (0, fi), (-1, fi), 10),
+        ]
+        grand_total_table = Table(total_rows, colWidths=ft_cw)
+        grand_total_table.setStyle(TableStyle(total_style_cmds))
+        elements.append(grand_total_table)
+        elements.append(Spacer(1, 20))
 
     # ------- PLYWOOD THICKNESS -------
     ply_items2 = plywood.used_on(project, _rooms2)
@@ -785,31 +853,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
             elements.append(Paragraph(f"• {ply}", ply_body_style2))
         elements.append(Spacer(1, 14))
 
-    # ------- MATERIAL SPECIFICATIONS -------
-    _specs = AppSetting.get('material_specs', '')
-    if _specs and _specs.strip():
-        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-        spec_header_style = ParagraphStyle('SpecHeader2', parent=styles['Normal'],
-                                           fontSize=9, textColor=BRAND_DARK,
-                                           fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
-        spec_body_style = ParagraphStyle('SpecBody2', parent=styles['Normal'],
-                                         fontSize=8, textColor=colors.HexColor('#333333'),
-                                         leading=13, spaceAfter=1)
-        elements.append(Paragraph("Material Specifications:", spec_header_style))
-        elements.append(Spacer(1, 4))
-        for line in _specs.splitlines():
-            line = line.strip()
-            if line:
-                elements.append(Paragraph(line.replace('●', '\u2022'), spec_body_style))
-        elements.append(Spacer(1, 14))
-
-    # ------- TERMS & CONDITIONS -------
-    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-    tc_style = ParagraphStyle('TC2', parent=styles['Normal'],
-                              fontSize=7.5, textColor=colors.HexColor('#757575'))
-    elements.append(Paragraph("<b>Terms &amp; Conditions:</b>", tc_style))
-    for term in _get_terms_lines():
-        elements.append(Paragraph(term, tc_style))
+    # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
+    elements += _section_elements(styles, BRAND_DARK)
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
         _thank_you_text(),

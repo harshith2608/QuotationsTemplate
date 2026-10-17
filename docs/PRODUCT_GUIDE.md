@@ -93,7 +93,12 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Sending
 - **Two PDFs.**
   - **Full Quotation:** every room, item and measurement with amounts (for the detail-minded customer, or internal use).
-  - **Initial Quotation:** amounts by material only, no measurements (a clean first quote that's harder to shop around).
+  - **★ Initial Quotation, room by room** (default; Settings → Quotation PDFs): each room with what it's made of (your own
+    description per room, or its materials), its items with sizes and No's, and **one amount per room**; each room's fittings
+    as a "<Room> – Hardware" row. No rates or per-item prices, so it's harder to shop around. Then Basic Total, discount,
+    Total and your numbered sections: Material Specifications, Payment Terms, Delivery Terms, Important Notes, T&C.
+    (Option: "By material", amounts per material, as before.)
+  - **★ No's:** a count per measured item (2 identical shutters on one line); area and price multiply by it.
 - **WhatsApp in one tap.** A ready-made message with the room-wise summary, totals and payment details.
 - **★ Online approval link.** The customer opens a link (no app, no login), sees the quotation in the
   business's colours, downloads the PDF and taps **Accept** or **Request changes**. Accepting moves the job
@@ -282,7 +287,7 @@ quoting in your brand. QuoteRoom is the professional middle."
 ## 11. Glossary (so you explain things the same way every time)
 
 - **Full Quotation:** PDF with every room, item, measurement and amount.
-- **Initial Quotation:** PDF with amounts by material only (no measurements).
+- **Initial Quotation:** PDF room by room: items with sizes and No's, one amount per room, Hardware rows (or by material).
 - **Material breakdown / Full detailed:** ★ what the customer sees on the approval link (same idea as the two PDFs).
 - **Won:** a quotation that reached Confirmed (or later) and wasn't cancelled.
 - **Invoiced:** ★ issued invoices (with or without GST), not cancelled. **GST:** only the GST on GST invoices.

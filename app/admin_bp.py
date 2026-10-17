@@ -835,8 +835,11 @@ def settings():
                         errors.append(str(exc))
         elif tab == 'documents':
             # Multi-line fields — preserve newlines, allow blanking
-            AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
-            AppSetting.set('terms_conditions', request.form.get('terms_conditions', '').strip())
+            from . import layout
+            for key in ('material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions'):
+                AppSetting.set(key, request.form.get(key, '').strip())
+            if request.form.get('initial_layout') in layout.LAYOUTS:
+                AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -859,7 +862,7 @@ def settings():
         return redirect(url_for('admin.settings', tab=tab))
 
     saved_keys = ([branding.FIELDS[k][0] for k in branding.COMPANY_KEYS + branding.THEME_KEYS]
-                  + EMAIL_KEYS + ['material_specs', 'terms_conditions'])
+                  + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes'])
     saved = AppSetting.get_many(saved_keys)
     saved['terms_conditions'] = saved['terms_conditions'] or DEFAULT_TERMS
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)
@@ -869,7 +872,9 @@ def settings():
     support_display, support_url = branding.support_contact()
     support_links = {key: branding.support_message_url(what, current_user, request.host_url)
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
+    from . import layout
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links,
+                           initial_layout=layout.initial_layout(), layouts=layout.LAYOUTS,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
                            support_display=support_display, support_url=support_url,

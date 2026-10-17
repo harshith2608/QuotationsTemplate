@@ -115,7 +115,8 @@ async function _doSaveDraft() {
       const p = _itemPayload(item);
       if (p) itemsPayload.push(p);
     });
-    roomsPayload.push({ name: roomName, items: itemsPayload });
+    const desc = (document.getElementById('room_desc_' + rk) || {}).value || '';
+    roomsPayload.push({ name: roomName, items: itemsPayload, description: desc.trim() });
   });
 
   try {
@@ -336,11 +337,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (existingRooms && existingRooms.length > 0) {
     existingRooms.forEach(rd => {
       const rk = addRoom(rd.name);
+      const descEl = document.getElementById('room_desc_' + rk);
+      if (descEl && rd.description) descEl.value = rd.description;
       (rd.items || []).forEach(id => {
         if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price); return; }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
-        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '');
+        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '', id.count || 1);
       });
     });
   }
@@ -395,6 +398,10 @@ function addRoom(presetName) {
       </button>
     </div>
     <div class="card-body p-2 p-md-3">
+      <input type="text" class="form-control form-control-sm mb-2" id="room_desc_${rk}" maxlength="500"
+             placeholder="Material description (optional), e.g. Carcass: BWP ply · Shutters: 1mm laminate"
+             title="Shown for this room on the Initial Quotation. Leave blank to list the materials used."
+             oninput="scheduleDraftSave()">
       <div class="item-table-wrap">
         <table class="table table-sm table-bordered item-table mb-2">
           <thead>
@@ -402,6 +409,7 @@ function addRoom(presetName) {
               <th style="min-width:150px">Item Name</th>
               <th style="min-width:155px">Length${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
               <th style="min-width:155px">Width${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
+              <th style="min-width:64px" title="How many identical pieces">No's</th>
               <th style="min-width:180px">Material &amp; Work</th>
               <th style="min-width:80px">Area (${escHtml(UNITS.areaLabel)})</th>
               <th style="width:36px"></th>
@@ -442,13 +450,13 @@ let _modalRoomKey = null;
 
 // Public: called by "Add Item" button — opens modal for user entry.
 // Also called internally with preset values when loading existing data.
-function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly) {
+function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount) {
   if (presetName === undefined && presetLFt === undefined) {
     // User clicked "Add Item" — open modal
     openItemModal(rk);
     return;
   }
-  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly);
+  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount);
 }
 
 function openItemModal(rk) {
@@ -458,6 +466,7 @@ function openItemModal(rk) {
   ['modal_item_lft','modal_item_lin','modal_item_wft','modal_item_win'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  const cntEl = document.getElementById('modal_item_count'); if (cntEl) cntEl.value = 1;
   const comboEl = document.getElementById('modal_item_combo');
   if (comboEl) comboEl.value = DEFAULT_COMBO;
   const plyEl = document.getElementById('modal_item_ply');
@@ -484,7 +493,8 @@ function modalCalcArea() {
   // clamp inches
   if (lIn > 11) document.getElementById('modal_item_lin').value = 11;
   if (wIn > 11) document.getElementById('modal_item_win').value = 11;
-  const area = ftInToDecimal(lFt, lIn) * ftInToDecimal(wFt, wIn);
+  const cnt = Math.max(parseInt(document.getElementById('modal_item_count')?.value, 10) || 1, 1);
+  const area = ftInToDecimal(lFt, lIn) * ftInToDecimal(wFt, wIn) * cnt;
   const el = document.getElementById('modal_item_area');
   if (el) el.textContent = showArea(area);
 }
@@ -545,7 +555,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice) {
                oninput="onFixedField('${rk}','${ik}')" autocomplete="off">
       </div>
     </td>
-    <td colspan="2">
+    <td colspan="3">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-2 small text-muted">Qty</span>
         <input type="number" class="form-control text-center px-1" id="item_qty_${ik}" min="0" step="any"
@@ -596,11 +606,12 @@ function _itemPayload(item) {
   const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
   const wDec = ftInToDecimal(item.widthFt  || 0, item.widthIn  || 0);
   if (!item.name || lDec <= 0 || wDec <= 0) return null;
+  const count = Math.max(parseInt(item.count || 1, 10) || 1, 1);
   return {
-    name: item.name, length: lDec, width: wDec,
+    name: item.name, length: lDec, width: wDec, count,
     wood_type: item.wood_type, work_type: item.work_type,
     plywood: usesPly(item.wood_type) ? (item.plywood || '') : '',
-    area: item.area || parseFloat((lDec * wDec).toFixed(4))
+    area: parseFloat((lDec * wDec * count).toFixed(4))
   };
 }
 
@@ -630,8 +641,9 @@ function saveItemFromModal() {
   const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
   const [wood, work] = splitCombo(document.getElementById('modal_item_combo')?.value || DEFAULT_COMBO);
   const ply = document.getElementById('modal_item_ply')?.value || '';
+  const cnt = Math.min(Math.max(parseInt(document.getElementById('modal_item_count')?.value, 10) || 1, 1), 999);
 
-  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply);
+  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply, cnt);
 
   const modalEl = document.getElementById('itemModal');
   const instance = bootstrap.Modal.getInstance(modalEl);
@@ -640,7 +652,7 @@ function saveItemFromModal() {
 
 // Internal: inserts an item row directly into the table (used when loading
 // existing data and after modal save).
-function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly) {
+function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -653,14 +665,15 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const work = presetWood ? (presetWork || '') : CATALOG.defaultWork;   // '' is a real value (single-rate material)
   const name = presetName || '';
 
+  const count = Math.max(parseInt(presetCount || 1, 10) || 1, 1);
   const lDec = ftInToDecimal(lFt, lIn);
   const wDec = ftInToDecimal(wFt, wIn);
-  const area  = parseFloat((lDec * wDec).toFixed(4));
+  const area  = parseFloat((lDec * wDec * count).toFixed(4));
 
   const ply = presetPly || '';
   rooms[rk].items[ik] = {
     name, lengthFt: lFt, lengthIn: lIn, widthFt: wFt, widthIn: wIn,
-    wood_type: wood, work_type: work, plywood: ply, area
+    wood_type: wood, work_type: work, plywood: ply, count, area
   };
 
   const tbody = document.getElementById('items_tbody_' + rk);
@@ -707,6 +720,11 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
                style="max-width:52px" title="Inches (0–11)">
         <span class="input-group-text px-1 small text-muted">in</span>
       </div>
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm text-center px-1" id="item_cnt_${ik}"
+             min="1" max="999" step="1" value="${count}" oninput="onItemField('${rk}','${ik}')"
+             style="max-width:60px" title="How many identical pieces (No's)">
     </td>
     <td>
       <select class="form-select form-select-sm"
@@ -766,9 +784,11 @@ function onItemField(rk, ik) {
   const wFt  = parseFloat(wFtEl?.value) || 0;
   const wIn  = parseFloat(wInEl?.value) || 0;
 
+  const cntEl = document.getElementById('item_cnt_' + ik);
+  const count = Math.min(Math.max(parseInt(cntEl?.value, 10) || 1, 1), 999);
   const lDec = ftInToDecimal(lFt, lIn);
   const wDec = ftInToDecimal(wFt, wIn);
-  const area  = parseFloat((lDec * wDec).toFixed(4));
+  const area  = parseFloat((lDec * wDec * count).toFixed(4));
 
   const comboParts = splitCombo(comboEl?.value || DEFAULT_COMBO);
   const plyEl = document.getElementById('item_ply_' + ik);
@@ -779,6 +799,7 @@ function onItemField(rk, ik) {
     wood_type: comboParts[0],
     work_type: comboParts[1],
     plywood:   plyEl ? plyEl.value : '',
+    count,
     area
   };
   syncPlyVisibility(ik, comboParts[0]);
@@ -961,7 +982,8 @@ function _validateForm() {
       hasItem = true;
     });
 
-    if (itemsPayload.length > 0) roomsPayload.push({ name: roomName, items: itemsPayload });
+    const desc = (document.getElementById('room_desc_' + rk) || {}).value || '';
+    if (itemsPayload.length > 0) roomsPayload.push({ name: roomName, items: itemsPayload, description: desc.trim() });
   });
 
   if (!hasItem) {

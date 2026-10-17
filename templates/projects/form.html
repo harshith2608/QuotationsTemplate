@@ -366,6 +366,11 @@
             </div>
           </div>
         </div>
+        <div class="mb-3" style="max-width:160px">
+          <label class="form-label fw-medium small mb-1" for="modal_item_count">No's <span class="text-muted fw-normal">(identical pieces)</span></label>
+          <input type="number" class="form-control text-center" id="modal_item_count" min="1" max="999" step="1" value="1"
+                 oninput="modalCalcArea()">
+        </div>
         <div class="mb-3">
           <label class="form-label fw-medium small mb-1">Material &amp; Work Type</label>
           <select class="form-select" id="modal_item_combo">

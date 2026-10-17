@@ -21,8 +21,8 @@ full = pdftext('/projects/1/pdf')
 ok('Full PDF: each fitting in its room', 'Magic Corner' in full and 'Tandem Drawer' in full and 'Fitting: 4 × Rs. 4,500' in full)
 ok('Full PDF: fittings line in cost summary + subtotal', 'Fittings & Accessories' in full and '181,800.00' in full)
 cust = pdftext('/projects/1/pdf/customer')
-ok('Initial PDF: one Fittings & Accessories line, not itemised', 'Fittings & Accessories' in cust and '36,000.00' in cust
-   and 'Magic Corner' not in cust and 'Tandem Drawer' not in cust)
+ok('Initial PDF: fittings in a Hardware row per room, with counts but no unit prices', 'Hardware' in cust
+   and 'Magic Corner' in cust and 'Tandem Drawer' in cust and 'Rs. 4,500' not in cust and '181,800.00' in cust)
 wa = unquote(c.get('/projects/1/whatsapp').headers['Location'])
 ok('WhatsApp: fittings itemised + summary', 'Magic Corner: 1 × Rs.18,000' in wa and 'Fittings & Accessories: Rs.36,000' in wa
    and 'Acrylic – Box Work' in wa)

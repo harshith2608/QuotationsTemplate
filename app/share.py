@@ -152,8 +152,10 @@ def view(token):
     snap = billing.quotation_snapshot(project)
     from .models import AppSetting
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
+    from . import layout
+    rows = layout.room_rows(snap) if share.detail != 'full' and layout.initial_layout() == layout.LAYOUT_ROOMS else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
-                                    pay=pay, paid=billing.paid_total(project)))
+                                    pay=pay, paid=billing.paid_total(project), room_rows=rows))
 
 
 @share_bp.route('/q/<token>/pdf')

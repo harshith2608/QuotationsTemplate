@@ -100,7 +100,12 @@ class Project(db.Model):
         one query per room). Each room gets an .item_list attribute, which
         Room.total_area also uses, so callers can loop without re-querying.
         """
-        rooms = self.rooms.order_by(Room.id).all()
+        from . import layout
+        rq = self.rooms.order_by(Room.id)
+        if layout.description_ready():
+            from sqlalchemy.orm import undefer
+            rq = rq.options(undefer(Room.description))       # with the rooms, not one query per room
+        rooms = rq.all()
         items_by_room = {r.id: [] for r in rooms}
         if rooms:
             from . import plywood
@@ -164,9 +169,13 @@ class Project(db.Model):
 
 class Room(db.Model):
     __tablename__ = 'rooms'
+    __mapper_args__ = {'eager_defaults': False}   # never read the description column back after saving
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    # What the room is made of, for the Initial Quotation ("Carcass: BWP ply · Shutters: 1mm laminate"); None = worked
+    # out from its materials. Deferred + FetchedValue: rooms save fine before the database update adds it.
+    description = db.deferred(db.Column(db.Text, nullable=True, server_default=db.FetchedValue()))
     items = db.relationship('Item', backref='room', lazy='dynamic',
                             cascade='all, delete-orphan')
 
@@ -206,6 +215,11 @@ class Item(db.Model):
     @property
     def is_fixed(self):
         return self.item_type == 'fixed'
+
+    @property
+    def count(self):
+        """How many of this measured item ("No's"); its area already includes it. Fittings use quantity."""
+        return 1 if self.is_fixed else max(int(round(self.quantity or 1)), 1)
 
     def cost(self, item_rates, project_plywood=None):
         """Amount for this line. item_rates: plywood.rate_map(); project_plywood: the quotation's plywood."""

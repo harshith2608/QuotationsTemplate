@@ -78,7 +78,7 @@
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
+            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
           </tr>
         {% endfor %}
@@ -86,6 +86,22 @@
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(room['items']|sum(attribute='amount')) }}</td></tr>
         </tbody>
       </table></div>
+    {% endfor %}
+  </div>
+  {% elif room_rows %}
+  <div class="q-card">
+    <div class="fw-semibold mb-2">Room by room</div>
+    {% for r in room_rows %}
+    <div class="d-flex justify-content-between gap-2 {{ 'border-top pt-2 mt-2' if not loop.first }}">
+      <div>
+        <div class="fw-semibold small" style="color:var(--p)">{{ r.no }}. {{ r.title }}</div>
+        {% if r.description %}<div class="small q-muted">{{ r.description }}</div>{% endif %}
+        <ul class="small mb-1 ps-3">
+          {% for it in r['items'] %}<li>{{ it.name }}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
+        </ul>
+      </div>
+      <div class="fw-semibold small text-nowrap">&#8377;{{ "{:,.2f}".format(r.amount) }}</div>
+    </div>
     {% endfor %}
   </div>
   {% else %}
@@ -102,10 +118,14 @@
     <div class="fw-semibold mb-2">Price</div>
     <table class="table table-sm small mb-0">
       <tbody>
+      {% if room_rows %}
+      <tr><td>Basic Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>
+      {% else %}
       {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ s.area|area }})</span></td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(s.amount) }}</td></tr>{% endfor %}
       {% if snap.fittings_total %}<tr><td>{{ snap.fittings_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.fittings_total) }}</td></tr>{% endif %}
+      {% endif %}
       {% if snap.discount.amount %}
-        <tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>
+        {% if not room_rows %}<tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>{% endif %}
         <tr class="text-danger"><td>Discount{% if snap.discount.type == 'percentage' %} ({{ '%g'|format(snap.discount.value) }}%){% endif %}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(snap.discount.amount) }}</td></tr>
       {% endif %}
       <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>

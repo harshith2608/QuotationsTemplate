@@ -51,6 +51,7 @@ def quotation_snapshot(project, rooms=None):
     from . import materials as M
     from .catalog import FIXED_ITEMS_LABEL
     from . import plywood
+    from . import layout
     rates = _item_rates()
     rooms = rooms if rooms is not None else project.rooms_with_items()
     project_ply = plywood.project_plywood(project)
@@ -69,11 +70,17 @@ def quotation_snapshot(project, rooms=None):
                        'area': round(i.area, 4), 'wood_type': i.wood_type, 'work_type': i.work_type,
                        'material': plywood.label(key, project), 'rate': rate,
                        'amount': round(i.area * rate, 2)}
+                if i.count > 1:
+                    row['count'] = i.count             # only when >1: older snapshots stay comparable
                 own = plywood.item_plywood(i)
                 if own:
                     row['plywood'] = own               # only when set: older snapshots stay comparable
                 items.append(row)
-        out_rooms.append({'name': room.name, 'items': items})
+        room_row = {'name': room.name, 'items': items}
+        desc = layout.room_description(room)
+        if desc:
+            room_row['description'] = desc
+        out_rooms.append(room_row)
     summary = []
     area_totals = project.get_item_totals(rooms)
     for key in M.ordered_keys(area_totals):
@@ -180,9 +187,10 @@ def restore_preview(project, snap):
             if round(rate, 2) != round(it.get('rate', rate), 2):
                 changes[it['material']] = (it['material'], it['rate'], rate)
             items.append({'name': it['name'], 'type': 'measured', 'length': it['length'], 'width': it['width'],
-                          'wood_type': it['wood_type'], 'work_type': it['work_type'], 'plywood': it.get('plywood')})
-            subtotal += round(it['length'] * it['width'], 4) * rate
-        rooms.append({'name': room['name'], 'items': items})
+                          'wood_type': it['wood_type'], 'work_type': it['work_type'], 'plywood': it.get('plywood'),
+                          'count': it.get('count', 1)})
+            subtotal += round(it['length'] * it['width'] * it.get('count', 1), 4) * rate
+        rooms.append({'name': room['name'], 'items': items, 'description': room.get('description')})
     subtotal = round(subtotal, 2)
     d = snap.get('discount') or {}
     dtype, dval = d.get('type') or 'none', d.get('value') or 0
@@ -210,7 +218,8 @@ def _fmt_dim(feet):
 def _describe(item):
     if item['type'] == 'fixed':
         return f"{item['quantity']:g} × ₹{item['unit_price']:,.0f}"
-    return f"{_fmt_dim(item['length'])} × {_fmt_dim(item['width'])}, {item['material']}"
+    count = f" × {item['count']}" if item.get('count', 1) > 1 else ''
+    return f"{_fmt_dim(item['length'])} × {_fmt_dim(item['width'])}{count}, {item['material']}"
 
 
 def diff_snapshots(old, new):
@@ -245,6 +254,8 @@ def diff_snapshots(old, new):
         for item_name, prev in before.items():            # items gone completely (none left with that name)
             if item_name not in after:
                 changes += [f'{name}: removed {item_name}'] * len(prev)
+        if (old_rooms[name].get('description') or '') != (room.get('description') or ''):
+            changes.append(f'{name}: description changed')
     if (old.get('plywood_choice') or '') != (new.get('plywood_choice') or '') and new.get('plywood_choice'):
         changes.append(f"Plywood {old.get('plywood_choice') or 'default'} → {new['plywood_choice']}")
     od, nd = old.get('discount', {}), new.get('discount', {})
@@ -413,7 +424,8 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
                                   'qty': it['quantity'], 'unit': 'nos', 'rate': it['unit_price'], 'amount': it['amount']})
                 else:
                     lines.append({'room': room['name'], 'description': it['name'],
-                                  'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])} · {it['material']}",
+                                  'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])}"
+                                            f"{' × ' + str(it['count']) if it.get('count', 1) > 1 else ''} · {it['material']}",
                                   'hsn': hsn, 'qty': round(units.area_value(it['area']), 2), 'unit': units.area_label(),
                                   'rate': round(units.rate_value(it['rate']), 2), 'amount': it['amount']})
         return lines
