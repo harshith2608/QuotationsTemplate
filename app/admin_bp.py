@@ -871,7 +871,8 @@ def settings():
                   + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes',
                                   'room_descriptions'])
     saved = AppSetting.get_many(saved_keys)
-    saved['terms_conditions'] = saved['terms_conditions'] or DEFAULT_TERMS
+    from .pdf_utils import terms_text
+    saved['terms_conditions'] = terms_text()          # defaults until first saved; empty stays empty
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)
                 for k in branding.COMPANY_KEYS + branding.THEME_KEYS}
     from . import billing

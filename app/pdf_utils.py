@@ -11,6 +11,7 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                  TableStyle, HRFlowable, Image)
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from . import db
 from .models import AppSetting
 from .catalog import FIXED_ITEMS_LABEL
 from . import materials as M
@@ -27,11 +28,16 @@ DEFAULT_TERMS = (
 )
 
 
+def terms_text():
+    """The business's Terms & Conditions. The defaults only until they first save the setting; once saved, an empty
+    box means no Terms & Conditions (the section is left out)."""
+    row = db.session.get(AppSetting, 'terms_conditions')
+    return DEFAULT_TERMS if row is None else (row.value or '')
+
+
 def _get_terms_lines():
-    """Return T&C as a list of non-empty lines, falling back to defaults."""
-    raw = AppSetting.get('terms_conditions', '').strip()
-    lines = [l.strip() for l in (raw or DEFAULT_TERMS).splitlines() if l.strip()]
-    return lines
+    """T&C as a list of non-empty lines."""
+    return [l.strip() for l in terms_text().splitlines() if l.strip()]
 
 
 def ft_in(decimal_ft):

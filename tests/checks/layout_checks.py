@@ -124,6 +124,21 @@ ok('…and both printed for the room', 'Carcass: BWP 710 ply' in mc and 'Shutter
 ok('…and both kept on the edit form', json.loads(c.get(f'/projects/{mp.id}/edit').text.split('id="existing-rooms-data"', 1)[1]
    .split('>', 1)[1].split('</script>', 1)[0])[0]['description'] == 'Carcass: BWP 710 ply\nShutters: 1mm laminate')
 
+# Terms & Conditions: defaults until first saved; an emptied box stays empty (and the section is left out)
+from app.models import AppSetting
+with app.app_context():
+    row = db.session.get(AppSetting, 'terms_conditions'); saved_terms = row.value if row else None
+    if row: db.session.delete(row); db.session.commit()
+t = c.get('/admin/settings?tab=documents').text
+ok('never saved: the default terms are offered', 'This quotation is valid for 30 days' in t)
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'terms_conditions': '   ',
+                                'material_specs': 'BWP 710 ply for carcass'})
+t = c.get('/admin/settings?tab=documents').text
+ok('emptied and saved: stays empty (no defaults put back)', 'This quotation is valid for 30 days' not in t)
+cust = pdftext(f'/projects/{pid}/pdf/customer')
+ok('…and the PDFs leave Terms & Conditions out', 'Terms & Conditions' not in cust and 'valid for 30 days' not in cust
+   and 'Material Specifications' in cust and 'Terms & Conditions' not in pdftext(f'/projects/{pid}/pdf'))
+
 # Customer's link follows the same layout
 r = c.post(f'/projects/{pid}/share', data={'detail': 'summary'}, follow_redirects=True)
 with app.app_context():
