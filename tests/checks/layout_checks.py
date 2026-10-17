@@ -162,6 +162,8 @@ with app.app_context():
     ok('restore brings back the count and the description', i.count == 2 and round(p.grand_total, 2) == round(subtotal, 2)
        and kroom.description.startswith('Carcass'))
 
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms',
+                                'material_specs': '{plywood_details} for all the carcass and shutters'})
 # Before the database update: rooms save and quotations print without descriptions
 with app.app_context():
     db.session.execute(text('ALTER TABLE rooms DROP COLUMN description'))
@@ -180,4 +182,4 @@ with app.app_context():
 cust = re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in PdfReader(io.BytesIO(c2.get(f'/projects/{pre}/pdf/customer').data)).pages))
 ok('before the update: Initial Quotation prints, rooms described from materials', 'Kitchen – Hardware' in cust
    and 'Laminates – Box Work' in cust and c2.get(f'/projects/{pre}').status_code == 200 and c2.get(f'/projects/{pre}/edit').status_code == 200)
-ok('before the update: {plywood_details} prints the plywood name', d_name in cust and 'Rates' not in cust[:0])
+ok('before the update: {plywood_details} prints the plywood name', f'{d_name} for all the carcass and shutters' in cust)
