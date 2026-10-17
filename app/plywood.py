@@ -85,10 +85,10 @@ def context():
             default = next((r for r in rows if r.is_default), rows[0])
             base, cbase = default.adjustment or 0.0, _cost_adj(default)
             for r in rows:
-                ctx['options'].append({'id': r.id, 'name': r.name, 'adjustment': round((r.adjustment or 0.0) - base, 2),
+                ctx['options'].append({'id': r.id, 'name': r.name, 'adjustment': round((r.adjustment or 0.0) - base, 6),
                                        'cost_adjustment': r.cost_adjustment, 'default': r is default, 'active': r.active})
-                ctx['deltas'][r.name] = round((r.adjustment or 0.0) - base, 2)
-                ctx['cost_deltas'][r.name] = round(_cost_adj(r) - cbase, 2)
+                ctx['deltas'][r.name] = round((r.adjustment or 0.0) - base, 6)
+                ctx['cost_deltas'][r.name] = round(_cost_adj(r) - cbase, 6)
             ctx['default'] = default.name
             ctx['from_db'] = True
         elif not AppSetting.get(SEEDED_KEY):           # not set up yet: the classic list, all at ₹0
@@ -194,7 +194,7 @@ def rate_map():
         for work in (WORK_TYPES if uses_work else ['']):
             base = rates.get(f'{wood}|{work}', 0.0)
             for name, delta in others:
-                rates[f'{wood}|{work}|{name}'] = round(max(base + delta, 0.0), 2)
+                rates[f'{wood}|{work}|{name}'] = round(max(base + delta, 0.0), 6)
     return rates
 
 

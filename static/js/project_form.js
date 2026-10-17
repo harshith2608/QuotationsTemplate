@@ -57,7 +57,8 @@ function plyOptions(selected, wood) {
   let html = `<option value="">Quotation's plywood${q ? ' (' + escHtml(q) + ')' : ''}</option>`;
   PLY.options.forEach(o => {
     if (!o.active && o.name !== selected) return;
-    const diff = o.name === PLY.default ? '' : (o.delta ? ` (${o.delta > 0 ? '+' : ''}${o.delta} ₹/sqft)` : '');
+    const d = Math.round(o.delta / UNITS.areaFactor * 100) / 100;          // per the business's area unit
+    const diff = o.name === PLY.default ? '' : (d ? ` (${d > 0 ? '+' : ''}${d} ₹${UNITS.rateLabel})` : '');
     html += `<option value="${escHtml(o.name)}" ${o.name === selected ? 'selected' : ''}>${escHtml(o.name)}${diff}</option>`;
   });
   return html;
@@ -152,16 +153,45 @@ function _showDraftIndicator() {
 
 
 // ─── Conversion helpers ───────────────────────────────────────────────────────
+// Units (Settings → Units). Sizes are always sent to the server in decimal feet. In mm / cm / inches the "ft" box
+// holds the size in that unit and the inches box is hidden. Areas are worked out in sqft (as rates are stored) and
+// only SHOWN in sq m when the business uses square metres.
+const UNITS = window.KI_UNITS || { size: 'ftin', perFoot: null, sizeLabel: 'ft & in', area: 'sqft', areaLabel: 'sqft', areaFactor: 1 };
+const METRIC_SIZE = UNITS.size !== 'ftin';
+
 function ftInToDecimal(ft, inch) {
+  if (METRIC_SIZE) return parseFloat(ft || 0) / UNITS.perFoot;
   return parseFloat(ft || 0) + parseFloat(inch || 0) / 12;
 }
 
 function decimalToFtIn(decimal) {
   if (!decimal || isNaN(decimal)) return { ft: 0, inch: 0 };
+  if (METRIC_SIZE) {
+    const v = decimal * UNITS.perFoot;
+    return { ft: UNITS.size === 'mm' ? Math.round(v) : Math.round(v * 10) / 10, inch: 0 };
+  }
   let ft = Math.floor(decimal);
   let inch = Math.round((decimal - ft) * 12);
   if (inch === 12) { ft++; inch = 0; }
   return { ft, inch };
+}
+
+function showArea(sqft) { return (sqft * UNITS.areaFactor).toFixed(2); }     // a sqft area in the business's unit
+
+function applyUnitInputs(root) {
+  // One box per size in mm / cm / inches: relabel the feet box, hide the inches box
+  if (!METRIC_SIZE || !root) return;
+  root.querySelectorAll('input[id$="_lft"], input[id$="_wft"], input[id^="item_lft_"], input[id^="item_wft_"]').forEach(el => {
+    el.max = '999999'; el.step = 'any'; el.title = UNITS.sizeLabel;
+    if (el.style.maxWidth) el.style.maxWidth = '84px';
+    const label = el.nextElementSibling;
+    if (label && label.classList.contains('input-group-text')) label.textContent = UNITS.sizeLabel;
+  });
+  root.querySelectorAll('input[id$="_lin"], input[id$="_win"], input[id^="item_lin_"], input[id^="item_win_"]').forEach(el => {
+    el.style.display = 'none';
+    const label = el.nextElementSibling;
+    if (label && label.classList.contains('input-group-text')) label.style.display = 'none';
+  });
 }
 
 // ─── Custom Autocomplete ──────────────────────────────────────────────────────
@@ -278,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { priceList = JSON.parse(document.getElementById('price-list-data').textContent || '[]'); } catch (e) { priceList = []; }
 
   document.getElementById('modal_item_combo')?.addEventListener('change', syncModalPly);
+  applyUnitInputs(document.getElementById('itemModal'));
 
   // Modal item name: suggests room items for measured, the price list for fixed-price items
   const modalNameInput = document.getElementById('modal_item_name');
@@ -358,7 +389,7 @@ function addRoom(presetName) {
                oninput="onRoomNameChange('${rk}', this.value)"
                autocomplete="off">
       </div>
-      <span class="badge bg-primary ms-auto me-1" id="room_total_badge_${rk}">0.00 sqft</span>
+      <span class="badge bg-primary ms-auto me-1" id="room_total_badge_${rk}">0.00 ${escHtml(UNITS.areaLabel)}</span>
       <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRoom('${rk}')" title="Remove Room">
         <i class="bi bi-trash"></i>
       </button>
@@ -369,10 +400,10 @@ function addRoom(presetName) {
           <thead>
             <tr>
               <th style="min-width:150px">Item Name</th>
-              <th style="min-width:155px">Length</th>
-              <th style="min-width:155px">Width</th>
+              <th style="min-width:155px">Length${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
+              <th style="min-width:155px">Width${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
               <th style="min-width:180px">Material &amp; Work</th>
-              <th style="min-width:80px">Area (sqft)</th>
+              <th style="min-width:80px">Area (${escHtml(UNITS.areaLabel)})</th>
               <th style="width:36px"></th>
             </tr>
           </thead>
@@ -455,7 +486,7 @@ function modalCalcArea() {
   if (wIn > 11) document.getElementById('modal_item_win').value = 11;
   const area = ftInToDecimal(lFt, lIn) * ftInToDecimal(wFt, wIn);
   const el = document.getElementById('modal_item_area');
-  if (el) el.textContent = area.toFixed(2);
+  if (el) el.textContent = showArea(area);
 }
 
 // ─── Fixed-price items (fittings & accessories) ──────────────────────────────
@@ -689,7 +720,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
     </td>
     <td class="text-center">
       <span class="area-display fw-bold text-primary" id="item_area_${ik}">
-        ${area > 0 ? area.toFixed(2) : '0.00'}
+        ${area > 0 ? showArea(area) : '0.00'}
       </span>
     </td>
     <td class="text-center">
@@ -700,6 +731,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
     </td>
   `;
   tbody.appendChild(tr);
+  applyUnitInputs(tr);
   // Wire up autocomplete for item name input
   const itemNameInput = document.getElementById('item_name_' + ik);
   if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
@@ -751,7 +783,7 @@ function onItemField(rk, ik) {
   };
   syncPlyVisibility(ik, comboParts[0]);
 
-  if (areaEl) areaEl.textContent = area.toFixed(2);
+  if (areaEl) areaEl.textContent = showArea(area);
   recalcAll();
 }
 
@@ -772,7 +804,7 @@ function recalcAll() {
       comboAreas[key] = (comboAreas[key] || 0) + a;
     });
     const badge = document.getElementById('room_total_badge_' + rk);
-    if (badge) badge.textContent = roomArea.toFixed(2) + ' sqft';
+    if (badge) badge.textContent = showArea(roomArea) + ' ' + UNITS.areaLabel;
   });
 
   let grandTotal = fixedTotal;
@@ -793,7 +825,7 @@ function recalcAll() {
   if (boardsBox) {
     if (totalArea > 0) {
       boardsBox.style.display = '';
-      if (boardsArea) boardsArea.textContent = totalArea.toFixed(2) + ' sqft';
+      if (boardsArea) boardsArea.textContent = showArea(totalArea) + ' ' + UNITS.areaLabel;
       if (boardsCnt)  boardsCnt.textContent  = '~' + Math.ceil(totalArea / 32);
     } else {
       boardsBox.style.display = 'none';
@@ -886,7 +918,7 @@ function renderSummary(comboAreas, grandTotal, fixedTotal) {
         <span class="summary-wood-label">
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${escHtml(label)}</span>
         </span>
-        <span class="text-muted small">${area.toFixed(2)} sqft</span>
+        <span class="text-muted small">${showArea(area)} ${escHtml(UNITS.areaLabel)}</span>
         <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });

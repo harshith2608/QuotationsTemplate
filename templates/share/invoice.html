@@ -73,7 +73,7 @@
           <tr><td colspan="2" class="fw-semibold pt-3" style="color:var(--p)">{{ l.room }}</td></tr>
         {% endif %}
         <tr>
-          <td>{{ l.description }}<div class="q-muted">{% if l.detail %}{{ l.detail }} · {% endif %}{{ "{:,.2f}".format(l.qty) if l.unit == 'sqft' else '%g'|format(l.qty) }} {{ l.unit }} × &#8377;{{ "{:,.2f}".format(l.rate) }}</div></td>
+          <td>{{ l.description }}<div class="q-muted">{% if l.detail %}{{ l.detail }} · {% endif %}{{ "{:,.2f}".format(l.qty) if l.unit in ('sqft', 'sq m') else '%g'|format(l.qty) }} {{ l.unit }} × &#8377;{{ "{:,.2f}".format(l.rate) }}</div></td>
           <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(l.amount) }}</td>
         </tr>
       {% endfor %}

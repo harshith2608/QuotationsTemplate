@@ -202,11 +202,9 @@ def restore_blocker(project):
 
 
 def _fmt_dim(feet):
-    whole = int(feet)
-    inches = round((feet - whole) * 12)
-    if inches == 12:
-        whole, inches = whole + 1, 0
-    return f'{whole} ft' if not inches else f'{whole} ft {inches} in'
+    """A size in the business's unit (Settings → Units)."""
+    from . import units
+    return units.length(feet)
 
 
 def _describe(item):
@@ -403,7 +401,9 @@ LAYOUT_SUMMARY = 'summary'      # one line per material & work, plus fittings
 
 def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
     """Invoice lines from a quotation snapshot. Room by room: each item with its size, under its room
-    ('room' on the line). Summary: one line per material & work (sqft) and one per fitting."""
+    ('room' on the line). Summary: one line per material & work and one per fitting. Sizes, areas and rates are
+    written in the business's units at the time of issue (the invoice keeps them)."""
+    from . import units
     if layout == LAYOUT_ROOMS:
         lines = []
         for room in snapshot['rooms']:
@@ -414,11 +414,11 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
                 else:
                     lines.append({'room': room['name'], 'description': it['name'],
                                   'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])} · {it['material']}",
-                                  'hsn': hsn, 'qty': round(it['area'], 2), 'unit': 'sqft', 'rate': it['rate'],
-                                  'amount': it['amount']})
+                                  'hsn': hsn, 'qty': round(units.area_value(it['area']), 2), 'unit': units.area_label(),
+                                  'rate': round(units.rate_value(it['rate']), 2), 'amount': it['amount']})
         return lines
-    lines = [{'description': s['label'], 'hsn': hsn, 'qty': s['area'], 'unit': 'sqft', 'rate': s['rate'],
-              'amount': s['amount']} for s in snapshot['summary']]
+    lines = [{'description': s['label'], 'hsn': hsn, 'qty': round(units.area_value(s['area']), 2), 'unit': units.area_label(),
+              'rate': round(units.rate_value(s['rate']), 2), 'amount': s['amount']} for s in snapshot['summary']]
     fittings = {}
     for room in snapshot['rooms']:
         for it in room['items']:

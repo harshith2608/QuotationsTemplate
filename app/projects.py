@@ -923,10 +923,8 @@ def whatsapp_share(project_id):
     if project_ply and plywood.enabled():
         lines.append(f"🪵 Plywood: {project_ply}")
     lines += ["", "*Room-wise Breakdown:*"]
-    def _ft_in(d):
-        feet = int(d); inch = round((d - feet) * 12)
-        if inch == 12: feet += 1; inch = 0
-        return f"{feet}ft" if inch == 0 else f"{feet}ft {inch}in"
+    from . import units
+    _ft_in = units.length
 
     for room in rooms:
         lines.append(f"\n🏠 *{room.name}*")
@@ -936,7 +934,7 @@ def whatsapp_share(project_id):
             else:
                 own_ply = plywood.item_plywood(item)
                 ply_note = f", {own_ply}" if own_ply and item.wood_type in plywood.context()['materials'] else ''
-                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {item.area:.2f} sqft ({item.wood_type}{ply_note})")
+                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {units.area(item.area)} ({item.wood_type}{ply_note})")
 
     lines += ["", "*Material Summary:*"]
     from . import materials as M
@@ -944,7 +942,7 @@ def whatsapp_share(project_id):
         area = combo_totals[key]
         if area > 0:
             rate = item_rates.get(key, 0.0)
-            lines.append(f"  • {plywood.label(key, project)}: {area:.2f} sqft × Rs.{rate:,.0f} = Rs.{area * rate:,.0f}")
+            lines.append(f"  • {plywood.label(key, project)}: {units.area(area)} × Rs.{units.rate_value(rate):,.0f}{units.rate_label()} = Rs.{area * rate:,.0f}")
     if fixed_total > 0:
         lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{fixed_total:,.0f}")
 

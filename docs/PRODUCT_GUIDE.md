@@ -74,6 +74,9 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 - **Fittings & accessories.** A price list (Magic Corner, Tandem Drawer, hinges…) added by quantity × price.
 - **Discounts** as a percentage or a fixed amount.
 - **Plywood estimate.** Roughly how many 8×4 boards a job needs, and the plywood listed on the quote.
+- **★ Units of measurement.** Settings → Units: sizes in feet & inches, mm, cm or inches, and areas & rates in sqft or
+  sq m, for the whole team. The form, quotation page, PDFs, WhatsApp, customer link and new invoices all follow. Changing
+  units never changes a measurement or a price (a 7 ft wardrobe just shows as 2134 mm). *Pitch: "Measure in mm? Set it once."*
 - **★ Plywood pricing.** Admin → Rates → Plywood: your own plywood list (names you choose) with a price difference
   per sqft vs your default (e.g. 18mm BWP +150, 12mm MR −200). Material rates are for the default. Each quotation picks a
   plywood (default pre-selected), any item can use its own, and board materials (switch "On plywood" per material; Glass,

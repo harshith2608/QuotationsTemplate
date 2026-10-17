@@ -199,7 +199,7 @@
           <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
             <div>
               <span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }} d-block mb-1">{{ row.label }}</span>
-              <span class="text-muted small">{{ "%.2f"|format(row.area) }} sqft &times; &#8377;{{ "{:,.0f}".format(row.rate) }}/sqft</span>
+              <span class="text-muted small">{{ row.area|area }} &times; &#8377;{{ "{:,.0f}".format(row.rate|rate) }}{{ units.rate_label() }}</span>
             </div>
             <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(row.subtotal) }}</span>
           </div>
@@ -230,8 +230,8 @@
           <thead class="table-light">
             <tr>
               <th>Material &amp; Work</th>
-              <th class="text-end">Area (sqft)</th>
-              <th class="text-end">Rate (&#8377;/sqft)</th>
+              <th class="text-end">Area ({{ units.area_label() }})</th>
+              <th class="text-end">Rate (&#8377;{{ units.rate_label() }})</th>
               <th class="text-end">Amount (&#8377;)</th>
             </tr>
           </thead>
@@ -239,8 +239,8 @@
             {% for row in item_summary %}
             <tr>
               <td><span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }}">{{ row.label }}</span></td>
-              <td class="text-end">{{ "%.2f"|format(row.area) }}</td>
-              <td class="text-end">{{ "{:,.0f}".format(row.rate) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(units.area_value(row.area)) }}</td>
+              <td class="text-end">{{ "{:,.0f}".format(row.rate|rate) }}</td>
               <td class="text-end fw-semibold">{{ "{:,.2f}".format(row.subtotal) }}</td>
             </tr>
             {% endfor %}
@@ -286,7 +286,7 @@
         <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
           <div>
             <span class="small fw-medium text-muted"><i class="bi bi-layers me-1"></i>Plywood boards needed</span>
-            <span class="text-muted small d-block" style="font-size:0.75rem">8×4 ft per board · {{ "%.2f"|format(total_area_all) }} sqft total</span>
+            <span class="text-muted small d-block" style="font-size:0.75rem">8×4 ft per board · {{ total_area_all|area }} total</span>
           </div>
           <span class="fw-bold text-primary fs-5">~{{ (total_area_all / 32) | round(0, 'ceil') | int }}</span>
         </div>
@@ -318,7 +318,7 @@
         <div class="ki-room-title d-flex justify-content-between align-items-center">
           <span><i class="bi bi-door-open me-2"></i>{{ room.name }}</span>
           <span class="badge bg-white text-primary">
-            Room Total: {{ "%.2f"|format(room.total_area) }} sqft
+            Room Total: {{ room.total_area|area }}
           </span>
         </div>
         <div class="table-responsive">
@@ -328,7 +328,7 @@
                 <th>Item</th>
                 <th class="text-center d-none d-md-table-cell">Length</th>
                 <th class="text-center d-none d-md-table-cell">Width</th>
-                <th class="text-center">Area (sqft)</th>
+                <th class="text-center">Area ({{ units.area_label() }})</th>
                 <th class="text-center">Material &amp; Work</th>
                 <th class="text-end">Subtotal (&#8377;)</th>
               </tr>
@@ -353,7 +353,7 @@
                 <td class="fw-medium">{{ item.name }}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.length | ft_in }}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.width | ft_in }}</td>
-                <td class="text-center fw-semibold">{{ "%.2f"|format(item.area) }}</td>
+                <td class="text-center fw-semibold">{{ "{:,.2f}".format(units.area_value(item.area)) }}</td>
                 <td class="text-center">
                   <span class="badge ki-badge-material ki-badge-{{ item.wood_type|lower|replace(' ', '-') }}">{{ item.wood_type }}</span>
                   {% if ply_materials and item.wood_type in ply_materials and item.plywood %}<span class="badge bg-light text-dark border ms-1">{{ item.plywood }}</span>{% endif %}
@@ -373,7 +373,7 @@
               <tr class="table-light">
                 <td colspan="2" class="fw-semibold text-muted text-end small d-none d-md-table-cell">Room Total</td>
                 <td class="fw-semibold text-muted text-end small d-md-none">Room Total</td>
-                <td class="text-center fw-semibold">{{ "%.2f"|format(room.total_area) }} sqft</td>
+                <td class="text-center fw-semibold">{{ room.total_area|area }}</td>
                 <td></td>
                 {% set room_cost = namespace(val=0) %}
                 {% for item in room.item_list %}

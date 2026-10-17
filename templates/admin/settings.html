@@ -86,7 +86,7 @@
 
 <ul class="nav nav-pills ki-settings-nav mb-3 flex-nowrap overflow-auto">
   {% for key, icon, label in [('company','building','Company'), ('appearance','palette','Appearance'),
-                               ('documents','file-earmark-text','Quotation PDFs'), ('invoices','receipt','Invoices'),
+                               ('documents','file-earmark-text','Quotation PDFs'), ('units','rulers','Units'), ('invoices','receipt','Invoices'),
                                ('email','envelope','Email')] %}
   <li class="nav-item">
     <a class="nav-link text-nowrap {% if tab == key %}active{% endif %}" href="{{ url_for('admin.settings', tab=key) }}">
@@ -421,6 +421,46 @@
   <div class="mt-3 mb-5">
     <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Quotation Settings</button>
   </div>
+</form>
+{% endif %}
+
+{# ───────────────────────────── UNITS ───────────────────────────── #}
+{% if tab == 'units' %}
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="units">
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>Units of measurement</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">For your whole team: how sizes are typed on quotations and shown everywhere (quotation page,
+        PDFs, WhatsApp, the customer's link, invoices). Changing them never changes a measurement or a price: a 7 ft wardrobe simply
+        shows as 2134 mm.</p>
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">Sizes (length &amp; width)</label>
+          {% for key, label in units.SIZE_UNITS.items() %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="size_unit" id="su_{{ key }}" value="{{ key }}" {{ 'checked' if units.size_unit() == key }}>
+            <label class="form-check-label" for="su_{{ key }}">{{ label }}
+              <span class="text-muted small">· e.g. {{ units.length(7.5, key) }}</span></label>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">Areas &amp; rates</label>
+          {% for key, label in units.AREA_UNITS.items() %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="area_unit" id="au_{{ key }}" value="{{ key }}" {{ 'checked' if units.area_unit() == key }}>
+            <label class="form-check-label" for="au_{{ key }}">{{ label }}
+              <span class="text-muted small">· rates in &#8377;/{{ 'sqft' if key == 'sqft' else 'sq m' }}</span></label>
+          </div>
+          {% endfor %}
+          <div class="form-text">Your rates are converted for you: &#8377;1,000/sqft shows as &#8377;10,764/sq m.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Units</button></div>
 </form>
 {% endif %}
 

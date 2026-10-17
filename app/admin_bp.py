@@ -50,7 +50,8 @@ def dashboard():
         .all()
     )
     wood_labels = [w.wood_type for w in wood_dist]
-    wood_data = [round(w.total_area, 2) for w in wood_dist]
+    from . import units
+    wood_data = [round(units.area_value(w.total_area), 2) for w in wood_dist]   # in the business's area unit
 
     # Room type distribution (top 8)
     room_dist = (
@@ -324,11 +325,12 @@ def _plywood_ready():
 
 def _adjustment(raw):
     """'+100', '-200', '' → float (₹/sqft, may be negative), or None if not a number."""
+    from . import units
     raw = str(raw if raw is not None else '').strip().replace(',', '').replace('₹', '').replace(' ', '')
     if raw in ('', '+', '-'):
         return 0.0
     try:
-        return round(float(raw), 2)
+        return units.rate_to_sqft(round(float(raw), 2))      # typed per the area unit; stored per sqft
     except ValueError:
         return None
 
@@ -352,7 +354,8 @@ def _save_plywood():
         if '|' in name:
             errors.append('A plywood name can\'t contain "|".')
             continue
-        adj = _adjustment(request.form.get(f'ply_adj_{sid}', r.adjustment))
+        raw_adj = request.form.get(f'ply_adj_{sid}')
+        adj = (r.adjustment or 0.0) if raw_adj is None else _adjustment(raw_adj)
         if adj is None:
             errors.append(f'{r.name}: enter the price difference as a number, e.g. 100 or -200.')
             continue
@@ -407,14 +410,15 @@ def _save_plywood():
     if base or cbase:
         _shift_plywood_rates(base, cbase)
         if base:
-            flash(f'Material rates priced on plywood moved by {base:+g} ₹/sqft, so they\'re for {new_default.name} '
-                  'and every quotation keeps the same price.', 'info')
+            from . import units
+            flash(f'Material rates priced on plywood moved by {round(units.rate_value(base), 2):+g} ₹{units.rate_label()}, '
+                  f'so they\'re for {new_default.name} and every quotation keeps the same price.', 'info')
     for r in rows:                                     # re-base: the default is ₹0, others keep their difference
         old_cost = r.cost_adjustment if r.cost_adjustment is not None else (r.adjustment or 0.0)
         r.is_default = r is new_default
-        r.adjustment = round((r.adjustment or 0.0) - base, 2)
-        new_cost = round(old_cost - cbase, 2)          # the same extra cost relative to the new default
-        if r.cost_adjustment is not None or new_cost != r.adjustment:
+        r.adjustment = round((r.adjustment or 0.0) - base, 6)
+        new_cost = round(old_cost - cbase, 6)          # the same extra cost relative to the new default
+        if r.cost_adjustment is not None or abs(new_cost - r.adjustment) > 1e-6:
             r.cost_adjustment = new_cost               # (unset costs keep following the price difference when it fits)
     plywood.clear_cache()
     return errors
@@ -429,16 +433,19 @@ def _shift_plywood_rates(delta, cost_delta):
     names = {m.name for m in Material.query.options(undefer(Material.uses_plywood)).all() if m.uses_plywood}
     for r in ItemRate.query.all():
         if r.wood_type in names:
-            r.rate_per_sqft = round(max((r.rate_per_sqft or 0.0) + delta, 0.0), 2)
+            r.rate_per_sqft = round(max((r.rate_per_sqft or 0.0) + delta, 0.0), 6)
     if billing.ready() and cost_delta:
         for c in CostRate.query.filter_by(kind='material'):
             if c.name.split('|', 1)[0] in names:
-                c.cost = round(max((c.cost or 0.0) + cost_delta, 0.0), 2)
+                c.cost = round(max((c.cost or 0.0) + cost_delta, 0.0), 6)
 
 
 def _rate(raw):
+    """A rate typed per the business's area unit (Settings → Units) → ₹ per sqft, as stored. Only the typed number
+    is rounded, so ₹1,000/sq m shows as ₹1,000/sq m again."""
+    from . import units
     try:
-        return max(0.0, round(float(raw or 0), 2))
+        return units.rate_to_sqft(max(0.0, round(float(raw or 0), 2)))
     except (TypeError, ValueError):
         return 0.0
 
@@ -557,6 +564,9 @@ def costs():
 
         def put(kind, name, raw, label):
             value = _parse_cost(raw)
+            if kind == 'material' and value not in (None, False):
+                from . import units
+                value = units.rate_to_sqft(value)         # typed per the area unit; stored per sqft
             row = existing.get((kind, name))
             if value is False:
                 errors.append(f'Enter a number for {label}.')
@@ -622,7 +632,7 @@ PAYMENT_KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
                 'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']
 EMAIL_KEYS = ['admin_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']
 SECRET_KEYS = {'razorpay_key_secret', 'webhook_secret', 'smtp_pass'}
-SETTINGS_TABS = ('company', 'appearance', 'documents', 'invoices', 'email')
+SETTINGS_TABS = ('company', 'appearance', 'documents', 'units', 'invoices', 'email')
 
 
 def _save_plain_settings(keys):
@@ -827,6 +837,15 @@ def settings():
             # Multi-line fields — preserve newlines, allow blanking
             AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
             AppSetting.set('terms_conditions', request.form.get('terms_conditions', '').strip())
+        elif tab == 'units':
+            from . import units
+            size, area = request.form.get('size_unit'), request.form.get('area_unit')
+            if size not in units.SIZE_UNITS or area not in units.AREA_UNITS:
+                errors.append('Choose a unit for sizes and for areas & rates.')
+            else:
+                AppSetting.set('size_unit', size)
+                AppSetting.set('area_unit', area)
+                units.clear_cache()
         elif tab == 'invoices':
             errors = _save_invoice_settings()
         elif tab == 'email':

@@ -81,7 +81,7 @@
   <div class="col-12 col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header ki-card-header">
-        <i class="bi bi-pie-chart me-2"></i>Material Usage (sqft)
+        <i class="bi bi-pie-chart me-2"></i>Material Usage ({{ units.area_label() }})
       </div>
       <div class="card-body d-flex align-items-center justify-content-center">
         {% if wood_labels %}
@@ -203,7 +203,7 @@ new Chart(woodCtx, {
       legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } },
       tooltip: {
         callbacks: {
-          label: ctx => ` ${ctx.label}: ${ctx.parsed.toFixed(2)} sqft`
+          label: ctx => ` ${ctx.label}: ${ctx.parsed.toFixed(2)} {{ units.area_label() }}`
         }
       }
     }

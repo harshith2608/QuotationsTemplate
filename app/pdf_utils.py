@@ -14,6 +14,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from .models import AppSetting
 from .catalog import FIXED_ITEMS_LABEL
 from . import materials as M
+from . import units
 from .branding import get_brand, tint, luminance, readable_text_on, load_logo_png
 
 
@@ -34,19 +35,10 @@ def _get_terms_lines():
 
 
 def ft_in(decimal_ft):
-    """Convert decimal feet to 'X ft Y in' string."""
-    try:
-        decimal_ft = float(decimal_ft or 0)
-    except (ValueError, TypeError):
-        return '—'
-    feet = int(decimal_ft)
-    inches = round((decimal_ft - feet) * 12)
-    if inches == 12:
-        feet += 1
-        inches = 0
-    if inches == 0:
-        return f"{feet} ft"
-    return f"{feet} ft {inches} in"
+    """A stored size (decimal feet) in the business's unit (Settings → Units)."""
+    from . import units
+    return units.length(decimal_ft) or '—'
+
 
 GREY_BG = colors.HexColor('#f5f5f5')
 
@@ -297,7 +289,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(room_header)
 
         # Items table
-        item_rows = [['Item Name', 'Length', 'Width', 'Material & Work', 'Area (sqft)', 'Subtotal (Rs.)']]
+        item_rows = [['Item Name', 'Length', 'Width', 'Material & Work', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
         room_total_area = 0.0
         room_total_cost = 0.0
         for item in room.item_list:
@@ -319,11 +311,11 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 ft_in(item.length),
                 ft_in(item.width),
                 plywood.label(_key, project),
-                f'{item.area:.2f}',
+                f'{units.area_value(item.area):,.2f}',
                 f'{_money(subtotal)}'
             ])
         # Room total row
-        item_rows.append(['', '', '', 'Room Total:', f'{room_total_area:.2f} sqft', f'Rs. {_money(room_total_cost)}'])
+        item_rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
 
         item_table = Table(item_rows, colWidths=col_widths)
         item_table.setStyle(TableStyle([
@@ -368,7 +360,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
 
     # Combined material + work cost table
     elements.append(Spacer(1, 3))
-    combo_data = [['Material & Work Type', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
+    combo_data = [['Material & Work Type', f'Total Area ({units.area_label()})', f'Rate (Rs.{units.rate_label()})', 'Amount (Rs.)']]
     combo_total = 0.0
     combo_area_total = 0.0
     for key in M.ordered_keys(item_totals):
@@ -378,7 +370,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             subtotal = area * rate
             combo_total += subtotal
             combo_area_total += area
-            combo_data.append([plywood.label(key, project), f'{area:,.2f}', f'{_money(rate, ",.0f")}', f'{_money(subtotal)}'])
+            combo_data.append([plywood.label(key, project), f'{units.area_value(area):,.2f}', f'{_money(units.rate_value(rate), ",.0f")}', f'{_money(subtotal)}'])
     fixed_total = project.fixed_items_total(rooms)
     if fixed_total > 0:
         combo_total += fixed_total
@@ -428,7 +420,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append(['', f'{combo_area_total:,.2f} sqft', 'FINAL TOTAL', f'Rs. {_money(final_total)}'])
+    total_rows.append(['', units.area(combo_area_total), 'FINAL TOTAL', f'Rs. {_money(final_total)}'])
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
         ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
@@ -760,7 +752,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append([f'FINAL TOTAL  ({total_area_all:,.2f} sqft)', f'Rs. {_money(final_total)}'])
+    total_rows.append([f'FINAL TOTAL  ({units.area(total_area_all)})', f'Rs. {_money(final_total)}'])
     ft_cw = cost_cw
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
@@ -996,7 +988,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
                                 ('ALIGN', (0, r), (-1, r), 'LEFT')])
         n += 1
         room_sum += l['amount']
-        qty = f"{l['qty']:,.2f} {l['unit']}" if l['unit'] == 'sqft' else f"{l['qty']:g} {l['unit']}"
+        qty = f"{l['qty']:,.2f} {l['unit']}" if l['unit'] in ('sqft', 'sq m') else f"{l['qty']:g} {l['unit']}"
         desc = [Paragraph(escape(l['description']), small)]
         if l.get('detail'):
             desc.append(Paragraph(escape(l['detail']), detail_style))

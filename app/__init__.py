@@ -123,19 +123,21 @@ def create_app(config_name='default'):
 
     @app.template_filter('ft_in')
     def ft_in_filter(decimal_ft):
-        """Convert decimal feet to 'X ft Y in' string."""
-        try:
-            decimal_ft = float(decimal_ft or 0)
-        except (ValueError, TypeError):
-            return '—'
-        feet = int(decimal_ft)
-        inches = round((decimal_ft - feet) * 12)
-        if inches == 12:
-            feet += 1
-            inches = 0
-        if inches == 0:
-            return f"{feet} ft"
-        return f"{feet} ft {inches} in"
+        """A stored size (decimal feet) in the business's unit (Settings → Units): '7 ft 6 in', '2286 mm'…"""
+        from . import units
+        return units.length(decimal_ft) or '—'
+
+    @app.template_filter('area')
+    def area_filter(sqft, dp=2):
+        """A stored area (sqft) in the business's unit: '50.00 sqft' or '4.65 sq m'."""
+        from . import units
+        return units.area(sqft, dp)
+
+    @app.template_filter('rate')
+    def rate_filter(per_sqft):
+        """A stored rate (₹ per sqft) per the business's area unit, as a number."""
+        from . import units
+        return units.rate_value(per_sqft)
 
     @app.context_processor
     def inject_globals():
@@ -147,9 +149,9 @@ def create_app(config_name='default'):
                 unread_count = Notification.query.filter_by(is_read=False).count()
             except Exception:
                 pass
-        from . import catalog
+        from . import catalog, units
         from .branding import get_brand
-        return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count,
+        return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
 

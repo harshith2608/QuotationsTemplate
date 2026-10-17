@@ -10,7 +10,7 @@
 
 <div class="alert alert-info py-2 small">
   <i class="bi bi-info-circle me-1"></i>
-  Set your rate per sqft for each material. A quotation's total = Σ (area × rate) for every measured item,
+  Set your rate per {{ units.area_label() }} for each material. A quotation's total = Σ (area × rate) for every measured item,
   plus fittings. Rate changes apply when a quotation is next saved.
 </div>
 
@@ -20,12 +20,12 @@
   <div class="col-12" id="materials">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header">
-        <i class="bi bi-layers me-2"></i>Materials &amp; Rates (&#8377;/sqft)
+        <i class="bi bi-layers me-2"></i>Materials &amp; Rates (&#8377;{{ units.rate_label() }})
       </div>
       <div class="card-body">
         <p class="small text-muted mb-3">
           Materials with <strong>work types</strong> have a rate for {{ work_types|join(' and ') }}.
-          Others (e.g. Glass, Wallpaper) have <strong>one rate per sqft</strong>.
+          Others (e.g. Glass, Wallpaper) have <strong>one rate per {{ units.area_label() }}</strong>.
           Rename a material and existing quotations follow. <strong>Hide</strong> one you no longer offer:
           old quotations keep it, new ones won't show it.
         </p>
@@ -54,17 +54,17 @@
                       <div class="input-group input-group-sm">
                         <span class="input-group-text">&#8377;</span>
                         <input type="number" name="rate_{{ m.id }}_{{ i }}" class="form-control text-end" step="0.01" min="0"
-                               value="{{ rate | round(2) }}" aria-label="{{ m.name }} {{ work }} rate">
+                               value="{{ (rate|rate) | round(2) }}" aria-label="{{ m.name }} {{ work }} rate">
                       </div>
                     </td>
                     {% endfor %}
                   {% else %}
                     {% set i, work, rate = row.rates[0] %}
-                    <td colspan="{{ work_types|length }}" data-label="Rate per sqft">
+                    <td colspan="{{ work_types|length }}" data-label="Rate per {{ units.area_label() }}">
                       <div class="input-group input-group-sm" style="max-width:260px;margin:0 auto">
                         <span class="input-group-text">&#8377;</span>
                         <input type="number" name="rate_{{ m.id }}_0" class="form-control text-end" step="0.01" min="0"
-                               value="{{ rate | round(2) }}" aria-label="{{ m.name }} rate">
+                               value="{{ (rate|rate) | round(2) }}" aria-label="{{ m.name }} rate">
                         <span class="input-group-text small">one rate</span>
                       </div>
                     </td>
@@ -106,7 +106,7 @@
                    placeholder="e.g. Glass, PU Finish, Wallpaper" required>
           </div>
           <div class="col-6 col-md-3">
-            <label class="form-label small fw-medium mb-1" for="mat_rate">Rate per sqft</label>
+            <label class="form-label small fw-medium mb-1" for="mat_rate">Rate per {{ units.area_label() }}</label>
             <div class="input-group">
               <span class="input-group-text">&#8377;</span>
               <input type="number" id="mat_rate" name="mat_rate" class="form-control text-end" step="0.01" min="0" placeholder="0">
@@ -146,7 +146,7 @@
       <div class="card-body">
         <p class="small text-muted mb-3">
           Your material rates above are for your <strong>default</strong> plywood. For any other plywood, enter how much
-          more (or less) it costs <strong>per sqft</strong>, e.g. <code>100</code> or <code>-200</code>. A quotation picks
+          more (or less) it costs <strong>per {{ units.area_label() }}</strong>, e.g. <code>100</code> or <code>-200</code>. A quotation picks
           one plywood (the default is pre-selected) and any item can use its own; materials ticked
           <strong>On plywood</strong> are priced at their rate + this difference. The customer sees the final rate.
         </p>
@@ -156,7 +156,7 @@
             <table class="table table-bordered align-middle mb-3 ki-materials-table">
               <thead class="ki-table-head"><tr>
                 <th class="text-center" style="width:80px">Default</th><th style="min-width:180px">Plywood</th>
-                <th class="text-center" style="min-width:170px">Price difference (&#8377;/sqft)</th>
+                <th class="text-center" style="min-width:170px">Price difference (&#8377;{{ units.rate_label() }})</th>
                 <th class="text-center" style="width:90px">Show</th><th class="text-center" style="width:90px">Delete</th></tr></thead>
               <tbody>
               {% for o in plywood_rows %}
@@ -174,8 +174,8 @@
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
                       <input type="text" name="ply_adj_{{ o.id }}" class="form-control text-end" inputmode="decimal"
-                             value="{{ '%+g'|format(o.adjustment) if o.adjustment else '0' }}" aria-label="{{ o.name }} price difference per sqft">
-                      <span class="input-group-text small">/sqft</span>
+                             value="{{ '%+g'|format((o.adjustment|rate)|round(2)) if o.adjustment else '0' }}" aria-label="{{ o.name }} price difference">
+                      <span class="input-group-text small">{{ units.rate_label() }}</span>
                     </div>
                     {% endif %}
                   </td>
@@ -195,8 +195,8 @@
                   <td data-label="Price difference"><div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
                       <input type="text" name="ply_new_adj" class="form-control text-end" inputmode="decimal" placeholder="e.g. 150 or -100"
-                             aria-label="New plywood price difference per sqft">
-                      <span class="input-group-text small">/sqft</span></div></td>
+                             aria-label="New plywood price difference">
+                      <span class="input-group-text small">{{ units.rate_label() }}</span></div></td>
                   <td></td><td></td>
                 </tr>
               </tbody>
@@ -290,7 +290,7 @@
       <div class="card-body small text-muted">
         <p class="mb-2">Each item's cost = Area × Rate for that material + work combination.</p>
         <code class="d-block bg-light p-2 rounded mb-2">Item Cost = Area × Rate(Material, Work Type)</code>
-        <p class="mb-2">Example — Wardrobe: 10 sqft, Laminates + Box Work @ ₹850:</p>
+        <p class="mb-2">Example — Wardrobe: 10 {{ units.area_label() }}, Laminates + Box Work @ ₹850{{ units.rate_label() }}:</p>
         <code class="d-block bg-light p-2 rounded mb-2">10 × ₹850 = ₹8,500</code>
         <p class="mb-2">Fittings &amp; accessories cost = Quantity × Price per unit, e.g. 4 Tandem Drawers @ ₹4,500:</p>
         <code class="d-block bg-light p-2 rounded">4 × ₹4,500 = ₹18,000</code>

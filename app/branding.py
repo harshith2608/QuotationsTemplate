@@ -211,8 +211,10 @@ def get_brand():
     from .models import AppSetting
     saved = {}
     try:
-        keys = [f[0] for f in FIELDS.values()] + [LOGO_VERSION_KEY]
+        from . import units
+        keys = [f[0] for f in FIELDS.values()] + [LOGO_VERSION_KEY] + list(units.KEYS)
         saved = {r.key: r.value for r in AppSetting.query.filter(AppSetting.key.in_(keys)).all()}
+        units.prime(saved)                     # the units come with the same query
     except Exception:
         # DB unreachable (e.g. cold start) — render with env/default values
         pass

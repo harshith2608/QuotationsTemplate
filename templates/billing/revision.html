@@ -35,7 +35,7 @@
       {% if restore.rate_changes %}
       <p class="mb-2 text-warning-emphasis"><i class="bi bi-info-circle me-1"></i>Your rates have changed since this version, and quotations
         are always priced at today's rates:
-        {% for label, then, now in restore.rate_changes %}{{ label }} &#8377;{{ "{:,.0f}".format(then) }} → &#8377;{{ "{:,.0f}".format(now) }}/sqft{{ '; ' if not loop.last }}{% endfor %}.
+        {% for label, then, now in restore.rate_changes %}{{ label }} &#8377;{{ "{:,.0f}".format(then|rate) }} → &#8377;{{ "{:,.0f}".format(now|rate) }}{{ units.rate_label() }}{{ '; ' if not loop.last }}{% endfor %}.
         (This version showed &#8377;{{ "{:,.2f}".format(snap.total) }}.)</p>
       {% endif %}
       <form method="POST" action="{{ url_for('billing.restore_revision', project_id=project.id, number=rev.number) }}"
@@ -64,7 +64,7 @@
       {% for it in room['items'] %}
         <tr><td>{{ it.name }}</td>
           {% if it.type == 'fixed' %}<td>{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}</td><td></td>
-          {% else %}<td>{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ "%.2f"|format(it.area) }} sqft</td><td>{{ it.material }}</td>{% endif %}
+          {% else %}<td>{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ it.area|area }}</td><td>{{ it.material }}</td>{% endif %}
           <td class="text-end">&#8377;{{ "{:,.2f}".format(it.amount) }}</td></tr>
       {% endfor %}
       </tbody>

@@ -78,7 +78,7 @@
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ "%.2f"|format(it.area) }} sqft · {{ it.material }}{% endif %}</div></td>
+            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
           </tr>
         {% endfor %}
@@ -102,7 +102,7 @@
     <div class="fw-semibold mb-2">Price</div>
     <table class="table table-sm small mb-0">
       <tbody>
-      {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ "{:,.2f}".format(s.area) }} sqft)</span></td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(s.amount) }}</td></tr>{% endfor %}
+      {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ s.area|area }})</span></td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(s.amount) }}</td></tr>{% endfor %}
       {% if snap.fittings_total %}<tr><td>{{ snap.fittings_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.fittings_total) }}</td></tr>{% endif %}
       {% if snap.discount.amount %}
         <tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>
