@@ -125,6 +125,8 @@ def _form_catalog(project):
     ply['selected'] = ply['selected'] or ply['default']
     ply['enabled'] = plywood.table_ready() and bool(ply['options'])
     cat['plywood_form'] = ply
+    from . import layout
+    cat['room_descriptions'] = layout.description_options()
     return cat
 
 

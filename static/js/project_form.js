@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     existingRooms.forEach(rd => {
       const rk = addRoom(rd.name);
       const descEl = document.getElementById('room_desc_' + rk);
-      if (descEl && rd.description) descEl.value = rd.description;
+      if (descEl && rd.description) descEl.innerHTML = roomDescriptionOptions(rd.description);
       (rd.items || []).forEach(id => {
         if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price); return; }
         const lFtIn = decimalToFtIn(id.length);
@@ -398,10 +398,13 @@ function addRoom(presetName) {
       </button>
     </div>
     <div class="card-body p-2 p-md-3">
-      <input type="text" class="form-control form-control-sm mb-2" id="room_desc_${rk}" maxlength="500"
-             placeholder="Material description (optional), e.g. Carcass: BWP ply · Shutters: 1mm laminate"
-             title="Shown for this room on the Initial Quotation. Leave blank to list the materials used."
-             oninput="scheduleDraftSave()">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <select class="form-select form-select-sm" id="room_desc_${rk}" onchange="scheduleDraftSave()"
+                title="What this room is made of, on the Initial Quotation" aria-label="Material description">
+          ${roomDescriptionOptions('')}
+        </select>
+        ${CATALOG.descriptionsUrl ? `<a class="small text-nowrap" href="${escHtml(CATALOG.descriptionsUrl)}" target="_blank" rel="noopener">Edit list</a>` : ''}
+      </div>
       <div class="item-table-wrap">
         <table class="table table-sm table-bordered item-table mb-2">
           <thead>
@@ -429,6 +432,16 @@ function addRoom(presetName) {
   if (roomNameInput && masterRooms.length) initAutocomplete(roomNameInput, masterRooms);
   updateNoRoomsHint();
   return rk;
+}
+
+// Room material description: the admin's list (Settings → Quotation PDFs); '' = list the materials used.
+// A saved description no longer on the list stays selectable for its room.
+function roomDescriptionOptions(selected) {
+  const list = (CATALOG.roomDescriptions || []).slice();
+  if (selected && !list.includes(selected)) list.push(selected);
+  let html = `<option value="">Material description: materials used (automatic)</option>`;
+  list.forEach(d => { html += `<option value="${escHtml(d)}" ${d === selected ? 'selected' : ''}>${escHtml(d)}</option>`; });
+  return html;
 }
 
 function removeRoom(rk) {

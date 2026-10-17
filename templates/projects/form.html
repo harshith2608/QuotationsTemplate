@@ -410,7 +410,9 @@
     combos:      {{ material_combos|tojson }},          // [{value: 'Glass|', label: 'Glass', wood, work}, …]
     defaultWood: {{ default_combo.split('|')[0]|tojson }},
     defaultWork: {{ default_combo.split('|', 1)[1]|tojson }},
-    fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }}
+    fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }},
+    roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
+    descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}
   };
   // Units (Settings → Units): sizes typed in this unit, sent to the server in feet; areas shown in sq ft or sq m
   window.KI_UNITS = {{ units.js()|tojson }};

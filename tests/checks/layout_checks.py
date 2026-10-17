@@ -69,8 +69,20 @@ ok('sections: numbered, own numbering removed, empty ones left out', 'Payment Te
    and '2. 50% after design finalisation' in cust and '3. 40% on delivery' in cust and 'Delivery Terms' in cust
    and 'Important Notes' not in cust and 'Material Specifications' in cust and 'Terms & Conditions' in cust)
 ok('the Full Quotation has the sections too', 'Payment Terms' in pdftext(f'/projects/{pid}/pdf'))
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms',
+                                'room_descriptions': 'Carcass: BWP 710 ply · Shutters: 1mm laminate\n\n  Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic \nCarcass: BWP 710 ply · Shutters: 1mm laminate'})
+with app.app_context():
+    opts = layout.description_options()
+ok('room descriptions: the admin\'s list, one per line, tidied, no duplicates',
+   opts == ['Carcass: BWP 710 ply · Shutters: 1mm laminate', 'Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic'])
+f = c.get('/projects/new').text
+ok('quotation form offers them as a dropdown per room, with an Edit list link for admins',
+   json.loads(re.search(r'roomDescriptions: (\[.*?\]),', f).group(1)) == opts and 'room-descriptions' in f)
+s_ = c.get(f'/projects/{pid}/edit').text
+ok('a room keeps a description that isn\'t on the list (kept selectable)', '1.5mm Acrylic' in s_)
 t = c.get('/admin/settings?tab=documents').text
 ok('Settings → Quotation PDFs: layout choice and the new sections', 'name="initial_layout"' in t and 'name="payment_terms"' in t
+   and 'name="room_descriptions"' in t
    and 'name="delivery_terms"' in t and 'name="important_notes"' in t)
 
 # Customer's link follows the same layout

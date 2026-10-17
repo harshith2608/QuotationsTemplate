@@ -413,6 +413,15 @@
         room's fittings as a "Hardware" row. Your Full Quotation (every rate and amount) doesn't change.</div>
     </div>
   </div>
+  <div class="card shadow-sm border-0 mb-3" id="room-descriptions">
+    <div class="card-header ki-card-header"><i class="bi bi-list-ul me-2"></i>Room descriptions</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">What a room is made of, chosen from a list on each room of a quotation and printed for that room
+        on the Initial Quotation. One per line. A room left on "Materials used" lists its materials instead.</p>
+      <textarea name="room_descriptions" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6"
+                placeholder="e.g. Carcass: BWP 710 ply, laminate finish · Shutters: 1mm laminate&#10;Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic">{{ saved.room_descriptions }}</textarea>
+    </div>
+  </div>
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-header ki-card-header"><i class="bi bi-card-checklist me-2"></i>Material Specifications</div>
     <div class="card-body">

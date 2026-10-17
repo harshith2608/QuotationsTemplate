@@ -836,7 +836,8 @@ def settings():
         elif tab == 'documents':
             # Multi-line fields — preserve newlines, allow blanking
             from . import layout
-            for key in ('material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions'):
+            for key in ('material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions',
+                        layout.DESCRIPTIONS_KEY):
                 AppSetting.set(key, request.form.get(key, '').strip())
             if request.form.get('initial_layout') in layout.LAYOUTS:
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
@@ -862,7 +863,8 @@ def settings():
         return redirect(url_for('admin.settings', tab=tab))
 
     saved_keys = ([branding.FIELDS[k][0] for k in branding.COMPANY_KEYS + branding.THEME_KEYS]
-                  + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes'])
+                  + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes',
+                                  'room_descriptions'])
     saved = AppSetting.get_many(saved_keys)
     saved['terms_conditions'] = saved['terms_conditions'] or DEFAULT_TERMS
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)

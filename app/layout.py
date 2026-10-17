@@ -22,6 +22,21 @@ SECTION_KEYS = [('material_specs', 'Material Specifications'), ('payment_terms',
                 ('delivery_terms', 'Delivery Terms'), ('important_notes', 'Important Notes')]
 
 
+DESCRIPTIONS_KEY = 'room_descriptions'
+DESCRIPTION_MAX = 500
+
+
+def description_options():
+    """The admin's room descriptions (Settings → Quotation PDFs), one per line, in order, without duplicates."""
+    from .models import AppSetting
+    out = []
+    for line in (AppSetting.get(DESCRIPTIONS_KEY, '') or '').splitlines():
+        line = ' '.join(line.split())[:DESCRIPTION_MAX]
+        if line and line not in out:
+            out.append(line)
+    return out[:100]
+
+
 def initial_layout():
     from .models import AppSetting
     value = AppSetting.get(LAYOUT_KEY, '')
