@@ -51,6 +51,30 @@ def _legacy_names():
     return list(PLYWOOD_OPTIONS)
 
 
+_details_ready = {}
+
+
+def details_ready():
+    """False until the database update that adds plywood_options.details has run (checked once per request)."""
+    if _details_ready.get(_schema()):
+        return True
+    if has_app_context() and '_ply_details_ready' in g:
+        return g._ply_details_ready
+    ready = False
+    if table_ready():
+        from sqlalchemy import inspect
+        try:
+            ready = 'details' in {c['name'] for c in inspect(db.session.connection()).get_columns('plywood_options',
+                                                                                                schema=_schema())}
+        except Exception:
+            ready = False
+    if ready:
+        _details_ready[_schema()] = True
+    if has_app_context():
+        g._ply_details_ready = ready
+    return ready
+
+
 def ensure_options():
     """Give a business the classic plywood list once (default: the first), all at ₹0 so no price changes.
     Called from the Rates page and the quotation form; never again after the admin edits the list."""
@@ -80,13 +104,18 @@ def context():
            'material_rows': [], 'from_db': False}
     if ctx['ready']:
         from .models import AppSetting, Material, PlywoodOption
-        rows = PlywoodOption.query.order_by(PlywoodOption.sort_order, PlywoodOption.id).all()
+        q = PlywoodOption.query.order_by(PlywoodOption.sort_order, PlywoodOption.id)
+        if details_ready():
+            from sqlalchemy.orm import undefer
+            q = q.options(undefer(PlywoodOption.details))
+        rows = q.all()
         if rows:
             default = next((r for r in rows if r.is_default), rows[0])
             base, cbase = default.adjustment or 0.0, _cost_adj(default)
             for r in rows:
                 ctx['options'].append({'id': r.id, 'name': r.name, 'adjustment': round((r.adjustment or 0.0) - base, 6),
-                                       'cost_adjustment': r.cost_adjustment, 'default': r is default, 'active': r.active})
+                                       'cost_adjustment': r.cost_adjustment, 'default': r is default, 'active': r.active,
+                                       'details': (r.details or '') if details_ready() else ''})
                 ctx['deltas'][r.name] = round((r.adjustment or 0.0) - base, 6)
                 ctx['cost_deltas'][r.name] = round(_cost_adj(r) - cbase, 6)
             ctx['default'] = default.name
@@ -94,7 +123,7 @@ def context():
         elif not AppSetting.get(SEEDED_KEY):           # not set up yet: the classic list, all at ₹0
             names = _legacy_names()
             ctx['options'] = [{'id': None, 'name': n, 'adjustment': 0.0, 'cost_adjustment': None, 'default': i == 0,
-                               'active': True} for i, n in enumerate(names)]
+                               'active': True, 'details': ''} for i, n in enumerate(names)]
             ctx['deltas'] = ctx['cost_deltas'] = {n: 0.0 for n in names}
             ctx['default'] = names[0] if names else None
         from . import materials as M
@@ -258,3 +287,11 @@ def label(price_key, project=None):
 def display_key(price_key, project=None):
     """The key a revision snapshot stores for a summary line: stable when the default plywood changes."""
     return _named(price_key, project)
+
+
+def details_of(name):
+    """A plywood's details (brand, grade, thickness, warranty), or its name when it has none."""
+    for o in context()['options']:
+        if o['name'] == name:
+            return o.get('details') or name
+    return name or ''

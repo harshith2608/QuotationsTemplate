@@ -157,6 +157,7 @@
               <thead class="ki-table-head"><tr>
                 <th class="text-center" style="width:80px">Default</th><th style="min-width:180px">Plywood</th>
                 <th class="text-center" style="min-width:170px">Price difference (&#8377;{{ units.rate_label() }})</th>
+                {% if ply_details %}<th style="min-width:220px" title="Brand, grade, thickness, warranty: printed where Material Specifications say {plywood_details}">Details</th>{% endif %}
                 <th class="text-center" style="width:90px">Show</th><th class="text-center" style="width:90px">Delete</th></tr></thead>
               <tbody>
               {% for o in plywood_rows %}
@@ -179,6 +180,9 @@
                     </div>
                     {% endif %}
                   </td>
+                  {% if ply_details %}<td data-label="Details"><input type="text" name="ply_details_{{ o.id }}" class="form-control form-control-sm"
+                           maxlength="500" value="{{ o.details }}" placeholder="e.g. 12-year warranty Century Sainik 710 BWP, 16mm"
+                           aria-label="{{ o.name }} details"></td>{% endif %}
                   <td class="text-center" data-label="Show"><input class="form-check-input" type="checkbox" name="ply_active_{{ o.id }}"
                            value="1" {{ 'checked' if o.active }} aria-label="Offer {{ o.name }} on new quotations"></td>
                   <td class="text-center" data-label="Delete">
@@ -197,6 +201,8 @@
                       <input type="text" name="ply_new_adj" class="form-control text-end" inputmode="decimal" placeholder="e.g. 150 or -100"
                              aria-label="New plywood price difference">
                       <span class="input-group-text small">{{ units.rate_label() }}</span></div></td>
+                  {% if ply_details %}<td data-label="Details"><input type="text" name="ply_new_details" class="form-control form-control-sm" maxlength="500"
+                           placeholder="Brand, grade, thickness, warranty" aria-label="New plywood details"></td>{% endif %}
                   <td></td><td></td>
                 </tr>
               </tbody>
@@ -206,7 +212,9 @@
             <i class="bi bi-check-circle me-2"></i>Save Plywood
           </button>
           <p class="small text-muted mt-2 mb-0">Changing the default keeps every price difference: the new default becomes &#8377;0
-            and the others move with it. Rename one and existing quotations follow.</p>
+            and the others move with it. Rename one and existing quotations follow.
+            {% if ply_details %}<strong>Details</strong> are printed wherever your Material Specifications say <code>{plywood_details}</code>
+            (Settings → Quotation PDFs).{% endif %}</p>
         </form>
       </div>
     </div>

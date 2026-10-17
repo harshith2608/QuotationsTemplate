@@ -609,6 +609,7 @@ class PlywoodOption(db.Model):
     """A plywood a business offers (18mm BWP, 12mm MR…), managed in Admin → Rates. Material rates are for the
     default one; another adds its adjustment (₹ per sqft, can be negative) to plywood materials' rates."""
     __tablename__ = 'plywood_options'
+    __mapper_args__ = {'eager_defaults': False}   # never read the details column back after saving
     id              = db.Column(db.Integer, primary_key=True)
     name            = db.Column(db.String(60), unique=True, nullable=False)
     adjustment      = db.Column(EncryptedFloat, nullable=False, default=0.0)   # selling, ₹/sqft vs the default
@@ -616,6 +617,9 @@ class PlywoodOption(db.Model):
     is_default      = db.Column(db.Boolean, nullable=False, default=False)
     active          = db.Column(db.Boolean, nullable=False, default=True)
     sort_order      = db.Column(db.Integer, nullable=False, default=0)
+    # Brand, grade, thickness, warranty… for {plywood_details} in the quotation sections. Deferred + FetchedValue:
+    # safe before the database update adds it (plywood.details_ready() guards every read).
+    details         = db.deferred(db.Column(db.Text, nullable=True, server_default=db.FetchedValue()))
 
     def __repr__(self):
         return f'<PlywoodOption {self.name}>'

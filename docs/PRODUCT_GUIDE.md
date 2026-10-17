@@ -99,6 +99,9 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
     as a "<Room> – Hardware" row. No rates or per-item prices, so it's harder to shop around. Then Basic Total, discount,
     Total and your numbered sections: Material Specifications, Payment Terms, Delivery Terms, Important Notes, T&C.
     (Option: "By material", amounts per material, as before.)
+  - **★ Placeholders in the sections:** Material Specifications, Payment/Delivery Terms, Notes and T&C can include
+    {plywood}, {plywood_details}, {materials}, {customer}, {company}, {quotation_no}, {date} (Insert buttons in Settings),
+    filled in per quotation. Plywood details (brand, grade, thickness, warranty) are set per plywood in Admin → Rates.
   - **★ No's:** a count per measured item (2 identical shutters on one line); area and price multiply by it.
 - **WhatsApp in one tap.** A ready-made message with the room-wise summary, totals and payment details.
 - **★ Online approval link.** The customer opens a link (no app, no login), sees the quotation in the

@@ -411,7 +411,7 @@
     <div class="card-header ki-card-header"><i class="bi bi-card-checklist me-2"></i>Material Specifications</div>
     <div class="card-body">
       <p class="small text-muted mb-3">
-        Appears in every quotation PDF, first of the sections below. One point per line; the PDFs number them. Leave blank to omit the section.
+        Appears in every quotation PDF, first of the sections below. One point per line; the PDFs number them. Leave blank to omit the section. Use <strong>Insert</strong> to add details that change per quotation, e.g. <code>{plywood_details} for all the carcass and shutters</code>.
       </p>
       <textarea name="material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6"
                 placeholder="e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...">{{ saved.material_specs }}</textarea>
@@ -441,6 +441,31 @@
     <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Quotation Settings</button>
   </div>
 </form>
+<script>
+// Placeholders for the sections: a tap inserts {plywood_details} etc. at the cursor; each quotation fills them in
+(function () {
+  const vars = {{ section_variables|tojson }};
+  ['material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions'].forEach(name => {
+    const ta = document.querySelector(`textarea[name="${name}"]`);
+    if (!ta) return;
+    const bar = document.createElement('div');
+    bar.className = 'd-flex flex-wrap gap-1 mb-2 align-items-center ki-var-bar';
+    bar.innerHTML = '<span class="small text-muted me-1">Insert:</span>';
+    vars.forEach(([key, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-sm btn-outline-secondary py-0 px-2';
+      b.textContent = '+ ' + label; b.title = `Inserts {${key}}: filled in from each quotation`;
+      b.addEventListener('click', () => {
+        const token = `{${key}}`, start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? start;
+        ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+        ta.focus(); ta.selectionStart = ta.selectionEnd = start + token.length;
+      });
+      bar.appendChild(b);
+    });
+    ta.parentNode.insertBefore(bar, ta);
+  });
+})();
+</script>
 {% endif %}
 
 {# ───────────────────────────── UNITS ───────────────────────────── #}

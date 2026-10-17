@@ -120,8 +120,41 @@ def section_lines(text):
             and _NUMBERED.sub('', line).strip()]
 
 
-def sections(settings, terms_lines):
-    """[(title, [lines])] in print order; empty sections are left out. Terms & Conditions last."""
-    out = [(title, section_lines(settings.get(key))) for key, title in SECTION_KEYS]
-    out.append(('Terms & Conditions', [_NUMBERED.sub('', t).strip() for t in terms_lines if _NUMBERED.sub('', t).strip()]))
+# Placeholders the business can put in any section (Settings → Quotation PDFs offers them as buttons)
+VARIABLES = [('plywood', 'Plywood'), ('plywood_details', 'Plywood details'), ('materials', 'Materials used'),
+             ('customer', 'Customer name'), ('company', 'Your company'), ('quotation_no', 'Quotation no.'), ('date', 'Date')]
+_VAR = re.compile(r'\{\s*(' + '|'.join(k for k, _ in VARIABLES) + r')\s*\}')
+
+
+def variables(project, rooms=None):
+    """{placeholder: text} for a quotation. Plywood: the quotation's plywood(s) (items can use their own)."""
+    from datetime import timedelta
+    from . import plywood
+    from .branding import get_brand
+    rooms = rooms if rooms is not None else project.rooms_with_items()
+    used = plywood.used_on(project, rooms) if plywood.enabled() else []
+    from . import materials as M
+    materials = []
+    for room in rooms:
+        for i in room.item_list:
+            if not i.is_fixed:
+                label = M.label(i.wood_type, i.work_type)
+                if label not in materials:
+                    materials.append(label)
+    return {'plywood': ', '.join(used), 'plywood_details': '; '.join(plywood.details_of(n) for n in used),
+            'materials': ', '.join(materials), 'customer': project.customer_name or '', 'company': get_brand()['name'],
+            'quotation_no': str(project.id),
+            'date': (project.created_at + timedelta(hours=5, minutes=30)).strftime('%d %b %Y') if project.created_at else ''}
+
+
+def fill(text, values):
+    """Replace {placeholders} with the quotation's values; unknown {words} are left as typed."""
+    return _VAR.sub(lambda m: values.get(m.group(1), ''), text or '') if values else (text or '')
+
+
+def sections(settings, terms_lines, values=None):
+    """[(title, [lines])] in print order, placeholders filled in; empty sections are left out. T&C last."""
+    out = [(title, section_lines(fill(settings.get(key), values))) for key, title in SECTION_KEYS]
+    terms = [_NUMBERED.sub('', fill(t, values)).strip() for t in terms_lines]
+    out.append(('Terms & Conditions', [t for t in terms if t]))
     return [(t, lines) for t, lines in out if lines]

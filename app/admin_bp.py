@@ -315,7 +315,8 @@ def rates():
             ply_rows.append(dict(o, in_use=plywood.in_use(o['name'])))
     return render_template('admin/rates.html', title='Manage Rates', materials=rows,
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
-                           work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows)
+                           work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,
+                           ply_details=ply_ready and plywood.details_ready())
 
 
 def _plywood_ready():
@@ -369,6 +370,8 @@ def _save_plywood():
             r.name = name
         r.adjustment = adj
         r.active = bool(request.form.get(f'ply_active_{sid}'))
+        if plywood.details_ready() and f'ply_details_{sid}' in request.form:
+            r.details = ' '.join((request.form.get(f'ply_details_{sid}') or '').split())[:500] or None
     if errors:
         return errors
     new_default = by_id.get(request.form.get('ply_default') or '') or next((r for r in rows if r.is_default), None)
@@ -398,6 +401,8 @@ def _save_plywood():
             base = new_default.adjustment if new_default else 0.0
             row = PlywoodOption(name=new_name, adjustment=adj + (base or 0.0), active=True,
                                 is_default=not rows, sort_order=max([r.sort_order for r in rows] or [0]) + 1)
+            if plywood.details_ready():
+                row.details = ' '.join((request.form.get('ply_new_details') or '').split())[:500] or None
             db.session.add(row)
             rows.append(row)
             new_default = new_default or row
@@ -877,6 +882,7 @@ def settings():
     from . import layout
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links,
                            initial_layout=layout.initial_layout(), layouts=layout.LAYOUTS,
+                           section_variables=layout.VARIABLES,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
                            support_display=support_display, support_url=support_url,

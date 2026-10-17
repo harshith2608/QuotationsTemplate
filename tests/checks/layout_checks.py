@@ -85,6 +85,30 @@ ok('Settings → Quotation PDFs: layout choice and the new sections', 'name="ini
    and 'name="room_descriptions"' in t
    and 'name="delivery_terms"' in t and 'name="important_notes"' in t)
 
+# Placeholders in the sections: filled in from each quotation (plywood details from Admin → Rates)
+from app.models import PlywoodOption
+with app.app_context():
+    d = PlywoodOption.query.filter_by(is_default=True).first(); d_id, d_name = d.id, d.name
+t = c.get('/admin/rates').text
+ok('Rates → Plywood has a Details box per plywood', f'name="ply_details_{d_id}"' in t)
+form = {'plywood_submit': '1', 'ply_default': str(d_id)}
+with app.app_context():
+    for o in PlywoodOption.query.all():
+        form[f'ply_name_{o.id}'] = o.name; form[f'ply_adj_{o.id}'] = '0'; form[f'ply_active_{o.id}'] = '1'
+form[f'ply_details_{d_id}'] = '12 Years Brand warranty Century Sainik 710 grade BWP ply of 16mm thickness'
+c.post('/admin/rates', data=form)
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms',
+       'material_specs': '{plywood_details} for all the carcass and shutters\nMaterials: {materials}\nPrepared for {customer} by {company}, quotation #{quotation_no}\nKeep {this} as typed',
+       'terms_conditions': 'GST extra as applicable'})
+cust = pdftext(f'/projects/{pid}/pdf/customer')
+ok('placeholders filled: plywood details, materials, customer, company, quotation no.',
+   '12 Years Brand warranty Century Sainik 710 grade BWP ply of 16mm thickness for all the carcass and shutters' in cust
+   and 'Laminates – Box Work' in cust and f'Prepared for Layout Test by Demo Interiors, quotation #{pid}' in cust)
+ok('unknown {words} are left as typed', 'Keep {this} as typed' in cust)
+ok('the Full Quotation fills them too', '16mm thickness for all the carcass' in pdftext(f'/projects/{pid}/pdf'))
+t = c.get('/admin/settings?tab=documents').text
+ok('Settings offers the placeholders as Insert buttons', '"plywood_details"' in t and 'ki-var-bar' in t)
+
 # Several descriptions on one room (multi-select): kept one per line, duplicates dropped, each printed
 multi = [{'name': 'Study', 'description': 'Carcass: BWP 710 ply\nShutters:   1mm laminate\nCarcass: BWP 710 ply', 'items': [
     {'name': 'Study Table', 'length': 4, 'width': 2, 'wood_type': 'Laminates', 'work_type': 'Box Work'}]}]
@@ -140,8 +164,11 @@ with app.app_context():
 
 # Before the database update: rooms save and quotations print without descriptions
 with app.app_context():
-    db.session.execute(text('ALTER TABLE rooms DROP COLUMN description')); db.session.commit()
+    db.session.execute(text('ALTER TABLE rooms DROP COLUMN description'))
+    db.session.execute(text('ALTER TABLE plywood_options DROP COLUMN details')); db.session.commit()
 layout._ready_forever.clear()
+from app import plywood as _ply
+_ply._details_ready.clear()
 c2 = app.test_client(); c2.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 c2.post('/projects/new', data={'customer_name': 'Pre Desc', 'mobile': '9000000889', 'rooms_data': json.dumps(rooms),
                                'discount_type': 'none', 'discount_value': '0'})
@@ -153,3 +180,4 @@ with app.app_context():
 cust = re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in PdfReader(io.BytesIO(c2.get(f'/projects/{pre}/pdf/customer').data)).pages))
 ok('before the update: Initial Quotation prints, rooms described from materials', 'Kitchen – Hardware' in cust
    and 'Laminates – Box Work' in cust and c2.get(f'/projects/{pre}').status_code == 200 and c2.get(f'/projects/{pre}/edit').status_code == 200)
+ok('before the update: {plywood_details} prints the plywood name', d_name in cust and 'Rates' not in cust[:0])

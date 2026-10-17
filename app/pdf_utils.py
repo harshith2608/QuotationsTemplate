@@ -144,7 +144,7 @@ def _quote_ref(project):
             + f'\nDate: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
 
 
-def _section_elements(styles, dark):
+def _section_elements(styles, dark, project=None, rooms=None):
     """Material Specifications, Payment Terms, Delivery Terms, Important Notes and Terms & Conditions
     (Settings → Quotation PDFs): each a numbered list, empty ones left out."""
     from . import layout
@@ -154,7 +154,8 @@ def _section_elements(styles, dark):
                           leading=12, leftIndent=12, firstLineIndent=-12, spaceAfter=1.5)
     settings = AppSetting.get_many([k for k, _ in layout.SECTION_KEYS])
     out = []
-    for title, lines in layout.sections(settings, _get_terms_lines()):
+    values = layout.variables(project, rooms) if project is not None else None
+    for title, lines in layout.sections(settings, _get_terms_lines(), values):
         out.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6))
         out.append(Paragraph(escape(title), head))
         for i, line in enumerate(lines, 1):
@@ -532,7 +533,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Spacer(1, 14))
 
     # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
-    elements += _section_elements(styles, BRAND_DARK)
+    elements += _section_elements(styles, BRAND_DARK, project, rooms)
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
         _thank_you_text(),
@@ -813,7 +814,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Spacer(1, 14))
 
     # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
-    elements += _section_elements(styles, BRAND_DARK)
+    elements += _section_elements(styles, BRAND_DARK, project, _rooms2)
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
         _thank_you_text(),
