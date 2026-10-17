@@ -222,7 +222,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
 
 Playlist: **QuoteRoom tutorials**. Audience: not made for kids. Tags (all): `interior design quotation, quotation app,
 interior designer software, modular kitchen quotation, wardrobe quotation, GST invoice, QuoteRoom`.
-**Re-recorded 18 Oct 2026** for the new app (plywood, No's, room-by-room Initial Quotation, view/edit access, no signatures):
+**Re-recorded 18 Oct 2026 (re-uploaded and console links updated the same day)** for the new app (plywood, No's, room-by-room Initial Quotation, view/edit access, no signatures):
 re-upload Full (4.5 min), 1 (58 s), 2 (45 s), 3 (1 min 51 s), 4 (31 s), 5 (38 s) and 9 (65 s), then update their links and
 lengths in the console. Parts 6–8 and 10 were re-rendered only for consistency; their content didn't change.
 
