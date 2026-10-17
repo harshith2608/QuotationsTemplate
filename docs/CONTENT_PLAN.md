@@ -49,7 +49,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | 🎬 8 | Track every job | Stages (Pending → Confirmed → Ongoing → Completed, On hold, Cancelled), search, filter by stage, notifications | Quotations list, stage menu, bell | ~45 s |
 | 🎬 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
 | 🎬 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
-| 11 | Online payments (Razorpay) | Test mode keys, webhook, send a payment link, payment records itself | Admin → Payment settings, Payment link | ~1.5 min |
+| 🎬 11 | Online payments (Razorpay) | Setup guide, API keys, webhook address & secret, Test connection → payment link for an advance → customer pays → recorded automatically with a notification and the new balance | Admin → Payment settings, Payment link | 63 s |
 | 🎬 12 | Your quotation PDF | By room or by material; room descriptions (ticked per room); Material Specifications with Insert buttons ({plywood_details} etc.); Payment/Delivery Terms; T&C; Units (ft & in / mm / cm / in, sqft / sq m); the room-wise Initial Quotation that results | Settings → Quotation PDFs, Units, Edit quotation | 81 s |
 | 13 | QuoteRoom on your home screen | Add to home screen on Android & iPhone for one-tap access | Browser menu | ~20 s |
 
@@ -310,6 +310,19 @@ Console → Tutorials → Add a tutorial: title `10 · Send by email`, length `1
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
 
 (Recorded with a practice mail server on the Mac: `tools/tutorials/part10_email.py` docstring. Fictional .example addresses.)
+
+**Part 11** — *QuoteRoom tutorial 11: online payments with Razorpay (payment links that record themselves)*
+> Let customers pay you online by UPI, card or net banking. Follow the step-by-step guide in Payment Settings: create a Razorpay account, start in Test mode, paste your API keys, add the webhook address and secret in Razorpay, and tap Test connection. Then type any amount on a quotation (an advance, a stage payment or the full balance) and tap Payment Link. When your customer pays, QuoteRoom records the payment on the quotation by itself, with a notification and the new balance. Switch Razorpay to Live mode when your KYC is approved.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Chapters: 0:00 Online payments · 0:05 Payment Settings & guide · 0:15 API keys & webhook · 0:24 Test connection · 0:27 Payment link for an advance · 0:38 Customer pays · 0:43 Recorded automatically · 0:57 Go live
+
+Console → Tutorials → Add a tutorial: title `11 · Online payments`, length `1 min`,
+"Razorpay keys, a payment link, and the payment records itself." Instagram Reel caption:
+> Send a payment link, get paid by UPI, and see it recorded on the quotation by itself 💸 No typing payments in, no checking your bank app. QuoteRoom works with Razorpay. Link in bio for a free 7-day trial.
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
+
+(Recorded with Razorpay TEST keys on the local tutorial app; the owner made the test payment; the "paid" webhook was delivered locally by `tools/tutorials/replay_razorpay_webhook.py` because Razorpay can't reach a local app. The app ran with a recording-only sitecustomize that turns off Razorpay's SMS/email for test links. Run the recorder with `RAZORPAY_ACCOUNT_NAME` set so the Razorpay account's name is shown as the fictional business.)
 
 **Part 12** — *QuoteRoom tutorial 12: make the quotation PDF your own (room descriptions, specs, terms & units)*
 > Choose what your customer gets: room by room (items with sizes and No's, one amount per room, no rates) or by material. Add your room descriptions once and tick them on each room. Write your Material Specifications, Payment Terms, Delivery Terms and Terms & Conditions, and tap Insert to add details that change per quotation, like the plywood: "Plywood: {plywood_details} for all carcass and shutters" prints the plywood chosen on that quotation. Measure in feet & inches, mm, cm or inches, with rates per sqft or per sq m.
