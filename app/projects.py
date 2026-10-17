@@ -168,7 +168,9 @@ def _save_project_data(project, rooms_data):
             continue
         room = Room(project_id=project.id, name=room_name)
         if desc_ready:                         # only once the database has the column
-            room.description = ' '.join(str(rd.get('description') or '').split())[:500] or None
+            # one or more of the admin's descriptions, one per line
+            lines = [' '.join(l.split()) for l in str(rd.get('description') or '').splitlines()]
+            room.description = '\n'.join(dict.fromkeys(l for l in lines if l))[:2000] or None
         db.session.add(room)
         db.session.flush()
 

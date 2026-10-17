@@ -193,7 +193,7 @@ def _room_rows_elements(project, page_width, palette, styles):
             size = (lambda v: units.length(v) if v else '—')
             data.append([str(r['no']) if i == 0 else '',
                          Paragraph(escape(r['title']), bold) if i == 0 else '',
-                         Paragraph(escape(r['description']), muted) if i == 0 and r['description'] else '',
+                         Paragraph(escape(r['description']).replace('\n', '<br/>'), muted) if i == 0 and r['description'] else '',
                          Paragraph(escape(it['name']), small), size(it['length']), size(it['width']),
                          layout.count_text(it['count']), _money(r['amount']) if i == 0 else ''])
         n = len(data)

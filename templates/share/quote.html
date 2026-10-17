@@ -95,7 +95,7 @@
     <div class="d-flex justify-content-between gap-2 {{ 'border-top pt-2 mt-2' if not loop.first }}">
       <div>
         <div class="fw-semibold small" style="color:var(--p)">{{ r.no }}. {{ r.title }}</div>
-        {% if r.description %}<div class="small q-muted">{{ r.description }}</div>{% endif %}
+        {% if r.description %}{% for d in r.description.split('\n') %}<div class="small q-muted">{{ d }}</div>{% endfor %}{% endif %}
         <ul class="small mb-1 ps-3">
           {% for it in r['items'] %}<li>{{ it.name }}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
         </ul>

@@ -94,7 +94,7 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 - **Two PDFs.**
   - **Full Quotation:** every room, item and measurement with amounts (for the detail-minded customer, or internal use).
   - **★ Initial Quotation, room by room** (default; Settings → Quotation PDFs): each room with what it's made of (your own
-    description per room, picked from a list you keep in Settings → Quotation PDFs → Room descriptions, or its
+    description per room, one or more picked from a list you keep in Settings → Quotation PDFs → Room descriptions, or its
     materials), its items with sizes and No's, and **one amount per room**; each room's fittings
     as a "<Room> – Hardware" row. No rates or per-item prices, so it's harder to shop around. Then Basic Total, discount,
     Total and your numbered sections: Material Specifications, Payment Terms, Delivery Terms, Important Notes, T&C.

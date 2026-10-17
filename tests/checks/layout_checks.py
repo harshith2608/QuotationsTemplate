@@ -85,6 +85,21 @@ ok('Settings → Quotation PDFs: layout choice and the new sections', 'name="ini
    and 'name="room_descriptions"' in t
    and 'name="delivery_terms"' in t and 'name="important_notes"' in t)
 
+# Several descriptions on one room (multi-select): kept one per line, duplicates dropped, each printed
+multi = [{'name': 'Study', 'description': 'Carcass: BWP 710 ply\nShutters:   1mm laminate\nCarcass: BWP 710 ply', 'items': [
+    {'name': 'Study Table', 'length': 4, 'width': 2, 'wood_type': 'Laminates', 'work_type': 'Box Work'}]}]
+c.post('/projects/new', data={'customer_name': 'Multi Desc', 'mobile': '9000000890', 'rooms_data': json.dumps(multi),
+                              'discount_type': 'none', 'discount_value': '0'})
+with app.app_context():
+    mp = Project.query.order_by(Project.id.desc()).first()
+    mroom = Room.query.options(undefer(Room.description)).filter_by(project_id=mp.id).first()
+    ok('multi-select descriptions saved one per line, tidied, no duplicates',
+       mroom.description == 'Carcass: BWP 710 ply\nShutters: 1mm laminate')
+mc = pdftext(f'/projects/{mp.id}/pdf/customer')
+ok('…and both printed for the room', 'Carcass: BWP 710 ply' in mc and 'Shutters: 1mm laminate' in mc)
+ok('…and both kept on the edit form', json.loads(c.get(f'/projects/{mp.id}/edit').text.split('id="existing-rooms-data"', 1)[1]
+   .split('>', 1)[1].split('</script>', 1)[0])[0]['description'] == 'Carcass: BWP 710 ply\nShutters: 1mm laminate')
+
 # Customer's link follows the same layout
 r = c.post(f'/projects/{pid}/share', data={'detail': 'summary'}, follow_redirects=True)
 with app.app_context():

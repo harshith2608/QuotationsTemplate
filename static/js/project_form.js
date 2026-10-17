@@ -115,8 +115,8 @@ async function _doSaveDraft() {
       const p = _itemPayload(item);
       if (p) itemsPayload.push(p);
     });
-    const desc = (document.getElementById('room_desc_' + rk) || {}).value || '';
-    roomsPayload.push({ name: roomName, items: itemsPayload, description: desc.trim() });
+    const desc = roomDescriptionValues(rk).join('\n');
+    roomsPayload.push({ name: roomName, items: itemsPayload, description: desc });
   });
 
   try {
@@ -337,8 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (existingRooms && existingRooms.length > 0) {
     existingRooms.forEach(rd => {
       const rk = addRoom(rd.name);
-      const descEl = document.getElementById('room_desc_' + rk);
-      if (descEl && rd.description) descEl.innerHTML = roomDescriptionOptions(rd.description);
+      if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
         if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price); return; }
         const lFtIn = decimalToFtIn(id.length);
@@ -399,10 +398,12 @@ function addRoom(presetName) {
     </div>
     <div class="card-body p-2 p-md-3">
       <div class="d-flex align-items-center gap-2 mb-2">
-        <select class="form-select form-select-sm" id="room_desc_${rk}" onchange="scheduleDraftSave()"
-                title="What this room is made of, on the Initial Quotation" aria-label="Material description">
-          ${roomDescriptionOptions('')}
-        </select>
+        <div class="dropdown flex-grow-1" style="min-width:0">
+          <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start text-truncate"
+                  id="room_desc_btn_${rk}" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                  title="What this room is made of, on the Initial Quotation">Material description: materials used (automatic)</button>
+          <div class="dropdown-menu p-2 shadow-sm" id="room_desc_${rk}" style="max-width:min(560px, 92vw)"></div>
+        </div>
         ${CATALOG.descriptionsUrl ? `<a class="small text-nowrap" href="${escHtml(CATALOG.descriptionsUrl)}" target="_blank" rel="noopener">Edit list</a>` : ''}
       </div>
       <div class="item-table-wrap">
@@ -427,6 +428,7 @@ function addRoom(presetName) {
     </div>
   `;
   container.appendChild(div);
+  renderRoomDescriptions(rk, []);
   // Wire up autocomplete for room name input
   const roomNameInput = document.getElementById('room_name_' + rk);
   if (roomNameInput && masterRooms.length) initAutocomplete(roomNameInput, masterRooms);
@@ -434,15 +436,36 @@ function addRoom(presetName) {
   return rk;
 }
 
-// Room material description: the admin's list (Settings → Quotation PDFs); '' = list the materials used.
-// A saved description no longer on the list stays selectable for its room.
-function roomDescriptionOptions(selected) {
+// Room material description: tick any of the admin's descriptions (Settings → Quotation PDFs); none ticked = list
+// the materials used. Saved one per line. Ticked descriptions no longer on the list stay for their room.
+function renderRoomDescriptions(rk, selected) {
+  const box = document.getElementById('room_desc_' + rk);
+  if (!box) return;
+  const chosen = (selected || []).filter(Boolean);
   const list = (CATALOG.roomDescriptions || []).slice();
-  if (selected && !list.includes(selected)) list.push(selected);
-  let html = `<option value="">Material description: materials used (automatic)</option>`;
-  list.forEach(d => { html += `<option value="${escHtml(d)}" ${d === selected ? 'selected' : ''}>${escHtml(d)}</option>`; });
-  return html;
+  chosen.forEach(d => { if (!list.includes(d)) list.push(d); });
+  if (!list.length) {
+    box.innerHTML = `<div class="small text-muted px-1">No descriptions yet.${CATALOG.descriptionsUrl ? ' Add them with "Edit list".' : ''}</div>`;
+  } else {
+    box.innerHTML = list.map((d, i) => `
+      <label class="dropdown-item d-flex gap-2 align-items-start small text-wrap" for="rd_${rk}_${i}">
+        <input class="form-check-input mt-0 flex-shrink-0" type="checkbox" id="rd_${rk}_${i}" value="${escHtml(d)}"
+               ${chosen.includes(d) ? 'checked' : ''} onchange="onRoomDescription('${rk}')">
+        <span>${escHtml(d)}</span>
+      </label>`).join('');
+  }
+  updateRoomDescriptionLabel(rk);
 }
+function roomDescriptionValues(rk) {
+  return Array.from(document.querySelectorAll(`#room_desc_${rk} input[type=checkbox]:checked`)).map(c => c.value);
+}
+function updateRoomDescriptionLabel(rk) {
+  const btn = document.getElementById('room_desc_btn_' + rk);
+  if (!btn) return;
+  const vals = roomDescriptionValues(rk);
+  btn.textContent = vals.length ? vals.join(' · ') : 'Material description: materials used (automatic)';
+}
+function onRoomDescription(rk) { updateRoomDescriptionLabel(rk); scheduleDraftSave(); }
 
 function removeRoom(rk) {
   const card = document.getElementById('room_card_' + rk);
@@ -995,8 +1018,8 @@ function _validateForm() {
       hasItem = true;
     });
 
-    const desc = (document.getElementById('room_desc_' + rk) || {}).value || '';
-    if (itemsPayload.length > 0) roomsPayload.push({ name: roomName, items: itemsPayload, description: desc.trim() });
+    const desc = roomDescriptionValues(rk).join('\n');
+    if (itemsPayload.length > 0) roomsPayload.push({ name: roomName, items: itemsPayload, description: desc });
   });
 
   if (!hasItem) {
