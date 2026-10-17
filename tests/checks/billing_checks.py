@@ -89,6 +89,35 @@ ok('admin still sees Edit', f'/projects/{pid}/edit' in c.get(f'/projects/{pid}')
 with app.app_context():
     ProjectAccess.query.filter_by(project_id=pid, user_id=st_id).delete(); db.session.commit()
 
+# Access levels from the list's Access pop-up: no access / can view / can edit; delete stays admin-only
+st_id_ = None
+with app.app_context():
+    st_id_ = User.query.filter_by(username='demo-staff').first().id
+lst = c.get('/projects').text
+ok('quotations list: no WhatsApp button in Actions; Access pop-up offers view/edit', 'whatsapp' not in lst.split('<table', 1)[-1].split('</table>', 1)[0].lower()
+   and "opt('edit'" in lst and "name=\"access_${emp.id}\"" in lst)
+r = c.post(f'/projects/{pid}/access', data={f'access_{st_id_}': 'edit'}, follow_redirects=True)
+ok('give staff edit access', 'Access updated: 1 can edit' in r.text)
+t = staff.get(f'/projects/{pid}').text
+ok('staff with edit access see Edit, can open and save the edit form', f'/projects/{pid}/edit' in t
+   and f'/projects/{pid}/edit' in staff.get('/projects').text and staff.get(f'/projects/{pid}/edit').status_code == 200)
+rooms_now = staff.get(f'/projects/{pid}/edit').text.split('id="existing-rooms-data"', 1)[1].split('>', 1)[1].split('</script>', 1)[0]
+r = staff.post(f'/projects/{pid}/edit', data={'customer_name': 'Billing Test', 'mobile': '9000000111', 'rooms_data': rooms_now,
+                                             'discount_type': 'fixed', 'discount_value': '1000'})
+ok('…and their save goes through', r.status_code == 302)
+r = staff.post(f'/projects/{pid}/delete')
+with app.app_context():
+    ok('…but they can never delete it', db.session.get(Project, pid) is not None and r.status_code in (302, 403))
+c.post(f'/projects/{pid}/access', data={f'access_{st_id_}': 'view'})
+ok('view access: no Edit, edit page refused', f'/projects/{pid}/edit' not in staff.get(f'/projects/{pid}').text
+   and staff.get(f'/projects/{pid}/edit').status_code == 403 and staff.get(f'/projects/{pid}').status_code == 200)
+c.post(f'/projects/{pid}/access', data={f'access_{st_id_}': ''})
+ok('no access: the quotation is hidden from them', staff.get(f'/projects/{pid}').status_code == 403)
+c.post(f'/projects/{pid}/access', data={'user_ids': str(st_id_)})
+ok('older pop-up (user_ids) still means view', staff.get(f'/projects/{pid}').status_code == 200
+   and staff.get(f'/projects/{pid}/edit').status_code == 403)
+c.post(f'/projects/{pid}/access', data={})
+
 # ── Restore an older revision ──
 rid = new_quote(name='Restore Test', mobile='9000000222')                     # Rev 1: 50 × 850 + 7,500 = 50,000
 c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': json.dumps(rooms2),
@@ -503,3 +532,16 @@ from app.seed import seed_demo
 with app.app_context():
     seed_demo(reset=True)
     ok('before the update: the nightly demo reset still works', Project.query.count() == 5)
+
+# Before the database update that adds edit access: sharing works, view-only
+with app.app_context():
+    db.session.execute(text('ALTER TABLE project_access DROP COLUMN can_edit')); db.session.commit()
+from app import access as _acc
+_acc._ready_forever.clear()
+c3 = app.test_client(); c3.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
+s3 = app.test_client(); s3.post('/login', data={'username': 'demo-staff', 'password': 'demo1234'})
+qid = new_quote(name='Pre Access', mobile='9000000333')
+r = c3.post(f'/projects/{qid}/access', data={f'access_{st_id_}': 'edit'}, follow_redirects=True)
+ok('before the update: sharing saves (as view), list and pages work', r.status_code == 200 and 'Access updated' in r.text
+   and s3.get(f'/projects/{qid}').status_code == 200 and s3.get(f'/projects/{qid}/edit').status_code == 403
+   and c3.get('/projects').status_code == 200)

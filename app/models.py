@@ -282,13 +282,17 @@ class ItemRate(db.Model):
 
 
 class ProjectAccess(db.Model):
-    """Grants an employee access to a project they didn't create."""
+    """Grants an employee access to a project they didn't create: view, or view and edit (can_edit)."""
     __tablename__ = 'project_access'
+    __mapper_args__ = {'eager_defaults': False}   # never read can_edit back after saving
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id',    ondelete='CASCADE'), nullable=False)
     granted_by = db.Column(db.Integer, db.ForeignKey('users.id'),   nullable=False)
     granted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # True: may edit the quotation too (never delete: that stays admin-only). Deferred + FetchedValue: safe before
+    # the database update adds it (access.edit_ready() guards every read).
+    can_edit   = db.deferred(db.Column(db.Boolean, nullable=False, server_default=db.FetchedValue()))
 
     grantee = db.relationship('User', foreign_keys=[user_id])
 

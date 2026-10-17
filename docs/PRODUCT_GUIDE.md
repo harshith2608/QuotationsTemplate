@@ -131,7 +131,8 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Running the business
 - **Job stages:** Awaiting confirmation → Confirmed → Ongoing → Completed (plus On hold, Cancelled), with history and notes.
 - **Dashboard:** value of work at each stage.
-- **Team:** staff logins; staff see only the quotations they're given; admins see everything.
+- **Team:** staff logins; staff see only the quotations they're given, as **Can view** or **★ Can edit** (Access on the
+  quotations list); only admins can delete; admins see everything.
 - **★ Costs & profit (owner only):** enter what materials and fittings cost you; each quotation shows its
   estimated profit and margin **before GST**. Never shown to staff or customers, never printed.
 - **★ Reports (owner only):** this financial year (won, collected, invoiced, GST, profit, to collect), a

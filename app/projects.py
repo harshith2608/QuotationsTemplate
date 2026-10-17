@@ -291,20 +291,28 @@ def list_projects():
     if current_user.is_admin:
         employees = User.query.filter_by(role='employee').order_by(User.username).all()
         page_ids = [p.id for p in projects.items]
-        rows = ProjectAccess.query.filter(ProjectAccess.project_id.in_(page_ids)).all()
-        for row in rows:
-            access_map.setdefault(row.project_id, []).append(row.user_id)
+        from . import access as _access
+        q = ProjectAccess.query.filter(ProjectAccess.project_id.in_(page_ids))
+        if _access.edit_ready():
+            from sqlalchemy.orm import undefer
+            q = q.options(undefer(ProjectAccess.can_edit))
+        for row in q.all():                 # {project: {user: 'view' | 'edit'}}
+            access_map.setdefault(row.project_id, {})[row.user_id] = \
+                'edit' if _access.edit_ready() and row.can_edit else 'view'
         # Build creator map so the modal knows who made each quotation
         for p in projects.items:
             creator_map[p.id] = p.created_by
 
     employees_json = [{'id': e.id, 'username': e.username} for e in employees]
+    from . import access as _access
+    editable_ids = _access.edit_ids(current_user, [p.id for p in projects.items])
     return render_template('projects/list.html', projects=projects, search=search,
                            stage=stage, stage_counts=stage_counts, all_count=all_count,
                            title='Quotations', employees=employees,
                            employees_json=employees_json,
                            access_map=access_map,
-                           creator_map=creator_map)
+                           creator_map=creator_map, editable_ids=editable_ids,
+                           edit_access_ready=_access.edit_ready())
 
 
 @projects_bp.route('/projects/new', methods=['GET', 'POST'])
@@ -514,6 +522,7 @@ def view_project(project_id):
                            stage_history=project.stage_changes.all(),
                            fixed_total=fixed_total,
                            can_change_stage=_can_change_stage(project),
+                           can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -552,7 +561,8 @@ def update_stage(project_id):
 def edit_project(project_id):
     from . import plywood as _ply
     project = _ply.load_project(project_id)
-    if not current_user.is_admin and project.created_by != current_user.id:
+    from . import access
+    if not access.can_edit(project, current_user):     # admin, its creator, or staff given "Can edit"
         abort(403)
 
     master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
@@ -694,21 +704,33 @@ def _build_rooms_json(project):
 @admin_required
 def set_project_access(project_id):
     project = Project.query.get_or_404(project_id)
-    selected_ids = set(int(uid) for uid in request.form.getlist('user_ids'))
+    from . import access
+    # access_<user id> = '' (no access) | 'view' | 'edit'. Older pop-ups send user_ids (view).
+    levels = {}
+    for key, value in request.form.items():
+        if key.startswith('access_') and key[7:].isdigit() and value in ('view', 'edit'):
+            levels[int(key[7:])] = value
+    for uid in request.form.getlist('user_ids'):
+        if uid.isdigit():
+            levels.setdefault(int(uid), 'view')
+    if not access.edit_ready():
+        levels = {u: 'view' for u in levels}           # edit access arrives with the database update
 
     # Replace all existing access entries for this project
     ProjectAccess.query.filter_by(project_id=project_id).delete()
-    for uid in selected_ids:
-        user = User.query.get(uid)
+    viewers = editors = 0
+    for uid, level in levels.items():
+        user = db.session.get(User, uid)
         if user and user.role == 'employee':
-            db.session.add(ProjectAccess(
-                project_id=project_id,
-                user_id=uid,
-                granted_by=current_user.id
-            ))
+            grant = ProjectAccess(project_id=project_id, user_id=uid, granted_by=current_user.id)
+            if access.edit_ready():
+                grant.can_edit = level == 'edit'
+            db.session.add(grant)
+            editors += level == 'edit'
+            viewers += level == 'view'
     db.session.commit()
-    count = len(selected_ids)
-    flash(f'Access updated — {count} employee{"s" if count != 1 else ""} can now view this quotation.', 'success')
+    parts = [f'{n} can {what}' for n, what in ((editors, 'edit'), (viewers, 'view')) if n]
+    flash('Access updated: ' + (', '.join(parts) if parts else 'only admins') + '. Deleting stays admin-only.', 'success')
     return redirect(url_for('projects.list_projects'))
 
 
