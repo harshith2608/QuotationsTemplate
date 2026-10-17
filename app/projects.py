@@ -1098,7 +1098,10 @@ def razorpay_webhook():
     if razorpay_pay_id and Payment.query.filter_by(razorpay_payment_id=razorpay_pay_id).first():
         return jsonify({'status': 'duplicate'}), 200
 
-    # ── 5. Auto-record payment (use first admin as recorded_by)
+    # ── 5. Auto-record payment (use first admin as recorded_by). Totals are taken before it's added: once added, the
+    # query below would already include it (autoflush) and count it twice.
+    total_paid = sum(p.amount for p in Payment.query.filter_by(project_id=project.id).all()) + amount_rupees
+    balance    = max(billing.amount_due_total(project) - total_paid, 0)
     admin_user = User.query.filter_by(role='admin').order_by(User.id).first()
     payment = Payment(
         project_id=project.id,
@@ -1110,12 +1113,7 @@ def razorpay_webhook():
     )
     db.session.add(payment)
 
-    # ── 6. Compute updated balance
-    all_payments = Payment.query.filter_by(project_id=project.id).all()
-    total_paid   = sum(p.amount for p in all_payments) + amount_rupees
-    balance      = max(billing.amount_due_total(project) - total_paid, 0)
-
-    # ── 7. In-app notification for admin
+    # ── 6. In-app notification for admin
     notif_msg = (
         f"₹{amount_rupees:,.2f} received from {project.customer_name} "
         f"(Quotation #{project.id}) via Razorpay.\n"
@@ -1128,7 +1126,7 @@ def razorpay_webhook():
     ))
     db.session.commit()
 
-    # ── 8. Email — customer
+    # ── 7. Email — customer
     if project.email:
         customer_body = (
             f"Dear {project.customer_name},\n\n"
@@ -1146,7 +1144,7 @@ def razorpay_webhook():
             customer_body
         )
 
-    # ── 9. Email — admin
+    # ── 8. Email — admin
     admin_email = AppSetting.get('admin_email', '').strip()
     if admin_email:
         admin_body = (

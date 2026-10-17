@@ -32,6 +32,9 @@ with app.app_context():
     ok(f'valid signed webhook → payment recorded (was a crash before) [{r.status_code}]',
        r.status_code == 200 and p is not None and p.amount == 25000.0 and p.source == 'razorpay')
     ok('admin notification created', sum('25,000.00' in n.message for n in Notification.query.all()) == 1)
+    paid_now = sum(x.amount for x in Payment.query.filter_by(project_id=3).all())
+    note = next(n for n in Notification.query.all() if '25,000.00' in n.message)
+    ok(f'notification counts the new payment once (Total Paid ₹{paid_now:,.2f})', f'Total Paid: ₹{paid_now:,.2f}' in note.message)
 r = post(payload(3, 'pay_REAL1', 2500000), secret='whsec_test')
 with app.app_context():
     ok('duplicate delivery ignored', r.get_json().get('status') == 'duplicate' and Payment.query.filter_by(razorpay_payment_id='pay_REAL1').count() == 1)
