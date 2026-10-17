@@ -313,6 +313,9 @@ def restore_revision(project_id, number):
     project.discount_type = d.get('type') if d.get('type') in ('percentage', 'fixed') else 'none'
     project.discount_value = d.get('value') or 0
     project.plywood_thickness = snap.get('plywood', project.plywood_thickness or '')
+    from . import plywood
+    if plywood.table_ready():
+        project.plywood = snap.get('plywood_choice')
     project.grand_total = _save_project_data(project, preview['rooms'])
     db.session.add(ProjectEditLog(project_id=project.id, edited_by=current_user.id))
     db.session.commit()

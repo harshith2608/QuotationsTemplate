@@ -31,8 +31,9 @@ ok('list shows discounted total, not pre-discount', f'{priya_final:,.2f}' in l a
 stmts = []
 with app.app_context():
     event.listen(db.engine, 'before_cursor_execute', lambda conn, cur, st, *a: stmts.append(st))
-# (the quotation page also loads its invoice, revisions, approval link, reminders and costs: a fixed few more)
-for url, budget in [(f'/projects/{priya.id}', 22), ('/projects', 15), ('/admin/dashboard', 20),
+# (the quotation page also loads its invoice, revisions, approval link, reminders and costs, plus the plywood list
+#  and which materials are priced on plywood: a fixed few more, never one per room or item)
+for url, budget in [(f'/projects/{priya.id}', 24), ('/projects', 15), ('/admin/dashboard', 20),
                     (f'/projects/{priya.id}/edit', 20)]:
     stmts.clear(); r = c.get(url)
     ok(f'{url}: {len(stmts)} queries (budget {budget})', r.status_code == 200 and len(stmts) <= budget)

@@ -161,26 +161,43 @@
     <div class="col-12 col-lg-4">
       <div class="summary-panel">
 
-      <!-- Plywood Thickness Selection -->
-      {% set _selected_ply = form_data.get('plywood_thickness', '') %}
+      <!-- Plywood -->
+      {% set ply = plywood_form %}
       <div class="card shadow-sm border-0 mb-3">
         <div class="card-header ki-card-header">
-          <i class="bi bi-layers me-2"></i>Plywood Thickness
+          <i class="bi bi-layers me-2"></i>Plywood
         </div>
         <div class="card-body py-2">
+          {% if ply.enabled %}
+          <p class="small text-muted mb-2">Plywood for this quotation. Board materials are priced on it; any item can use its own.</p>
+          <div class="ply-options">
+            {% for opt in ply.options %}{% if opt.active or opt.name == ply.selected %}
+            {% set opt_id = 'ply_' ~ loop.index %}
+            <label class="ply-option" for="{{ opt_id }}">
+              <input class="form-check-input" type="radio" name="plywood" value="{{ opt.name }}" id="{{ opt_id }}"
+                     {{ 'checked' if opt.name == ply.selected }} onchange="onQuotationPlywood()">
+              <span>{{ opt.name }}</span>
+              <span class="ms-auto small text-muted">{% if opt.name == ply.default %}your rates{% elif opt.delta %}{{ '%+g'|format(opt.delta) }} &#8377;/sqft{% else %}same price{% endif %}</span>
+            </label>
+            {% endif %}{% endfor %}
+          </div>
+          {% if current_user.is_admin %}<div class="form-text small">Set plywood and prices in
+            <a href="{{ url_for('admin.rates') }}#plywood" target="_blank" rel="noopener">Admin → Rates</a>.</div>{% endif %}
+          {% else %}
+          {# Before the database update: the old information-only list #}
+          {% set _selected_list = (form_data.get('plywood_thickness', '') or '').split(',') | map('trim') | list %}
           <p class="small text-muted mb-2">Select all plywood types used in this project.</p>
-          {% set _selected_list = (_selected_ply or '').split(',') | map('trim') | list %}
           <div class="ply-options">
             {% for opt in catalog.PLYWOOD_OPTIONS %}
             {% set opt_id = 'ply_' ~ loop.index %}
             <label class="ply-option" for="{{ opt_id }}">
-              <input class="form-check-input" type="checkbox" name="plywood_thickness"
-                     value="{{ opt }}" id="{{ opt_id }}"
+              <input class="form-check-input" type="checkbox" name="plywood_thickness" value="{{ opt }}" id="{{ opt_id }}"
                      {{ 'checked' if opt in _selected_list else '' }}>
               <span>{{ opt }}</span>
             </label>
             {% endfor %}
           </div>
+          {% endif %}
           <div id="boards-estimate" class="mt-2 pt-2 border-top" style="display:none">
             <div class="d-flex justify-content-between align-items-center">
               <span class="small text-muted">Total Area</span>
@@ -359,6 +376,12 @@
           {% if current_user.is_admin %}<div class="form-text small">Need glass, PU, wallpaper…? Add materials in
             <a href="{{ url_for('admin.rates') }}#materials" target="_blank" rel="noopener">Admin → Rates</a>.</div>{% endif %}
         </div>
+        {% if plywood_form.enabled %}
+        <div class="mb-3" id="modal_ply_wrap">
+          <label class="form-label fw-medium small mb-1" for="modal_item_ply">Plywood</label>
+          <select class="form-select" id="modal_item_ply"></select>
+        </div>
+        {% endif %}
         <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
           <span class="small text-muted fw-medium">Calculated Area</span>
           <span class="fw-bold text-primary fs-6"><span id="modal_item_area">0.00</span> sqft</span>
@@ -384,6 +407,9 @@
     defaultWork: {{ default_combo.split('|', 1)[1]|tojson }},
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }}
   };
+  // Plywood pricing (Admin → Rates → Plywood): rates are for `default`; item_rates has 'Material|Work|Plywood' keys
+  window.KI_PLYWOOD = {{ ({'enabled': plywood_form.enabled, 'default': plywood_form.default,
+                           'materials': plywood_form.materials, 'options': plywood_form.options})|tojson }};
 </script>
 <script src="{{ asset_url('js/project_form.js') }}"></script>
 {% endblock %}

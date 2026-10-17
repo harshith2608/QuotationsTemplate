@@ -64,6 +64,9 @@ def save_draft():
         db.session.add(project)
         db.session.flush()   # get project.id before saving rooms
 
+    from . import plywood
+    if plywood.table_ready() and 'plywood' in data:
+        project.plywood = plywood.clean_choice(data.get('plywood'))
     # Save rooms/items (replaces any previously auto-saved rooms for this draft)
     if rooms_data:
         grand_total = _save_project_data(project, rooms_data)

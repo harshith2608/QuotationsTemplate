@@ -41,8 +41,8 @@ def ready():
 # ── Quotation snapshot (revisions, invoices, online approval) ───────────────
 
 def _item_rates():
-    from .models import ItemRate
-    return {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in ItemRate.query.all()}
+    from . import plywood
+    return plywood.rate_map()
 
 
 def quotation_snapshot(project, rooms=None):
@@ -50,8 +50,10 @@ def quotation_snapshot(project, rooms=None):
     the material summary and the totals. Uses the current rates (as the quotation pages do)."""
     from . import materials as M
     from .catalog import FIXED_ITEMS_LABEL
+    from . import plywood
     rates = _item_rates()
     rooms = rooms if rooms is not None else project.rooms_with_items()
+    project_ply = plywood.project_plywood(project)
     out_rooms = []
     for room in rooms:
         items = []
@@ -61,11 +63,16 @@ def quotation_snapshot(project, rooms=None):
                               'unit_price': round(i.unit_price or 0, 2),
                               'amount': round((i.quantity or 0) * (i.unit_price or 0), 2)})
             else:
-                rate = rates.get(f'{i.wood_type}|{i.work_type}', 0.0)
-                items.append({'name': i.name, 'type': 'measured', 'length': i.length, 'width': i.width,
-                              'area': round(i.area, 4), 'wood_type': i.wood_type, 'work_type': i.work_type,
-                              'material': M.label(i.wood_type, i.work_type), 'rate': rate,
-                              'amount': round(i.area * rate, 2)})
+                key = plywood.item_key(i, project_ply)
+                rate = rates.get(key, 0.0)
+                row = {'name': i.name, 'type': 'measured', 'length': i.length, 'width': i.width,
+                       'area': round(i.area, 4), 'wood_type': i.wood_type, 'work_type': i.work_type,
+                       'material': plywood.label(key, project), 'rate': rate,
+                       'amount': round(i.area * rate, 2)}
+                own = plywood.item_plywood(i)
+                if own:
+                    row['plywood'] = own               # only when set: older snapshots stay comparable
+                items.append(row)
         out_rooms.append({'name': room.name, 'items': items})
     summary = []
     area_totals = project.get_item_totals(rooms)
@@ -73,7 +80,7 @@ def quotation_snapshot(project, rooms=None):
         area = area_totals.get(key, 0.0)
         if area > 0:
             rate = rates.get(key, 0.0)
-            summary.append({'key': key, 'label': M.label_of(key), 'area': round(area, 2), 'rate': rate,
+            summary.append({'key': plywood.display_key(key, project), 'label': plywood.label(key, project), 'area': round(area, 2), 'rate': rate,
                             'amount': round(area * rate, 2)})
     fixed_total = project.fixed_items_total(rooms)
     return {
@@ -88,6 +95,7 @@ def quotation_snapshot(project, rooms=None):
                      'amount': project.discount_amount},
         'total': project.final_total,
         'plywood': project.plywood_thickness or '',
+        **({'plywood_choice': project.plywood} if plywood.context()['ready'] and project.plywood else {}),
     }
 
 
@@ -148,9 +156,14 @@ def restore_preview(project, snap):
     current rates, like the quotation itself): {'rooms', 'subtotal', 'discount', 'total', 'rate_changes', 'missing'}.
     rate_changes: [(material label, rate then, rate now)]; missing: materials that no longer exist."""
     from . import materials as M
+    from . import plywood
     rates = _item_rates()
     valid = {f'{w}|{k}' for w, k, _ in M.combos(include_hidden=True)}
     rooms, subtotal, changes, missing = [], 0.0, {}, []
+    ply_ctx = plywood.context()
+    project_ply = snap.get('plywood_choice') or ply_ctx['default']
+    if snap.get('plywood_choice') and not plywood.known(snap['plywood_choice']):
+        missing.append(f"{snap['plywood_choice']} (plywood)")
     for room in snap.get('rooms', []):
         items = []
         for it in room['items']:
@@ -158,14 +171,16 @@ def restore_preview(project, snap):
                 items.append({'name': it['name'], 'type': 'fixed', 'quantity': it['quantity'], 'unit_price': it['unit_price']})
                 subtotal += it['quantity'] * it['unit_price']
                 continue
-            key = f"{it['wood_type']}|{it['work_type']}"
-            if key not in valid:
+            if f"{it['wood_type']}|{it['work_type']}" not in valid:
                 missing.append(it['material'])
+            if it.get('plywood') and not plywood.known(it['plywood']):
+                missing.append(f"{it['plywood']} (plywood)")
+            key = plywood.key_for(it['wood_type'], it['work_type'], it.get('plywood') or project_ply)
             rate = rates.get(key, 0.0)
             if round(rate, 2) != round(it.get('rate', rate), 2):
                 changes[it['material']] = (it['material'], it['rate'], rate)
             items.append({'name': it['name'], 'type': 'measured', 'length': it['length'], 'width': it['width'],
-                          'wood_type': it['wood_type'], 'work_type': it['work_type']})
+                          'wood_type': it['wood_type'], 'work_type': it['work_type'], 'plywood': it.get('plywood')})
             subtotal += round(it['length'] * it['width'], 4) * rate
         rooms.append({'name': room['name'], 'items': items})
     subtotal = round(subtotal, 2)
@@ -232,6 +247,8 @@ def diff_snapshots(old, new):
         for item_name, prev in before.items():            # items gone completely (none left with that name)
             if item_name not in after:
                 changes += [f'{name}: removed {item_name}'] * len(prev)
+    if (old.get('plywood_choice') or '') != (new.get('plywood_choice') or '') and new.get('plywood_choice'):
+        changes.append(f"Plywood {old.get('plywood_choice') or 'default'} → {new['plywood_choice']}")
     od, nd = old.get('discount', {}), new.get('discount', {})
     if round(od.get('amount', 0), 2) != round(nd.get('amount', 0), 2):
         changes.append(f"Discount ₹{od.get('amount', 0):,.0f} → ₹{nd.get('amount', 0):,.0f}")
@@ -700,7 +717,9 @@ def profit(project, rooms=None, invoice=False, costs=None, settings=None, gst_re
     costs = costs if costs is not None else cost_rates()
     if not costs:
         return None
+    from . import plywood
     rooms = rooms if rooms is not None else project.rooms_with_items()
+    project_ply = plywood.project_plywood(project)
     total_cost, missing = 0.0, []
     for room in rooms:
         for i in room.item_list:
@@ -711,7 +730,7 @@ def profit(project, rooms=None, invoice=False, costs=None, settings=None, gst_re
                 else:
                     total_cost += (i.quantity or 0) * c
             else:
-                c = costs.get(('material', f'{i.wood_type}|{i.work_type}'))
+                c = plywood.cost_for(costs, plywood.item_key(i, project_ply))
                 if c is None:
                     missing.append(f'{room.name}: {i.name} ({i.wood_type}{" – " + i.work_type if i.work_type else ""})')
                 else:

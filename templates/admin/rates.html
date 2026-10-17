@@ -37,6 +37,7 @@
                 <tr>
                   <th class="ps-3" style="min-width:170px">Material</th>
                   {% for work in work_types %}<th class="text-center" style="min-width:130px">{{ work }}</th>{% endfor %}
+                  {% if ply_ready %}<th class="text-center" style="min-width:110px" title="Its rate changes with the quotation's plywood">On plywood</th>{% endif %}
                   <th class="text-center" style="min-width:150px">Status</th>
                 </tr>
               </thead>
@@ -67,6 +68,13 @@
                         <span class="input-group-text small">one rate</span>
                       </div>
                     </td>
+                  {% endif %}
+                  {% if ply_ready %}
+                  <td class="text-center" data-label="On plywood">
+                    <input type="hidden" name="ply_seen_{{ m.id }}" value="1">
+                    <input class="form-check-input" type="checkbox" name="ply_{{ m.id }}" value="1" {{ 'checked' if row.on_plywood }}
+                           aria-label="{{ m.name }} is priced on plywood" title="Its rate changes with the quotation's plywood">
+                  </td>
                   {% endif %}
                   <td class="text-center text-nowrap" data-label="Status">
                     <span class="badge {{ 'bg-success' if m.active else 'bg-secondary' }} me-1">{{ 'Shown' if m.active else 'Hidden' }}</span>
@@ -110,6 +118,14 @@
               <label class="form-check-label small" for="mat_uses_work">Priced by {{ work_types|join(' / ') }}</label>
             </div>
           </div>
+          {% if ply_ready %}
+          <div class="col-12 col-md-3 offset-md-7">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="mat_uses_plywood" name="mat_uses_plywood" value="1">
+              <label class="form-check-label small" for="mat_uses_plywood">Priced on plywood</label>
+            </div>
+          </div>
+          {% endif %}
           <div class="col-12 col-md-2">
             <button type="submit" name="material_add" value="1" class="btn btn-outline-primary w-100">
               <i class="bi bi-plus-lg me-1"></i>Add
@@ -121,6 +137,81 @@
       </div>
     </div>
   </div>
+
+  {% if ply_ready %}
+  <!-- Plywood -->
+  <div class="col-12" id="plywood">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header"><i class="bi bi-stack me-2"></i>Plywood</div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Your material rates above are for your <strong>default</strong> plywood. For any other plywood, enter how much
+          more (or less) it costs <strong>per sqft</strong>, e.g. <code>100</code> or <code>-200</code>. A quotation picks
+          one plywood (the default is pre-selected) and any item can use its own; materials ticked
+          <strong>On plywood</strong> are priced at their rate + this difference. The customer sees the final rate.
+        </p>
+        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="table-responsive">
+            <table class="table table-bordered align-middle mb-3 ki-materials-table">
+              <thead class="ki-table-head"><tr>
+                <th class="text-center" style="width:80px">Default</th><th style="min-width:180px">Plywood</th>
+                <th class="text-center" style="min-width:170px">Price difference (&#8377;/sqft)</th>
+                <th class="text-center" style="width:90px">Show</th><th class="text-center" style="width:90px">Delete</th></tr></thead>
+              <tbody>
+              {% for o in plywood_rows %}
+                <tr class="{{ '' if o.active else 'table-light text-muted' }}">
+                  <td class="text-center" data-label="Default">
+                    <input class="form-check-input" type="radio" name="ply_default" value="{{ o.id }}" {{ 'checked' if o.default }}
+                           aria-label="Make {{ o.name }} the default"></td>
+                  <td data-label="Plywood"><input type="text" name="ply_name_{{ o.id }}" class="form-control form-control-sm fw-semibold"
+                           value="{{ o.name }}" maxlength="60" aria-label="Plywood name"></td>
+                  <td data-label="Price difference">
+                    {% if o.default %}
+                      <input type="hidden" name="ply_adj_{{ o.id }}" value="0">
+                      <span class="small text-muted">&#8377;0 · your rates are for this one</span>
+                    {% else %}
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="text" name="ply_adj_{{ o.id }}" class="form-control text-end" inputmode="decimal"
+                             value="{{ '%+g'|format(o.adjustment) if o.adjustment else '0' }}" aria-label="{{ o.name }} price difference per sqft">
+                      <span class="input-group-text small">/sqft</span>
+                    </div>
+                    {% endif %}
+                  </td>
+                  <td class="text-center" data-label="Show"><input class="form-check-input" type="checkbox" name="ply_active_{{ o.id }}"
+                           value="1" {{ 'checked' if o.active }} aria-label="Offer {{ o.name }} on new quotations"></td>
+                  <td class="text-center" data-label="Delete">
+                    {% if o.default %}<span class="small text-muted">—</span>
+                    {% elif o.in_use %}<span class="small text-muted" title="Used on quotations: untick Show to hide it">in use</span>
+                    {% else %}<input class="form-check-input" type="checkbox" name="ply_delete" value="{{ o.id }}" aria-label="Delete {{ o.name }}">{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+                <tr>
+                  <td class="text-center small text-muted" data-label="">New</td>
+                  <td data-label="New plywood"><input type="text" name="ply_new_name" class="form-control form-control-sm" maxlength="60"
+                           placeholder="e.g. 18mm BWP (Marine)" aria-label="New plywood name"></td>
+                  <td data-label="Price difference"><div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="text" name="ply_new_adj" class="form-control text-end" inputmode="decimal" placeholder="e.g. 150 or -100"
+                             aria-label="New plywood price difference per sqft">
+                      <span class="input-group-text small">/sqft</span></div></td>
+                  <td></td><td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" name="plywood_submit" value="1" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Save Plywood
+          </button>
+          <p class="small text-muted mt-2 mb-0">Changing the default keeps every price difference: the new default becomes &#8377;0
+            and the others move with it. Rename one and existing quotations follow.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Fittings & accessories price list -->
   <div class="col-12" id="price-list">

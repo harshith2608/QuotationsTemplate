@@ -25,6 +25,61 @@ function splitCombo(value) {
 function comboLabel(wood, work) { return work ? `${wood} – ${work}` : (wood || ''); }
 const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 
+// ─── Plywood pricing ──────────────────────────────────────────────────────────
+// Rates are for the business's default plywood. A plywood material on another plywood has its own rate under the key
+// 'Material|Work|Plywood' (sent by the server in itemRates). The quotation picks a plywood; an item can use its own.
+const PLY = window.KI_PLYWOOD || { enabled: false, default: null, materials: [], options: [] };
+function quotationPly() {
+  const r = document.querySelector('input[name="plywood"]:checked');
+  return r ? r.value : PLY.default;
+}
+function usesPly(wood) { return PLY.enabled && PLY.materials.includes(wood); }
+function priceKey(wood, work, itemPly) {
+  const base = `${wood}|${work || ''}`;
+  const eff = itemPly || quotationPly();
+  if (!usesPly(wood) || !eff || eff === PLY.default || !PLY.options.some(o => o.name === eff)) return base;
+  return `${base}|${eff}`;
+}
+function parseKey(key) {                      // 'Material|Work|Plywood' → [wood, work, plywood|null]
+  const p = (key || '').split('|');
+  return [p[0], p[1] || '', p[2] || null];
+}
+function keyLabel(key) {
+  const [wood, work, ply] = parseKey(key);
+  let label = comboLabel(wood, work);
+  if (ply) label += ' · ' + ply;
+  else if (usesPly(wood) && PLY.default) label += ' · ' + PLY.default;    // same naming as the PDFs
+  return label;
+}
+function plyOptions(selected, wood) {
+  // '' = follow the quotation's plywood
+  const q = quotationPly();
+  let html = `<option value="">Quotation's plywood${q ? ' (' + escHtml(q) + ')' : ''}</option>`;
+  PLY.options.forEach(o => {
+    if (!o.active && o.name !== selected) return;
+    const diff = o.name === PLY.default ? '' : (o.delta ? ` (${o.delta > 0 ? '+' : ''}${o.delta} ₹/sqft)` : '');
+    html += `<option value="${escHtml(o.name)}" ${o.name === selected ? 'selected' : ''}>${escHtml(o.name)}${diff}</option>`;
+  });
+  return html;
+}
+function onQuotationPlywood() {
+  // Refresh the "Quotation's plywood (…)" wording in every item picker, then re-price
+  document.querySelectorAll('select[id^="item_ply_"]').forEach(sel => {
+    const v = sel.value; sel.innerHTML = plyOptions(v); sel.value = v;
+  });
+  recalcAll();
+}
+function syncPlyVisibility(ik, wood) {
+  const wrap = document.getElementById('item_ply_wrap_' + ik);
+  if (wrap) wrap.style.display = usesPly(wood) ? '' : 'none';
+}
+function syncModalPly() {
+  const wrap = document.getElementById('modal_ply_wrap');
+  if (!wrap) return;
+  const [wood] = splitCombo(document.getElementById('modal_item_combo')?.value || DEFAULT_COMBO);
+  wrap.style.display = usesPly(wood) && modalItemType !== 'fixed' ? '' : 'none';
+}
+
 // ─── Draft Auto-Save ──────────────────────────────────────────────────────────
 // Only active on the New Quotation form (IS_DRAFT_FORM = true, set by template).
 // Saves customer name/mobile/email to the server 3 s after the last keystroke.
@@ -69,6 +124,7 @@ async function _doSaveDraft() {
       body: JSON.stringify({
         draft_id: draftId || null,
         customer_name: customerName, mobile, email,
+        ...(PLY.enabled ? { plywood: quotationPly() } : {}),
         rooms_data: roomsPayload
       })
     });
@@ -221,6 +277,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   try { priceList = JSON.parse(document.getElementById('price-list-data').textContent || '[]'); } catch (e) { priceList = []; }
 
+  document.getElementById('modal_item_combo')?.addEventListener('change', syncModalPly);
+
   // Modal item name: suggests room items for measured, the price list for fixed-price items
   const modalNameInput = document.getElementById('modal_item_name');
   if (modalNameInput) {
@@ -251,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price); return; }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
-        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type);
+        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '');
       });
     });
   }
@@ -353,13 +411,13 @@ let _modalRoomKey = null;
 
 // Public: called by "Add Item" button — opens modal for user entry.
 // Also called internally with preset values when loading existing data.
-function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork) {
+function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly) {
   if (presetName === undefined && presetLFt === undefined) {
     // User clicked "Add Item" — open modal
     openItemModal(rk);
     return;
   }
-  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork);
+  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly);
 }
 
 function openItemModal(rk) {
@@ -371,6 +429,8 @@ function openItemModal(rk) {
   });
   const comboEl = document.getElementById('modal_item_combo');
   if (comboEl) comboEl.value = DEFAULT_COMBO;
+  const plyEl = document.getElementById('modal_item_ply');
+  if (plyEl) { plyEl.innerHTML = plyOptions(''); plyEl.value = ''; }
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
   const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
@@ -379,6 +439,7 @@ function openItemModal(rk) {
   const measuredRadio = document.getElementById('modal_type_measured');
   if (measuredRadio) measuredRadio.checked = true;
   setModalItemType('measured');
+  syncModalPly();
   const modal = new bootstrap.Modal(document.getElementById('itemModal'));
   modal.show();
   setTimeout(() => { if (nameEl) nameEl.focus(); }, 350);
@@ -405,6 +466,7 @@ function setModalItemType(type) {
   const nameEl = document.getElementById('modal_item_name');
   if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : 'e.g. Wardrobe';
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
+  syncModalPly();
 }
 
 function _findPrice(name) {
@@ -506,6 +568,7 @@ function _itemPayload(item) {
   return {
     name: item.name, length: lDec, width: wDec,
     wood_type: item.wood_type, work_type: item.work_type,
+    plywood: usesPly(item.wood_type) ? (item.plywood || '') : '',
     area: item.area || parseFloat((lDec * wDec).toFixed(4))
   };
 }
@@ -535,8 +598,9 @@ function saveItemFromModal() {
   const wFt  = parseFloat(document.getElementById('modal_item_wft')?.value) || 0;
   const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
   const [wood, work] = splitCombo(document.getElementById('modal_item_combo')?.value || DEFAULT_COMBO);
+  const ply = document.getElementById('modal_item_ply')?.value || '';
 
-  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work);
+  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply);
 
   const modalEl = document.getElementById('itemModal');
   const instance = bootstrap.Modal.getInstance(modalEl);
@@ -545,7 +609,7 @@ function saveItemFromModal() {
 
 // Internal: inserts an item row directly into the table (used when loading
 // existing data and after modal save).
-function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork) {
+function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -562,9 +626,10 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const wDec = ftInToDecimal(wFt, wIn);
   const area  = parseFloat((lDec * wDec).toFixed(4));
 
+  const ply = presetPly || '';
   rooms[rk].items[ik] = {
     name, lengthFt: lFt, lengthIn: lIn, widthFt: wFt, widthIn: wIn,
-    wood_type: wood, work_type: work, area
+    wood_type: wood, work_type: work, plywood: ply, area
   };
 
   const tbody = document.getElementById('items_tbody_' + rk);
@@ -618,6 +683,9 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
               onchange="onItemField('${rk}','${ik}')">
         ${buildComboOptions(wood, work)}
       </select>
+      ${PLY.enabled ? `<div id="item_ply_wrap_${ik}" class="mt-1" style="${usesPly(wood) ? '' : 'display:none'}">
+        <select class="form-select form-select-sm" id="item_ply_${ik}" title="Plywood for this item"
+                onchange="onItemField('${rk}','${ik}')">${plyOptions(ply)}</select></div>` : ''}
     </td>
     <td class="text-center">
       <span class="area-display fw-bold text-primary" id="item_area_${ik}">
@@ -671,14 +739,17 @@ function onItemField(rk, ik) {
   const area  = parseFloat((lDec * wDec).toFixed(4));
 
   const comboParts = splitCombo(comboEl?.value || DEFAULT_COMBO);
+  const plyEl = document.getElementById('item_ply_' + ik);
   rooms[rk].items[ik] = {
     name:      nameEl?.value.trim() || '',
     lengthFt:  lFt, lengthIn: lIn,
     widthFt:   wFt, widthIn:  wIn,
     wood_type: comboParts[0],
     work_type: comboParts[1],
+    plywood:   plyEl ? plyEl.value : '',
     area
   };
+  syncPlyVisibility(ik, comboParts[0]);
 
   if (areaEl) areaEl.textContent = area.toFixed(2);
   recalcAll();
@@ -697,7 +768,7 @@ function recalcAll() {
       const a = item.area || 0;
       roomArea += a;
       totalArea += a;
-      const key = `${item.wood_type}|${item.work_type}`;
+      const key = priceKey(item.wood_type, item.work_type, item.plywood);
       comboAreas[key] = (comboAreas[key] || 0) + a;
     });
     const badge = document.getElementById('room_total_badge_' + rk);
@@ -806,9 +877,10 @@ function renderSummary(comboAreas, grandTotal, fixedTotal) {
   Object.entries(comboAreas).forEach(([key, area]) => {
     if (area <= 0) return;
     const rate = itemRates[key] || 0;
-    const parts = splitCombo(key);
-    const label = comboLabel(parts[0], parts[1]);
-    const c = COMBO_COLORS[key] || colorFor(key);
+    const parts = parseKey(key);
+    const label = keyLabel(key);
+    const base = `${parts[0]}|${parts[1]}`;
+    const c = COMBO_COLORS[base] || colorFor(base);
     html += `
       <div class="summary-wood-row">
         <span class="summary-wood-label">

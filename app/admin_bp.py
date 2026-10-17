@@ -238,6 +238,23 @@ def rates():
             flash('Price list updated.', 'success')
         return redirect(url_for('admin.rates') + '#price-list')
 
+    from . import plywood
+    if plywood.table_ready():
+        plywood.ensure_options()
+    if request.method == 'POST' and 'plywood_submit' in request.form:
+        if not plywood.table_ready():
+            flash('Plywood can be set up after the database update (Updates).', 'warning')
+            return redirect(url_for('admin.rates'))
+        errors = _save_plywood()
+        if errors:
+            db.session.rollback()
+            for err in errors:
+                flash(err, 'danger')
+        else:
+            db.session.commit()
+            flash('Plywood updated. New and edited quotations use these prices.', 'success')
+        return redirect(url_for('admin.rates') + '#plywood')
+
     if request.method == 'POST' and 'material_add' in request.form:
         try:
             name = M.clean_name(request.form.get('mat_name'))
@@ -250,7 +267,10 @@ def rates():
         uses_work = bool(request.form.get('mat_uses_work'))
         rate = _rate(request.form.get('mat_rate'))
         top = db.session.query(db.func.max(Material.sort_order)).scalar() or 0
-        db.session.add(Material(name=name, uses_work_types=uses_work, active=True, sort_order=top + 1))
+        mat = Material(name=name, uses_work_types=uses_work, active=True, sort_order=top + 1)
+        if plywood.table_ready():
+            mat.uses_plywood = bool(request.form.get('mat_uses_plywood'))
+        db.session.add(mat)
         for work in (WORK_TYPES if uses_work else ['']):
             existing = ItemRate.query.filter_by(wood_type=name, work_type=work).first()
             if existing:
@@ -278,13 +298,142 @@ def rates():
 
     rate_map = {(r.wood_type, r.work_type): r.rate_per_sqft for r in ItemRate.query.all()}
     rows = []
-    for m in Material.query.order_by(Material.sort_order, Material.id).all():
+    ply_ready = plywood.table_ready()
+    q = Material.query.order_by(Material.sort_order, Material.id)
+    if ply_ready:
+        from sqlalchemy.orm import undefer
+        q = q.options(undefer(Material.uses_plywood))
+    for m in q.all():
         works = WORK_TYPES if m.uses_work_types else ['']
-        rows.append({'m': m, 'in_use': M.in_use(m.name),
+        rows.append({'m': m, 'in_use': M.in_use(m.name), 'on_plywood': ply_ready and m.uses_plywood,
                      'rates': [(i, w, rate_map.get((m.name, w), 0.0)) for i, w in enumerate(works)]})
+    ply_rows = []
+    if ply_ready:
+        from .models import PlywoodOption
+        for o in plywood.context()['options']:
+            ply_rows.append(dict(o, in_use=plywood.in_use(o['name'])))
     return render_template('admin/rates.html', title='Manage Rates', materials=rows,
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
-                           work_types=WORK_TYPES)
+                           work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows)
+
+
+def _plywood_ready():
+    from . import plywood
+    return plywood.table_ready()
+
+
+def _adjustment(raw):
+    """'+100', '-200', '' → float (₹/sqft, may be negative), or None if not a number."""
+    raw = str(raw if raw is not None else '').strip().replace(',', '').replace('₹', '').replace(' ', '')
+    if raw in ('', '+', '-'):
+        return 0.0
+    try:
+        return round(float(raw), 2)
+    except ValueError:
+        return None
+
+
+def _save_plywood():
+    """Names, adjustments, default, show/hide, delete and a new one, from the Plywood card. Returns errors.
+    The default is always ₹0: choosing another default re-bases every adjustment on it, so the same plywood keeps
+    the same price difference to the others."""
+    from . import plywood
+    from .models import PlywoodOption
+    errors = []
+    rows = PlywoodOption.query.order_by(PlywoodOption.sort_order, PlywoodOption.id).all()
+    by_id = {str(r.id): r for r in rows}
+    deleting = set(request.form.getlist('ply_delete'))
+    for r in rows:
+        sid = str(r.id)
+        name = ' '.join((request.form.get(f'ply_name_{sid}', r.name) or '').split())[:plywood.NAME_MAX]
+        if len(name) < 2:
+            errors.append('Give every plywood a name (at least 2 characters).')
+            continue
+        if '|' in name:
+            errors.append('A plywood name can\'t contain "|".')
+            continue
+        adj = _adjustment(request.form.get(f'ply_adj_{sid}', r.adjustment))
+        if adj is None:
+            errors.append(f'{r.name}: enter the price difference as a number, e.g. 100 or -200.')
+            continue
+        if name != r.name:
+            if any(o.name.lower() == name.lower() and o.id != r.id for o in rows):
+                errors.append(f'"{name}" already exists.')
+                continue
+            # Quotations follow a renamed plywood
+            Project.query.filter(Project.plywood == r.name).update({'plywood': name}, synchronize_session=False)
+            Item.query.filter(Item.plywood == r.name).update({'plywood': name}, synchronize_session=False)
+            r.name = name
+        r.adjustment = adj
+        r.active = bool(request.form.get(f'ply_active_{sid}'))
+    if errors:
+        return errors
+    new_default = by_id.get(request.form.get('ply_default') or '') or next((r for r in rows if r.is_default), None)
+    for sid in deleting:
+        r = by_id.get(sid)
+        if not r:
+            continue
+        if r is new_default:
+            errors.append(f'"{r.name}" is the default. Choose another default first.')
+        elif plywood.in_use(r.name):
+            errors.append(f'"{r.name}" is used on quotations, so it can\'t be deleted. Untick "Show" to hide it instead.')
+        else:
+            db.session.delete(r)
+            rows.remove(r)
+    if errors:
+        return errors
+    new_name = ' '.join((request.form.get('ply_new_name') or '').split())[:plywood.NAME_MAX]
+    if new_name:
+        adj = _adjustment(request.form.get('ply_new_adj'))
+        if len(new_name) < 2 or '|' in new_name:
+            errors.append('Give the new plywood a name (at least 2 characters, no "|").')
+        elif adj is None:
+            errors.append('Enter the new plywood\'s price difference as a number, e.g. 100 or -200.')
+        elif any(o.name.lower() == new_name.lower() for o in rows):
+            errors.append(f'"{new_name}" already exists.')
+        else:
+            base = new_default.adjustment if new_default else 0.0
+            row = PlywoodOption(name=new_name, adjustment=adj + (base or 0.0), active=True,
+                                is_default=not rows, sort_order=max([r.sort_order for r in rows] or [0]) + 1)
+            db.session.add(row)
+            rows.append(row)
+            new_default = new_default or row
+    if errors or not new_default:
+        return errors
+    if not new_default.active:
+        new_default.active = True
+    base = new_default.adjustment or 0.0
+    cbase = new_default.cost_adjustment if new_default.cost_adjustment is not None else base
+    if base or cbase:
+        _shift_plywood_rates(base, cbase)
+        if base:
+            flash(f'Material rates priced on plywood moved by {base:+g} ₹/sqft, so they\'re for {new_default.name} '
+                  'and every quotation keeps the same price.', 'info')
+    for r in rows:                                     # re-base: the default is ₹0, others keep their difference
+        old_cost = r.cost_adjustment if r.cost_adjustment is not None else (r.adjustment or 0.0)
+        r.is_default = r is new_default
+        r.adjustment = round((r.adjustment or 0.0) - base, 2)
+        new_cost = round(old_cost - cbase, 2)          # the same extra cost relative to the new default
+        if r.cost_adjustment is not None or new_cost != r.adjustment:
+            r.cost_adjustment = new_cost               # (unset costs keep following the price difference when it fits)
+    plywood.clear_cache()
+    return errors
+
+
+def _shift_plywood_rates(delta, cost_delta):
+    """A new default plywood: rates (and costs) of materials priced on plywood move by its difference, so every
+    plywood keeps exactly the price (and cost) it had."""
+    from sqlalchemy.orm import undefer
+    from . import billing
+    from .models import CostRate
+    names = {m.name for m in Material.query.options(undefer(Material.uses_plywood)).all() if m.uses_plywood}
+    for r in ItemRate.query.all():
+        if r.wood_type in names:
+            r.rate_per_sqft = round(max((r.rate_per_sqft or 0.0) + delta, 0.0), 2)
+    if billing.ready() and cost_delta:
+        for c in CostRate.query.filter_by(kind='material'):
+            if c.name.split('|', 1)[0] in names:
+                c.cost = round(max((c.cost or 0.0) + cost_delta, 0.0), 2)
 
 
 def _rate(raw):
@@ -320,6 +469,8 @@ def _save_materials_and_rates():
                 taken.pop(m.name.lower(), None)
                 taken[new_name.lower()] = m.id
                 m.name = new_name
+        if f'ply_seen_{m.id}' in request.form and _plywood_ready():
+            m.uses_plywood = bool(request.form.get(f'ply_{m.id}'))
         for i, work in enumerate(WORK_TYPES if m.uses_work_types else ['']):
             field = f'rate_{m.id}_{i}'
             if field not in request.form:
@@ -425,6 +576,22 @@ def costs():
         for (kind, name), row in existing.items():
             if kind == 'fitting' and name.lower() not in listed:
                 put('fitting', name, request.form.get(f'x_{row.id}'), name)
+        # What each other plywood costs you extra per sqft ('' = same as its price difference)
+        from . import plywood
+        if plywood.table_ready():
+            from .models import PlywoodOption
+            for o in PlywoodOption.query.filter_by(is_default=False):
+                if f'pc_{o.id}' not in request.form:
+                    continue
+                raw = (request.form.get(f'pc_{o.id}') or '').strip()
+                if raw == '':
+                    o.cost_adjustment = None
+                else:
+                    value = _adjustment(raw)
+                    if value is None:
+                        errors.append(f'Enter the extra cost of {o.name} as a number, e.g. 80 or -150.')
+                    else:
+                        o.cost_adjustment = value
         extra_name = ' '.join((request.form.get('new_fitting') or '').split())[:120]
         if extra_name:
             if any(k == 'fitting' and n.lower() == extra_name.lower() for k, n in existing):
@@ -442,8 +609,12 @@ def costs():
     listed = {f.name.lower() for f in fittings}
     extra = sorted([row for (kind, name), row in existing.items() if kind == 'fitting' and name.lower() not in listed],
                    key=lambda r: r.name.lower())
+    from . import plywood
+    ply_rows = []
+    if plywood.table_ready():
+        ply_rows = [o for o in plywood.context()['options'] if not o['default']]
     return render_template('admin/costs.html', title='Costs & profit', combos=combos, rates=rates,
-                           fittings=fittings, extra=extra,
+                           fittings=fittings, extra=extra, plywood_rows=ply_rows, plywood_default=plywood.default_name(),
                            costs={k: v.cost for k, v in existing.items()})
 
 

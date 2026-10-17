@@ -43,9 +43,13 @@ def seed_reference_data():
         seeded.append('work type rates')
     from .materials import table_ready
     fresh_rates = not ItemRate.query.first()
+    from . import plywood
     if table_ready() and not Material.query.first():
-        db.session.add_all(Material(name=n, uses_work_types=w, active=True, sort_order=i)
-                           for i, (n, w, _) in enumerate(catalog.DEFAULT_MATERIALS))
+        for i, (n, w, _) in enumerate(catalog.DEFAULT_MATERIALS):
+            m = Material(name=n, uses_work_types=w, active=True, sort_order=i)
+            if plywood.table_ready():
+                m.uses_plywood = w                    # board materials are priced on plywood
+            db.session.add(m)
         seeded.append('materials')
     if fresh_rates:
         rows = []
@@ -64,6 +68,13 @@ def seed_reference_data():
         db.session.add_all(PriceListItem(name=n, price=p, unit=u) for n, p, u in catalog.DEFAULT_PRICE_LIST)
         seeded.append('fittings price list')
     db.session.commit()
+    if plywood.table_ready():
+        from .models import PlywoodOption
+        had = PlywoodOption.query.first() is not None
+        plywood.clear_cache()
+        plywood.ensure_options()
+        if not had and PlywoodOption.query.first():
+            seeded.append('plywood list')
     return seeded
 
 

@@ -191,6 +191,7 @@
         <i class="bi bi-calculator me-2"></i>Cost Summary
       </div>
       <div class="card-body">
+        {% if plywood_enabled and project_ply %}<div class="small text-muted mb-2" id="quotePlywood"><i class="bi bi-stack me-1"></i>Plywood: <strong>{{ project_ply }}</strong></div>{% endif %}
         {% if item_summary or fixed_total %}
         <!-- Mobile: stacked list -->
         <div class="d-md-none">
@@ -334,7 +335,7 @@
             </thead>
             <tbody>
               {% for item in room.item_list %}
-              {% set item_subtotal = item.cost(item_rates) %}
+              {% set item_subtotal = item.cost(item_rates, project_ply) %}
               {% if item.is_fixed %}
               <tr>
                 <td class="fw-medium">{{ item.name }}</td>
@@ -355,6 +356,7 @@
                 <td class="text-center fw-semibold">{{ "%.2f"|format(item.area) }}</td>
                 <td class="text-center">
                   <span class="badge ki-badge-material ki-badge-{{ item.wood_type|lower|replace(' ', '-') }}">{{ item.wood_type }}</span>
+                  {% if ply_materials and item.wood_type in ply_materials and item.plywood %}<span class="badge bg-light text-dark border ms-1">{{ item.plywood }}</span>{% endif %}
                   {% if item.work_type %}
                   <span class="badge d-md-none ms-1 {% if item.work_type == 'Box Work' %}text-white{% else %}bg-warning text-dark{% endif %}"
                         style="{% if item.work_type == 'Box Work' %}background:#7c3aed{% endif %}">{{ item.work_type }}</span>
@@ -375,7 +377,7 @@
                 <td></td>
                 {% set room_cost = namespace(val=0) %}
                 {% for item in room.item_list %}
-                  {% set room_cost.val = room_cost.val + item.cost(item_rates) %}
+                  {% set room_cost.val = room_cost.val + item.cost(item_rates, project_ply) %}
                 {% endfor %}
                 <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>
               </tr>

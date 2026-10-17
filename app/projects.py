@@ -25,8 +25,9 @@ def _get_price_list():
 
 
 def _get_item_rates():
-    """Returns flat dict { 'wood_type|work_type': rate } for the JS form."""
-    return {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in ItemRate.query.all()}
+    """{price key: rate per sqft}, including plywood variants (see plywood.rate_map)."""
+    from . import plywood
+    return plywood.rate_map()
 
 
 class EmailNotConfigured(Exception):
@@ -108,11 +109,37 @@ def _get_wood_rates():
 def _form_catalog(project):
     """Material options for the quotation form; keeps materials already used on `project` even if hidden since."""
     from . import materials as M
+    from . import plywood
     used = set()
     if project is not None:
         for room in project.rooms_with_items():
             used |= {(i.wood_type, i.work_type) for i in room.item_list if not i.is_fixed}
-    return M.form_catalog(used)
+    cat = M.form_catalog(used)
+    if plywood.table_ready():
+        plywood.ensure_options()
+    ply = plywood.form_data()
+    if request.method == 'POST' and request.form.get('plywood'):
+        ply['selected'] = plywood.clean_choice(request.form.get('plywood'))
+    else:
+        ply['selected'] = plywood.project_plywood(project) if project is not None else None
+    ply['selected'] = ply['selected'] or ply['default']
+    ply['enabled'] = plywood.table_ready() and bool(ply['options'])
+    cat['plywood_form'] = ply
+    return cat
+
+
+def _set_project_plywood(project, form):
+    """The quotation's plywood from the form (Admin → Rates → Plywood). The old free list is cleared once a
+    quotation has a priced plywood, so the PDF shows one, not both."""
+    from . import plywood
+    if not plywood.table_ready() or not plywood.enabled() or 'plywood' not in form:
+        return
+    chosen = plywood.clean_choice(form.get('plywood')) or plywood.default_name()
+    existing = project.status == 'complete' and project.id is not None
+    if existing and project.plywood is None and chosen == plywood.default_name():
+        return          # a quotation from before plywood pricing, left on the default: nothing changes
+    project.plywood = chosen
+    project.plywood_thickness = ''
 
 
 def _save_project_data(project, rooms_data):
@@ -125,6 +152,9 @@ def _save_project_data(project, rooms_data):
     item_rates_flat = _get_item_rates()
     grand_total = 0.0
     from . import materials as M
+    from . import plywood
+    ply_ready = plywood.table_ready()
+    project_ply = plywood.project_plywood(project)
     valid_combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     fallback_combo = M.default_combo()
 
@@ -180,8 +210,15 @@ def _save_project_data(project, rooms_data):
                 wood_type=wood_type,
                 work_type=work_type
             )
+            item_ply = None
+            if ply_ready:                      # only once the database has the column
+                item_ply = plywood.clean_choice(id_.get('plywood'))
+                if wood_type not in plywood.context()['materials'] or item_ply == project_ply:
+                    item_ply = None            # same as the quotation's: follow it
+                item.plywood = item_ply
             db.session.add(item)
-            grand_total += area * item_rates_flat.get(f'{wood_type}|{work_type}', 0)
+            grand_total += area * item_rates_flat.get(
+                plywood.key_for(wood_type, work_type, item_ply or project_ply), 0)
 
             # Auto-learn item name (case-insensitive dedup)
             if not MasterItem.query.filter(MasterItem.name.ilike(item_name)).first():
@@ -352,6 +389,7 @@ def create_project():
             db.session.add(project)
             db.session.flush()
 
+        _set_project_plywood(project, request.form)
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
         project.status = 'complete'
@@ -379,7 +417,8 @@ def create_project():
 @projects_bp.route('/projects/<int:project_id>')
 @login_required
 def view_project(project_id):
-    project = Project.query.get_or_404(project_id)
+    from . import plywood as _ply
+    project = _ply.load_project(project_id)
     if not current_user.is_admin:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
@@ -392,16 +431,16 @@ def view_project(project_id):
     item_totals = project.get_item_totals(rooms)  # { 'wood|work': area } — measured items only
     fixed_total = project.fixed_items_total(rooms)
     from . import materials as M
+    from . import plywood
+    project_ply = plywood.project_plywood(project)
     item_summary = []
-    keys = [M.key(w, k) for w, k, _ in M.combos(include_hidden=True)]
-    keys += [k for k in item_totals if k not in keys]
-    for key in keys:
+    for key in M.ordered_keys(item_totals):
         area = item_totals.get(key, 0.0)
         if area > 0:
             rate = item_rates_flat.get(key, 0.0)
-            wood, _, work = key.partition('|')
+            wood, work, _ply = plywood.split_key(key)
             item_summary.append({
-                'label': M.label(wood, work),
+                'label': plywood.label(key, project),
                 'wood_type': wood, 'work_type': work,
                 'area': area, 'rate': rate, 'subtotal': round(area * rate, 2)
             })
@@ -448,6 +487,9 @@ def view_project(project_id):
                            rooms=rooms,
                            item_summary=item_summary,
                            item_rates=item_rates_flat,
+                           project_ply=project_ply,
+                           ply_materials=plywood.context()['materials'],
+                           plywood_enabled=plywood.enabled(),
                            edit_logs=edit_logs,
                            payments=payments,
                            total_paid=total_paid,
@@ -495,7 +537,8 @@ def update_stage(project_id):
 @projects_bp.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_project(project_id):
-    project = Project.query.get_or_404(project_id)
+    from . import plywood as _ply
+    project = _ply.load_project(project_id)
     if not current_user.is_admin and project.created_by != current_user.id:
         abort(403)
 
@@ -567,6 +610,7 @@ def edit_project(project_id):
         project.discount_type     = discount_type if discount_type in ('percentage', 'fixed') else 'none'
         project.discount_value    = discount_value
         project.plywood_thickness = plywood_thickness
+        _set_project_plywood(project, request.form)
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
         project.status = 'complete'
@@ -604,6 +648,7 @@ def edit_project(project_id):
 
 
 def _build_rooms_json(project):
+    from . import plywood
     rooms_data = []
     for room in project.rooms_with_items():
         room_dict = {
@@ -619,6 +664,7 @@ def _build_rooms_json(project):
                     'area': item.area,
                     'quantity': item.quantity,
                     'unit_price': item.unit_price,
+                    'plywood': plywood.item_plywood(item),
                 }
                 for item in room.item_list
             ]
@@ -842,14 +888,17 @@ def download_customer_pdf(project_id):
 @login_required
 def whatsapp_share(project_id):
     from flask import redirect as flask_redirect
-    project = Project.query.get_or_404(project_id)
+    from . import plywood as _ply
+    project = _ply.load_project(project_id)
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
 
+    from . import plywood
     item_rates = _get_item_rates()
     rooms = project.rooms_with_items()
-    combo_totals = project.get_item_totals(rooms)    # measured items, by material & work
+    combo_totals = project.get_item_totals(rooms)    # measured items, by material & work (& plywood)
+    project_ply = plywood.project_plywood(project)
     fixed_total = project.fixed_items_total(rooms)
 
     # Payment info for WhatsApp
@@ -871,6 +920,8 @@ def whatsapp_share(project_id):
     ]
     if project.address:
         lines.append(f"📍 Address: {project.address}")
+    if project_ply and plywood.enabled():
+        lines.append(f"🪵 Plywood: {project_ply}")
     lines += ["", "*Room-wise Breakdown:*"]
     def _ft_in(d):
         feet = int(d); inch = round((d - feet) * 12)
@@ -883,14 +934,17 @@ def whatsapp_share(project_id):
             if item.is_fixed:
                 lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{item.unit_price:,.0f}")
             else:
-                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {item.area:.2f} sqft ({item.wood_type})")
+                own_ply = plywood.item_plywood(item)
+                ply_note = f", {own_ply}" if own_ply and item.wood_type in plywood.context()['materials'] else ''
+                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)} = {item.area:.2f} sqft ({item.wood_type}{ply_note})")
 
     lines += ["", "*Material Summary:*"]
-    for key, area in combo_totals.items():
+    from . import materials as M
+    for key in M.ordered_keys(combo_totals):
+        area = combo_totals[key]
         if area > 0:
             rate = item_rates.get(key, 0.0)
-            wood, work = key.split('|')
-            lines.append(f"  • {wood} – {work}: {area:.2f} sqft × Rs.{rate:,.0f} = Rs.{area * rate:,.0f}")
+            lines.append(f"  • {plywood.label(key, project)}: {area:.2f} sqft × Rs.{rate:,.0f} = Rs.{area * rate:,.0f}")
     if fixed_total > 0:
         lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{fixed_total:,.0f}")
 

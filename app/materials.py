@@ -114,11 +114,19 @@ def in_use(name):
 
 
 def ordered_keys(totals):
-    """Combo keys of `totals` ({'Material|Work': area}) in catalogue order, unknown ones last."""
-    keys = [key(w, k) for w, k, _ in combos(include_hidden=True)]
-    return [k for k in keys if k in totals] + [k for k in totals if k not in keys]
+    """Price keys of `totals` ({'Material|Work' or 'Material|Work|Plywood': area}) in catalogue order, each
+    material's plywood variants right after it; unknown ones last."""
+    order = {key(w, k): i for i, (w, k, _) in enumerate(combos(include_hidden=True))}
+
+    def rank(k):
+        wood, work, *ply = k.split('|')
+        base = key(wood, work)
+        return (order.get(base, len(order)), base if base not in order else '', 1 if ply and ply[0] else 0, k)
+    return sorted(totals, key=rank)
 
 
 def label_of(combo_key):
-    wood, _, work = combo_key.partition('|')
-    return label(wood, work)
+    """'Laminates|Box Work' → 'Laminates – Box Work'; with a plywood: 'Laminates – Box Work · 18mm BWP'."""
+    wood, work, *ply = combo_key.split('|')
+    text = label(wood, work)
+    return f'{text} · {ply[0]}' if ply and ply[0] else text

@@ -80,6 +80,32 @@
       </div>
     </div>
   </div>
+  {% if plywood_rows %}
+  <div class="card shadow-sm border-0 mb-3" id="plywood-costs">
+    <div class="card-header ki-card-header"><i class="bi bi-stack me-2"></i>Plywood (extra cost per sqft vs {{ plywood_default }})</div>
+    <div class="card-body">
+      <p class="small text-muted">Your material costs above are on {{ plywood_default }}. What does each other plywood cost you
+        extra per sqft? Leave a box empty to use its price difference (from Rates), i.e. the same profit per sqft.</p>
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0 ki-materials-table">
+          <thead class="ki-table-head"><tr><th class="ps-3">Plywood</th><th class="text-end">You charge extra</th><th style="min-width:160px">It costs you extra</th></tr></thead>
+          <tbody>
+          {% for o in plywood_rows %}
+            <tr>
+              <td class="ps-3 fw-semibold" data-label="Plywood">{{ o.name }}</td>
+              <td class="text-end" data-label="You charge extra">{{ '%+g'|format(o.adjustment) if o.adjustment else '0' }} /sqft</td>
+              <td data-label="It costs you extra"><div class="input-group input-group-sm"><span class="input-group-text">&#8377;</span>
+                <input type="text" name="pc_{{ o.id }}" class="form-control" inputmode="decimal"
+                       value="{{ '%g'|format(o.cost_adjustment) if o.cost_adjustment is not none else '' }}"
+                       placeholder="{{ '%g'|format(o.adjustment) }}" aria-label="Extra cost of {{ o.name }} per sqft"></div></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
   <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save costs</button></div>
 </form>
 {% endblock %}

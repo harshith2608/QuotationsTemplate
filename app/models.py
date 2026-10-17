@@ -46,6 +46,7 @@ class User(UserMixin, db.Model):
 
 class Project(db.Model):
     __tablename__ = 'projects'
+    __mapper_args__ = {'eager_defaults': False}   # never read the plywood column back after saving
     id = db.Column(db.Integer, primary_key=True)
     # Customer details and amounts are encrypted at rest (app/crypto.py): never filter,
     # sort or sum these in SQL; do it in Python after loading.
@@ -63,6 +64,10 @@ class Project(db.Model):
                       server_default=DEFAULT_STAGE, index=True)
     stage_changed_at = db.Column(db.DateTime, nullable=True)
     plywood_thickness = db.Column(db.Text, nullable=True, default='')
+    # The quotation's plywood (Admin → Rates → Plywood); None = the business's default. Older quotations keep
+    # plywood_thickness (a free list, information only). Deferred: safe before the database update adds it.
+    # FetchedValue: left out of INSERTs unless set, so new quotations save fine before the column exists
+    plywood = db.deferred(db.Column(db.String(60), nullable=True, server_default=db.FetchedValue()))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     rooms     = db.relationship('Room',           backref='project', lazy='dynamic', cascade='all, delete-orphan')
@@ -98,7 +103,12 @@ class Project(db.Model):
         rooms = self.rooms.order_by(Room.id).all()
         items_by_room = {r.id: [] for r in rooms}
         if rooms:
-            for item in Item.query.filter(Item.room_id.in_(items_by_room)).order_by(Item.id):
+            from . import plywood
+            q = Item.query.filter(Item.room_id.in_(items_by_room)).order_by(Item.id)
+            if plywood.table_ready():
+                from sqlalchemy.orm import undefer
+                q = q.options(undefer(Item.plywood))          # one query, not one per item
+            for item in q:
                 items_by_room[item.room_id].append(item)
         for room in rooms:
             room.item_list = items_by_room[room.id]
@@ -125,8 +135,11 @@ class Project(db.Model):
         return self._area_totals(lambda i: i.wood_type, rooms)
 
     def get_item_totals(self, rooms=None):
-        """Returns dict of {'wood_type|work_type': total_area}. Pass preloaded rooms to avoid re-querying."""
-        return self._area_totals(lambda i: f'{i.wood_type}|{i.work_type}', rooms)
+        """{price key: total area}: 'Material|Work', or 'Material|Work|Plywood' when an item is on a plywood other
+        than the default (it has its own rate, see plywood.rate_map). Pass preloaded rooms to avoid re-querying."""
+        from . import plywood
+        ply = plywood.project_plywood(self)
+        return self._area_totals(lambda i: plywood.item_key(i, ply), rooms)
 
     def get_work_totals(self, rooms=None):
         """Returns dict of {work_type: total_area}. Pass preloaded rooms to avoid re-querying."""
@@ -175,6 +188,7 @@ class Item(db.Model):
                      no dimensions (length/width/area are 0, wood/work types empty)
     """
     __tablename__ = 'items'
+    __mapper_args__ = {'eager_defaults': False}   # never read the plywood column back after saving
     id = db.Column(db.Integer, primary_key=True)
     room_id = db.Column(db.Integer, db.ForeignKey('rooms.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
@@ -186,16 +200,19 @@ class Item(db.Model):
     item_type = db.Column(db.String(10), nullable=False, default='measured', server_default='measured')
     quantity = db.Column(db.Float, nullable=True)
     unit_price = db.Column(EncryptedFloat, nullable=True)
+    plywood = db.deferred(db.Column(db.String(60), nullable=True,    # this item's own plywood; None = the quotation's
+                                    server_default=db.FetchedValue()))  # (left out of INSERTs unless set: safe before the update)
 
     @property
     def is_fixed(self):
         return self.item_type == 'fixed'
 
-    def cost(self, item_rates):
-        """Amount for this line. item_rates: {'wood|work': rate per sqft}."""
+    def cost(self, item_rates, project_plywood=None):
+        """Amount for this line. item_rates: plywood.rate_map(); project_plywood: the quotation's plywood."""
         if self.is_fixed:
             return (self.quantity or 0) * (self.unit_price or 0)
-        return self.area * item_rates.get(f'{self.wood_type}|{self.work_type}', 0)
+        from . import plywood
+        return self.area * item_rates.get(plywood.item_key(self, project_plywood), 0)
 
     def __repr__(self):
         return f'<Item {self.name}>'
@@ -560,11 +577,31 @@ class Material(db.Model):
     With work types, it is priced per (material, Box/Frame Work); without, one rate per sqft (work_type '').
     Items store the material by name; renaming updates them. Hidden materials stay valid on old quotations."""
     __tablename__ = 'materials'
+    __mapper_args__ = {'eager_defaults': False}   # never read the plywood column back after saving
     id              = db.Column(db.Integer, primary_key=True)
     name            = db.Column(db.String(60), unique=True, nullable=False)
     uses_work_types = db.Column(db.Boolean, nullable=False, default=True)
     active          = db.Column(db.Boolean, nullable=False, default=True)
     sort_order      = db.Column(db.Integer, nullable=False, default=0)
+    # Priced on plywood: its rate changes with the quotation's plywood (Admin → Rates → Plywood). Deferred: safe
+    # before the database update adds it (plywood.table_ready() guards every read).
+    uses_plywood    = db.deferred(db.Column(db.Boolean, nullable=False, server_default=db.FetchedValue()))
 
     def __repr__(self):
         return f'<Material {self.name}>'
+
+
+class PlywoodOption(db.Model):
+    """A plywood a business offers (18mm BWP, 12mm MR…), managed in Admin → Rates. Material rates are for the
+    default one; another adds its adjustment (₹ per sqft, can be negative) to plywood materials' rates."""
+    __tablename__ = 'plywood_options'
+    id              = db.Column(db.Integer, primary_key=True)
+    name            = db.Column(db.String(60), unique=True, nullable=False)
+    adjustment      = db.Column(EncryptedFloat, nullable=False, default=0.0)   # selling, ₹/sqft vs the default
+    cost_adjustment = db.Column(EncryptedFloat, nullable=True)                 # what it costs you extra; None = same
+    is_default      = db.Column(db.Boolean, nullable=False, default=False)
+    active          = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order      = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<PlywoodOption {self.name}>'

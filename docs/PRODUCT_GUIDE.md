@@ -74,6 +74,12 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 - **Fittings & accessories.** A price list (Magic Corner, Tandem Drawer, hinges…) added by quantity × price.
 - **Discounts** as a percentage or a fixed amount.
 - **Plywood estimate.** Roughly how many 8×4 boards a job needs, and the plywood listed on the quote.
+- **★ Plywood pricing.** Admin → Rates → Plywood: your own plywood list (names you choose) with a price difference
+  per sqft vs your default (e.g. 18mm BWP +150, 12mm MR −200). Material rates are for the default. Each quotation picks a
+  plywood (default pre-selected), any item can use its own, and board materials (switch "On plywood" per material; Glass,
+  Wallpaper etc. off) are priced at rate + difference. The customer sees the final rate, e.g. "Laminates – Box Work ·
+  18mm BWP". Changing the default keeps every price; Costs has an optional extra cost per plywood for accurate profit.
+  *Pitch: "Customer wants marine ply instead? Tap it, and the whole quotation re-prices."*
 - **Auto-save.** A half-filled quotation is saved as a draft, so nothing is lost if the phone locks.
 - **★ Revisions.** Every saved change becomes Rev 2, Rev 3…, with a list of what changed ("TV Unit 10 ft × 5 ft → 12 ft × 5 ft").
   The PDF shows the revision number.

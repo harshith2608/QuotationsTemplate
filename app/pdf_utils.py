@@ -274,8 +274,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     page_width = A4[0] - 3 * cm
     col_widths = [page_width * float(p.strip('%')) / 100 for p in item_col_widths]
 
-    from .models import ItemRate as _ItemRate
-    _item_rates_map = {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in _ItemRate.query.all()}
+    from . import plywood
+    _item_rates_map = plywood.rate_map()
+    _project_ply = plywood.project_plywood(project)
 
     rooms = project.rooms_with_items()
     for room in rooms:
@@ -302,13 +303,14 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         for item in room.item_list:
             if item.is_fixed:
                 # Fitting/accessory: quantity × unit price, no dimensions
-                subtotal = item.cost(_item_rates_map)
+                subtotal = item.cost(_item_rates_map, _project_ply)
                 room_total_cost += subtotal
                 item_rows.append([item.name, '—', '—',
                                   f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}', '—', f'{_money(subtotal)}'])
                 continue
             work_type  = item.work_type or ''
-            rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
+            _key       = plywood.item_key(item, _project_ply)
+            rate       = _item_rates_map.get(_key, 0.0)
             subtotal   = item.area * rate
             room_total_area += item.area
             room_total_cost += subtotal
@@ -316,7 +318,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 item.name,
                 ft_in(item.length),
                 ft_in(item.width),
-                M.label(item.wood_type, work_type),
+                plywood.label(_key, project),
                 f'{item.area:.2f}',
                 f'{_money(subtotal)}'
             ])
@@ -376,7 +378,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             subtotal = area * rate
             combo_total += subtotal
             combo_area_total += area
-            combo_data.append([M.label_of(key), f'{area:,.2f}', f'{_money(rate, ",.0f")}', f'{_money(subtotal)}'])
+            combo_data.append([plywood.label(key, project), f'{area:,.2f}', f'{_money(rate, ",.0f")}', f'{_money(subtotal)}'])
     fixed_total = project.fixed_items_total(rooms)
     if fixed_total > 0:
         combo_total += fixed_total
@@ -445,22 +447,20 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Spacer(1, 20))
 
     # ------- PLYWOOD THICKNESS -------
-    _ply_raw = (project.plywood_thickness or '').strip()
-    if _ply_raw:
-        ply_items = [p.strip() for p in _ply_raw.split(',') if p.strip()]
-        if ply_items:
-            elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-            ply_header_style = ParagraphStyle('PlyHeader', parent=styles['Normal'],
-                                              fontSize=9, textColor=BRAND_DARK,
-                                              fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
-            ply_body_style = ParagraphStyle('PlyBody', parent=styles['Normal'],
-                                            fontSize=8, textColor=colors.HexColor('#333333'),
-                                            leading=13, spaceAfter=1)
-            elements.append(Paragraph("Plywood Used:", ply_header_style))
-            elements.append(Spacer(1, 4))
-            for ply in ply_items:
-                elements.append(Paragraph(f"• {ply}", ply_body_style))
-            elements.append(Spacer(1, 14))
+    ply_items = plywood.used_on(project, rooms)
+    if ply_items:
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        ply_header_style = ParagraphStyle('PlyHeader', parent=styles['Normal'],
+                                          fontSize=9, textColor=BRAND_DARK,
+                                          fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+        ply_body_style = ParagraphStyle('PlyBody', parent=styles['Normal'],
+                                        fontSize=8, textColor=colors.HexColor('#333333'),
+                                        leading=13, spaceAfter=1)
+        elements.append(Paragraph("Plywood Used:", ply_header_style))
+        elements.append(Spacer(1, 4))
+        for ply in ply_items:
+            elements.append(Paragraph(f"• {ply}", ply_body_style))
+        elements.append(Spacer(1, 14))
 
     # ------- MATERIAL SPECIFICATIONS -------
     _specs = AppSetting.get('material_specs', '')
@@ -694,10 +694,11 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Cost Summary", section_style))
     elements.append(Spacer(1, 8))
 
-    from .models import ItemRate as _ItemRate2
-    _item_rates_map2 = {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in _ItemRate2.query.all()}
-
-    item_totals2 = project.get_item_totals()  # { 'wood|work': area }
+    from . import plywood
+    _item_rates_map2 = plywood.rate_map()
+    _project_ply2 = plywood.project_plywood(project)
+    _rooms2 = project.rooms_with_items()
+    item_totals2 = project.get_item_totals(_rooms2)  # { price key: area }
 
     # Cost summary — show material+work combo and amount only (no area, no rate)
     cost_cw   = [page_width * p for p in [0.60, 0.40]]
@@ -710,7 +711,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
             subtotal      = area * _item_rates_map2.get(key, 0.0)
             mat_total    += subtotal
             total_area_all += area
-            cost_data.append([M.label_of(key), f'{_money(subtotal)}'])
+            cost_data.append([plywood.label(key, project), f'{_money(subtotal)}'])
     # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
     fixed_total2 = project.fixed_items_total()
     if fixed_total2 > 0:
@@ -777,22 +778,20 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Spacer(1, 20))
 
     # ------- PLYWOOD THICKNESS -------
-    _ply_raw2 = (project.plywood_thickness or '').strip()
-    if _ply_raw2:
-        ply_items2 = [p.strip() for p in _ply_raw2.split(',') if p.strip()]
-        if ply_items2:
-            elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-            ply_header_style2 = ParagraphStyle('PlyHeader2', parent=styles['Normal'],
-                                               fontSize=9, textColor=BRAND_DARK,
-                                               fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
-            ply_body_style2 = ParagraphStyle('PlyBody2', parent=styles['Normal'],
-                                             fontSize=8, textColor=colors.HexColor('#333333'),
-                                             leading=13, spaceAfter=1)
-            elements.append(Paragraph("Plywood Used:", ply_header_style2))
-            elements.append(Spacer(1, 4))
-            for ply in ply_items2:
-                elements.append(Paragraph(f"• {ply}", ply_body_style2))
-            elements.append(Spacer(1, 14))
+    ply_items2 = plywood.used_on(project, _rooms2)
+    if ply_items2:
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        ply_header_style2 = ParagraphStyle('PlyHeader2', parent=styles['Normal'],
+                                           fontSize=9, textColor=BRAND_DARK,
+                                           fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+        ply_body_style2 = ParagraphStyle('PlyBody2', parent=styles['Normal'],
+                                         fontSize=8, textColor=colors.HexColor('#333333'),
+                                         leading=13, spaceAfter=1)
+        elements.append(Paragraph("Plywood Used:", ply_header_style2))
+        elements.append(Spacer(1, 4))
+        for ply in ply_items2:
+            elements.append(Paragraph(f"• {ply}", ply_body_style2))
+        elements.append(Spacer(1, 14))
 
     # ------- MATERIAL SPECIFICATIONS -------
     _specs = AppSetting.get('material_specs', '')
