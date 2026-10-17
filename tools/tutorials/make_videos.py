@@ -21,9 +21,10 @@ PARTS = [
     (8, 'track-every-job', 'Stages, filters, search and notifications.', 'Every job, always up to date.'),
     (9, 'your-team', 'Staff logins, passwords and sharing a job.', 'Your whole team, one price.'),
     (10, 'send-by-email', 'Set up your email once, then email quotations and invoices.', 'From your own email, in your brand.'),
+    (12, 'your-quotation-pdf', 'Room descriptions, material specs, payment terms and units.', 'Every quotation, your way.'),
 ]
 WALKTHROUGH = (1, 2, 3, 4, 5)
-STYLE = {6: 'pop', 7: 'funk', 8: 'tropical', 9: 'cinematic', 10: 'lofi'}            # parts 1–5 and the walkthrough: lo-fi; later parts vary, since they're also posted as Reels
+STYLE = {6: 'pop', 7: 'funk', 8: 'tropical', 9: 'cinematic', 10: 'lofi', 12: 'funk'}            # parts 1–5 and the walkthrough: lo-fi; later parts vary, since they're also posted as Reels
 SUB = {n: s for n, _, s, _ in PARTS}
 
 if __name__ == '__main__':

@@ -50,7 +50,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | 🎬 9 | Your team | Add staff logins, reset a password, give a staff member access to a quotation; one price for the whole team | Admin → Users, Access on a quotation | ~1 min |
 | 🎬 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
 | 11 | Online payments (Razorpay) | Test mode keys, webhook, send a payment link, payment records itself | Admin → Payment settings, Payment link | ~1.5 min |
-| 12 | Your PDFs & invoice settings | Material specs and terms & conditions on quotations; invoice prefix/numbering, GST or not, GST rate, prices incl./excl. GST, HSN, room-by-room or summary, invoice notes | Settings → Quotation PDFs, Invoices | ~1 min |
+| 🎬 12 | Your quotation PDF | By room or by material; room descriptions (ticked per room); Material Specifications with Insert buttons ({plywood_details} etc.); Payment/Delivery Terms; T&C; Units (ft & in / mm / cm / in, sqft / sq m); the room-wise Initial Quotation that results | Settings → Quotation PDFs, Units, Edit quotation | 81 s |
 | 13 | QuoteRoom on your home screen | Add to home screen on Android & iPhone for one-tap access | Browser menu | ~20 s |
 
 Later: a second "full walkthrough" for 6–9 ("Run your business"), and short Reels cut from 6, 7 and 11.
@@ -310,3 +310,14 @@ Console → Tutorials → Add a tutorial: title `10 · Send by email`, length `1
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
 
 (Recorded with a practice mail server on the Mac: `tools/tutorials/part10_email.py` docstring. Fictional .example addresses.)
+
+**Part 12** — *QuoteRoom tutorial 12: make the quotation PDF your own (room descriptions, specs, terms & units)*
+> Choose what your customer gets: room by room (items with sizes and No's, one amount per room, no rates) or by material. Add your room descriptions once and tick them on each room. Write your Material Specifications, Payment Terms, Delivery Terms and Terms & Conditions, and tap Insert to add details that change per quotation, like the plywood: "Plywood: {plywood_details} for all carcass and shutters" prints the plywood chosen on that quotation. Measure in feet & inches, mm, cm or inches, with rates per sqft or per sq m.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Chapters: 0:00 Quotation PDFs · 0:16 Room descriptions · 0:21 Material Specifications & Insert · 0:34 Payment & Delivery Terms · 0:44 Units · 0:51 Edit a quotation · 1:05 The Initial Quotation
+
+Console → Tutorials → Add a tutorial: title `12 · Your quotation PDF`, length `1 min`,
+"Room descriptions, material specs, payment terms and units." Instagram Reel caption:
+> Your quotation, your words 📄 Room-by-room amounts, your material specs with the plywood filled in automatically, your payment terms. Set it once in QuoteRoom and every quotation comes out your way. Link in bio for a free 7-day trial.
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
