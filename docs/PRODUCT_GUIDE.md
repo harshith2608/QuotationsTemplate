@@ -211,7 +211,7 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 > WhatsApp in minutes, then track confirmations and payments.
 > I'll set up your free 7-day trial in your company name. What should the web address be, e.g. *{company}*.quote-room.co.in?
 > Meanwhile:
-> ▶️ See it in 1 minute (a quotation made on the phone, the customer accepts it online): {demo video link}
+> ▶️ See it in 1 minute (a quotation made on a laptop, the customer accepts it on their phone): {demo video link}
 > 👉 Try the live demo yourself: https://www.quote-room.co.in
 
 The 1-minute video is `ad-videos/tutorials/quoteroom-demo-quote-to-accepted.mp4` (made by
