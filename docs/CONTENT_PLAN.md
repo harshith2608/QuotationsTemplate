@@ -51,7 +51,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | 🎬 10 | Send by email | Set up Gmail (app password), send a test, email a quotation or invoice with the PDF attached | Settings → Email, Email buttons | ~1 min |
 | 🎬 11 | Online payments (Razorpay) | Setup guide, API keys, webhook address & secret, Test connection → payment link for an advance → customer pays → recorded automatically with a notification and the new balance | Admin → Payment settings, Payment link | 63 s |
 | 🎬 12 | Your quotation PDF | By room or by material; room descriptions (ticked per room); Material Specifications with Insert buttons ({plywood_details} etc.); Payment/Delivery Terms; T&C; Units (ft & in / mm / cm / in, sqft / sq m); the room-wise Initial Quotation that results | Settings → Quotation PDFs, Units, Edit quotation | 81 s |
-| 13 | QuoteRoom on your home screen | Add to home screen on Android & iPhone for one-tap access | Browser menu | ~20 s |
+| 🎬 13 | QuoteRoom on your home screen | Android (⋮ → Add to Home screen) and iPhone (Share → Add to Home Screen); the business's own logo and name on the home screen; opens full screen | Browser menu (drawn mock-ups) | 26 s |
 
 Later: a second "full walkthrough" for 6–9 ("Run your business"), and short Reels cut from 6, 7 and 11.
 
@@ -334,3 +334,15 @@ Console → Tutorials → Add a tutorial: title `12 · Your quotation PDF`, leng
 "Room descriptions, material specs, payment terms and units." Instagram Reel caption:
 > Your quotation, your words 📄 Room-by-room amounts, your material specs with the plywood filled in automatically, your payment terms. Set it once in QuoteRoom and every quotation comes out your way. Link in bio for a free 7-day trial.
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
+
+
+**Part 13** — *QuoteRoom tutorial 13: put QuoteRoom on your home screen (Android & iPhone)*
+> Open QuoteRoom in one tap, like an app, with your own logo and name. Android (Chrome): tap the three-dot menu → Add to Home screen (or Install app) → Add. iPhone (Safari): tap Share → Add to Home Screen → Add. It opens full screen, straight to your quotations. No app store, and each person in your team can do it on their own phone.
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Console → Tutorials → Add a tutorial: title `13 · On your home screen`, length `30 s`,
+"Add QuoteRoom to your home screen on Android and iPhone." Instagram Reel caption:
+> Your quotation app, one tap away 📱 Add QuoteRoom to your home screen with your own logo: no app store, works on Android and iPhone. Link in bio for a free 7-day trial.
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
+
+(The browser menus are plain drawn mock-ups, since a web page can't capture the browser's own menus; the icon and name are the app's real ones.)

@@ -141,7 +141,7 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Their brand, their app
 - **Their own web address** (e.g. `sharma.quote-room.co.in`), their logo, colours, fonts and header style on the app, PDFs and customer pages.
 - **Company name, GSTIN and logo lock** once saved, so nobody can quietly change them (support unlocks if needed).
-- Works in the browser on any phone, tablet or laptop; add it to the home screen for one-tap access. Nothing to install.
+- Works in the browser on any phone, tablet or laptop; add it to the home screen for one-tap access, with the business's own logo and name as the app icon, opening full screen. Nothing to install.
 
 ### Safety
 - Each paying business has **its own app and its own database**; trials are kept separately. Other customers never see their data.
