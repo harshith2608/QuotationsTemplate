@@ -29,6 +29,24 @@ def add_item(rec, page, room, name, l_ft, w_ft, w_in, combo, caption):
     rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, wait=600, after_hold=0.5)
 
 
+def quick_item(rec, page, room, name, l_ft, w_ft, w_in, combo, caption):
+    """The same steps, faster: one look at the filled-in item."""
+    page.locator(f'#room_card_{room} button', has_text='Add Item').click()
+    page.wait_for_timeout(500)
+    page.locator('#modal_item_name').fill(name)
+    for sel, val in (('#modal_item_lft', l_ft), ('#modal_item_lin', '0'), ('#modal_item_wft', w_ft), ('#modal_item_win', w_in)):
+        page.locator(sel).fill(val)
+    page.locator('#modal_item_combo').select_option(combo)
+    page.wait_for_timeout(300)
+    rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, hold=0.9, wait=600, after_hold=0.6)
+
+
+def add_room(rec, page, n, name, caption):
+    rec.tap(page.locator('#add-room-btn-wrap button'), caption, hold=0.5, wait=600, after_hold=0.3)
+    rec.type(page.locator(f'#room_name_room_{n}'), name, caption, per_frame=4)
+    page.locator(f'#room_name_room_{n}').press('Escape')
+
+
 def record(base, work, password):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
@@ -42,7 +60,7 @@ def record(base, work, password):
 
         rec = DeskRecorder(page, os.path.join(work, 'demo'), 'Demo', TITLE)
         page.goto(base + '/projects')
-        rec.shot('Your customer wants a price for their kitchen. Open QuoteRoom.', 2.4)
+        rec.shot('Your customer wants a price for her home. Open QuoteRoom.', 2.4)
         rec.tap(page.locator('a', has_text='New Quotation').first, 'Click New Quotation.', wait=900)
         rec.type(page.locator('#customer_name'), 'Kavya Menon', 'Customer name and mobile.', per_frame=3)
         rec.type(page.locator('#mobile'), '9000012345', 'Customer name and mobile.', per_frame=3)
@@ -51,6 +69,16 @@ def record(base, work, password):
         page.locator('#room_name_room_1').press('Escape')
         add_item(rec, page, 'room_1', 'Base Cabinet', '10', '2', '9', 'Acrylic|Box Work', 'Add each item with its size.')
         add_item(rec, page, 'room_1', 'Overhead Cabinet', '10', '2', '6', 'Acrylic|Box Work', 'Add each item with its size.')
+        quick_item(rec, page, 'room_1', 'Loft', '10', '1', '6', 'Laminates|Box Work', 'Add each item with its size.')
+        add_room(rec, page, 2, 'Master Bedroom', 'Then the next room: Master Bedroom…')
+        quick_item(rec, page, 'room_2', 'Wardrobe', '8', '7', '0', 'Laminates|Box Work', 'Then the next room: Master Bedroom…')
+        quick_item(rec, page, 'room_2', 'Wardrobe Loft', '8', '2', '0', 'Laminates|Box Work', 'Then the next room: Master Bedroom…')
+        add_room(rec, page, 3, 'Guest Bedroom', '…Guest Bedroom…')
+        quick_item(rec, page, 'room_3', 'Wardrobe', '6', '7', '0', 'Laminates|Box Work', '…Guest Bedroom…')
+        quick_item(rec, page, 'room_3', 'Study Table', '4', '2', '0', 'Laminates|Box Work', '…Guest Bedroom…')
+        add_room(rec, page, 4, 'Living Room', '…and the Living Room.')
+        quick_item(rec, page, 'room_4', 'TV Unit', '8', '1', '6', 'Veneer|Box Work', '…and the Living Room.')
+        quick_item(rec, page, 'room_4', 'Crockery Unit', '4', '6', '0', 'Veneer|Box Work', '…and the Living Room.')
         rec.scroll_to(page.locator('#final-total-display'), 'The total adds up as you go.')
         rec.shot('The total adds up as you go. Your rates, every time.', 2.2)
         rec.tap(page.locator('button:visible', has_text='Save Quotation').last, 'Click Save.', wait=1500, after_hold=1.0)
@@ -69,8 +97,10 @@ def record(base, work, password):
         crec.items = rec.items
         cust.goto(link)
         crec.shot("Kavya opens it on her phone. No app, no login.", 2.6)
-        crec.scroll_to(cust.locator('table').first, 'Every item with its size, and the total.', offset=160)
-        crec.shot('Every item with its size, and the total.', 2.4)
+        crec.scroll_to(cust.get_by_text('Kitchen').first, 'Every room, every item with its size…', offset=120)
+        crec.shot('Every room, every item with its size…', 2.2)
+        crec.scroll_to(cust.get_by_text('Living Room').first, '…and the total.', offset=300)
+        crec.shot('…and the total.', 1.8)
         crec.scroll_to(cust.locator('#respond'), 'She ticks the box and taps Accept.', offset=200)
         crec.tap(cust.locator('#accAgree'), 'She ticks the box and taps Accept.', after_hold=0.5)
         crec.tap(cust.locator('#respond button[type=submit]').first, 'She ticks the box and taps Accept.', wait=1200, after_hold=0.6)
