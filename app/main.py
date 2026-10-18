@@ -44,6 +44,30 @@ def brand_logo():
     return Response(png, mimetype='image/png', headers={'Cache-Control': cache})
 
 
+def _icon_url(size):
+    brand = get_brand()
+    return url_for('main.app_icon', size=size, v=f"{brand['theme_version']}{brand.get('logo_version') or ''}")
+
+
+@main_bp.route('/manifest.webmanifest')
+def web_manifest():
+    """For "Add to Home screen": the business's name, colours and icon (no login: phones fetch it without cookies)."""
+    import json
+    from .app_icon import manifest
+    return Response(json.dumps(manifest(_icon_url)), mimetype='application/manifest+json',
+                    headers={'Cache-Control': 'public, max-age=3600'})
+
+
+@main_bp.route('/app-icon-<int:size>.png')
+def app_icon(size):
+    """The business's home-screen icon (logo on white, or initials on the brand colour). ?v= changes with them."""
+    from .app_icon import SIZES, icon_png
+    if size not in SIZES:
+        abort(404)
+    cache = 'public, max-age=31536000, immutable' if request.args.get('v') else 'no-cache'
+    return Response(icon_png(size), mimetype='image/png', headers={'Cache-Control': cache})
+
+
 @main_bp.app_errorhandler(403)
 def forbidden(e):
     return render_template('errors/403.html'), 403

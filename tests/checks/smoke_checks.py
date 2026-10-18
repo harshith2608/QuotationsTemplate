@@ -71,6 +71,31 @@ try:
     ok('cleared admin values fall back to env', 'Env Name Co' in t and 'Kitchens &amp; Wardrobes' in t)
     txt = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(c.get('/projects/1/pdf').data)).pages)
     ok('PDF falls back to env name, no GSTIN', 'Env Name Co' in txt and 'GSTIN' not in txt)
+
+    # Add to Home screen: the business's own name, colour and icon, without logging in (phones fetch them cookie-less)
+    from PIL import Image
+    anon = app.test_client()
+    m = anon.get('/manifest.webmanifest')
+    ok('manifest: business name, colour, opens on quotations, no login needed', m.status_code == 200
+       and m.mimetype == 'application/manifest+json' and m.json['name'] == 'Env Name Co'
+       and m.json['theme_color'] == '#7b1fa2' and m.json['start_url'] == '/projects' and m.json['display'] == 'standalone')
+    icon_urls = [i['src'] for i in m.json['icons']]
+    imgs = [Image.open(BytesIO(anon.get(u).data)) for u in icon_urls]
+    ok(f'manifest icons are real square PNGs {[i.size for i in imgs]}', all(i.format == 'PNG' and i.width == i.height for i in imgs)
+       and {i.width for i in imgs} == {192, 512})
+    logo_icon = Image.open(BytesIO(anon.get('/app-icon-180.png').data)).convert('RGB')
+    ok('icon: the logo centred on white', logo_icon.getpixel((2, 2)) == (255, 255, 255) and logo_icon.getpixel((90, 90))[0] > 150
+       and logo_icon.getpixel((90, 90))[1] < 80)
+    ok('icon: other sizes refused', anon.get('/app-icon-64.png').status_code == 404)
+    head = c.get('/projects').text
+    ok('pages link the manifest and the iPhone icon and title', 'rel="manifest"' in head and 'rel="apple-touch-icon"' in head
+       and 'apple-mobile-web-app-title" content="Env Name Co"' in head)
+    os.environ['LOGO_FILE'] = ''
+    from app import app_icon
+    with app.test_request_context():
+        plain = Image.open(BytesIO(app_icon.icon_png(192))).convert('RGB')
+    ok('icon without a logo: initials on the brand colour', plain.getpixel((3, 3)) == (0x7b, 0x1f, 0xa2)
+       and app_icon.initials('Env Name Co') == 'EN' and app_icon.initials('A & B Interiors') == 'AB')
 finally:
     if os.path.exists(LOGO):
         os.remove(LOGO)
