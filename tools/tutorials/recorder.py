@@ -126,7 +126,7 @@ def _frame(bg, screen, chapter, title, caption, tap, tap_t):
     img = bg.copy()
     d = ImageDraw.Draw(img)
     brand(img, 60, 70, 40)
-    d.text((W - 60, 104), f'Part {chapter}', font=font(30, 'bold'), fill=TAPE, anchor='rm')
+    d.text((W - 60, 104), chapter if isinstance(chapter, str) else f'Part {chapter}', font=font(30, 'bold'), fill=TAPE, anchor='rm')
     d.text((60, 180), title, font=font(_fit(title, 64, 'heavy', W - 120)), fill=PAPER)
     # caption box
     lines = _wrap(caption, 40, 'demi', W - 160)
@@ -177,7 +177,7 @@ def title_card(chapter, title, subtitle, t):
     brand(img, 60, 70, 40)
     a = min(1.0, t / 0.5)
     col = lambda c: tuple(int(v * a + 14 * (1 - a)) for v in c)
-    d.text((W / 2, 760), f'PART {chapter}', font=font(40, 'bold'), fill=col(TAPE), anchor='mm')
+    d.text((W / 2, 760), chapter.upper() if isinstance(chapter, str) else f'PART {chapter}', font=font(40, 'bold'), fill=col(TAPE), anchor='mm')
     d.text((W / 2, 870), title, font=font(_fit(title, 90, 'heavy', W - 120)), fill=col(PAPER), anchor='mm')
     for i, line in enumerate(_wrap(subtitle, 42, 'demi', W - 200)):
         d.text((W / 2, 980 + i * 56), line, font=font(42, 'demi'), fill=col(MUTED), anchor='mm')
