@@ -33,8 +33,36 @@ with app.app_context():
     event.listen(db.engine, 'before_cursor_execute', lambda conn, cur, st, *a: stmts.append(st))
 # (the quotation page also loads its invoice, revisions, approval link, reminders and costs, plus the plywood list
 #  and which materials are priced on plywood: a fixed few more, never one per room or item)
-for url, budget in [(f'/projects/{priya.id}', 24), ('/projects', 15), ('/admin/dashboard', 20),
-                    (f'/projects/{priya.id}/edit', 20)]:
+# Settings are read once per request (branding.prefetch_common), materials/plywood "in use" in one query each, and
+# Reports loads every quotation's rooms and items (with their plywood) in a fixed number of queries.
+for url, budget in [(f'/projects/{priya.id}', 21), ('/projects', 12), ('/admin/dashboard', 10),
+                    (f'/projects/{priya.id}/edit', 15), ('/projects/new', 12), ('/admin/reports', 14),
+                    ('/admin/rates', 13), ('/admin/settings', 8), ('/admin/costs', 11)]:
     c.get(url)                         # warm: one-time checks (does a new column exist yet?) aren't per-page cost
     stmts.clear(); r = c.get(url)
     ok(f'{url}: {len(stmts)} queries (budget {budget})', r.status_code == 200 and len(stmts) <= budget)
+
+
+# Reports' "still to collect" matches the Balances page (worked out from rows Reports already loaded)
+from app import billing as _billing, reports as _reports
+class _Admin:
+    is_admin, id = True, None
+with app.test_request_context():
+    ok('reports outstanding = sum of Balances', abs(_reports.build()['outstanding']
+                                                    - round(sum(r['balance'] for r in _billing.balances_due(_Admin())), 2)) < 0.01)
+
+# Settings read in a request are kept for the rest of it; a write updates them; a rollback forgets them
+from app.models import AppSetting
+with app.test_request_context():
+    AppSetting.get_many(['company_name', 'upi_id'])
+    stmts.clear()
+    AppSetting.get('company_name'); AppSetting.get_many(['upi_id', 'company_name'])
+    ok('settings already read in this request: no new query', len(stmts) == 0)
+    before = AppSetting.get('upi_id')
+    AppSetting.set('upi_id', 'changed@upi')
+    ok('a write shows straight away in the same request', AppSetting.get('upi_id') == 'changed@upi')
+    db.session.rollback()
+    ok('after a rollback the old value is read again', AppSetting.get('upi_id') == before)
+    AppSetting.set('account_number', '123456789012'); db.session.commit()
+    ok('encrypted settings round-trip through the cache', AppSetting.get('account_number') == '123456789012'
+       and db.session.get(AppSetting, 'account_number').value.startswith('enc1:'))

@@ -258,6 +258,13 @@ def in_use(name):
             or db.session.query(Item.id).filter(Item.plywood == name).first() is not None)
 
 
+def names_in_use():
+    """Every plywood name chosen on some quotation or item, in two queries (Admin → Rates)."""
+    from .models import Item, Project
+    return ({n for (n,) in db.session.query(Project.plywood).filter(Project.plywood.isnot(None)).distinct()}
+            | {n for (n,) in db.session.query(Item.plywood).filter(Item.plywood.isnot(None)).distinct()})
+
+
 def form_data():
     """What the quotation form's script needs to price items live."""
     ctx = context()

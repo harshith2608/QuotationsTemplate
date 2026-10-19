@@ -75,9 +75,10 @@ def is_valid(wood, work):
     return any(w == wood and k == (work or '') for w, k, _ in combos(include_hidden=True))
 
 
-def default_combo():
-    """'Material|Work' preselected for new items: the usual default if available, else the first one."""
-    active = combos()
+def default_combo(active=None):
+    """'Material|Work' preselected for new items: the usual default if available, else the first one.
+    `active`: combos() if already worked out."""
+    active = combos() if active is None else active
     for w, k, _ in active:
         if w == DEFAULT_WOOD and k == DEFAULT_WORK:
             return w, k
@@ -87,13 +88,14 @@ def default_combo():
 def form_catalog(extra=()):
     """What the quotation form needs: active combos, plus any `extra` (wood, work) already used on this quotation
     (e.g. a material hidden since), so editing an old quotation never loses its material."""
-    rows = [{'value': key(w, k), 'label': l, 'wood': w, 'work': k} for w, k, l in combos()]
+    active = combos()
+    rows = [{'value': key(w, k), 'label': l, 'wood': w, 'work': k} for w, k, l in active]
     known = {r['value'] for r in rows}
     for w, k in extra:
         if key(w, k) not in known and w:
             rows.append({'value': key(w, k), 'label': label(w, k) + ' (hidden)', 'wood': w, 'work': k or ''})
             known.add(key(w, k))
-    dw, dk = default_combo()
+    dw, dk = default_combo(active)
     return {'material_combos': rows, 'default_combo': key(dw, dk)}
 
 
@@ -111,6 +113,14 @@ def in_use(name):
     if not table_ready():
         return True
     return db.session.query(Item.id).filter(Item.wood_type == name).first() is not None
+
+
+def names_in_use():
+    """Every material name used on some item, in one query (Admin → Rates), or None before the database update."""
+    from .models import Item
+    if not table_ready():
+        return None
+    return {n for (n,) in db.session.query(Item.wood_type).distinct()}
 
 
 def ordered_keys(totals):

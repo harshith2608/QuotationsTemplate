@@ -30,10 +30,14 @@ def _blank():
 
 
 def build(today=None):
+    from sqlalchemy.orm import undefer
+    from . import plywood
     from .models import Invoice, Item, Payment, Project, ProjectStageChange, Room
     today = today or (datetime.utcnow() + IST).date()
     current_fy = billing.financial_year(today)
-    projects = Project.query.filter(Project.status != 'draft').all()
+    ply = plywood.table_ready()        # plywood columns: with the rows, not one query per item / quotation
+    q = Project.query.filter(Project.status != 'draft')
+    projects = (q.options(undefer(Project.plywood)) if ply else q).all()
     ids = [p.id for p in projects]
 
     # Rooms and items for every quotation in two queries (for profit)
@@ -41,7 +45,8 @@ def build(today=None):
     if ids:
         rooms = Room.query.filter(Room.project_id.in_(ids)).order_by(Room.id).all()
         items_by_room = {}
-        for it in Item.query.filter(Item.room_id.in_([r.id for r in rooms])).order_by(Item.id):
+        iq = Item.query.filter(Item.room_id.in_([r.id for r in rooms])).order_by(Item.id)
+        for it in (iq.options(undefer(Item.plywood)) if ply else iq):
             items_by_room.setdefault(it.room_id, []).append(it)
         for r in rooms:
             r.item_list = items_by_room.get(r.id, [])
@@ -105,7 +110,9 @@ def build(today=None):
             for b in targets:
                 b['invoiced'] += inv.total
                 b['gst'] += gst
+    paid = {}
     for pay in Payment.query.filter(Payment.project_id.in_(ids)) if ids else []:
+        paid[pay.project_id] = paid.get(pay.project_id, 0) + pay.amount
         when = _day(pay.recorded_at)
         y, fy = bucket(when)
         targets = [y, total] + ([months.setdefault((when.year, when.month), _blank())] if fy == current_fy else [])
@@ -144,7 +151,12 @@ def build(today=None):
         'win_rate': round(win_rate * 100, 1),
         'pipeline_expected': round(pending_value * win_rate, 2),
     }
-    outstanding = sum(r['balance'] for r in billing.balances_due(_AllAccess()))
+    # Still to collect: the same rule as billing.balances_due, from the rows already loaded here
+    outstanding = 0.0
+    for p in projects:
+        inv = active.get(p.id)
+        if p.stage in billing.DUE_STAGES or inv:
+            outstanding += round(max((round(inv.total, 2) if inv else p.final_total) - paid.get(p.id, 0), 0), 2)
     max_month = max([m['won_value'] for m in month_rows] + [m['collected'] for m in month_rows] + [1])
     return {
         'today': today, 'current_fy': current_fy, 'current': cur, 'months': month_rows, 'max_month': max_month,
@@ -152,8 +164,3 @@ def build(today=None):
         'outstanding': round(outstanding, 2), 'has_costs': has_costs,
     }
 
-
-class _AllAccess:
-    """Stand-in user for billing.balances_due: every quotation (reports are admin-only)."""
-    is_admin = True
-    id = None

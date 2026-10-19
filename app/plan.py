@@ -129,6 +129,8 @@ def load_status(on=None):
         return g.plan_status
     from .models import AppSetting
     try:
+        from .branding import prefetch_common
+        prefetch_common()                      # with the brand and other common settings: one query per request
         rows = AppSetting.get_many([PLAN_KEY, STARTED_KEY, ENDS_KEY])
     except Exception:
         rows = {}

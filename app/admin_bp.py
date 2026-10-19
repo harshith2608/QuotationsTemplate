@@ -304,15 +304,17 @@ def rates():
     if ply_ready:
         from sqlalchemy.orm import undefer
         q = q.options(undefer(Material.uses_plywood))
+    used = M.names_in_use()                    # one query for all materials, not one per material
     for m in q.all():
         works = WORK_TYPES if m.uses_work_types else ['']
-        rows.append({'m': m, 'in_use': M.in_use(m.name), 'on_plywood': ply_ready and m.uses_plywood,
+        rows.append({'m': m, 'in_use': used is None or m.name in used, 'on_plywood': ply_ready and m.uses_plywood,
                      'rates': [(i, w, rate_map.get((m.name, w), 0.0)) for i, w in enumerate(works)]})
     ply_rows = []
     if ply_ready:
         from .models import PlywoodOption
+        ply_used = plywood.names_in_use()
         for o in plywood.context()['options']:
-            ply_rows.append(dict(o, in_use=plywood.in_use(o['name'])))
+            ply_rows.append(dict(o, in_use=o['name'] in ply_used))
     return render_template('admin/rates.html', title='Manage Rates', materials=rows,
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                            work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,

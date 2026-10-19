@@ -204,17 +204,31 @@ def build_brand(saved):
     return brand
 
 
+def prefetch_common():
+    """Read, in ONE query, the settings nearly every page needs: brand, units, plan, invoice and payment settings
+    (AppSetting keeps them for the rest of the request). Returns the raw values."""
+    from . import billing, layout, plan, units
+    from .models import AppSetting
+    keys = ([f[0] for f in FIELDS.values()] + [LOGO_VERSION_KEY] + list(units.KEYS)
+            + [plan.PLAN_KEY, plan.STARTED_KEY, plan.ENDS_KEY] + list(billing.INVOICE_KEYS)
+            + ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code', 'razorpay_key_id', 'admin_email',
+               'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'terms_conditions', 'plywood_seeded',
+               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY]
+            + [k for k, _ in layout.SECTION_KEYS])
+    return AppSetting.prefetch(keys)
+
+
 def get_brand():
     """The merged brand dict for this request (cached on flask.g; one settings query)."""
     if 'brand' in g:
         return g.brand
 
-    from .models import AppSetting
     saved = {}
     try:
         from . import units
+        raw = prefetch_common()
         keys = [f[0] for f in FIELDS.values()] + [LOGO_VERSION_KEY] + list(units.KEYS)
-        saved = {r.key: r.value for r in AppSetting.query.filter(AppSetting.key.in_(keys)).all()}
+        saved = {k: raw[k] for k in keys if raw.get(k) is not None}
         units.prime(saved)                     # the units come with the same query
     except Exception:
         # DB unreachable (e.g. cold start) — render with env/default values

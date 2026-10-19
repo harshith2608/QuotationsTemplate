@@ -316,16 +316,40 @@ class AppSetting(db.Model):
     def _out(cls, key, value):
         return decrypt(value) if key in cls.ENCRYPTED_KEYS else value
 
+    # Settings read during a request are kept for the rest of it (raw values, None = no row), one dict per database
+    # schema: the operator console reads several businesses in one request. Cleared on rollback.
+    @classmethod
+    def _cache(cls):
+        from flask import g, has_app_context
+        if not has_app_context():
+            return None
+        from . import tenancy
+        return g.setdefault('_app_settings', {}).setdefault(tenancy.current_schema() or '', {})
+
+    @classmethod
+    def prefetch(cls, keys):
+        """Raw values for `keys` ({key: value or None}), reading only the ones not already read in this request."""
+        cache = cls._cache()
+        if cache is None:
+            found = {r.key: r.value for r in cls.query.filter(cls.key.in_(keys)).all()}
+            return {k: found.get(k) for k in keys}
+        missing = [k for k in dict.fromkeys(keys) if k not in cache]
+        if missing:
+            found = {r.key: r.value for r in cls.query.filter(cls.key.in_(missing)).all()}
+            for k in missing:
+                cache[k] = found.get(k)
+        return cache
+
     @classmethod
     def get(cls, key, default=None):
-        row = cls.query.get(key)
-        return cls._out(key, row.value) if row else default
+        raw = cls.prefetch([key]).get(key)
+        return cls._out(key, raw) if raw is not None else default
 
     @classmethod
     def get_many(cls, keys, default=''):
-        """Fetch several settings in one query: {key: value or default}."""
-        rows = {r.key: cls._out(r.key, r.value) for r in cls.query.filter(cls.key.in_(keys)).all()}
-        return {k: rows.get(k) or default for k in keys}
+        """Fetch several settings in one query (or none, if already read): {key: value or default}."""
+        raw = cls.prefetch(keys)
+        return {k: (cls._out(k, raw[k]) if raw.get(k) is not None else None) or default for k in keys}
 
     @classmethod
     def set(cls, key, value):
@@ -336,6 +360,9 @@ class AppSetting(db.Model):
             row.value = value
         else:
             db.session.add(cls(key=key, value=value or ''))
+        cache = cls._cache()
+        if cache is not None:
+            cache[key] = value if row else (value or '')
 
     def __repr__(self):
         return f'<AppSetting {self.key}>'
@@ -633,3 +660,15 @@ class PlywoodOption(db.Model):
 
     def __repr__(self):
         return f'<PlywoodOption {self.name}>'
+
+
+from sqlalchemy import event as _event                     # noqa: E402
+from sqlalchemy.orm import Session as _Session             # noqa: E402
+
+
+@_event.listens_for(_Session, 'after_soft_rollback')
+def _forget_settings(session, previous_transaction):
+    """A rolled-back AppSetting.set must not stay in the request's settings cache."""
+    from flask import g, has_app_context
+    if has_app_context():
+        g.pop('_app_settings', None)

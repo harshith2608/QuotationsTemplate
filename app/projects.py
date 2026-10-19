@@ -5,7 +5,7 @@ from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, send_file, current_app)
 from flask_login import login_required, current_user
 from . import db
-from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, WorkTypeRate, ItemRate,
+from .models import (Project, Room, Item, MasterRoom, MasterItem, ItemRate,
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
                      PaymentLink, Notification, PriceListItem)
 from .decorators import admin_required
@@ -14,9 +14,6 @@ from .branding import get_brand
 from . import billing
 
 projects_bp = Blueprint('projects', __name__)
-
-def _get_work_type_rates():
-    return {r.work_type: r.rate_per_sqft for r in WorkTypeRate.query.all()}
 
 def _get_price_list():
     """Fittings & accessories price list for the quotation form: [{name, price, unit}]."""
@@ -102,17 +99,14 @@ def _ensure_creator_access(project, creator_user):
         ))
 
 
-def _get_wood_rates():
-    return {r.wood_type: r.rate_per_sqft for r in WoodRate.query.all()}
-
-
-def _form_catalog(project):
-    """Material options for the quotation form; keeps materials already used on `project` even if hidden since."""
+def _form_catalog(project, rooms=None):
+    """Material options for the quotation form; keeps materials already used on `project` even if hidden since.
+    `rooms`: the project's rooms if already loaded (rooms_with_items)."""
     from . import materials as M
     from . import plywood
     used = set()
     if project is not None:
-        for room in project.rooms_with_items():
+        for room in (rooms if rooms is not None else project.rooms_with_items()):
             used |= {(i.wood_type, i.work_type) for i in room.item_list if not i.is_fixed}
     cat = M.form_catalog(used)
     if plywood.table_ready():
@@ -320,8 +314,6 @@ def list_projects():
 def create_project():
     master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
     master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
-    rates = _get_wood_rates()
-    work_type_rates = _get_work_type_rates()
     item_rates = _get_item_rates()
     form_cat = _form_catalog(None)
 
@@ -367,8 +359,7 @@ def create_project():
                                    title='New Quotation',
                                    master_rooms=master_rooms,
                                    master_items=master_items,
-                                   rates=rates,
-                                   work_type_rates=work_type_rates, **form_cat,
+                                   **form_cat,
                                    item_rates=item_rates,
                                    price_list=_get_price_list(),
                                    form_data={'customer_name': customer_name,
@@ -426,8 +417,7 @@ def create_project():
                            title='New Quotation',
                            master_rooms=master_rooms,
                            master_items=master_items,
-                           rates=rates,
-                           work_type_rates=work_type_rates, **form_cat,
+                           **form_cat,
                            item_rates=item_rates,
                            price_list=_get_price_list(),
                            form_data={},
@@ -567,10 +557,9 @@ def edit_project(project_id):
 
     master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
     master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
-    rates = _get_wood_rates()
-    work_type_rates = _get_work_type_rates()
     item_rates = _get_item_rates()
-    form_cat = _form_catalog(project)
+    rooms = project.rooms_with_items()           # once, for the form's materials and (on GET) the rooms themselves
+    form_cat = _form_catalog(project, rooms)
 
     if request.method == 'POST':
         customer_name  = request.form.get('customer_name', '').strip()
@@ -614,8 +603,7 @@ def edit_project(project_id):
                                    title='Edit Quotation',
                                    master_rooms=master_rooms,
                                    master_items=master_items,
-                                   rates=rates,
-                                   work_type_rates=work_type_rates, **form_cat,
+                                   **form_cat,
                                    item_rates=item_rates,
                                    price_list=_get_price_list(),
                                    form_data={'customer_name': customer_name,
@@ -650,13 +638,12 @@ def edit_project(project_id):
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
 
-    existing_json = _build_rooms_json(project)
+    existing_json = _build_rooms_json(project, rooms if request.method == 'GET' else None)
     return render_template('projects/form.html',
                            title='Edit Quotation',
                            master_rooms=master_rooms,
                            master_items=master_items,
-                           rates=rates,
-                           work_type_rates=work_type_rates, **form_cat,
+                           **form_cat,
                            item_rates=item_rates,
                            price_list=_get_price_list(),
                            form_data={
@@ -670,11 +657,11 @@ def edit_project(project_id):
                            project=project)
 
 
-def _build_rooms_json(project):
+def _build_rooms_json(project, rooms=None):
     from . import plywood
     from . import layout
     rooms_data = []
-    for room in project.rooms_with_items():
+    for room in (rooms if rooms is not None else project.rooms_with_items()):
         room_dict = {
             'name': room.name,
             'items': [
