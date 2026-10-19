@@ -230,6 +230,24 @@ Upload order: full, 1, 2, 3, 4, 5. Then add each link in the ops console → **T
 (first time: press **Add the first six tutorials**, paste each YouTube link, Save). New videos later: **Add a tutorial**
 on the same page; they appear on www.quote-room.co.in/tutorials within a minute, no deploy needed.
 
+**Demo: quote to accepted** (landscape, laptop; 1 min 17 s) — *QuoteRoom in 1 minute: a full home quotation, accepted online by the customer*
+> See QuoteRoom, the quotation app for interior designers and modular furniture firms, in action. A quotation for a whole home (kitchen, master bedroom, guest bedroom and living room) made in minutes on a laptop, with sizes in feet and inches and your own rates. Then a branded PDF, an approval link sent on WhatsApp, and the customer opening it on her phone (no app, no login) and accepting. Back on your side, the quotation is Confirmed with a notification.
+>
+> 0:00 A new quotation
+> 0:10 Kitchen: items with sizes
+> 0:28 Master Bedroom, Guest Bedroom, Living Room
+> 0:44 Save and the PDF
+> 0:51 Send the approval link on WhatsApp
+> 0:56 The customer views it and accepts
+> 1:08 Confirmed, with a notification
+>
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Console → Tutorials → **Add a tutorial**: title `QuoteRoom in 1 minute`, length `1 min`, "A full home quotation made on a
+laptop, then the customer views it on her phone and accepts it online." Then press **↑ Up** until it is first: the first
+video is the big one at the top of the Tutorials page. Its link also goes in the first message to a lead (PRODUCT_GUIDE §7).
+Made by `tools/tutorials/demo_quote_to_accepted.py` (landscape layout: `tools/tutorials/landscape.py`).
+
 **Full walkthrough** — *QuoteRoom full walkthrough: from setup to getting paid (4.5 min)*
 > Everything you need to start using QuoteRoom, the quotation app for interior designers and modular furniture firms, on your phone.
 >
