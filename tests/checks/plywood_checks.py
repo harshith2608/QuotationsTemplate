@@ -81,6 +81,11 @@ ok('quotation page: plywood shown, lines named with their plywood, total right',
 full = pdftext(f'/projects/{pid}/pdf')
 ok('Full Quotation PDF: priced with plywood, both plywoods named on their lines (no separate Plywood Used list), same total',
    'Plywood Used' not in full and '18mm BWP' in full and '18mm 8*4' in full and money(expect) in full)
+ok('Full Quotation items say what they are: "Laminates Finish · 18mm BWP plywood"',
+   'Laminates Finish · 18mm BWP plywood' in full and 'Acrylic Finish · 18mm 8*4 plywood' in full)
+from app import materials as _M
+ok('…without doubling "plywood", and Glass keeps its name', _M.finish_label_of('Acrylic|Box Work|18mm Marine Ply') ==
+   'Acrylic Finish · 18mm Marine Ply' and _M.finish_label_of('Glass|') == 'Glass')
 cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('Initial Quotation PDF: same total, plywood lines', money(expect) in cust and '18mm BWP' in cust)
 wa = c.get(f'/projects/{pid}/whatsapp').headers.get('Location', '')

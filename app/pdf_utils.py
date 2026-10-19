@@ -346,7 +346,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Room-by-Room Breakdown", section_style))
     elements.append(Spacer(1, 6))
 
-    item_col_widths = ['22%', '11%', '11%', '24%', '14%', '18%']
+    item_col_widths = ['20%', '10%', '10%', '31%', '12%', '17%']
     page_width = A4[0] - 3 * cm
     col_widths = [page_width * float(p.strip('%')) / 100 for p in item_col_widths]
 

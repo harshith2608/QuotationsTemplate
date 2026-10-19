@@ -136,11 +136,15 @@ def ordered_keys(totals):
 
 
 def finish_label_of(combo_key):
-    """For the Full Quotation's items: 'Acrylic|Box Work' → 'Acrylic Finish', with a plywood 'Acrylic Finish · 18mm BWP';
-    a material without work types keeps its name ('Glass')."""
+    """For the Full Quotation's items: 'Acrylic|Box Work' → 'Acrylic Finish', with a plywood
+    'Acrylic Finish · 18mm BWP plywood' ("plywood" added unless the name already says ply); a material without work
+    types keeps its name ('Glass')."""
     wood, work, *ply = combo_key.split('|')
     text = f'{wood} Finish' if work else wood
-    return f'{text} · {ply[0]}' if ply and ply[0] else text
+    if not (ply and ply[0]):
+        return text
+    board = ply[0] if 'ply' in ply[0].lower() else f'{ply[0]} plywood'
+    return f'{text} · {board}'
 
 
 def label_of(combo_key):
