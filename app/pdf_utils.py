@@ -353,6 +353,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     from . import plywood
     _item_rates_map = plywood.rate_map()
     _project_ply = plywood.project_plywood(project)
+    material_style = ParagraphStyle('ItemMaterial', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
 
     rooms = project.rooms_with_items()
     for room in rooms:
@@ -373,7 +374,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(room_header)
 
         # Items table
-        item_rows = [['Item Name', 'Length', 'Width', 'Material & Work', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
+        item_rows = [['Item Name', 'Length', 'Width', 'Material', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
         room_total_area = 0.0
         room_total_cost = 0.0
         for item in room.item_list:
@@ -394,7 +395,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 item.name + (f' × {item.count}' if item.count > 1 else ''),
                 ft_in(item.length),
                 ft_in(item.width),
-                plywood.label(_key, project),
+                Paragraph(escape(plywood.finish_label(_key, project)), material_style),   # wraps: never cut off
                 f'{units.area_value(item.area):,.2f}',
                 f'{_money(subtotal)}'
             ])
@@ -429,6 +430,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('PADDING', (0, 0), (-1, -1), 5),
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
         elements.append(item_table)
         elements.append(Spacer(1, 8))

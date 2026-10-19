@@ -59,6 +59,9 @@ ok('…with sizes, one amount per room, discount and total; no rates or areas', 
    and 'sqft' not in cust)
 full = pdftext(f'/projects/{pid}/pdf')
 ok('Full Quotation keeps every rate and shows the count', 'Glass Shutters × 2' in full and money(subtotal - 1000) in full)
+ok('Full Quotation: each item\'s material as a finish (Laminates Finish), work types only in the Cost Summary',
+   'Laminates Finish' in full and 'Acrylic Finish' in full and 'Laminates – Box Work' in full.split('Cost Summary')[1]
+   and 'Laminates – Box Work' not in full.split('Cost Summary')[0])
 
 # Sections
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'material_specs': 'BWP 710 ply for carcass',

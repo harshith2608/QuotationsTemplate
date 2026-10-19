@@ -291,6 +291,12 @@ def label(price_key, project=None):
     return M.label_of(_named(price_key, project))
 
 
+def finish_label(price_key, project=None):
+    """Item label on the Full Quotation, e.g. 'Laminates Finish · 18mm BWP' (see materials.finish_label_of)."""
+    from . import materials as M
+    return M.finish_label_of(_named(price_key, project))
+
+
 def display_key(price_key, project=None):
     """The key a revision snapshot stores for a summary line: stable when the default plywood changes."""
     return _named(price_key, project)
