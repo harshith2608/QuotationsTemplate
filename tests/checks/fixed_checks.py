@@ -18,7 +18,7 @@ v = c.get('/projects/1').text
 ok('view: Fittings & Accessories summary line', 'Fittings &amp; Accessories' in v and '36,000.00' in v)
 ok('view: itemised in room table', 'Magic Corner' in v and '1 &times; &#8377;18,000' in v and '4 &times; &#8377;4,500' in v)
 full = pdftext('/projects/1/pdf')
-ok('Full PDF: each fitting in its room, with its unit price and No\'s', 'Magic Corner' in full and 'Tandem Drawer @ Rs. 4,500' in full)
+ok('Full PDF: each fitting in its room', 'Magic Corner' in full and 'Tandem Drawer' in full and 'Fitting: 4 × Rs. 4,500' in full)
 ok('Full PDF: fittings line in cost summary + subtotal', 'Fittings & Accessories' in full and '181,800.00' in full)
 cust = pdftext('/projects/1/pdf/customer')
 ok('Initial PDF: fittings in a Hardware row per room, with counts but no unit prices', 'Hardware' in cust
