@@ -211,12 +211,12 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 > WhatsApp in minutes, then track confirmations and payments.
 > I'll set up your free 7-day trial in your company name. What should the web address be, e.g. *{company}*.quote-room.co.in?
 > Meanwhile:
-> ▶️ See it in 1 minute (a quotation made on a laptop, the customer accepts it on their phone): {demo video link}
+> ▶️ See it in 1 minute (a quotation made on a laptop, the customer accepts it on their phone): https://youtu.be/cJgZoWVaB80
 > 👉 Try the live demo yourself: https://www.quote-room.co.in
 
 The 1-minute video is `ad-videos/tutorials/quoteroom-demo-quote-to-accepted.mp4` (made by
-`tools/tutorials/demo_quote_to_accepted.py`). Put its YouTube link in place of {demo video link}, or attach the video
-itself on WhatsApp (it plays right in the chat).
+`tools/tutorials/demo_quote_to_accepted.py`), on YouTube at https://youtu.be/cJgZoWVaB80. You can also attach the
+video itself on WhatsApp (it plays right in the chat).
 
 **Trial welcome** — sent from the console when you create the trial (it includes their link, username and
 password). Add a personal line:
