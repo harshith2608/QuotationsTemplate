@@ -8,6 +8,14 @@ from sqlalchemy import create_engine, text
 from werkzeug.security import generate_password_hash, check_password_hash
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
+
+
+def _dec(key, value):
+    from app import crypto as _c
+    with _c.using_key(key):
+        return _c.decrypt(value)
+
+
 SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'
 ADMIN = os.environ['TEST_REAL_PG_ADMIN_URL']
 os.environ.update(CONSOLE_MODE='1', TENANT_BASE_DOMAIN='quote-room.test', CONSOLE_TOTP_SECRET=SECRET,
@@ -72,14 +80,32 @@ ok('signed in', c.get('/customers').status_code == 200)
 ok('customers page has the form (all settings present)', 'New paying customer' in c.get('/customers').text)
 
 # A trial with real data, to convert
+# (made like a real one: details pre-filled from the trial request, then the recent features used: plywood on the
+#  quotation and on an item, room descriptions, staff "Can edit" access, specs with placeholders)
 with app.app_context():
-    t = ops.create_trial('sharma', 'owner', 'sharma-pass-123', 7)
+    t = ops.create_trial('sharma', 'owner', 'sharma-pass-123', 7, company='Sharma Interiors', phone='919811111111',
+                         city='Hyderabad', email='hello@sharma.example')
     with tenant_context('sharma'):
+        from app.models import Room, Item, ProjectAccess, PlywoodOption
+        from app import plywood as _ply
         u = User.query.first()
-        db.session.add(Project(customer_name='Trial Customer One', mobile='9000000001', created_by=u.id,
-                               grand_total=50000, discount_type='none', discount_value=0, status='complete'))
-        AppSetting.set('account_number', 'SHARMA-ACCT-9'); AppSetting.set('company_name', 'Sharma Interiors')
+        _ply.ensure_options()
+        ply_names = [o.name for o in PlywoodOption.query.order_by(PlywoodOption.sort_order)]
+        p1 = Project(customer_name='Trial Customer One', mobile='9000000001', created_by=u.id,
+                     grand_total=50000, discount_type='none', discount_value=0, status='complete', plywood=ply_names[1])
+        db.session.add(p1); db.session.flush()
+        room = Room(project_id=p1.id, name='Kitchen', description='Carcass: BWP ply · Shutters: 1mm laminate')
+        db.session.add(room); db.session.flush()
+        db.session.add(Item(room_id=room.id, name='Base Cabinet', length=10, width=3, quantity=2, wood_type='Laminates',
+                            work_type='Box Work', area=60, plywood=ply_names[2]))
+        staff = User(username='rahul', password_hash=generate_password_hash('rahul-pass-123', method='pbkdf2:sha256'),
+                     role='employee')
+        db.session.add(staff); db.session.flush()
+        db.session.add(ProjectAccess(project_id=p1.id, user_id=staff.id, granted_by=u.id, can_edit=True))
+        AppSetting.set('account_number', 'SHARMA-ACCT-9')
+        AppSetting.set('material_specs', 'Plywood: {plywood_details} for all carcass and shutters')
         db.session.commit()
+        trial_pid = p1.id
 
 # Convert: runs database → data → project → deploy, then waits for the build
 r = c.post('/customers', data={'source': 'trial', 'trial': 'sharma', 'name': 'Sharma Interiors', 'plan': '1y',
@@ -120,7 +146,18 @@ with eng.connect() as conn:
     plan = dict(conn.execute(text("select key, value from app_settings where key like 'plan_%'")).all())
 with crypto.using_key(key):
     ok('trial data copied and re-encrypted with the customer\'s own key', crypto.decrypt(raw_name) == 'Trial Customer One')
-ok('logins kept', users == ['owner'])
+ok('logins kept', sorted(users) == ['owner', 'rahul'])
+with eng.connect() as conn:
+    sett = dict(conn.execute(text("select key, value from app_settings where key in "
+                                  "('company_name', 'company_mobile', 'company_address', 'company_email')")).all())
+    ply_cols = conn.execute(text('select p.plywood, i.plywood, r.description, a.can_edit from projects p '
+                                 'join rooms r on r.project_id = p.id join items i on i.room_id = r.id '
+                                 'join project_access a on a.project_id = p.id')).first()
+ok('pre-filled company details carried over', sett == {'company_name': 'Sharma Interiors', 'company_mobile': '+91 98111 11111',
+                                                     'company_address': 'Hyderabad', 'company_email': 'hello@sharma.example'})
+desc = ply_cols and (_dec(key, ply_cols[2]) if str(ply_cols[2]).startswith('enc1:') else ply_cols[2])
+ok('recent features carried over: quotation + item plywood, room description, Can edit access',
+   ply_cols is not None and ply_cols[0] and ply_cols[1] and ply_cols[3] is True and 'BWP' in (desc or ''))
 ok('12-month plan started today', plan.get('plan_name') == '1y')
 with eng.connect() as conn:
     enc = conn.execute(text('select pg_encoding_to_char(encoding) from pg_database where datname = current_database()')).scalar()
@@ -128,6 +165,36 @@ ok('customer database is UTF-8', enc == 'UTF8')
 with app.app_context():
     st, rev = cust.live_status('sharma')
 ok('console reads the live plan (≈365 days left)', 360 <= st.days_left <= 366 and rev == cust.head_revision())
+
+# The customer's own app, started on its new database with its own key: the owner and staff use it as before
+import subprocess, sys, json as _json
+code_ = '''
+import json, os, re
+os.environ.pop("CONSOLE_MODE", None)
+from app import create_app
+app = create_app("development"); app.config["WTF_CSRF_ENABLED"] = False
+pid = int(os.environ["PID"]); out = {}
+c = app.test_client(); c.post("/login", data={"username": "owner", "password": "sharma-pass-123"})
+for u in ["/projects", f"/projects/{pid}", f"/projects/{pid}/edit", f"/projects/{pid}/pdf", f"/projects/{pid}/pdf/customer",
+          "/admin/reports", "/admin/rates", "/admin/settings", "/admin/settings?tab=documents", "/admin/dashboard"]:
+    r = c.get(u); out[u] = r.status_code
+v = c.get(f"/projects/{pid}").text
+out["name"] = "Sharma Interiors" in v
+s = app.test_client(); s.post("/login", data={"username": "rahul", "password": "rahul-pass-123"})
+out["staff_edit"] = s.get(f"/projects/{pid}/edit").status_code
+out["staff_reports"] = s.get("/admin/reports").status_code
+print("RESULT " + json.dumps(out))
+'''
+env_ = dict(os.environ, DATABASE_URL=s['direct_url'], DATA_ENCRYPTION_KEY=key, PID=str(trial_pid), FLASK_ENV='development')
+res = subprocess.run([sys.executable, '-c', code_], capture_output=True, text=True, env=env_,
+                     cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+m = re.search(r'RESULT (.*)', res.stdout)
+out = _json.loads(m.group(1)) if m else {}
+pages = {k: v for k, v in out.items() if k.startswith('/')}
+ok(f'converted app: every main page works for the owner {pages or res.stderr[-400:]}',
+   pages and all(v == 200 for v in pages.values()) and out.get('name'))
+ok('converted app: staff keep their "Can edit" access; reports stay admin-only',
+   out.get('staff_edit') == 200 and out.get('staff_reports') in (302, 403))
 
 # Isolation: the customer's login opens only its own database
 def can(url):
