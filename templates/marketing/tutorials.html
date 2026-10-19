@@ -8,6 +8,9 @@
 .tut .lede { color: var(--muted); margin-top: .6rem; max-width: 60ch; }
 .tut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 22px; margin-top: 28px; }
 .tut-main { max-width: 380px; }
+/* landscape videos (recorded on a laptop): a whole row, 16:9 */
+.tut-card.wide { grid-column: 1 / -1; max-width: 820px; }
+.tut-card.wide .yt { aspect-ratio: 16 / 9; }
 .tut-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
 .tut-card h2, .tut-card h3 { font-size: 1.1rem; margin: 0; }
 .tut-card p { color: var(--muted); font-size: .92rem; margin-top: .35rem; }
@@ -26,13 +29,13 @@
   <div class="wrap">
     <p class="eyebrow">Tutorials</p>
     <h1 style="margin-top:.6rem">Set up {{ product }} in minutes</h1>
-    <p class="lede">Short videos on a phone, step by step: your company details, your rates, your first quotation, sending it
+    <p class="lede">Short videos, step by step: your company details, your rates, your first quotation, sending it
       and getting paid. Watch the full walkthrough or jump to the part you need.</p>
 
     {% set first = videos[0] %}
     <div class="tut-grid">
       {% for v in videos %}
-      <article class="tut-card {{ 'tut-main' if loop.first }}">
+      <article class="tut-card {{ 'wide' if v.wide else ('tut-main' if loop.first) }}">
         <button class="yt" type="button" data-yt="{{ v.id }}" aria-label="Play: {{ v.title }}"
                 style="background-image:url('https://i.ytimg.com/vi/{{ v.id }}/hqdefault.jpg')"></button>
         <div class="meta">

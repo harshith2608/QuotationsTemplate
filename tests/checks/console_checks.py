@@ -191,6 +191,22 @@ with le.connect() as conn:
     row = conn.execute(text('select title, youtube_id, hidden from tutorials where id = :i'), {'i': ids[1]}).first()
 ok('edit saves title and the ID from a watch link', row.title == '6 · Your team & logins' and row.youtube_id == 'BBBBBBBBBBB'
    and not row.hidden and '2 on the site' in r.text)
+r = c.post(f'/tutorials/{ids[1]}', data={'title': '6 · Your team & logins', 'length': '1 min', 'wide': 'on',
+           'youtube': 'https://youtu.be/BBBBBBBBBBB', 'shown': 'on'}, follow_redirects=True)
+with le.connect() as conn:
+    wide = conn.execute(text('select wide from tutorials where id = :i'), {'i': ids[1]}).scalar()
+ok('Landscape video tick box saves (shown wide on the site)', bool(wide) and 'name="wide" checked' in r.text)
+with le.begin() as conn:
+    conn.execute(text('alter table tutorials drop column wide'))
+r = c.post('/tutorials/add', data={'title': 'Before the update', 'youtube': 'https://youtu.be/DDDDDDDDDDD', 'wide': 'on', 'shown': 'on'},
+           follow_redirects=True)
+ok('before the database update that adds Landscape: list, add and edit still work, no tick box',
+   r.status_code == 200 and 'Added &#34;Before the update&#34;' in r.text and 'name="wide"' not in r.text
+   and c.post(f'/tutorials/{ids[1]}', data={'title': '6 · Your team & logins', 'youtube': 'https://youtu.be/BBBBBBBBBBB',
+                                            'shown': 'on'}).status_code == 302)
+with le.begin() as conn:
+    conn.execute(text("delete from tutorials where title = 'Before the update'"))
+    conn.execute(text('alter table tutorials add column wide boolean not null default 0'))
 from app.console import _tutorials_line, _welcome_message
 from datetime import date as _date
 msg = _welcome_message('Ravi', 'https://x.quote-room.test', 'admin', 'pw', _date(2026, 10, 23))

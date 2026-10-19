@@ -585,6 +585,10 @@ class Tutorial(db.Model):
     youtube_id = db.Column(db.String(11))                               # none yet → not shown
     hidden     = db.Column(db.Boolean, nullable=False, default=False)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    # Landscape (16:9) video, shown wide on the page; phone tutorials are 9:16. Deferred, with a server default, so
+    # nothing reads or writes it before the database update that adds it (marketing.tutorials_wide_ready).
+    wide       = db.deferred(db.Column(db.Boolean, nullable=False, server_default=db.false()))
+    __mapper_args__ = {'eager_defaults': False}
 
     def __repr__(self):
         return f'<Tutorial {self.title}>'

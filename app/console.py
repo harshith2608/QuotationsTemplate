@@ -294,9 +294,14 @@ def load_demo_stats(days=30):
 
 # ── Tutorials on the marketing site (stored in the demo database) ──────────
 
+_TUTORIALS_NARROW = None
+
+
 def _tutorials_table():
-    """(engine, table) or (None, reason) when not connected / before the database update."""
-    from sqlalchemy import inspect
+    """(engine, table) or (None, reason) when not connected / before the database update. Before the update that
+    adds tutorials.wide, the table is given without that column, so nothing reads or writes it."""
+    global _TUTORIALS_NARROW
+    from sqlalchemy import MetaData, Table, inspect
     from .models import Tutorial
     engine = _leads_engine_or_none()
     if engine is None:
@@ -304,7 +309,11 @@ def _tutorials_table():
     with engine.connect() as conn:
         if not inspect(conn).has_table('tutorials'):
             return None, 'pending'
-    return engine, Tutorial.__table__
+        if 'wide' in {c['name'] for c in inspect(conn).get_columns('tutorials')}:
+            return engine, Tutorial.__table__
+    if _TUTORIALS_NARROW is None:
+        _TUTORIALS_NARROW = Table('tutorials', MetaData(), *[c._copy() for c in Tutorial.__table__.columns if c.name != 'wide'])
+    return engine, _TUTORIALS_NARROW
 
 
 STARTER_TUTORIALS = [   # the first videos (tools/tutorials), offered when the list is empty
@@ -326,8 +335,8 @@ def load_tutorials():
         return None, [dict(r) for r in conn.execute(select(t).order_by(t.c.position, t.c.id)).mappings()]
 
 
-def _tutorial_values(form):
-    """(values, error) from the add/edit form."""
+def _tutorial_values(form, t=None):
+    """(values, error) from the add/edit form. `t`: the table, to include Landscape once that column exists."""
     from .marketing import youtube_id
     title = ' '.join((form.get('title') or '').split())[:120]
     link = (form.get('youtube') or '').strip()
@@ -336,9 +345,12 @@ def _tutorial_values(form):
         return None, 'Give the video a title.'
     if link and not vid:
         return None, "That doesn't look like a YouTube link (e.g. https://youtu.be/AbCdEfGhIjK)."
-    return dict(title=title, about=' '.join((form.get('about') or '').split())[:300],
-                length=' '.join((form.get('length') or '').split())[:20], youtube_id=vid or None,
-                hidden=form.get('shown') != 'on', updated_at=datetime.utcnow()), None
+    values = dict(title=title, about=' '.join((form.get('about') or '').split())[:300],
+                  length=' '.join((form.get('length') or '').split())[:20], youtube_id=vid or None,
+                  hidden=form.get('shown') != 'on', updated_at=datetime.utcnow())
+    if t is not None and 'wide' in t.c:
+        values['wide'] = form.get('wide') == 'on'
+    return values, None
 
 
 def _site_url():
@@ -566,8 +578,10 @@ def restore_lead(lead_id):
 @login_required
 def tutorials():
     problem, rows = load_tutorials()
+    engine, t = _tutorials_table()
     return render_template('console/tutorials.html', problem=problem, rows=rows, site_url=_site_url(),
-                           live=sum(1 for r in rows if r['youtube_id'] and not r['hidden']))
+                           live=sum(1 for r in rows if r['youtube_id'] and not r['hidden']),
+                           wide_ready=engine is not None and 'wide' in t.c)
 
 
 def _tutorial_or_404(engine, t, tid):
@@ -584,7 +598,7 @@ def tutorial_add():
     engine, t = _tutorials_table()
     if engine is None:
         abort(404)
-    values, error = _tutorial_values(request.form)
+    values, error = _tutorial_values(request.form, t)
     if error:
         flash(error, 'error')
         return redirect(url_for('console.tutorials'))
@@ -623,7 +637,7 @@ def tutorial_save(tid):
     if engine is None:
         abort(404)
     _tutorial_or_404(engine, t, tid)
-    values, error = _tutorial_values(request.form)
+    values, error = _tutorial_values(request.form, t)
     if error:
         flash(error, 'error')
         return redirect(url_for('console.tutorials') + f'#t{tid}')

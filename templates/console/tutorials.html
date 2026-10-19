@@ -53,6 +53,7 @@
                  value="{{ 'https://youtu.be/' ~ r.youtube_id if r.youtube_id else '' }}"></div>
         <div class="row" style="align-items:center">
           <label class="check"><input type="checkbox" name="shown" {{ 'checked' if not r.hidden }}> Show on the site</label>
+          {% if wide_ready %}<label class="check" title="A landscape (16:9) video, e.g. recorded on a laptop: shown wide on the page"><input type="checkbox" name="wide" {{ 'checked' if r.wide }}> Landscape video</label>{% endif %}
           <button class="btn btn-primary btn-sm" type="submit">Save</button>
           {% if r.youtube_id %}<a class="small" href="https://youtu.be/{{ r.youtube_id }}" target="_blank" rel="noopener">Open on YouTube</a>{% endif %}
         </div>
@@ -93,6 +94,7 @@
   <div><label for="new_yt">YouTube link</label><input type="text" id="new_yt" name="youtube" inputmode="url" placeholder="https://youtu.be/… (you can add it later)"></div>
   <div class="row" style="align-items:center">
     <label class="check"><input type="checkbox" name="shown" checked> Show on the site</label>
+    {% if wide_ready %}<label class="check" title="A landscape (16:9) video, e.g. recorded on a laptop: shown wide on the page"><input type="checkbox" name="wide"> Landscape video</label>{% endif %}
     <button class="btn btn-primary" type="submit">Add tutorial</button>
   </div>
   <p class="muted small" style="margin:0">New videos go at the end; use ↑ Up to move them.</p>

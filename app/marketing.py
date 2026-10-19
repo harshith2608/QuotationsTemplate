@@ -97,8 +97,14 @@ def youtube_id(value):
     return m.group(1) if value and m else ''
 
 
+def tutorials_wide_ready(conn):
+    """True once the database update that adds tutorials.wide has run."""
+    from sqlalchemy import inspect
+    return 'wide' in {c['name'] for c in inspect(conn).get_columns('tutorials')}
+
+
 def tutorials():
-    """[{title, about, length, id}] for the shown videos that have a YouTube link, in page order.
+    """[{title, about, length, id, wide}] for the shown videos that have a YouTube link, in page order.
     [] until the database update that adds the tutorials table has run."""
     import time
     hit = _tutorials_cache.get('v')
@@ -111,7 +117,11 @@ def tutorials():
     if inspect(db.session.connection()).has_table('tutorials'):
         q = select(Tutorial).where(Tutorial.hidden.is_(False), Tutorial.youtube_id.isnot(None), Tutorial.youtube_id != '') \
             .order_by(Tutorial.position, Tutorial.id)
-        rows = [dict(title=t.title, about=t.about, length=t.length, id=t.youtube_id) for t in db.session.scalars(q)]
+        wide = tutorials_wide_ready(db.session.connection())
+        if wide:
+            q = q.options(undefer(Tutorial.wide))
+        rows = [dict(title=t.title, about=t.about, length=t.length, id=t.youtube_id, wide=bool(wide and t.wide))
+                for t in db.session.scalars(q)]
     _tutorials_cache['v'] = (time.time(), rows)
     return rows
 

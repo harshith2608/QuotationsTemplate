@@ -71,6 +71,24 @@ ok('tutorials page lists linked, shown videos in order (no link / hidden skipped
    and 'youtube-nocookie.com/embed/' in t and '<iframe' not in t)
 ok('header and footer link to Tutorials', c.get('/').text.count('/tutorials">Tutorials</a>') == 2)
 with c.application.app_context():
+    rows = _db.session.scalars(_db.select(_Tut).order_by(_Tut.position)).all()
+    rows[2].wide = True
+    _db.session.commit()
+_mk._tutorials_cache.clear()
+t = c.get('/tutorials').text
+ok('a landscape video is shown wide (16:9), phone ones tall', t.count('tut-card wide') == 1
+   and t.index('tut-card wide') > t.index('AAAAAAAAAAA') and 'aspect-ratio: 16 / 9' in t)
+with c.application.app_context():
+    _db.session.execute(_db.text('alter table tutorials drop column wide'))
+    _db.session.commit()
+_mk._tutorials_cache.clear()
+t = c.get('/tutorials').text
+ok('before the database update that adds Landscape: the page still lists the videos, all tall',
+   'data-yt="BBBBBBBBBBB"' in t and 'tut-card wide' not in t)
+with c.application.app_context():
+    _db.session.execute(_db.text('alter table tutorials add column wide boolean not null default 0'))
+    _db.session.commit()
+with c.application.app_context():
     for r in _db.session.scalars(_db.select(_Tut)):
         r.youtube_id = None
     _db.session.commit()
