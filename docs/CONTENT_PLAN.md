@@ -266,6 +266,13 @@ Made by `tools/tutorials/demo_quote_to_accepted.py` (landscape layout: `tools/tu
 > Tip: check your company name and GSTIN carefully, they lock once saved (message us if you need a change).
 > 👉 Free 7-day trial: https://www.quote-room.co.in
 
+Instagram Reel caption (cover text: "Set up your quotation app in 1 minute"):
+> Your quotations, in your brand ✨ In about a minute: add your company name, phone, address and GSTIN, upload your logo and pick your colours. They show on your app and on every quotation PDF your customer gets.
+>
+> Part 1 of our QuoteRoom setup series. Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom #interiordesignindia #quotation
+
 **Part 2** — *QuoteRoom tutorial 2: set your rates, materials & plywood*
 > Set your own rate per sqft for each material and work type, add any material you use (wallpaper, PU, glass…), keep a price list of fittings like Magic Corners and tandem drawers, and add the plywood you offer with its price difference per sqft (e.g. 18mm BWP +₹150) and details. Every new quotation uses your rates.
 > 👉 Free 7-day trial: https://www.quote-room.co.in
