@@ -83,7 +83,7 @@
   <p class="muted small" style="margin-top:8px">Anonymous counts, no personal data. A site visitor is a browser opening the website for
     the first time; a demo visitor, a browser opening the demo for the first time (returning ones aren't counted again).
     Bots and link previews are left out. % for the demo and trial requests is of site visitors; for quotations and PDFs, of
-    demo visitors. Days are UTC.{% if not demo_stats.visitors_ready %} Site visitors are counted after the next database
+    demo visitors. Days are UTC.{% if demo_stats.started %} Counting since {{ demo_stats.started.strftime('%d %b %Y') }}.{% endif %}{% if not demo_stats.visitors_ready %} Site visitors are counted after the next database
     update (Updates → Update all).{% endif %}</p>
   {% endif %}
 </div>

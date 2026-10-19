@@ -275,7 +275,7 @@ def load_leads(limit=100):
 def load_demo_stats(days=30):
     """Anonymous live-demo counts from the demo database: totals for today / 7 / 30 days and daily rows.
     None if not connected; {'pending': True} before the database update that adds the table."""
-    from sqlalchemy import inspect, select
+    from sqlalchemy import func, inspect, select
     from .models import DemoStat
     engine = _leads_engine_or_none()
     if engine is None:
@@ -290,9 +290,12 @@ def load_demo_stats(days=30):
         present = {c['name'] for c in inspect(conn).get_columns('demo_stats')}   # site_visitors: a later update
         cols = [c for c in t.c if c.name in present]
         rows = [dict(r) for r in conn.execute(select(*cols).where(t.c.day > since).order_by(t.c.day.desc())).mappings()]
-        # trial requests per day (only their dates are read: nothing encrypted is needed)
-        lead_days = [d.date() for (d,) in conn.execute(select(Lead.__table__.c.created_at)
-                                                       .where(Lead.__table__.c.created_at >= datetime.combine(since, datetime.min.time())))]
+        # trial requests per day (only their dates are read: nothing encrypted is needed), from the day counting started
+        # (the funnel's first day), so every column covers the same days
+        started = conn.execute(select(func.min(t.c.day))).scalar()
+        lead_days = [] if started is None else [
+            d.date() for (d,) in conn.execute(select(Lead.__table__.c.created_at).where(
+                Lead.__table__.c.created_at >= datetime.combine(max(since + timedelta(days=1), started), datetime.min.time())))]
     requests_by_day = {}
     for d in lead_days:
         requests_by_day[d] = requests_by_day.get(d, 0) + 1
@@ -313,7 +316,7 @@ def load_demo_stats(days=30):
         out['pct'].update({k: (round(out[k] / out['starts'] * 100) if out['starts'] else None) for k in ('quotations', 'pdfs')})
         return out
     return {'pending': False, 'visitors_ready': 'site_visitors' in present, 'today': total(1), 'week': total(7),
-            'month': total(30), 'days': rows[:14]}
+            'month': total(30), 'days': rows[:14], 'started': started}
 
 
 # ── Tutorials on the marketing site (stored in the demo database) ──────────
