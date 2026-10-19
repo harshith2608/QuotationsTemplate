@@ -11,7 +11,7 @@ demo it, what to say (in messages and out loud), and how to answer the usual que
 ## 1. QuoteRoom in one breath
 
 **QuoteRoom is a quotation app for interior designers and furniture makers.** You measure each room in
-feet and inches on your phone, QuoteRoom works out the square feet, applies your rates and gives you a
+your own unit (feet & inches, mm, cm or inches) on your phone or laptop, QuoteRoom works out the area, applies your rates and gives you a
 branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed, invoiced and paid.
 
 - **Short version (one line):** "Measure on site, send a professional quotation before you leave, and get paid faster."
@@ -67,8 +67,8 @@ branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed
 Explain features as **problem → what QuoteRoom does → what the customer gets**.
 
 ### Quoting
-- **Feet & inches, room by room.** Add rooms (Master Bedroom, Kitchen…) and items (Wardrobe, Loft…). Enter
-  length and width in ft and in; sqft, room totals and the grand total update as you type.
+- **Room by room, in your unit.** Add rooms (Master Bedroom, Kitchen…) and items (Wardrobe, Loft…). Enter
+  length and width in feet & inches, mm, cm or inches (Settings → Units); the area, room totals and the grand total update as you type.
 - **Your materials and rates.** Acrylic, Laminates, Veneer with Box Work / Frame Work rates, plus any
   materials they add themselves (Glass, PU, Wallpaper, Wooden Flooring…) with one rate per sqft. Hide old ones; rename freely.
 - **Fittings & accessories.** A price list (Magic Corner, Tandem Drawer, hinges…) added by quantity × price.
@@ -174,7 +174,7 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 
 **30-second pitch (call, walk-in, expo)**
 > "You know how after a site visit it takes a day or two to send the quotation? With QuoteRoom you measure
-> each room on your phone in feet and inches, it calculates the square feet and the price with your rates, and
+> each room on your phone in feet and inches, or mm if you prefer, it calculates the area and the price with your rates, and
 > you send a branded PDF on WhatsApp before you leave the site. Then it tracks which jobs are confirmed and
 > who still owes you money. It's your own app with your logo, for your whole team, from ₹750 a month. Can I show
 > you in two minutes?"
@@ -207,8 +207,8 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 
 **First message to a lead (after a trial request or an ad enquiry)**
 > Hi {name}, thanks for your interest in QuoteRoom! 🙂
-> It lets you measure each room on your phone in feet and inches and send your customer a branded quotation on
-> WhatsApp in minutes, then track confirmations and payments.
+> It lets you measure each room in feet & inches, mm, cm or inches (your choice), on your phone or laptop, and send your
+> customer a branded quotation on WhatsApp in minutes, then track confirmations and payments.
 > I'll set up your free 7-day trial in your company name. What should the web address be, e.g. *{company}*.quote-room.co.in?
 > Meanwhile:
 > ▶️ See it in 1 minute (a quotation made on a laptop, the customer accepts it on their phone): https://youtu.be/cJgZoWVaB80
@@ -273,7 +273,7 @@ any price other than the ones in section 3, or custom work you haven't agreed to
 |---|---|---|---|
 | What it is | Quotation → approval → invoice → payment, for small interior/furniture firms | Full interior ERP + CRM (procurement, inventory, attendance, AI) | Android quotation & billing app for carpenters/workshops |
 | Price | ₹4,999 / 6 mo, ₹8,999 / yr, whole team | ₹6,000–12,500 per user/yr + GST | Not published ("ask on WhatsApp") |
-| Feet & inches → sqft quoting | Core feature | Measurement sheets on Pro plan | Not described |
+| Measurements → area quoting (ft & in, mm, cm, in; sqft or sq m) | Core feature | Measurement sheets on Pro plan | Not described |
 | Own brand & web address | Included | White-label ₹75,000+ (Enterprise) | Logo on PDF |
 | Works on iPhone / laptop | Yes (browser) | Yes | Android app |
 | Best for | 1–10 person studios & workshops | 5–50 person fit-out firms | Price-sensitive carpenters |
