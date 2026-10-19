@@ -74,11 +74,12 @@
     <div class="fw-semibold mb-2">Room by room</div>
     {% for room in snap.rooms %}
       <div class="fw-semibold small mt-3 mb-1" style="color:var(--p)">{{ room.name }}</div>
+      {% if room.material_description %}{% for d in room.material_description.split('\n') %}<div class="small q-muted mb-1">{{ d }}</div>{% endfor %}{% endif %}
       <div class="table-responsive"><table class="table table-sm small mb-0">
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
+            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }}{% endif %}</div></td>
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
           </tr>
         {% endfor %}

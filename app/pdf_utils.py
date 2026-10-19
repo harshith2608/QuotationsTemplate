@@ -346,13 +346,15 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Room-by-Room Breakdown", section_style))
     elements.append(Spacer(1, 6))
 
-    item_col_widths = ['22%', '11%', '11%', '24%', '14%', '18%']
+    item_col_widths = ['34%', '13%', '13%', '8%', '14%', '18%']
     page_width = A4[0] - 3 * cm
     col_widths = [page_width * float(p.strip('%')) / 100 for p in item_col_widths]
 
-    from . import plywood
+    from . import layout, plywood
     _item_rates_map = plywood.rate_map()
     _project_ply = plywood.project_plywood(project)
+    desc_style = ParagraphStyle('RoomDesc', parent=styles['Normal'], fontSize=8, leading=10.5, textColor=colors.HexColor('#37474f'))
+    cell_style = ParagraphStyle('ItemCell', parent=styles['Normal'], fontSize=8, leading=10)
 
     rooms = project.rooms_with_items()
     for room in rooms:
@@ -372,8 +374,23 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ]))
         elements.append(room_header)
 
+        # What the room is made of, once, as on the Initial Quotation: its ticked description, else its materials
+        measured_keys = []
+        for item in room.item_list:
+            if not item.is_fixed:
+                label = plywood.label(plywood.item_key(item, _project_ply), project)
+                if label not in measured_keys:
+                    measured_keys.append(label)
+        description = layout.room_description(room) or ', '.join(measured_keys)
+        if description:
+            desc_table = Table([[Paragraph('<b>Material description:</b> ' + escape(description).replace('\n', '<br/>'),
+                                           desc_style)]], colWidths=[page_width])
+            desc_table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), BRAND_LIGHT),
+                                            ('PADDING', (0, 0), (-1, -1), 6)]))
+            elements.append(desc_table)
+
         # Items table
-        item_rows = [['Item Name', 'Length', 'Width', 'Material & Work', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
+        item_rows = [['Item Name', 'Length', 'Width', "No's", f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
         room_total_area = 0.0
         room_total_cost = 0.0
         for item in room.item_list:
@@ -381,25 +398,24 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 # Fitting/accessory: quantity × unit price, no dimensions
                 subtotal = item.cost(_item_rates_map, _project_ply)
                 room_total_cost += subtotal
-                item_rows.append([item.name, '—', '—',
-                                  f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}', '—', f'{_money(subtotal)}'])
+                item_rows.append([Paragraph(f'{escape(item.name)} <font color="#616161">@ Rs. {_money(item.unit_price, ",.0f")}</font>',
+                                            cell_style), '—', '—', f'{item.quantity:g}', '—', f'{_money(subtotal)}'])
                 continue
-            work_type  = item.work_type or ''
             _key       = plywood.item_key(item, _project_ply)
             rate       = _item_rates_map.get(_key, 0.0)
             subtotal   = item.area * rate
             room_total_area += item.area
             room_total_cost += subtotal
             item_rows.append([
-                item.name + (f' × {item.count}' if item.count > 1 else ''),
+                Paragraph(escape(item.name), cell_style),
                 ft_in(item.length),
                 ft_in(item.width),
-                plywood.label(_key, project),
+                layout.count_text(item.count),
                 f'{units.area_value(item.area):,.2f}',
                 f'{_money(subtotal)}'
             ])
         # Room total row
-        item_rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
+        item_rows.append(['Room Total:', '', '', '', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
 
         item_table = Table(item_rows, colWidths=col_widths)
         item_table.setStyle(TableStyle([
@@ -419,10 +435,13 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fafafa')]),
             # Total row
             ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-            ('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'),
-            ('TEXTCOLOR', (3, -1), (-1, -1), BRAND_DARK),
-            ('ALIGN', (3, -1), (4, -1), 'CENTER'),
+            ('SPAN', (0, -1), (3, -1)),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
+            ('ALIGN', (0, -1), (0, -1), 'RIGHT'),
+            ('ALIGN', (4, -1), (4, -1), 'CENTER'),
             ('ALIGN', (5, -1), (5, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             # Grid
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
             ('LINEBELOW', (0, 0), (-1, 0), 1, BRAND_DARK),

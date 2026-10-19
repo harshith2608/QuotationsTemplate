@@ -58,7 +58,11 @@ ok('…with sizes, one amount per room, discount and total; no rates or areas', 
    and money(subtotal) in cust and money(subtotal - 1000) in cust and f'{LAM:,.0f}' not in cust.replace(money(subtotal), '')
    and 'sqft' not in cust)
 full = pdftext(f'/projects/{pid}/pdf')
-ok('Full Quotation keeps every rate and shows the count', 'Glass Shutters × 2' in full and money(subtotal - 1000) in full)
+ok('Full Quotation keeps every rate and shows the count', 'Glass Shutters' in full and "No's" in full and money(subtotal - 1000) in full
+   and 'Cost Summary' in full and f'{LAM:,.0f}' in full)
+ok("Full Quotation: each room's material once (its description, else its materials), not on every item",
+   'Material description: Carcass: BWP 710 ply' in full and 'Material & Work Type' in full
+   and full.count('Material description:') == len([r for r in rooms if any(i.get('wood_type') for i in r['items'])]))
 
 # Sections
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'material_specs': 'BWP 710 ply for carcass',

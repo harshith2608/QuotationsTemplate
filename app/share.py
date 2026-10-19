@@ -154,6 +154,9 @@ def view(token):
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     from . import layout
     rows = layout.room_rows(snap) if share.detail != 'full' and layout.initial_layout() == layout.LAYOUT_ROOMS else None
+    if share.detail == 'full':          # each room's material, once (as on the PDFs), not on every item
+        for room in snap.get('rooms', []):
+            room['material_description'] = room.get('description') or layout.auto_description(room['items'])
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
                                     pay=pay, paid=billing.paid_total(project), room_rows=rows))
 
