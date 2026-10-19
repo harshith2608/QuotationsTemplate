@@ -62,6 +62,8 @@ ok('Full Quotation keeps every rate and shows the count', 'Glass Shutters × 2' 
 ok('Full Quotation: each item\'s material as a finish (Laminates Finish), work types only in the Cost Summary',
    'Laminates Finish' in full and 'Acrylic Finish' in full and 'Laminates – Box Work' in full.split('Cost Summary')[1]
    and 'Laminates – Box Work' not in full.split('Cost Summary')[0])
+ok('Full Quotation Cost Summary: area and amount per material, no rate per area', 'Total Area' in full
+   and 'Rate (Rs.' not in full and f'{LAM:,.0f}' not in full.split('Cost Summary')[1].split('Subtotal')[0].replace(money(LAM * 20), ''))
 
 # Sections
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'material_specs': 'BWP 710 ply for carcass',

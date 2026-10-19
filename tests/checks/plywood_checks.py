@@ -79,8 +79,8 @@ ok('quotation page: plywood shown, lines named with their plywood, total right',
    'Plywood: <strong>18mm BWP</strong>' in t and 'Laminates – Box Work · 18mm BWP' in t
    and 'Acrylic – Box Work · 18mm 8*4' in t and money(expect) in t and '>18mm 8*4</span>' in t)
 full = pdftext(f'/projects/{pid}/pdf')
-ok('Full Quotation PDF: rate with plywood, both plywoods named on their lines (no separate Plywood Used list), same total',
-   f'{LAM + 150:,.0f}' in full and 'Plywood Used' not in full and '18mm BWP' in full and '18mm 8*4' in full and money(expect) in full)
+ok('Full Quotation PDF: priced with plywood, both plywoods named on their lines (no separate Plywood Used list), same total',
+   'Plywood Used' not in full and '18mm BWP' in full and '18mm 8*4' in full and money(expect) in full)
 cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('Initial Quotation PDF: same total, plywood lines', money(expect) in cust and '18mm BWP' in cust)
 wa = c.get(f'/projects/{pid}/whatsapp').headers.get('Location', '')

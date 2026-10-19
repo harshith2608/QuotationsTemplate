@@ -446,7 +446,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
 
     # Combined material + work cost table
     elements.append(Spacer(1, 3))
-    combo_data = [['Material & Work Type', f'Total Area ({units.area_label()})', f'Rate (Rs.{units.rate_label()})', 'Amount (Rs.)']]
+    combo_data = [['Material & Work Type', f'Total Area ({units.area_label()})', 'Amount (Rs.)']]   # no rate per area
     combo_total = 0.0
     combo_area_total = 0.0
     for key in M.ordered_keys(item_totals):
@@ -456,14 +456,14 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             subtotal = area * rate
             combo_total += subtotal
             combo_area_total += area
-            combo_data.append([plywood.label(key, project), f'{units.area_value(area):,.2f}', f'{_money(units.rate_value(rate), ",.0f")}', f'{_money(subtotal)}'])
+            combo_data.append([plywood.label(key, project), f'{units.area_value(area):,.2f}', f'{_money(subtotal)}'])
     fixed_total = project.fixed_items_total(rooms)
     if fixed_total > 0:
         combo_total += fixed_total
-        combo_data.append([FIXED_ITEMS_LABEL, '—', '—', f'{_money(fixed_total)}'])
-    combo_data.append(['', '', 'Subtotal', f'Rs. {_money(combo_total)}'])
+        combo_data.append([FIXED_ITEMS_LABEL, '—', f'{_money(fixed_total)}'])
+    combo_data.append(['', 'Subtotal', f'Rs. {_money(combo_total)}'])
 
-    combo_table = Table(combo_data, colWidths=summary_cw)
+    combo_table = Table(combo_data, colWidths=[page_width * p for p in [0.57, 0.22, 0.21]])
     combo_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
@@ -474,7 +474,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
         ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (2, -1), (-1, -1), BRAND_DARK),
+        ('TEXTCOLOR', (1, -1), (-1, -1), BRAND_DARK),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),

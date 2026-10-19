@@ -36,8 +36,8 @@ t = c.get(f'/projects/{pid}').text
 ok('quotation page in mm and sq m, same total', '3,048 mm' in t and '2,286 mm' in t and f'{75 * SQM:,.2f} sq m' in t
    and f'{total:,.2f}' in t and '/sq m' in t)
 full = pdftext(f'/projects/{pid}/pdf')
-ok('Full Quotation PDF in mm, sq m and ₹/sq m, same total', '3,048 mm' in full and 'sq m' in full and 'sqft' not in full
-   and f'{LAM / SQM:,.0f}' in full and f'{total:,.2f}' in full)
+ok('Full Quotation PDF in mm and sq m, same total', '3,048 mm' in full and 'sq m' in full and 'sqft' not in full
+   and f'{total:,.2f}' in full)
 cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('Initial Quotation PDF (room by room): sizes in mm, same total', f'{total:,.2f}' in cust and '3,048 mm' in cust)
 wa = unquote(c.get(f'/projects/{pid}/whatsapp').headers.get('Location', ''))
