@@ -274,7 +274,9 @@ aren't re-encrypted with the new key automatically yet.
 ### 3f. Operator console (`ops.quote-room.co.in`)
 
 A private web page to manage trials with buttons: see new trial requests, create a trial from a
-request (address, admin login and a ready-to-send WhatsApp message), extend, reset the admin
+request (address, admin login and a ready-to-send WhatsApp message; the company name from the request,
+editable before you press Create, and their phone are filled in, so their quotations carry their name from the
+start, and they can correct the name once in Settings), extend, reset the admin
 password, unlock company details and delete. It runs as its **own** Vercel project. Sign-in needs your
 password **and** a 6-digit code from an authenticator app. Every action is logged under **Activity**.
 

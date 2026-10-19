@@ -70,7 +70,7 @@ ok('live demo card: today 4, last 7 days 10, last 30 days 20 visitors', '<h2>Liv
    and '<td>Last 30 days</td><td><strong>20</strong></td><td>3</td><td>4</td>' in t)
 ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
    and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
-   and 'name="company" value="Kumar Woodcraft"' in t)
+   and 'name="company" value="Kumar Woodcraft" maxlength="80"' in t)
 with crypto.using_key(LEADS_KEY), le.connect() as conn:
     lead_id = conn.execute(Lead.__table__.select()).first().id
 r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7', 'lead_id': lead_id, 'name': 'Ravi Kumar', 'company': 'Kumar Woodcraft',
@@ -80,7 +80,8 @@ password = m.group(1) if m else ''
 wa = re.search(r'href="(https://wa\.me/919876543210\?text=[^"]+)"', r.text)
 ok('create trial → credentials shown once + WhatsApp message to the lead', r.status_code == 200 and password
    and wa and 'https://ravi-modular.quote-room.test' in unquote(wa.group(1)) and password in unquote(wa.group(1))
-   and 'free trial for Kumar Woodcraft is ready' in unquote(wa.group(1)))
+   and 'free trial for Kumar Woodcraft is ready' in unquote(wa.group(1))
+   and "I've already put in Kumar Woodcraft as your company name" in unquote(wa.group(1)))
 ok('no tutorials on the site yet → welcome message has no tutorials link', '/tutorials' not in unquote(wa.group(1)))
 with app.app_context():
     from app import ops
@@ -90,6 +91,11 @@ with app.app_context():
     with tenancy.tenant_context('ravi-modular'):
         u = User.query.filter_by(username='admin').first()
         ok('generated password works for the trial admin', u and check_password_hash(u.password_hash, password))
+        from app import branding as _br
+        from app.models import AppSetting as _AS
+        ok('trial starts with the company name and phone from the request (name open for one correction)',
+           _AS.get('company_name') == 'Kumar Woodcraft' and _AS.get('company_mobile') == '+91 98765 43210'
+           and 'name' not in _br.locked_fields())
 t = c.get('/').text
 ok('request no longer "new"; shown as handled → trial', 'Not interested' not in t and 'trial <a href="/trials/ravi-modular">' in t)
 ok('running trial shows "running"', '>running<' in t)
@@ -132,8 +138,8 @@ with app.app_context(), tenancy.tenant_context('ravi-modular'):
 with app.app_context(), tenancy.tenant_context('ravi-modular'):
     from app.models import AppSetting
     from app import branding
-    AppSetting.set('company_name', 'Ravi Kitchens'); db.session.commit()
-    ok('company name locked after first save', 'name' in branding.locked_fields())
+    AppSetting.set('company_name', 'Ravi Kitchens'); branding.relock('name'); db.session.commit()   # as Settings → Company does
+    ok('company name locked after the customer corrects the pre-filled one', 'name' in branding.locked_fields())
 c.post('/trials/ravi-modular/unlock', data={'fields': ['name']})
 with app.app_context(), tenancy.tenant_context('ravi-modular'):
     ok('unlock button unlocks it for one change', 'name' not in branding.locked_fields())

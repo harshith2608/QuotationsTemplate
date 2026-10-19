@@ -393,9 +393,11 @@ def _tutorials_line():
 def _welcome_message(name, url, username, password, ends_on, company=''):
     hello = f'Hi {name}!' if name else 'Hi!'
     whose = f' for {company}' if company else ''
+    ready = (f"I've already put in {company} as your company name, so your quotations carry your name. "
+             "Add your logo, address and GSTIN in Settings → Company, and your own rates in Rates.\n\n") if company else ''
     return (f"{hello} Your {_product()} free trial{whose} is ready.\n\n"
             f"Open: {url}\nUsername: {username}\nPassword: {password}\n\n"
-            + _tutorials_line() +
+            + ready + _tutorials_line() +
             f"Your trial runs until {ends_on.strftime('%d %b %Y')}. On your phone, add the page to your home screen "
             "for one-tap access. Reply here if you need any help!")
 
@@ -452,7 +454,7 @@ def create_trial():
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
     try:
         days = int(days)
-        t = ops.create_trial(slug, username, None, days)
+        t = ops.create_trial(slug, username, None, days, company=company, phone=phone)
     except (ops.OpsError, ValueError) as exc:
         flash(f'Could not create trial: {exc}', 'error')
         return redirect(url_for('console.dashboard'))

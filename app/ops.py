@@ -4,6 +4,7 @@ Trial operations shared by the CLI (`flask trial …`) and the operator console.
 All functions need an app context whose DATABASE_URL is the shared trials database
 (Postgres), and DATA_ENCRYPTION_KEY set to the trials project's key.
 """
+import re
 import os
 import secrets
 from datetime import timedelta
@@ -152,8 +153,22 @@ def schema_of(slug, active_only=True):
     return row[0]
 
 
-def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=None):
-    """Create schema, tables, admin login, default data and the trial plan. Returns a summary dict."""
+PREFILLED_NAME_KEY = 'company_name_prefilled'
+
+
+def phone_display(digits):
+    """'919876543210' → '+91 98765 43210' (as typed elsewhere in the app); other numbers get a leading +."""
+    digits = re.sub(r'\D', '', digits or '')
+    if len(digits) == 12 and digits.startswith('91'):
+        return f'+91 {digits[2:7]} {digits[7:]}'
+    return f'+{digits}' if digits else ''
+
+
+def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=None, company=None, phone=None):
+    """Create schema, tables, admin login, default data and the trial plan. Returns a summary dict.
+    `company` / `phone` (from the trial request) are filled in as the business's company name and phone, so the
+    customer starts with their own name on quotations. The name stays open for one correction by the customer
+    (it locks after they save it, like any company name)."""
     from .seed import SeedError, bootstrap
     log = log or (lambda line: None)
     need_postgres()
@@ -185,6 +200,17 @@ def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=
                 log(line)
         except SeedError as exc:
             raise OpsError(str(exc))
+        company = ' '.join((company or '').split())[:80]
+        if company:
+            from . import branding
+            from .models import AppSetting
+            AppSetting.set(branding.FIELDS['name'][0], company)
+            AppSetting.set(PREFILLED_NAME_KEY, company)       # so the console doesn't count it as the customer's own
+            branding.unlock(['name'])
+            log(f'Company name: {company}')
+        if phone_display(phone):
+            from .models import AppSetting
+            AppSetting.set('company_mobile', phone_display(phone))
         start = plan_mod.today()
         end = start + timedelta(days=int(days))
         plan_mod.save_plan('trial', start, end)
@@ -193,7 +219,7 @@ def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=
         conn.execute(text("UPDATE public.tenants SET status = 'active' WHERE slug = :s"), {'s': slug})
     tenancy.clear_cache()
     return {'slug': slug, 'schema': schema, 'username': admin_username, 'password': admin_password,
-            'ends_on': end, 'url': trial_url(slug)}
+            'ends_on': end, 'url': trial_url(slug), 'company': company}
 
 
 def trial_url(slug):

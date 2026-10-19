@@ -60,14 +60,15 @@ def usage():
             return datetime.fromisoformat(value) if value else None
         except ValueError:
             return None
-    s = AppSetting.get_many([LAST_ACTIVE_KEY, LAST_LOGIN_KEY, FIELDS['name'][0]])
+    s = AppSetting.get_many([LAST_ACTIVE_KEY, LAST_LOGIN_KEY, FIELDS['name'][0], 'company_name_prefilled'])
     last_quote = db.session.scalar(select(func.max(Project.updated_at)))
     out = dict(
         quotations=db.session.scalar(select(func.count(Project.id))) or 0,
         last_quotation_at=last_quote,
         users=db.session.scalar(select(func.count(User.id))) or 0,
         payments=db.session.scalar(select(func.count(Payment.id))) or 0,
-        company_set=bool((s[FIELDS['name'][0]] or '').strip()),
+        # the customer's own name: one filled in from their trial request (ops.create_trial) doesn't count
+        company_set=bool((s[FIELDS['name'][0]] or '').strip()) and s[FIELDS['name'][0]] != s['company_name_prefilled'],
         logo_set=db.session.scalar(select(func.count()).select_from(AppSetting).where(
             AppSetting.key == LOGO_DATA_KEY, AppSetting.value != '')) > 0,
         last_login_at=when(s[LAST_LOGIN_KEY]),
