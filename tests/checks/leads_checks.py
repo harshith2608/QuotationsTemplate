@@ -14,7 +14,8 @@ os.environ.update(MARKETING_SITE='1', MARKETING_WHATSAPP='919876543210', META_PI
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = True   # the form must work with CSRF on
 c = app.test_client()
 J = {'Accept': 'application/json'}
-good = {'name': '  Ravi   Kumar ', 'company_name': ' Sharma  Interiors ', 'phone': '+91 98765-43210', 'business_type': 'interiors', 'utm_source': 'facebook',
+good = {'name': '  Ravi   Kumar ', 'company_name': ' Sharma  Interiors ', 'city': ' Hyderabad ', 'email': 'ravi@sharma.example',
+        'phone': '+91 98765-43210', 'business_type': 'interiors', 'utm_source': 'facebook',
         'utm_campaign': 'oct-launch', 'page': '/'}
 
 t = c.get('/free-trial?utm_source=fb').text
@@ -26,19 +27,21 @@ ok('valid request → ok, no WhatsApp follow-up link', r.status_code == 200 and 
 with app.app_context():
     l = Lead.query.one()
     ok('stored: name tidied, phone normalised, source kept', l.name == 'Ravi Kumar' and l.phone == '919876543210'
-       and l.company_name == 'Sharma Interiors'
+       and l.company_name == 'Sharma Interiors' and l.city == 'Hyderabad' and l.email == 'ravi@sharma.example'
        and l.business_type == 'interiors' and l.source == 'facebook · oct-launch · /')
-    raw = db.session.execute(text('select name, phone, company_name from leads')).first()
-    ok('name, phone and company encrypted in the database', all(str(v).startswith('enc1:') for v in raw))
+    raw = db.session.execute(text('select name, phone, company_name, city, email from leads')).first()
+    ok('name, phone, company, city and email encrypted in the database', all(str(v).startswith('enc1:') for v in raw))
 
 bad = c.post('/trial-request', data={'name': 'R', 'phone': '12345', 'business_type': 'other'}, headers=J)
 e = bad.get_json()['errors']
-ok('validation errors per field', bad.status_code == 400 and set(e) == {'name', 'company_name', 'phone', 'business_other'})
-e = c.post('/trial-request', data={'name': 'Ab', 'company_name': 'Ab Co', 'phone': '9876543211', 'business_type': 'carpenter'}, headers=J).get_json()['errors']
+ok('validation errors per field', bad.status_code == 400 and set(e) == {'name', 'company_name', 'city', 'phone', 'business_other'})
+e = c.post('/trial-request', data={'name': 'Ab', 'company_name': 'Ab Co', 'city': 'Pune', 'phone': '9876543211', 'business_type': 'carpenter'}, headers=J).get_json()['errors']
 ok('unknown business type rejected', set(e) == {'business_type'})
-r = c.post('/trial-request', data={'name': 'Meena', 'company_name': 'Meena Kitchens', 'phone': '09123456789', 'business_type': 'other',
+e = c.post('/trial-request', data=dict(good, phone='9876543212', email='not-an-email'), headers=J).get_json()['errors']
+ok('a mistyped email is caught', set(e) == {'email'})
+r = c.post('/trial-request', data={'name': 'Meena', 'company_name': 'Meena Kitchens', 'city': 'Chennai', 'phone': '09123456789', 'business_type': 'other',
                                    'business_other': 'Modular kitchens'}, headers=J)
-ok('"Others" with text accepted (0-prefixed number ok)', r.get_json()['ok'])
+ok('"Others" with text accepted (0-prefixed number ok, email optional)', r.get_json()['ok'])
 for num, valid in [('98765 43210', True), ('919876543210', True), ('5876543210', False), ('98765432', False), ('+1 415 555 0100', False)]:
     from app.marketing import normalise_phone
     ok(f'phone {num!r} → {"valid" if valid else "invalid"}', bool(normalise_phone(num)) == valid)
@@ -59,7 +62,8 @@ t = c2.post('/trial-request', data=dict(good, phone='9811111111'), environ_base=
 ok('no-JS post → thank-you page with the live demo button, no WhatsApp button', 'Thanks, Ravi Kumar!' in t
    and 'Skip the wait' not in t and 'data-trial-wa' not in t and 'Try the live demo' in t and 'data-demo' in t)
 t = c2.get('/').text
-ok('pop-up form asks for the company name, no WhatsApp follow-up', 'name="company_name"' in t and 'Skip the wait' not in t)
+ok('pop-up form asks for the company name, city and email, no WhatsApp follow-up', 'name="company_name"' in t
+   and 'name="city"' in t and 'name="email"' in t and 'Skip the wait' not in t)
 ok('only interior designers / furniture works count as a Lead; Others → LeadOther', "btype === 'interiors' || btype === 'furniture'" in t and "track('LeadOther')" in t)
 ok('Lead event sends a value and INR currency (Meta asks for both)', 'leadValue: 1000.0' in t
    and "track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype })" in t)
@@ -106,13 +110,15 @@ ok('cookie notice links to the cookies section', 'href="/privacy#cookies"' in t)
 # Right after a deploy, before the database update adds leads.company_name: the form still works
 import app.marketing as _mk
 with app.app_context():
-    db.session.execute(text('ALTER TABLE leads DROP COLUMN company_name')); db.session.commit()
-_mk._has_company_column = False
+    for col in ('company_name', 'city', 'email'):
+        db.session.execute(text(f'ALTER TABLE leads DROP COLUMN {col}'))
+    db.session.commit()
+_mk._lead_columns.clear()
 c4 = app.test_client()
 r = c4.post('/trial-request', data=dict(good, phone='9833333333'), headers=J, environ_base={'REMOTE_ADDR': '10.2.2.2'})
 with app.app_context():
     stored = any(l.phone == '919833333333' for l in Lead.query.all())
-ok('before the update: request accepted and stored (without the company)', r.status_code == 200 and r.get_json()['ok'] and stored)
+ok('before the update: request accepted and stored (without the company, city and email)', r.status_code == 200 and r.get_json()['ok'] and stored)
 r = c4.get('/leads', headers=auth('leads-pass-123'))
 ok('before the update: /leads and CSV still work', r.status_code == 200 and 'Ravi Kumar' in r.text
    and c4.get('/leads.csv', headers=auth('leads-pass-123')).status_code == 200)

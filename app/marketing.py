@@ -182,6 +182,8 @@ def _validate_lead(form):
     """(clean dict, {field: error})"""
     name = ' '.join((form.get('name') or '').split())[:80]
     company = ' '.join((form.get('company_name') or '').split())[:80]
+    city = ' '.join((form.get('city') or '').split())[:60]
+    email = (form.get('email') or '').strip()[:120]
     phone = normalise_phone(form.get('phone'))
     btype = (form.get('business_type') or '').strip()
     other = ' '.join((form.get('business_other') or '').split())[:80]
@@ -192,12 +194,19 @@ def _validate_lead(form):
         errors['company_name'] = 'Please enter your company name.'
     if not phone:
         errors['phone'] = 'Please enter a 10-digit Indian mobile number.'
+    if len(city) < 2:
+        errors['city'] = 'Please enter your city.'
+    if email and not EMAIL_RE.match(email):
+        errors['email'] = 'Please check your email address (or leave it empty).'
     if btype not in BUSINESS_TYPES:
         errors['business_type'] = 'Please choose your type of business.'
     elif btype == 'other' and len(other) < 2:
         errors['business_other'] = 'Please tell us what your business does.'
-    return dict(name=name, company_name=company, phone=phone, business_type=btype,
+    return dict(name=name, company_name=company, city=city, email=email or None, phone=phone, business_type=btype,
                 business_other=other if btype == 'other' else None), errors
+
+
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$')
 
 
 def _business_label(lead):
@@ -205,17 +214,21 @@ def _business_label(lead):
         else BUSINESS_TYPES.get(lead.business_type, lead.business_type)
 
 
-_has_company_column = False
+_lead_columns = set()
+LATER_LEAD_COLUMNS = ('company_name', 'city', 'email')     # added by database updates after the first release
+
+
+def lead_has(column):
+    """True once the database update that adds leads.<column> has run (until then it isn't stored)."""
+    if column not in _lead_columns:
+        from sqlalchemy import inspect
+        from . import db
+        _lead_columns.update(c['name'] for c in inspect(db.session.connection()).get_columns('leads'))
+    return column in _lead_columns
 
 
 def lead_has_company():
-    """True once the database update that adds leads.company_name has run (until then it isn't stored)."""
-    global _has_company_column
-    if not _has_company_column:
-        from sqlalchemy import inspect
-        from . import db
-        _has_company_column = 'company_name' in {c['name'] for c in inspect(db.session.connection()).get_columns('leads')}
-    return _has_company_column
+    return lead_has('company_name')
 
 
 def _ip_hash():
@@ -282,8 +295,9 @@ def trial_request():
                 (request.form.get('page') or '')[:60]]))[:200]
             values = dict(name=data['name'], phone=data['phone'], business_type=data['business_type'],
                           business_other=data['business_other'], source=source or None, ip_hash=ip_hash)
-            if lead_has_company():          # only once the database update has added the column
-                values['company_name'] = data['company_name']
+            for col in LATER_LEAD_COLUMNS:  # only once the database update has added the column
+                if lead_has(col):
+                    values[col] = data[col]
             db.session.execute(Lead.__table__.insert().values(**values))
         Lead.query.filter(Lead.created_at < now - timedelta(days=KEEP_LEADS_DAYS)).delete()
         db.session.commit()
@@ -319,11 +333,13 @@ def leads():
     if denied:
         return denied
     from .models import Lead
-    has_company = lead_has_company()
-    q = Lead.query.options(undefer(Lead.company_name)) if has_company else Lead.query
+    present = [c for c in LATER_LEAD_COLUMNS if lead_has(c)]
+    q = Lead.query.options(*[undefer(getattr(Lead, c)) for c in present])
     rows = q.order_by(Lead.created_at.desc()).limit(500).all()
     ctx = _context()
-    items = [dict(lead=l, company=l.company_name if has_company else None, business=_business_label(l), phone_display=_display_number(l.phone),
+    items = [dict(lead=l, company=l.company_name if 'company_name' in present else None,
+                  city=l.city if 'city' in present else None, email=l.email if 'email' in present else None,
+                  business=_business_label(l), phone_display=_display_number(l.phone),
                   wa_url=f"https://wa.me/{l.phone}?text={quote(f'Hi {l.name}, thanks for your interest in ' + ctx['product'] + '!')}")
              for l in rows]
     resp = Response(render_template('marketing/leads.html', items=items, ist_offset=timedelta(hours=5, minutes=30), **ctx))
@@ -340,11 +356,12 @@ def leads_csv():
     from .models import Lead
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(['Received (UTC)', 'Name', 'Company', 'Phone', 'Business', 'Source'])
-    has_company = lead_has_company()
-    q = Lead.query.options(undefer(Lead.company_name)) if has_company else Lead.query
+    w.writerow(['Received (UTC)', 'Name', 'Company', 'City', 'Phone', 'Email', 'Business', 'Source'])
+    present = [c for c in LATER_LEAD_COLUMNS if lead_has(c)]
+    q = Lead.query.options(*[undefer(getattr(Lead, c)) for c in present])
+    later = lambda l, c: (getattr(l, c) if c in present else None) or ''
     for l in q.order_by(Lead.created_at.desc()).all():
-        w.writerow([l.created_at.strftime('%Y-%m-%d %H:%M'), l.name, (l.company_name if has_company else None) or '',
-                    '+' + l.phone, _business_label(l), l.source or ''])
+        w.writerow([l.created_at.strftime('%Y-%m-%d %H:%M'), l.name, later(l, 'company_name'), later(l, 'city'),
+                    '+' + l.phone, later(l, 'email'), _business_label(l), l.source or ''])
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=trial-requests.csv', 'Cache-Control': 'no-store'})

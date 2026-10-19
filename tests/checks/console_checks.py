@@ -23,7 +23,8 @@ le = create_engine(f'sqlite:///{leads_db}')
 Lead.__table__.create(le, checkfirst=True)
 with crypto.using_key(LEADS_KEY), le.begin() as c:
     c.execute(Lead.__table__.insert(), [dict(name='Ravi Kumar', phone='919876543210', business_type='other',
-              business_other='Ravi Modular Kitchens', company_name='Kumar Woodcraft', source='facebook', created_at=datetime.utcnow())])
+              business_other='Ravi Modular Kitchens', company_name='Kumar Woodcraft', city='Vijayawada',
+              email='ravi@kumarwood.example', source='facebook', created_at=datetime.utcnow())])
 
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client()
@@ -73,15 +74,17 @@ ok('dashboard shows new trial request with company and an address suggested from
    and 'name="company" value="Kumar Woodcraft" maxlength="80"' in t)
 with crypto.using_key(LEADS_KEY), le.connect() as conn:
     lead_id = conn.execute(Lead.__table__.select()).first().id
+ok('request shows city and email, both editable before Create', 'Vijayawada' in t and 'ravi@kumarwood.example' in t
+   and 'name="city" value="Vijayawada"' in t and 'name="email" value="ravi@kumarwood.example"' in t)
 r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7', 'lead_id': lead_id, 'name': 'Ravi Kumar', 'company': 'Kumar Woodcraft',
-                            'phone': '919876543210'})
+                            'phone': '919876543210', 'city': 'Vijayawada', 'email': 'ravi@kumarwood.example'})
 m = re.search(r'Password:</strong> <span class="secret">([^<]+)</span>', r.text)
 password = m.group(1) if m else ''
 wa = re.search(r'href="(https://wa\.me/919876543210\?text=[^"]+)"', r.text)
 ok('create trial → credentials shown once + WhatsApp message to the lead', r.status_code == 200 and password
    and wa and 'https://ravi-modular.quote-room.test' in unquote(wa.group(1)) and password in unquote(wa.group(1))
    and 'free trial for Kumar Woodcraft is ready' in unquote(wa.group(1))
-   and "I've already put in Kumar Woodcraft as your company name" in unquote(wa.group(1)))
+   and "I've already put in Kumar Woodcraft and your contact details" in unquote(wa.group(1)))
 ok('no tutorials on the site yet → welcome message has no tutorials link', '/tutorials' not in unquote(wa.group(1)))
 with app.app_context():
     from app import ops
@@ -95,6 +98,7 @@ with app.app_context():
         from app.models import AppSetting as _AS
         ok('trial starts with the company name and phone from the request (name open for one correction)',
            _AS.get('company_name') == 'Kumar Woodcraft' and _AS.get('company_mobile') == '+91 98765 43210'
+           and _AS.get('company_address') == 'Vijayawada' and _AS.get('company_email') == 'ravi@kumarwood.example'
            and 'name' not in _br.locked_fields())
 t = c.get('/').text
 ok('request no longer "new"; shown as handled → trial', 'Not interested' not in t and 'trial <a href="/trials/ravi-modular">' in t)

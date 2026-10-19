@@ -18,6 +18,8 @@
         <span class="muted small" style="margin-left:auto">{{ l.created_at|ist }}</span>
       </div>
       <div class="small"><a href="https://wa.me/{{ l.phone }}" target="_blank" rel="noopener">+{{ l.phone }}</a>
+        {% if l.city %}<span> · {{ l.city }}</span>{% endif %}
+        {% if l.email %}<span> · <a href="mailto:{{ l.email }}">{{ l.email }}</a></span>{% endif %}
         {% if l.source %}<span class="muted"> · {{ l.source }}</span>{% endif %}</div>
       <details style="margin-top:10px">
         <summary>Create trial</summary>
@@ -29,6 +31,8 @@
           <input type="hidden" name="phone" value="{{ l.phone }}">
           <div class="grow"><label>Company name <span class="muted small">(goes on their quotations)</span></label>
             <input type="text" name="company" value="{{ l.company_name or '' }}" maxlength="80"></div>
+          <div class="grow"><label>City</label><input type="text" name="city" value="{{ l.city or '' }}" maxlength="60"></div>
+          <div class="grow"><label>Email</label><input type="email" name="email" value="{{ l.email or '' }}" maxlength="120"></div>
           <div class="grow"><label>Address name</label>
             <input type="text" name="slug" value="{{ l.suggested_slug }}" required pattern="[a-z][a-z0-9-]{1,29}"
                    title="2–30 lowercase letters, numbers or hyphens, starting with a letter"></div>

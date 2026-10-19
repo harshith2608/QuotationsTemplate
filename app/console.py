@@ -266,7 +266,8 @@ def load_leads(limit=100):
             else BUSINESS_TYPES.get(r['business_type'], r['business_type'])
         link = links.get(r['id'])
         r['link_status'], r['link_slug'] = (link.status, link.slug) if link else (None, None)
-        r.setdefault('company_name', None)
+        for later in ('company_name', 'city', 'email'):   # columns added by later database updates
+            r.setdefault(later, None)
         r['suggested_slug'] = suggest_slug(r['company_name'] or r['business_other'] or r['name'])
     return rows
 
@@ -393,8 +394,8 @@ def _tutorials_line():
 def _welcome_message(name, url, username, password, ends_on, company=''):
     hello = f'Hi {name}!' if name else 'Hi!'
     whose = f' for {company}' if company else ''
-    ready = (f"I've already put in {company} as your company name, so your quotations carry your name. "
-             "Add your logo, address and GSTIN in Settings → Company, and your own rates in Rates.\n\n") if company else ''
+    ready = (f"I've already put in {company} and your contact details, so your quotations carry your name. "
+             "Add your logo, full address and GSTIN in Settings → Company, and your own rates in Rates.\n\n") if company else ''
     return (f"{hello} Your {_product()} free trial{whose} is ready.\n\n"
             f"Open: {url}\nUsername: {username}\nPassword: {password}\n\n"
             + ready + _tutorials_line() +
@@ -451,10 +452,12 @@ def create_trial():
     lead_id = request.form.get('lead_id', type=int)
     name = request.form.get('name', '').strip()[:80]
     company = request.form.get('company', '').strip()[:80]
+    city = ' '.join(request.form.get('city', '').split())[:60]
+    email = request.form.get('email', '').strip()[:120]
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
     try:
         days = int(days)
-        t = ops.create_trial(slug, username, None, days, company=company, phone=phone)
+        t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email)
     except (ops.OpsError, ValueError) as exc:
         flash(f'Could not create trial: {exc}', 'error')
         return redirect(url_for('console.dashboard'))

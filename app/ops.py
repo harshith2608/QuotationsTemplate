@@ -164,9 +164,11 @@ def phone_display(digits):
     return f'+{digits}' if digits else ''
 
 
-def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=None, company=None, phone=None):
+def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=None, company=None, phone=None,
+                 city=None, email=None):
     """Create schema, tables, admin login, default data and the trial plan. Returns a summary dict.
-    `company` / `phone` (from the trial request) are filled in as the business's company name and phone, so the
+    `company` / `phone` / `city` / `email` (from the trial request) are filled in as the business's company name,
+    phone, address and email, so the
     customer starts with their own name on quotations. The name stays open for one correction by the customer
     (it locks after they save it, like any company name)."""
     from .seed import SeedError, bootstrap
@@ -208,9 +210,11 @@ def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=
             AppSetting.set(PREFILLED_NAME_KEY, company)       # so the console doesn't count it as the customer's own
             branding.unlock(['name'])
             log(f'Company name: {company}')
-        if phone_display(phone):
-            from .models import AppSetting
-            AppSetting.set('company_mobile', phone_display(phone))
+        from .models import AppSetting
+        for key, value in (('company_mobile', phone_display(phone)), ('company_address', ' '.join((city or '').split())[:60]),
+                           ('company_email', (email or '').strip()[:120] if '@' in (email or '') else '')):
+            if value:
+                AppSetting.set(key, value)
         start = plan_mod.today()
         end = start + timedelta(days=int(days))
         plan_mod.save_plan('trial', start, end)

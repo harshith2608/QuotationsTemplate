@@ -24,6 +24,18 @@
     </div>
     <p class="field-error" data-error-for="phone" {% if not errors.phone %}hidden{% endif %}>{{ errors.phone }}</p>
   </div>
+  <div class="field">
+    <label for="{{ prefix }}City">City</label>
+    <input id="{{ prefix }}City" name="city" type="text" autocomplete="address-level2" maxlength="60" required
+           placeholder="e.g. Hyderabad" value="{{ form.get('city', '') }}" {% if errors.city %}aria-invalid="true"{% endif %}>
+    <p class="field-error" data-error-for="city" {% if not errors.city %}hidden{% endif %}>{{ errors.city }}</p>
+  </div>
+  <div class="field">
+    <label for="{{ prefix }}Email">Email <span class="optional">(optional)</span></label>
+    <input id="{{ prefix }}Email" name="email" type="email" autocomplete="email" maxlength="120"
+           placeholder="you@yourcompany.com" value="{{ form.get('email', '') }}" {% if errors.email %}aria-invalid="true"{% endif %}>
+    <p class="field-error" data-error-for="email" {% if not errors.email %}hidden{% endif %}>{{ errors.email }}</p>
+  </div>
   <fieldset class="field">
     <legend>Your business</legend>
     <div class="chips">
