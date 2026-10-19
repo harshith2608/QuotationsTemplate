@@ -81,8 +81,9 @@ def create_app(config_name='default'):
     app.register_blueprint(share_bp)
     app.register_blueprint(billing_bp)
     app.before_request(block_demo_writes)
-    from .demo import count_demo_use
+    from .demo import count_demo_use, count_site_visit
     app.after_request(count_demo_use)
+    app.after_request(count_site_visit)
     from .plan import enforce_read_only
     app.before_request(enforce_read_only)
     from .activity import touch

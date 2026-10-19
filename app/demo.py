@@ -116,9 +116,10 @@ def _is_bot():
 
 
 def count(field):
-    """Add one to today's anonymous demo counter. Never breaks the request (e.g. before the table exists)."""
+    """Add one to today's anonymous demo counter. Never breaks the request (e.g. before the table exists).
+    True when counted."""
     if _is_bot():
-        return
+        return False
     from datetime import datetime
     from sqlalchemy.exc import IntegrityError
     from . import db
@@ -131,12 +132,13 @@ def count(field):
             if not done:
                 db.session.execute(t.insert().values({'day': today, 'starts': 0, 'quotations': 0, 'pdfs': 0, field: 1}))
             db.session.commit()
-            return
+            return True
         except IntegrityError:
             db.session.rollback()
         except Exception:
             db.session.rollback()
-            return
+            return False
+    return False
 
 
 def count_demo_use(response):
@@ -144,6 +146,23 @@ def count_demo_use(response):
     rule = COUNTED.get(request.endpoint)
     if rule and demo_enabled() and request.method == rule[1] and response.status_code in rule[2]:
         count(rule[0])
+    return response
+
+
+# Marketing-site pages: a browser's first visit to any of them counts once (an anonymous "seen" cookie, no ID)
+SITE_PAGES = {'main.index', 'marketing.landing', 'marketing.tutorials_page', 'marketing.privacy', 'marketing.terms',
+              'marketing.free_trial'}
+SEEN_COOKIE = 'qr_seen'
+
+
+def count_site_visit(response):
+    """after_request hook (marketing deployment): count a browser's first visit to the website."""
+    from .marketing import marketing_enabled
+    if (request.method == 'GET' and request.endpoint in SITE_PAGES and response.status_code == 200
+            and not request.cookies.get(SEEN_COOKIE) and marketing_enabled() and not _is_bot()):
+        if count('site_visitors'):         # only mark the browser once it has been counted (not before the update)
+            response.set_cookie(SEEN_COOKIE, '1', max_age=2 * 365 * 24 * 3600, httponly=True, samesite='Lax',
+                                secure=request.is_secure)
     return response
 
 

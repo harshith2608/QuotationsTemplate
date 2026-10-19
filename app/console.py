@@ -280,17 +280,40 @@ def load_demo_stats(days=30):
     engine = _leads_engine_or_none()
     if engine is None:
         return None
+    from .models import Lead
     t = DemoStat.__table__
     today = datetime.utcnow().date()
+    since = today - timedelta(days=days)
     with engine.connect() as conn:
         if not inspect(conn).has_table('demo_stats'):
             return {'pending': True}
-        rows = [dict(r) for r in conn.execute(select(t).where(t.c.day > today - timedelta(days=days))
-                                              .order_by(t.c.day.desc())).mappings()]
+        present = {c['name'] for c in inspect(conn).get_columns('demo_stats')}   # site_visitors: a later update
+        cols = [c for c in t.c if c.name in present]
+        rows = [dict(r) for r in conn.execute(select(*cols).where(t.c.day > since).order_by(t.c.day.desc())).mappings()]
+        # trial requests per day (only their dates are read: nothing encrypted is needed)
+        lead_days = [d.date() for (d,) in conn.execute(select(Lead.__table__.c.created_at)
+                                                       .where(Lead.__table__.c.created_at >= datetime.combine(since, datetime.min.time())))]
+    requests_by_day = {}
+    for d in lead_days:
+        requests_by_day[d] = requests_by_day.get(d, 0) + 1
+    by_day = {r['day']: r for r in rows}
+    for d, n in requests_by_day.items():                  # a day with requests but no demo use still shows
+        by_day.setdefault(d, {'day': d, 'starts': 0, 'quotations': 0, 'pdfs': 0})
+    rows = sorted(by_day.values(), key=lambda r: r['day'], reverse=True)
+    for r in rows:
+        r.setdefault('site_visitors', None)
+        r['requests'] = requests_by_day.get(r['day'], 0)
+    keys = ('site_visitors', 'starts', 'quotations', 'pdfs', 'requests')
+
     def total(n):
         picked = [r for r in rows if r['day'] > today - timedelta(days=n)]
-        return {k: sum(r[k] for r in picked) for k in ('starts', 'quotations', 'pdfs')}
-    return {'pending': False, 'today': total(1), 'week': total(7), 'month': total(30), 'days': rows[:14]}
+        out = {k: sum(r[k] or 0 for r in picked) for k in keys}
+        out['pct'] = {k: (round(out[k] / out['site_visitors'] * 100) if out['site_visitors'] else None)
+                      for k in ('starts', 'requests')}
+        out['pct'].update({k: (round(out[k] / out['starts'] * 100) if out['starts'] else None) for k in ('quotations', 'pdfs')})
+        return out
+    return {'pending': False, 'visitors_ready': 'site_visitors' in present, 'today': total(1), 'week': total(7),
+            'month': total(30), 'days': rows[:14]}
 
 
 # ── Tutorials on the marketing site (stored in the demo database) ──────────

@@ -61,14 +61,27 @@ from datetime import date, timedelta as _td
 from app.models import DemoStat
 DemoStat.__table__.create(le, checkfirst=True)
 with le.begin() as conn:
-    conn.execute(DemoStat.__table__.insert(), [dict(day=datetime.utcnow().date(), starts=4, quotations=2, pdfs=3),
-                                               dict(day=datetime.utcnow().date() - _td(days=3), starts=6, quotations=1, pdfs=0),
-                                               dict(day=datetime.utcnow().date() - _td(days=20), starts=10, quotations=0, pdfs=1)])
+    conn.execute(DemoStat.__table__.insert(), [dict(day=datetime.utcnow().date(), starts=4, quotations=2, pdfs=3, site_visitors=40),
+                                               dict(day=datetime.utcnow().date() - _td(days=3), starts=6, quotations=1, pdfs=0, site_visitors=60),
+                                               dict(day=datetime.utcnow().date() - _td(days=20), starts=10, quotations=0, pdfs=1, site_visitors=100)])
 t = c.get('/').text
-ok('live demo card: today 4, last 7 days 10, last 30 days 20 visitors', '<h2>Live demo</h2>' in t
-   and '<td>Today</td><td><strong>4</strong></td><td>2</td><td>3</td>' in t
-   and '<td>Last 7 days</td><td><strong>10</strong></td><td>3</td><td>3</td>' in t
-   and '<td>Last 30 days</td><td><strong>20</strong></td><td>3</td><td>4</td>' in t)
+flat = re.sub(r'\s+', ' ', t)
+row = lambda label, *cells: f'<td>{label}</td> ' + ' '.join(cells) + '</tr>'
+ok('funnel: site visitors → demo → quotations → PDFs, and trial requests, with % (today, 7 and 30 days)',
+   '<h2>Website &amp; live demo</h2>' in t
+   and row('Today', '<td><strong>40</strong></td>', '<td><strong>4</strong><span class="muted small"> · 10%</span></td>',
+           '<td>2<span class="muted small"> · 50%</span></td>', '<td>3<span class="muted small"> · 75%</span></td>',
+           '<td><strong>1</strong><span class="muted small"> · 2%</span></td>') in flat
+   and row('Last 30 days', '<td><strong>200</strong></td>', '<td><strong>20</strong><span class="muted small"> · 10%</span></td>',
+           '<td>3<span class="muted small"> · 15%</span></td>', '<td>4<span class="muted small"> · 20%</span></td>',
+           '<td><strong>1</strong><span class="muted small"> · 0%</span></td>') in flat)
+with le.begin() as conn:
+    conn.execute(text('alter table demo_stats drop column site_visitors'))
+flat = re.sub(r'\s+', ' ', c.get('/').text)
+ok('before the update that adds site visitors: the card still shows the demo numbers', '<td><strong>—</strong></td> <td><strong>4</strong>' in flat
+   and 'Site visitors are counted after the next database update' in flat)
+with le.begin() as conn:
+    conn.execute(text('alter table demo_stats add column site_visitors integer not null default 0'))
 ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
    and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
    and 'name="company" value="Kumar Woodcraft" maxlength="80"' in t)

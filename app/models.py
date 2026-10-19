@@ -597,6 +597,9 @@ class DemoStat(db.Model):
     starts     = db.Column(db.Integer, nullable=False, default=0)   # visitors who opened the demo
     quotations = db.Column(db.Integer, nullable=False, default=0)   # quotations they created
     pdfs       = db.Column(db.Integer, nullable=False, default=0)   # PDFs they opened
+    # browsers opening the marketing site for the first time; added by a later database update, so no Python default:
+    # inserts leave it out and the database fills in 0 (and nothing breaks before the update)
+    site_visitors = db.Column(db.Integer, nullable=False, server_default='0')
 
     def __repr__(self):
         return f'<DemoStat {self.day}>'

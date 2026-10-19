@@ -130,6 +130,29 @@ app2 = make(DEMO_MODE='1')
 ok('no CRON_SECRET → reset disabled', app2.test_client().get('/demo/reset', headers={'Authorization': 'Bearer '}).status_code == 404)
 
 
+# Website visitors (marketing deployment): a browser's first visit counts once; bots and app pages don't
+appm = make(DEMO_MODE='1', MARKETING_SITE='1')
+with appm.app_context():
+    DemoStat.query.delete(); db.session.commit()
+b1, b2 = appm.test_client(), appm.test_client()
+r = b1.get('/', headers=UA)
+b1.get('/tutorials', headers=UA); b1.get('/', headers=UA)           # same browser again
+b2.get('/privacy', headers=UA)                                        # another browser, another page
+appm.test_client().get('/', headers={'User-Agent': 'Googlebot/2.1'})  # a bot
+appm.test_client().get('/', headers={'User-Agent': 'facebookexternalhit/1.1'})
+with appm.app_context():
+    st = DemoStat.query.one()
+    ok(f'site visitors: 2 browsers counted once each, no bots ({st.site_visitors}); cookie has no ID',
+       st.site_visitors == 2 and 'qr_seen=1' in r.headers.get('Set-Cookie', '') and 'HttpOnly' in r.headers.get('Set-Cookie', ''))
+ok('privacy policy explains the site\'s own counting cookie', 'qr_seen' in b1.get('/privacy', headers=UA).text)
+with appm.app_context():
+    db.session.execute(__import__('sqlalchemy').text('ALTER TABLE demo_stats DROP COLUMN site_visitors')); db.session.commit()
+b3 = appm.test_client()
+r = b3.get('/', headers=UA)
+ok('before the update that adds site visitors: site works, no cookie set (counted later)', r.status_code == 200
+   and 'qr_seen' not in r.headers.get('Set-Cookie', ''))
+
+
 # Before the database update adds demo_stats: the demo works, nothing is counted
 from sqlalchemy import text as _text
 app3 = make(DEMO_MODE='1')
