@@ -1,0 +1,26 @@
+{# Shown on a setup step's page while the admin follows the setup guide (app/setup_guide.py) #}
+{% if setup_banner %}
+{% set b = setup_banner %}
+<div class="ki-setup-banner card border-0 shadow-sm mb-2">
+  <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center gap-2">
+    <div class="flex-grow-1" style="min-width:220px">
+      <div class="small text-muted"><i class="bi bi-signpost-2 me-1"></i>Setup guide · {% if b.number %}step {{ b.number }} of {{ b.total }}{% else %}optional step{% endif %}</div>
+      <div class="fw-semibold">{{ b.step.title }}{% if b.done %} <span class="badge bg-success ms-1"><i class="bi bi-check-lg"></i> done</span>{% endif %}</div>
+      <div class="small">{{ b.step.what }} Change what you need, then save.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <form method="post" action="{{ url_for('admin.setup_done', key=b.step.key) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="1">
+        <button class="btn btn-sm btn-success fw-semibold" type="submit">
+          {% if b.next %}Done, next step <i class="bi bi-arrow-right"></i>{% else %}Done <i class="bi bi-check-lg"></i>{% endif %}</button>
+      </form>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.setup') }}">All steps</a>
+      <form method="post" action="{{ url_for('admin.setup_stop') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-link text-muted px-1" type="submit" title="Close the guide" aria-label="Close the guide"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}

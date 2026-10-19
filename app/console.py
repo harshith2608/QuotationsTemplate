@@ -398,6 +398,7 @@ def _welcome_message(name, url, username, password, ends_on, company=''):
              "Add your logo, full address and GSTIN in Settings → Company, and your own rates in Rates.\n\n") if company else ''
     return (f"{hello} Your {_product()} free trial{whose} is ready.\n\n"
             f"Open: {url}\nUsername: {username}\nPassword: {password}\n\n"
+            "When you sign in, a short setup guide takes you through your rates and settings step by step.\n\n"
             + ready + _tutorials_line() +
             f"Your trial runs until {ends_on.strftime('%d %b %Y')}. On your phone, add the page to your home screen "
             "for one-tap access. Reply here if you need any help!")

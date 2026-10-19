@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Setup guide{% endblock %}
+{% block content %}
+{% set pct = (guide.done * 100 // guide.total) if guide.total else 100 %}
+<div class="mt-3 mb-3" style="max-width:820px">
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-signpost-2 me-2 text-primary"></i>Setup guide</h4>
+  <p class="text-muted mb-3">A few short steps to make the app yours. Each step opens the right page with a reminder of what
+    to do; press <strong>Done, next step</strong> when you're happy. You can come back here any time from the menu
+    (<strong>Setup guide</strong>).</p>
+  <div class="d-flex align-items-center gap-3 mb-1">
+    <div class="progress flex-grow-1" style="height:10px" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar bg-success" style="width:{{ pct }}%"></div>
+    </div>
+    <span class="fw-semibold small text-nowrap">{{ guide.done }} of {{ guide.total }} done</span>
+  </div>
+  {% if guide.complete %}
+  <div class="alert alert-success py-2 mt-3"><i class="bi bi-check-circle-fill me-2"></i>Your setup is complete.
+    The optional steps below are there whenever you need them.</div>
+  {% elif guide.next %}
+  <a class="btn btn-primary ki-btn-primary mt-3" href="{{ url_for('admin.setup_open', key=guide.next.key) }}">
+    {{ 'Start' if guide.done == 0 else 'Continue' }}: {{ guide.next.title }} <i class="bi bi-arrow-right ms-1"></i></a>
+  {% endif %}
+</div>
+
+<div style="max-width:820px">
+{% for step, done in guide.steps %}
+  {% if loop.first or (step.optional and not guide.steps[loop.index0 - 1][0].optional) %}
+  <h6 class="text-muted text-uppercase small fw-bold mt-4 mb-2">{{ 'Optional, when you need them' if step.optional else 'Steps' }}</h6>
+  {% endif %}
+  <div class="card shadow-sm border-0 mb-2 {{ 'ki-step-done' if done }}" id="step-{{ step.key }}">
+    <div class="card-body py-3 d-flex gap-3 align-items-start">
+      <div class="flex-shrink-0 rounded-circle d-flex align-items-center justify-content-center fw-bold
+                  {{ 'bg-success text-white' if done else 'border border-2 text-muted' }}" style="width:34px;height:34px">
+        {% if done %}<i class="bi bi-check-lg"></i>{% else %}{{ loop.index }}{% endif %}</div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">{{ step.title }}</div>
+        <div class="small text-muted">{{ step.what }}</div>
+        <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
+          <a class="btn btn-sm {{ 'btn-outline-secondary' if done else 'btn-primary' }}" href="{{ url_for('admin.setup_open', key=step.key) }}">
+            {{ 'Open again' if done else 'Open' }}</a>
+          <form method="post" action="{{ url_for('admin.setup_done', key=step.key) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if done %}<input type="hidden" name="undo" value="1">{% endif %}
+            <button class="btn btn-sm btn-link text-muted px-1" type="submit">{{ 'Mark as not done' if done else ('Skip' if step.optional else 'Mark as done') }}</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+  <form method="post" action="{{ url_for('admin.setup_hide') }}" class="mt-3 small">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="back" value="setup">
+    {% if guide.hidden %}<input type="hidden" name="show" value="1">
+    <span class="text-muted">The "Finish setting up" card is hidden from your quotations list.</span>
+    <button class="btn btn-sm btn-link px-1" type="submit">Show it again</button>
+    {% elif not guide.complete %}
+    <button class="btn btn-sm btn-link text-muted px-0" type="submit">Hide the "Finish setting up" card from my quotations list</button>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

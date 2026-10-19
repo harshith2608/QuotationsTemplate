@@ -16,6 +16,24 @@
   </a>
 </div>
 
+{% if setup %}
+<div class="card shadow-sm border-0 mb-3 ki-setup-card">
+  <div class="card-body py-3 d-flex flex-wrap align-items-center gap-3">
+    <i class="bi bi-signpost-2 fs-3 text-primary"></i>
+    <div class="flex-grow-1" style="min-width:200px">
+      <div class="fw-semibold">Finish setting up your app</div>
+      <div class="small text-muted">{{ setup.done }} of {{ setup.total }} steps done{% if setup.next %} · next: {{ setup.next.title }}{% endif %}</div>
+      <div class="progress mt-1" style="height:6px;max-width:320px"><div class="progress-bar bg-success" style="width:{{ setup.done * 100 // setup.total }}%"></div></div>
+    </div>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('admin.setup') }}">Continue setup</a>
+    <form method="post" action="{{ url_for('admin.setup_hide') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-link text-muted px-1" type="submit" title="Hide (the guide stays in the menu)">Hide</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <!-- Search bar -->
 <form method="GET" action="{{ url_for('projects.list_projects') }}" class="mb-3">
   <div class="input-group">

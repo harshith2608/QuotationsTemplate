@@ -24,6 +24,73 @@ def require_admin():
         abort(403)
 
 
+@admin_bp.after_request
+def note_setup_progress(response):
+    """A page in the setup guide was saved (POST answered with a redirect): its step is done."""
+    if request.method == 'POST' and response.status_code == 302 and request.endpoint:
+        from . import setup_guide
+        try:
+            if any(s.saved and s.saved.split(':')[0] == request.endpoint for s in setup_guide.STEPS):
+                setup_guide.page_saved(request.endpoint, request.form)
+                db.session.commit()
+        except Exception:               # never get in the way of the save itself
+            db.session.rollback()
+    return response
+
+
+# ── Setup guide ──────────────────────────────────────────────────────────────
+
+@admin_bp.route('/setup')
+def setup():
+    from . import setup_guide
+    setup_guide.note_seen()
+    setup_guide.stop()
+    db.session.commit()
+    return render_template('admin/setup.html', title='Setup guide', guide=setup_guide.status())
+
+
+@admin_bp.route('/setup/<key>/open')
+def setup_open(key):
+    """Open a step's page with the guide banner on it."""
+    from . import setup_guide
+    step = setup_guide.BY_KEY.get(key) or abort(404)
+    setup_guide.follow(key)
+    return redirect(step.url())
+
+
+@admin_bp.route('/setup/<key>/done', methods=['POST'])
+def setup_done(key):
+    """Mark a step done (or not done again); from the banner, go on to the next step."""
+    from . import setup_guide
+    if key not in setup_guide.BY_KEY:
+        abort(404)
+    setup_guide.mark(key, request.form.get('undo') != '1')
+    db.session.commit()
+    if request.form.get('next') == '1':
+        nxt = setup_guide.status()['next']
+        if nxt:
+            setup_guide.follow(nxt.key)
+            return redirect(nxt.url())
+        flash('Your setup is complete. You can open this guide again any time from the menu.', 'success')
+    return redirect(url_for('admin.setup'))
+
+
+@admin_bp.route('/setup/hide', methods=['POST'])
+def setup_hide():
+    """Hide (or show again) the "Finish setting up" card on the quotations list. The guide stays in the menu."""
+    from . import setup_guide
+    setup_guide.set_hidden(request.form.get('show') != '1')
+    db.session.commit()
+    return redirect(request.form.get('back') == 'setup' and url_for('admin.setup') or url_for('projects.list_projects'))
+
+
+@admin_bp.route('/setup/stop', methods=['POST'])
+def setup_stop():
+    from . import setup_guide
+    setup_guide.stop()
+    return redirect(request.referrer if (request.referrer or '').startswith(request.host_url) else url_for('admin.setup'))
+
+
 @admin_bp.route('/dashboard')
 def dashboard():
     # Amounts and mobiles are encrypted, so totals are added up here rather than in SQL

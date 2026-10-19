@@ -66,6 +66,13 @@ branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed
 
 Explain features as **problem → what QuoteRoom does → what the customer gets**.
 
+### Getting started
+- **★ Setup guide.** A new business's admin lands on a short guide after their first sign-in: company details, logo &
+  colours, units, rates, quotation PDF, how customers pay, first quotation (plus optional costs, team, invoices,
+  email). Each step opens the right page with a banner and **Done, next step**; steps tick themselves off when the
+  page is saved or the app can see it's done. Open it again any time: menu → **Setup guide**. *Pitch: "We'll walk you
+  through it: your app is ready for real quotes in 10 minutes."*
+
 ### Quoting
 - **Room by room, in your unit.** Add rooms (Master Bedroom, Kitchen…) and items (Wardrobe, Loft…). Enter
   length and width in feet & inches, mm, cm or inches (Settings → Units); the area, room totals and the grand total update as you type.

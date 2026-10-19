@@ -30,6 +30,11 @@ def login():
             login_user(user, remember=True)
             from .activity import record_login
             record_login()
+            if user.is_admin and not request.args.get('next'):
+                from . import setup_guide
+                if setup_guide.open_on_first_login():       # a new business: start with the setup guide
+                    flash(f'Welcome, {user.display_name}! Let\'s set up your app: a few short steps.', 'success')
+                    return redirect(url_for('admin.setup'))
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(safe_next())
         flash('Invalid username or password.', 'danger')

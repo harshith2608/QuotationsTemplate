@@ -300,7 +300,12 @@ def list_projects():
     employees_json = [{'id': e.id, 'username': e.username} for e in employees]
     from . import access as _access
     editable_ids = _access.edit_ids(current_user, [p.id for p in projects.items])
-    return render_template('projects/list.html', projects=projects, search=search,
+    setup = None
+    if current_user.is_admin:                     # "Finish setting up" card until the guide is done or hidden
+        from . import setup_guide
+        st = setup_guide.status()
+        setup = st if st['show_card'] else None
+    return render_template('projects/list.html', projects=projects, search=search, setup=setup,
                            stage=stage, stage_counts=stage_counts, all_count=all_count,
                            title='Quotations', employees=employees,
                            employees_json=employees_json,
