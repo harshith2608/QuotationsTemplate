@@ -157,10 +157,11 @@ def s2_excel():
     y = title(img, 230, 'Type. Fix. Format.', 'Repeat.', size=72)
     y = para(img, y + 6, 'Every size typed by hand. Every formula checked. Then make it look decent enough to send.',
              size=34)
-    sheet = sheet_image(12)                                            # totals done, with the 8.6 mistake called out
+    sheet = sheet_image(14)                                            # totals done (no unit-specific callout)
     k = (W - 100) / sheet.width
     sheet = sheet.resize((int(sheet.width * k), int(sheet.height * k)), Image.LANCZOS)
     img.alpha_composite(sheet, (50, y + 40))
+    rich_pill(img, 'Every formula checked by hand', W / 2, y + 40 + sheet.height - 30, 28, fg='white', bg=RED)
     d = ImageDraw.Draw(img)
     y2 = y + 40 + sheet.height + 50
     timer(img, W - 60, y2 + 10, 40, RED)
@@ -174,13 +175,13 @@ def s3_quoteroom():
     img = frame(3)
     tag(img, 205, 180, 'THE QUOTEROOM WAY', TAPE, fg=INK, size=28)
     y = title(img, 230, 'Measure. Tap.', 'Send.', size=72)
-    y = para(img, y + 6, 'Type the size in feet and inches. QuoteRoom works out the sqft, applies your rates and makes '
-                         'the PDF in your brand.', size=34)
+    y = para(img, y + 6, 'Type each size in your own unit: feet & inches, mm or cm. QuoteRoom works out the area, applies '
+                         'your rates and makes the PDF in your brand.', size=34)
     top = y + 40
     ph, pad = phone(S_ADD, 380)
     img.alpha_composite(ph, (60 - pad + 10, top - pad))
     d = ImageDraw.Draw(img)
-    steps = ['Rooms & items added', 'Sqft & totals worked out', 'Branded PDF ready', 'Sent on WhatsApp']
+    steps = ['Rooms & items added', 'Area & totals worked out', 'Branded PDF ready', 'Sent on WhatsApp']
     sy = top + 40
     for s in steps:
         check(d, 520, sy + 22, 22)
@@ -273,10 +274,10 @@ def versus_slide(n, topic_white, topic_yellow, sub, bad, good, good_visual=None,
 
 
 def s6_sqft():
-    return versus_slide(6, 'Feet, inches and', 'sqft maths', 'Where most wrong prices start.',
-                        ['8 ft 6 in typed as 8.6 instead of 8.5: wrong sqft, wrong price',
+    return versus_slide(6, 'Sizes and', 'area maths', 'Where most wrong prices start.',
+                        ['Sizes and formulas typed by hand: one slip, wrong area, wrong price',
                          'One broken formula and the total is off'],
-                        ['Type 8 ft 6 in (or mm, cm): the sqft is worked out for you',
+                        ['Type sizes in your unit (ft & in, mm, cm or inches): the area is worked out for you',
                          'Your rates applied automatically, every time',
                          'Room totals and the grand total update as you type'],
                         good_visual=phone_at(S_ADD))
@@ -305,7 +306,7 @@ def s9_table():
     img = frame(9)
     y = title(img, 180, 'Side by side', None, size=72)
     d = ImageDraw.Draw(img)
-    rows = ['Sizes in feet & inches (or mm)', 'Sqft & totals worked out', 'PDF in your brand',
+    rows = ['Sizes in your own unit', 'Area & totals worked out', 'PDF in your brand',
             'Customer accepts online', 'Every version kept', 'Payments & GST invoice', 'On every phone in your team',
             'Profit on every job']
     excel_has = {'PDF in your brand': 'manual'}
