@@ -392,3 +392,112 @@ Console → Tutorials → Add a tutorial: title `13 · On your home screen`, len
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
 
 (The browser menus are plain drawn mock-ups, since a web page can't capture the browser's own menus; the icon and name are the app's real ones.)
+## 8. Instagram captions for every tutorial (standalone)
+
+Each works on its own (no "part N", no "previous video"). Paste the caption, set the cover text, post as a Reel.
+Links in captions aren't clickable on Instagram, so each one says "link in bio". Same hashtags on all, plus one per topic.
+
+**1-minute demo** (laptop + phone) · cover: "Quote to yes in 1 minute"
+> A whole home quoted in minutes ⏱️ Kitchen, master bedroom, guest bedroom, living room: every item with its size, your own rates, and the total worked out as you go. Send the link on WhatsApp, and your customer opens it on her phone and taps Accept. No app, no login, no chasing.
+>
+> See QuoteRoom for yourself: free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #homeinteriors
+
+**Full walkthrough** · cover: "Set up to paid, in 4 minutes"
+> Everything in one video 🎬 Add your company and logo, set your rates, make a room-by-room quotation, send it on WhatsApp, get it accepted online, then record payments and issue a GST invoice. That's QuoteRoom, start to finish.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #gstinvoice
+
+**1 · Company details & logo** · cover: "Set up your quotation app in 1 minute"
+> Your quotations, in your brand ✨ In about a minute: add your company name, phone, address and GSTIN, upload your logo and pick your colours. They show on your app and on every quotation PDF your customer gets.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #branding
+
+**2 · Rates, materials & plywood** · cover: "Your rates, set once"
+> Every quotation priced your way 💰 Set your rate per sqft for acrylic, laminates, veneer, glass or anything you use. Add the plywood you offer (18mm BWP? +₹150/sqft), and keep a price list of fittings like Magic Corners and tandem drawers. Every new quotation uses them, for everyone in your team.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #modularfurniture
+
+**3 · Your first quotation** · cover: "A quotation on your phone"
+> Still adding up sqft on a calculator? 📱 Add rooms and items, type the length and width in feet and inches (or mm), pick the material and plywood, add fittings and a discount. QuoteRoom works out every area and the total as you type.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #wardrobedesign
+
+**4 · Send it & get it accepted** · cover: "Accepted online. No chasing."
+> "Did you see the quotation?" Stop asking ✅ Send a clean PDF in your brand, or a link on WhatsApp. Your customer opens it on their phone, sees every room and the total, and taps Accept. The job turns Confirmed and you get a notification.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #customerexperience
+
+**5 · Get paid** · cover: "From quote to paid"
+> Who still owes you money? 🧾 Record advances and payments as they come in, issue a proper GST invoice in one tap, and send a polite payment reminder on WhatsApp with your UPI details. Balances shows everyone who owes you, biggest first.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #gstinvoice
+
+**6 · Know your profit** · cover: "What do you make on each job?"
+> Do you know your margin on every job? 📊 Enter what each material and fitting costs you, once. Every quotation then shows its profit (only to you, never to the customer), and Reports shows your sales, collections and profit for the year.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #businessgrowth
+
+**7 · Change a quotation** · cover: "Every version kept"
+> "Can we drop the loft?" … "Actually, keep it." 🔄 Edit the quotation, and QuoteRoom keeps every version with exactly what changed. Customer changes their mind again? Restore the earlier one in one tap. No re-typing, no mix-ups.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #wardrobedesign
+
+**8 · Track every job** · cover: "Every job, one list"
+> Which jobs are confirmed? Which are on site? Which customer still hasn't replied? 🤔 QuoteRoom keeps every job's stage in one list: awaiting confirmation, confirmed, ongoing, on hold, completed. Tap a stage to filter, add a note for your team at each step, and get a notification the moment a customer accepts.
+>
+> No more scrolling WhatsApp chats to remember where each job stands. Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #smallbusinessindia
+
+**9 · Your team** · cover: "Your whole team, one price"
+> One login per person, one price for the whole team 👷 Give your site supervisor his own login, share only the jobs he needs (view or edit), and keep your costs and profit to yourself. Forgot a password? Set a new one in seconds.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #teamwork
+
+**10 · Send by email** · cover: "From your own email"
+> Some customers want it by email ✉️ Connect your Gmail once, then send quotations and GST invoices from your own address: PDF attached, plus a link they can open and accept.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #smallbusiness
+
+**11 · Online payments** · cover: "Paid online. Recorded for you."
+> Collect the advance online 💸 Send a payment link, your customer pays by UPI or card, and the payment shows up on the quotation by itself, with a notification and the new balance. No typing payments in, no checking your bank app.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #upi
+
+**12 · Your quotation PDF** · cover: "Every quotation, your way"
+> Your quotation, your words 📄 Room-by-room amounts with what each room is made of, your material specifications with the plywood filled in automatically, your payment and delivery terms. Measure in feet, mm or cm. Set it once, and every quotation comes out your way.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #quotation
+
+**13 · On your home screen** · cover: "Your app, one tap away"
+> Your quotation app, with your logo, right on your phone's home screen 📱 Two taps on Android or iPhone, no app store. It opens full screen, straight to your quotations, for everyone in your team.
+>
+> Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #smallbusinessindia
