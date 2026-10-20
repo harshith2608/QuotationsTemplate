@@ -135,6 +135,24 @@ t = c.get('/trials/ravi-modular').text
 ok('trial page shows usage details (sign-in time, quotations)', '<h2>Usage</h2>' in t and 'none recorded' not in t
    and '<strong>1</strong>' in t and '(today)' in t)
 
+ok('trial page: WhatsApp card with the request\'s name and number, suggested draft for a trial in use',
+   'id="whatsapp"' in t and 'id="waName" type="text" value="Ravi"' in t and 'value="919876543210"' in t
+   and 'value="quote" data-body=' in t and 'selected>Going well: make a real quotation (suggested)' in t
+   and 'trial ends on' in t and '₹4,999' in t and 'class="btn btn-wa"' in t)
+ok('dashboard: WhatsApp button per running trial', 'href="/trials/ravi-modular#whatsapp">WhatsApp</a>' in c.get('/').text)
+with app.app_context():
+    from types import SimpleNamespace as _NS
+    from datetime import date as _date
+    from app import console as _con
+    _t = lambda days, **u: {'url': 'https://x.test', 'usage': u, 'status_obj': _NS(
+        has_limit=True, days_left=days, ends_on=_date(2026, 10, 27), delete_on=_date(2026, 11, 26))}
+    ok('suggested draft follows the trial: not signed in / no quotation / ending / ended',
+       _con.follow_ups(_t(6))[1] == 'signin' and _con.follow_ups(_t(5, last_login_at=1, used=True))[1] == 'rates'
+       and _con.follow_ups(_t(2, quotations=3))[1] == 'ending' and _con.follow_ups(_t(-1))[1] == 'ended')
+    _d = dict((k, b) for k, _, b in _con.follow_ups(_t(-1))[0])
+    ok('drafts keep {name} for the page, fill in dates and prices', _d['ended'].startswith('Hi {name},')
+       and '27 Oct' in _d['ended'] and '26 Nov' in _d['ended'] and '₹8,999' in _d['ended'])
+
 r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7'}, follow_redirects=True)
 ok('duplicate address refused with a message', 'already exists' in r.text)
 r = c.post('/trials', data={'slug': 'www', 'days': '7'}, follow_redirects=True)

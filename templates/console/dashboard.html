@@ -143,6 +143,7 @@
         <button class="btn btn-sm btn-primary" type="submit">Extend</button>
       </form>
       {% endif %}
+      {% if t.status == 'active' %}<a class="btn btn-sm" href="{{ url_for('console.trial_detail', slug=t.slug) }}#whatsapp">WhatsApp</a>{% endif %}
       <a class="btn btn-sm" href="{{ url_for('console.trial_detail', slug=t.slug) }}">Manage</a>
     </div>
   </div>

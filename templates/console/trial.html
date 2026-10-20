@@ -23,6 +23,54 @@
 </div>
 {% endif %}
 
+{% if t.status == 'active' %}
+<h2 id="whatsapp">Message on WhatsApp</h2>
+<div class="card stack wa-card">
+  <p class="muted small">Pick a draft or write your own. The button opens WhatsApp with the message ready; you check it and press send.
+    {% if not contact.phone %}<strong>No number on this trial yet: type it in.</strong>{% endif %}</p>
+  <div class="row">
+    <div><label for="waName">Name</label><input id="waName" type="text" value="{{ contact.name }}" maxlength="60" placeholder="e.g. Ravi"></div>
+    <div><label for="waPhone">WhatsApp number</label><input id="waPhone" type="tel" value="{{ contact.phone }}" maxlength="20" placeholder="919876543210"></div>
+    <div class="grow"><label for="waDraft">Message</label>
+      <select id="waDraft">{% for key, label, body in drafts %}
+        <option value="{{ key }}" data-body="{{ body }}" {% if key == suggested %}selected{% endif %}>{{ label }}{{ ' (suggested)' if key == suggested }}</option>{% endfor %}
+      </select></div>
+  </div>
+  {% if contact.company %}<p class="muted small" style="margin:0">{{ contact.company }}</p>{% endif %}
+  <textarea id="waText" rows="7" aria-label="Message text"></textarea>
+  <div class="row">
+    <a id="waSend" class="btn btn-wa" href="#" target="_blank" rel="noopener">Open in WhatsApp</a>
+    <button id="waCopy" class="btn" type="button">Copy text</button>
+    <span id="waNote" class="muted small"></span>
+  </div>
+</div>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const name = $('waName'), phone = $('waPhone'), draft = $('waDraft'), box = $('waText'), send = $('waSend'), note = $('waNote');
+  let edited = false;
+  const fill = () => {
+    const opt = draft.options[draft.selectedIndex];
+    const who = name.value.trim();
+    box.value = opt.dataset.body.replace('Hi {name},', who ? 'Hi ' + who + ',' : 'Hi,').split('{name}').join(who);
+    edited = false; link();
+  };
+  const digits = () => { let d = phone.value.replace(/\D/g, ''); return d.length === 10 ? '91' + d : d; };
+  const link = () => {
+    const d = digits();
+    send.href = (d ? 'https://wa.me/' + d : 'https://wa.me/') + '?text=' + encodeURIComponent(box.value);
+    note.textContent = d ? '' : 'No number: WhatsApp will ask who to send it to.';
+  };
+  draft.addEventListener('change', () => { if (!edited || confirm('Replace your changes with this draft?')) fill(); else link(); });
+  name.addEventListener('input', () => edited ? link() : fill());
+  phone.addEventListener('input', link);
+  box.addEventListener('input', () => { edited = true; link(); });
+  $('waCopy').addEventListener('click', () => navigator.clipboard.writeText(box.value).then(() => { note.textContent = 'Copied.'; }));
+  fill();
+})();
+</script>
+{% endif %}
+
 {% set u = t.usage %}
 {% if u %}
 <h2>Usage</h2>

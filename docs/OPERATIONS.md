@@ -321,6 +321,7 @@ password in your password manager (you need the key to set up a new phone).
 | `LEADS_DATABASE_URL` | **demo** pooled URL (same as `quotations-template`), so trial requests show up |
 | `LEADS_DATA_ENCRYPTION_KEY` | **demo** key (same as `quotations-template`) |
 | `MARKETING_PRODUCT_NAME` | `QuoteRoom` (used in the welcome message) |
+| `CONSOLE_SENDER_NAME` | optional: your first name in follow-up messages (default `Harshith`) |
 
 Don't set `TENANT_MODE`, `MARKETING_SITE` or `DEMO_MODE` here. Region **Singapore (sin1)**. In
 **Settings → Functions**, make sure **Max Duration** is at least **30 seconds** (creating a trial
@@ -469,6 +470,13 @@ python -m flask trial list                # every trial: plan, end date, state, 
 python -m flask trial extend acme 7d      # e.g. while negotiating
 unset DATABASE_URL
 ```
+
+### Follow up on WhatsApp
+Each trial's page in the console (or **WhatsApp** on the dashboard) has a **Message on WhatsApp** card: the
+business's name and number from their trial request, a draft picked for where they are (not signed in yet, help with
+rates, make a real quotation, quiet for a while, trial ending with the plan prices, trial ended), or your own text.
+**Open in WhatsApp** opens your own WhatsApp with the message ready; check it and press send. Nothing is sent by the
+console. Suggested rhythm: day 1, day 3, two days before the end, the day it ends.
 
 ### Trial → paying customer
 **With the console (section 3g):** after the payment arrives, **Customers → New paying customer → Convert a

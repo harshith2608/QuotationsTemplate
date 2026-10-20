@@ -434,6 +434,101 @@ def _wa_link(phone, message):
     return f"https://wa.me/{phone}?text={quote(message)}" if phone else ''
 
 
+# ── Follow-up messages on WhatsApp ───────────────────────────────────────────
+# Drafts for the trial page's "Message on WhatsApp" card. {name} is filled in on the page (it can be edited there);
+# the rest when the page is built. The message opens in the operator's own WhatsApp (wa.me): nothing is sent from here.
+
+PLAN_PRICES = '6 months ₹4,999 or 12 months ₹8,999, one price for your whole team'
+
+FOLLOW_UPS = [
+    ('signin', 'Not signed in yet',
+     "Hi {name}, this is {sender} from {product}. Just checking you got the login I sent. If you have any trouble "
+     "signing in, tell me and I'll sort it out right away.\n\nOpen: {url}\n\nIt takes about 10 minutes to set up your "
+     "rates and make your first quotation."),
+    ('rates', 'Help with rates (offer a call)',
+     "Hi {name}, good to see you've started on {product} 👍 The next step is your rates for each material and work "
+     "type. Once they're in, every quotation works itself out. If it's easier, I can set up your rates with you on a "
+     "10-minute call, whenever suits you."),
+    ('quote', 'Going well: make a real quotation',
+     "Hi {name}, great to see you're set up on {product}! Try making a quotation for one of the customers you're "
+     "quoting this week. You can send it on WhatsApp as a PDF, or as a link they can accept online. If you send me "
+     "your logo, I'll add it so the PDF is in your brand. Anything you need, just message me."),
+    ('checkin', 'Quiet for a while: check in',
+     "Hi {name}, {sender} from {product} here. How is the trial going? If something got in the way or didn't work "
+     "the way you quote, tell me. I'm happy to set it up with you on a quick call."),
+    ('ending', 'Trial ending soon (plans)',
+     "Hi {name}, your {product} trial ends on {ends_on}. Everything you've set up (rates, logo, quotations) stays "
+     "when you continue. Plans: {prices}. Which one suits you? Happy to answer any questions on a quick call."),
+    ('ended', 'Trial ended: continue or feedback',
+     "Hi {name}, your {product} trial ended on {ends_on}. Your data is kept until {delete_on}, so you can continue "
+     "right where you left off: {prices}. If it wasn't the right fit, could you tell me what was missing? It really "
+     "helps."),
+    ('custom', 'Custom message', 'Hi {name}, '),
+]
+
+
+def _first_name(name):
+    words = (name or '').split()
+    return words[0].title() if words and len(words[0]) > 1 else (name or '').strip()
+
+
+def trial_contact(t):
+    """{'name', 'phone', 'company'} for a trial: from the trial request it was made from (console_lead_links), else
+    the phone and company name filled in on the trial."""
+    from . import crypto
+    from .models import AppSetting, Lead
+    out = {'name': '', 'phone': '', 'company': ''}
+    with db.engine.connect() as conn:
+        lead_id = conn.execute(text("SELECT lead_id FROM public.console_lead_links WHERE slug = :s AND status = 'trial' "
+                                    'ORDER BY lead_id DESC LIMIT 1'), {'s': t['slug']}).scalar()
+    engine = _leads_engine_or_none() if lead_id else None
+    if engine is not None:
+        try:
+            from sqlalchemy import inspect, select
+            lt = Lead.__table__
+            with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
+                present = {c['name'] for c in inspect(conn).get_columns('leads')}
+                cols = [lt.c.name, lt.c.phone] + ([lt.c.company_name] if 'company_name' in present else [])
+                row = conn.execute(select(*cols).where(lt.c.id == lead_id)).mappings().first()
+            if row:
+                out.update(name=row['name'] or '', phone=row['phone'] or '', company=row.get('company_name') or '')
+        except Exception:                     # the leads database being unreachable mustn't break the trial page
+            pass
+    if t['status'] == 'active' and not (out['phone'] and out['company']):
+        with tenancy.tenant_context(t['slug'], t['schema_name']):
+            s = AppSetting.get_many(['company_mobile', 'company_name'])
+        out['phone'] = out['phone'] or s['company_mobile'] or ''
+        out['company'] = out['company'] or s['company_name'] or ''
+    digits = re.sub(r'\D', '', out['phone'])
+    out['phone'] = '91' + digits if len(digits) == 10 else digits
+    out['name'] = _first_name(out['name'])
+    return out
+
+
+def follow_ups(t):
+    """([(key, label, draft)], suggested key) for a trial, from its plan dates and usage."""
+    st, u = t.get('status_obj'), t.get('usage') or {}
+    fmt = lambda d: d.strftime('%d %b') if d else ''
+    values = dict(product=_product(), sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), url=t['url'], prices=PLAN_PRICES,
+                  ends_on=fmt(st.ends_on) if st and st.has_limit else '',
+                  delete_on=fmt(st.delete_on) if st and st.has_limit else '')
+    drafts = [(k, label, body.replace('{name}', '\0').format(**values).replace('\0', '{name}'))
+              for k, label, body in FOLLOW_UPS]
+    if st and st.has_limit and st.days_left < 0:
+        pick = 'ended'
+    elif st and st.has_limit and st.days_left <= 2:
+        pick = 'ending'
+    elif not u.get('last_login_at') and not u.get('used'):
+        pick = 'signin'
+    elif not u.get('quotations'):
+        pick = 'rates'
+    elif u.get('last_seen_at') and (datetime.utcnow() - u['last_seen_at'].replace(tzinfo=None)).days >= 3:
+        pick = 'checkin'
+    else:
+        pick = 'quote'
+    return drafts, pick
+
+
 def _with_badges(trials):
     """(label, css class) per trial: running / ends today / ended / read-only / due for deletion."""
     today = plan_mod.today()
@@ -516,8 +611,10 @@ def trial_detail(slug):
     with db.engine.connect() as conn:
         history = conn.execute(text('SELECT at, action, detail FROM public.console_audit WHERE target = :s '
                                     'ORDER BY at DESC LIMIT 30'), {'s': slug}).mappings().all()
+    contact = trial_contact(t)
+    drafts, suggested = follow_ups(t)
     return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history,
-                           extend_choices=EXTEND_CHOICES)
+                           extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested)
 
 
 @console_bp.route('/trials/<slug>/extend', methods=['POST'])
