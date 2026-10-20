@@ -1,11 +1,13 @@
 {% extends "marketing/_base.html" %}
 {% block content %}
   <section class="hero">
-    <div class="wrap">
-      <div>
+    <div class="wrap hero-grid">
+      <div class="hero-head">
         <p class="eyebrow">Quotation app for interior designers &amp; modular furniture firms</p>
         <h1 style="margin-top:.9rem">Send the quote <em>before you leave the site.</em></h1>
         <p class="lede">Measure each room in feet & inches, mm or cm on your phone. {{ product }} works out the area, applies your rates and sends your customer a branded PDF on WhatsApp in minutes.</p>
+      </div>
+      <div class="hero-actions">
         <div class="ctas">
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>
             Start your 7-day free trial
@@ -17,6 +19,24 @@
         </div>
       </div>
 
+      <!-- The 1-minute demo: only a thumbnail loads until someone taps play (no YouTube scripts or cookies before that) -->
+      <figure class="hero-video">
+        <button class="yt" type="button" data-yt="{{ demo_video }}" aria-label="Play the 1-minute demo"
+                style="background-image:url('https://i.ytimg.com/vi/{{ demo_video }}/maxresdefault.jpg'), url('https://i.ytimg.com/vi/{{ demo_video }}/hqdefault.jpg')"></button>
+        <figcaption><strong>Watch: 1 minute.</strong> A quotation made on a laptop, then opened and accepted by the customer on her phone.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div class="tape" role="presentation"></div>
+
+  <section id="try" class="try-band">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Try it here</p>
+        <h2>Add an item, watch the total</h2>
+        <p>A sample quotation that works: change the size or the material and add it. In {{ product }} you set your own unit and your own rates.</p>
+      </div>
       <!-- Working sample quote: visitors can add an item and watch the total update -->
       <div class="quote-card" aria-label="Sample quotation">
         <div class="qc-head">
@@ -53,8 +73,6 @@
     </div>
   </section>
 
-  <div class="tape" role="presentation"></div>
-
   <section id="how">
     <div class="wrap">
       <div class="section-head">
@@ -62,7 +80,7 @@
         <h2>From tape measure to payment in four steps</h2>
       </div>
       <div class="steps">
-        <div class="step"><span class="n">01</span><h3>Measure</h3><p>Add rooms and items at the site. Enter length and height in ft and in; sqft is calculated for you.</p></div>
+        <div class="step"><span class="n">01</span><h3>Measure</h3><p>Add rooms and items at the site. Enter length and height in your own unit (ft &amp; in, mm or cm); the area is worked out for you.</p></div>
         <div class="step"><span class="n">02</span><h3>Price</h3><p>Pick the material and work type for each item. Your saved rates apply automatically, with discounts if you need them.</p></div>
         <div class="step"><span class="n">03</span><h3>Send</h3><p>Share a branded PDF on WhatsApp, or a link your customer opens to accept the quotation online.</p></div>
         <div class="step"><span class="n">04</span><h3>Get paid</h3><p>Turn the accepted quote into a GST invoice, send payment reminders on WhatsApp and record payments as they come in.</p></div>
@@ -227,6 +245,17 @@
 
 {% block scripts %}
 <script>
+// The demo video: load the YouTube player only when someone taps play (privacy-enhanced mode)
+document.querySelectorAll('.hero-video .yt').forEach(b => b.addEventListener('click', () => {
+  const f = document.createElement('iframe');
+  f.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(b.dataset.yt) + '?autoplay=1&rel=0&playsinline=1';
+  f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+  f.title = b.getAttribute('aria-label');
+  const box = document.createElement('div');
+  box.className = 'yt playing';
+  box.appendChild(f);
+  b.replaceWith(box);
+}, { once: true }));
 (function () {
   'use strict';
 

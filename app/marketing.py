@@ -79,6 +79,7 @@ def _context():
         terms_url=_env('MARKETING_TERMS_URL') or url_for('marketing.terms'),
         home_url=url_for('main.index'),
         year=datetime.utcnow().year,
+        demo_video=youtube_id(_env('MARKETING_DEMO_VIDEO', 'cJgZoWVaB80')) or 'cJgZoWVaB80',
         has_tutorials=bool(tutorials()),
     )
 

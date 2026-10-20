@@ -20,6 +20,11 @@ ok('every free-trial button opens the trial form', t.count('href="/free-trial" d
 ok('trial pop-up with the form is on the page', 'id="trialDialog"' in t and 'name="business_type" value="other"' in t)
 ok('display number formatted', '+91 98765 43210' in t)
 ok('product name applied everywhere', 'QuoteRoom' not in t and t.count('Sitequote') >= 8 and 'Sitequote%206-month' in t)
+ok('1-minute demo video at the top: thumbnail only, YouTube loads on tap (no-cookie)',
+   'data-yt="cJgZoWVaB80"' in t and t.index('class="hero-video"') < t.index('id="try"') and '<iframe' not in t
+   and 'youtube-nocookie.com/embed/' in t)
+ok('sample quote card still on the page', 'id="qcForm"' in t and 'id="qcTotal"' in t)
+ok('unit-neutral steps', 'in ft and in; sqft' not in t and 'your own unit' in t)
 ok('demo button → this site login', 'href="/login" data-demo>Try the live demo' in t)
 ok('click events: StartTrialClick on trial buttons, DemoClick on demo, Lead on submit',
    "track('StartTrialClick')" in t and "track('DemoClick')" in t and "track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype })" in t and "'trackCustom'" in t)
