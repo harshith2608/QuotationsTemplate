@@ -316,6 +316,27 @@ Console → Tutorials → Add a tutorial: title `8 · Track every job`, length `
 > Which jobs are confirmed, which are on site, which are waiting? 📋 QuoteRoom keeps every job's stage and history in one list, with a note for your team at each step. Link in bio for a free 7-day trial.
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
 
+As a standalone YouTube Short (upload separately; under 3 min, vertical): title *Track every interior job in one place:
+confirmed, on site, on hold #Shorts*
+> Which jobs are confirmed, which are on site, which are still waiting for the customer's answer? QuoteRoom keeps every quotation's stage in one list: Awaiting confirmation, Confirmed, Ongoing, On hold, Completed or Cancelled.
+>
+> Tap a stage to filter, search by customer name or mobile, move a job along with a note for your team, and see each job's full history. The bell tells you the moment a customer accepts a quotation or asks for changes.
+>
+> QuoteRoom is a quotation app for interior designers and furniture makers: measure rooms on your phone, send branded quotations on WhatsApp, and track every job to payment.
+>
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+>
+> #interiordesign #interiordesigner #modularkitchen #interiorbusiness #quoteroom #Shorts
+
+Instagram (standalone, cover text "Every job, one list"):
+> Which jobs are confirmed? Which are on site? Which customer still hasn't replied? 🤔
+>
+> QuoteRoom keeps every job's stage in one list: awaiting confirmation, confirmed, ongoing, on hold, completed. Tap a stage to filter, add a note for your team at each step, and get a notification the moment a customer accepts your quotation.
+>
+> No more scrolling WhatsApp chats to remember where each job stands. Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #smallbusinessindia
+
 **Part 9** — *QuoteRoom tutorial 9: your team (staff logins & sharing jobs)*
 > Give everyone in your team their own login: one price, however many people. Add a staff login, set a new password if they forget it, and share a job with them using Access, as Can view or Can edit (only admins can delete). Staff see only the jobs shared with them and the ones they make; your costs, profit, reports and settings stay admin-only.
 > 👉 Free 7-day trial: https://www.quote-room.co.in
