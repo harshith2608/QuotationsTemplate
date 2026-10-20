@@ -16,6 +16,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "One price. Your whole team." | Single image 4:5 | **Scheduled** | `post-one-price.png` | `tools/ad_video/profile_posts.py` |
 | "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Ready to post** | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
 | "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Ready to post** | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
+| "Excel vs QuoteRoom" carousel (10-slide framework: hook, example, diagrams, comparisons, CTA) | Carousel, 10 slides 4:5 | **Ready to post** | `carousel-excel-vs-1…10.png` | `tools/ad_video/carousel_excel_vs.py` |
 | "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Ready to post** | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
 | "Do you know your profit?" | Reel 22 s, 9:16, music | **Ready to post** | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
 | "Does your quotation have all 6?" | Single image 4:5 | **Ready to post** | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
@@ -501,3 +502,20 @@ Links in captions aren't clickable on Instagram, so each one says "link in bio".
 > Free 7-day trial, link in bio 👆
 >
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #smallbusinessindia
+
+
+## 9. Excel vs QuoteRoom carousel (feed, 10 slides)
+
+Slides: 1 hook ("Still making quotations in Excel?", the #VALUE! sheet, 40 min vs 3 min) · 2 the Excel way · 3 the
+QuoteRoom way · 4 where the 40 minutes go (bar chart) · 5 after you send it (two flows) · 6 sqft maths · 7 changes &
+versions · 8 getting the yes and getting paid · 9 side-by-side ✗/✓ table · 10 "Stop fixing formulas. Start sending
+quotes." Files `ad-videos/carousel-excel-vs-1…10.png`, made by `tools/ad_video/carousel_excel_vs.py`.
+
+Caption:
+> Still making quotations in Excel? 📊 Same kitchen, same customer: 40 minutes and a #VALUE! error, or 3 minutes and sent on WhatsApp.
+>
+> Swipe to see where the 40 minutes go, what happens after you send it, and the side-by-side comparison 👉
+>
+> Save this for your next quote. Free 7-day trial, link in bio 👆
+>
+> #interiordesign #interiordesigner #interiorbusiness #modularkitchen #interiordesignindia #quoteroom #excel
