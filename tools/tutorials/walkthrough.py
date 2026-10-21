@@ -13,7 +13,7 @@ import subprocess
 from PIL import Image, ImageDraw
 
 import recorder as R
-from landscape import DESK, DESK_DPR, LH, LW, DeskRecorder, end_card, frame, title_card
+from landscape import LH, LW, DeskRecorder, end_card, frame, title_card
 from music import make_music
 from recorder import FFMPEG, FPS, _wrap
 from static_ads import MUTED, PAPER, TAPE, background, brand, font, rounded_mask, shadowed
@@ -27,7 +27,15 @@ def _read_time(title, points, base=1.2, cap=3.0):
     return min(cap, max(2.2, base + words / 6))
 
 
+WIN = {'width': 1280, 'height': 800}        # a common laptop size: the quotation's room tables fit without scrolling
+WIN_DPR = 1.2                                 # same 1536x960 screenshots as landscape.DESK at 1.5
+
+
 class WalkRecorder(DeskRecorder):
+    def _centre(self, locator):
+        box = locator.bounding_box()
+        return ((box['x'] + box['width'] / 2) * WIN_DPR, (box['y'] + box['height'] / 2) * WIN_DPR)
+
     def slide(self, kicker, title, points=(), hold=None):
         if kicker.lower().startswith('step'):
             self.section = f'{kicker} · {title}'          # shown above the explanations that follow
@@ -42,13 +50,13 @@ class WalkRecorder(DeskRecorder):
         boxes = [b for b in (loc.bounding_box() for loc in locators) if b]
         x0 = max(0, min(b['x'] for b in boxes) - pad)
         y0 = max(0, min(b['y'] for b in boxes) - pad)
-        x1 = min(DESK['width'], max(b['x'] + b['width'] for b in boxes) + pad)
-        y1 = min(DESK['height'], max(b['y'] + b['height'] for b in boxes) + pad)
+        x1 = min(WIN['width'], max(b['x'] + b['width'] for b in boxes) + pad)
+        y1 = min(WIN['height'], max(b['y'] + b['height'] for b in boxes) + pad)
         self._mask_local()
         path = os.path.join(self.dir, f'{len(self.items):04d}-explain.png')
         self.page.screenshot(path=path)
         self.items.append({'kind': 'explain', 'png': path, 'kicker': kicker or getattr(self, 'section', self.chapter), 'title': title,
-                           'points': list(points), 'box': [v * DESK_DPR for v in (x0, y0, x1, y1)],
+                           'points': list(points), 'box': [v * WIN_DPR for v in (x0, y0, x1, y1)],
                            'hold': hold or _read_time(title, points)})
 
 

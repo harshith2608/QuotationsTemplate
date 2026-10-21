@@ -13,9 +13,8 @@ import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
-from landscape import DESK, DESK_DPR
 from recorder import DPR, OUT, VIEW, Recorder
-from walkthrough import WalkRecorder, render
+from walkthrough import WIN, WIN_DPR, WalkRecorder, render
 
 TITLE = 'Set up, step by step'
 SUBTITLE = 'From your first sign-in to your first quotation, step by step.'
@@ -48,7 +47,7 @@ def record(base, work, password):
     logo = make_logo(os.path.join(work, 'sharma-logo.png'))
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_context(viewport=DESK, device_scale_factor=DESK_DPR).new_page()
+        page = browser.new_context(viewport=WIN, device_scale_factor=WIN_DPR).new_page()
         rec = WalkRecorder(page, os.path.join(work, 'walk'), LABEL, TITLE)
 
         rec.slide('Interiors & turnkey', 'From sign-in to your first quotation', [
