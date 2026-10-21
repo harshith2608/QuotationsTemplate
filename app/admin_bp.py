@@ -291,10 +291,11 @@ def _save_boq_lines():
     errors = []
     ids, names = request.form.getlist('bq_id'), request.form.getlist('bq_name')
     descs, units, rates = request.form.getlist('bq_desc'), request.form.getlist('bq_unit'), request.form.getlist('bq_rate')
+    cats = request.form.getlist('bq_cat') or [''] * len(ids)
     delete_ids = {d for d in request.form.getlist('bq_delete') if d}
     existing = {str(b.id): b for b in BoqItem.query.all()}
     seen = set()
-    for item_id, name, desc, unit, rate in zip(ids, names, descs, units, rates):
+    for item_id, name, desc, unit, rate, cat in zip(ids, names, descs, units, rates, cats):
         name = ' '.join(name.split())[:100]
         if item_id in delete_ids:
             if item_id in existing:
@@ -311,7 +312,8 @@ def _save_boq_lines():
             errors.append(f'Rate for "{name}" must be a number.')
             continue
         seen.add(name.lower())
-        values = dict(name=name, description=boq.clean_description(desc), unit=boq.clean_unit(unit), rate=rate_val)
+        values = dict(name=name, description=boq.clean_description(desc), unit=boq.clean_unit(unit), rate=rate_val,
+                      category=' '.join(cat.split())[:60] or None)
         row = existing.get(item_id)
         if row:
             for k, v in values.items():
@@ -445,7 +447,7 @@ def rates():
 
 def _boq_lines():
     from .models import BoqItem
-    return BoqItem.query.order_by(BoqItem.name).all()
+    return BoqItem.query.order_by(BoqItem.category, BoqItem.name).all()
 
 
 def _plywood_ready():

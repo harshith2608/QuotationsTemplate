@@ -515,6 +515,7 @@ class BoqItem(db.Model):
     name        = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.Text, nullable=True)
     unit        = db.Column(db.String(20), nullable=True)
+    category    = db.Column(db.String(60), nullable=True)    # groups the "Add from my lines" checklist
     rate        = db.Column(EncryptedFloat, nullable=False, default=0.0)
 
     def __repr__(self):

@@ -549,6 +549,8 @@ function addRoom(presetName) {
       <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
         <i class="bi bi-plus me-1"></i>Add Item
       </button>
+      ${BOQ && BOQ_SAVED.length ? `<button type="button" class="btn btn-sm btn-outline-primary ms-1" onclick="openBoqPicker('${rk}')">
+        <i class="bi bi-list-check me-1"></i>Add from my lines</button>` : ''}
     </div>
   `;
   container.appendChild(div);
@@ -746,15 +748,82 @@ function modalCalcBoq() {
                                         : '₹' + (qty * rate).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
+// ─── Add from my lines: tick several saved BOQ lines, add them to a room at once ──
+let _pickRoom = null;
+function openBoqPicker(rk) {
+  _pickRoom = rk;
+  const search = document.getElementById('boqPickSearch');
+  if (search) search.value = '';
+  renderBoqPicker();
+  new bootstrap.Modal(document.getElementById('boqPickModal')).show();
+  setTimeout(() => search?.focus(), 350);
+}
+function renderBoqPicker() {
+  const list = document.getElementById('boqPickList');
+  if (!list) return;
+  const q = (document.getElementById('boqPickSearch')?.value || '').trim().toLowerCase();
+  const ticked = new Set(Array.from(list.querySelectorAll('input:checked')).map(c => c.value));
+  const inRoom = new Set(Object.values(rooms[_pickRoom]?.items || {}).map(i => (i.name || '').toLowerCase()));
+  const groups = {};
+  BOQ_SAVED.forEach((b, i) => {
+    if (q && !(`${b.name} ${b.description} ${b.category}`.toLowerCase().includes(q))) return;
+    (groups[b.category || 'Other'] = groups[b.category || 'Other'] || []).push([b, i]);
+  });
+  // the group named like this room first (adding to "Electrical Fitting" shows those lines on top)
+  const roomName = (document.getElementById('room_name_' + _pickRoom)?.value || '').trim().toLowerCase();
+  const names = Object.keys(groups).sort((a, b) => (b.toLowerCase() === roomName) - (a.toLowerCase() === roomName));
+  list.innerHTML = names.length ? names.map(g => `
+    <div class="ki-pick-group">
+      <div class="d-flex align-items-center justify-content-between mt-2 mb-1">
+        <span class="small fw-bold text-uppercase text-muted">${escHtml(g)}</span>
+        <button type="button" class="btn btn-link btn-sm p-0" onclick="pickGroup(this)">Tick all</button>
+      </div>
+      ${groups[g].map(([b, i]) => `
+        <label class="ki-pick-row d-flex gap-2 align-items-start py-1 border-bottom" for="bp_${i}">
+          <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="bp_${i}" value="${i}"
+                 ${ticked.has(String(i)) ? 'checked' : ''} onchange="countBoqPicks()">
+          <span class="flex-grow-1">
+            <span class="fw-semibold small">${escHtml(b.name)}</span>
+            ${inRoom.has(b.name.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : ''}
+            ${b.description ? `<span class="d-block small text-muted text-truncate" style="max-width:520px">${escHtml(b.description.split('\n')[0])}</span>` : ''}
+          </span>
+          <span class="small text-nowrap text-muted">${b.rate ? '₹' + Number(b.rate).toLocaleString('en-IN') : '—'} / ${escHtml(b.unit)}</span>
+        </label>`).join('')}
+    </div>`).join('') : '<p class="text-muted small my-3">No saved lines match.</p>';
+  countBoqPicks();
+}
+function pickGroup(btn) {
+  const boxes = btn.closest('.ki-pick-group').querySelectorAll('input[type=checkbox]');
+  const all = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => { b.checked = !all; });
+  countBoqPicks();
+}
+function countBoqPicks() {
+  const n = document.querySelectorAll('#boqPickList input:checked').length;
+  const btn = document.getElementById('boqPickAdd');
+  if (btn) { btn.disabled = !n; btn.textContent = n ? `Add ${n} line${n > 1 ? 's' : ''}` : 'Add lines'; }
+}
+function addBoqPicks() {
+  const picks = Array.from(document.querySelectorAll('#boqPickList input:checked')).map(c => BOQ_SAVED[+c.value]);
+  picks.forEach(b => {
+    const lump = b.unit === 'lump sum';
+    _insertBoqRow(_pickRoom, b.name, lump ? 1 : 0, b.unit, b.rate, b.description, false, 0, 0, 1, !lump);
+  });
+  bootstrap.Modal.getInstance(document.getElementById('boqPickModal'))?.hide();
+  const first = document.querySelector(`#room_card_${_pickRoom} tr.ki-needs-qty input[id^="item_qty_"]`);
+  if (first) { first.scrollIntoView({ block: 'center' }); setTimeout(() => first.focus(), 300); }
+}
+
 // ─── BOQ lines ───────────────────────────────────────────────────────────────
-function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count) {
+function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
   const qty = quantity !== undefined && quantity !== null ? quantity : 1;     // 0: a rate-only line
   const r = rate !== undefined && rate !== null ? rate : '';
   rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
-                          unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault };
+                          unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault,
+                          pending: !!pending };
   const tbody = document.getElementById('items_tbody_' + rk);
   if (!tbody) return;
   const tr = document.createElement('tr');
@@ -810,6 +879,7 @@ function onBoqField(rk, ik) {
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
   }
   const keepDefault = rooms[rk].items[ik].save_default;
+  let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
   const quantity   = parseFloat(document.getElementById('item_qty_' + ik)?.value) || 0;
@@ -817,7 +887,11 @@ function onBoqField(rk, ik) {
   rooms[rk].items[ik] = { type: 'boq', name: document.getElementById('item_name_' + ik)?.value.trim() || '',
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
                           unit_price, description: descOf(ik), save_default: keepDefault,
-                          length: size.length, width: size.width, count: size.count };
+                          length: size.length, width: size.width, count: size.count,
+                          pending: pending && !(quantity > 0) };
+  const rowEl = document.getElementById('item_row_' + ik);
+  rowEl?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
+  document.getElementById('item_descrow_' + ik)?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
   const amtEl = document.getElementById('item_amount_' + ik);
   if (amtEl) amtEl.innerHTML = unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })
                                 : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
@@ -1330,6 +1404,14 @@ function _validateForm() {
   }
 
   if (!valid) return false;
+  // Lines added from "Add from my lines" whose quantity was never typed would print as rate only: ask first
+  const pending = Object.values(rooms).flatMap(r => Object.values(r.items)).filter(i => i.type === 'boq' && i.pending);
+  if (pending.length && !confirm(`${pending.length} line${pending.length > 1 ? 's have' : ' has'} no quantity yet `
+      + `(${pending.slice(0, 4).map(i => i.name).join(', ')}${pending.length > 4 ? '…' : ''}).\n\n`
+      + 'They will print with their rate only and are not added to the total. Save anyway?')) {
+    document.querySelector('.ki-needs-qty input[id^="item_qty_"]')?.focus();
+    return false;
+  }
   document.getElementById('rooms_data_field').value = JSON.stringify(roomsPayload);
   return true;
 }

@@ -145,25 +145,27 @@ def qty_text(quantity):
 def saved_lines():
     """[{name, description, unit, rate}] for the quotation form, by name."""
     from .models import BoqItem
-    return [{'name': b.name, 'description': b.description or '', 'unit': b.unit or 'nos', 'rate': b.rate or 0}
-            for b in BoqItem.query.order_by(BoqItem.name).all()]
+    return [{'name': b.name, 'description': b.description or '', 'unit': b.unit or 'nos', 'rate': b.rate or 0,
+             'category': b.category or 'Other'}
+            for b in BoqItem.query.order_by(BoqItem.id).all()]             # groups in the order they were added
 
 
 def remember(lines):
     """After a quotation is saved: a BOQ line used for the first time is saved with its description, unit and rate;
     one already saved keeps its defaults unless the line asked to update them ("Save as my default").
-    lines: [(name, description, unit, rate, save_default)]."""
+    lines: [(name, description, unit, rate, save_default, category)] — category: the section it was used in."""
     from sqlalchemy import func
     from .models import BoqItem
     done = set()
-    for name, description, unit, rate, save_default in lines:
+    for name, description, unit, rate, save_default, category in lines:
         key = name.strip().lower()
         if not key or key in done:
             continue
         done.add(key)
         row = BoqItem.query.filter(func.lower(BoqItem.name) == key).first()
         if row is None:
-            db.session.add(BoqItem(name=name.strip()[:100], description=description, unit=unit, rate=rate))
+            db.session.add(BoqItem(name=name.strip()[:100], description=description, unit=unit, rate=rate,
+                                   category=(category or '').strip()[:60] or None))
         elif save_default:
             row.description, row.unit, row.rate = description, unit, rate
 
@@ -171,10 +173,17 @@ def remember(lines):
 # Starter lines, from typical turnkey 2 BHK quotations: offered when BOQ lines are turned on for a business with none
 # saved yet. Rates are examples to change (Admin → Rates → BOQ lines).
 STARTER = [
-    # Services
+    ('#', 'Services'),
     ('False Ceiling', 'sqft', 120, 'Gypsum false ceiling with framework, as per design (living room, kitchen, passage, bedrooms)'),
     ('Electric Wiring', 'point', 850, 'Conduit, Polycab wire (1.5 sq.mm considered); excluding switches, sockets & plates'),
-    # Electrical fitting (labour), one line each
+    ('Paint Work', 'sqft', 45, 'Royale Luxury Emulsion / Asian Royale on all indoor walls, with putty, primer and 2 coats of colour'),
+    ('3D Design', LUMP_SUM, 45000, '3D design for reference (living room, kitchen & bedrooms), one revision, 10-12 views'),
+    ('Floor Protection', LUMP_SUM, 7500, 'Floor protection sheet on all areas during work'),
+    ('Debris Removal and Deep Cleaning', LUMP_SUM, 22000, 'Debris removal\nDeep cleaning with machine'),
+    ('Door Laminate Change', 'nos', 12000, 'Removing and pasting laminate on both sides (single laminate); same hardware'),
+    ('Door Frame Paneling', 'nos', 12500, 'Door frame paneling with laminate finish'),
+    ('Laminate Variation Cost', LUMP_SUM, 25000, 'Approximate, for the laminates finally selected'),
+    ('#', 'Electrical Fitting'),
     ('Fan Fitting', 'nos', 500, 'Fan fitting including bracket'),
     ('Exhaust Fan Fixing', 'nos', 350, ''),
     ('Switch Board Shifting', 'nos', 350, ''),
@@ -184,7 +193,7 @@ STARTER = [
     ('Cove Light Fitting', 'rft', 75, ''),
     ('COB Light Fitting', 'nos', 150, ''),
     ('Hanging Light Fitting', 'nos', 250, 'Hanging lights as per design and selection, priced separately'),
-    # Lights & points (supply)
+    ('#', 'Lights & Points'),
     ('COB Light 12 W', 'nos', 420, '3 inch'),
     ('Panel Light 15 W', 'nos', 500, '3-in-1'),
     ('Profile Light 17 mm', 'rft', 550, ''),
@@ -194,16 +203,7 @@ STARTER = [
     ('Laser Light', 'nos', 900, '5 nos with 3 W LED each'),
     ('Switch / Socket Point', 'point', 1150, 'With switch or socket (GM base level switches and plates)'),
     ('Point Looping', 'point', 550, 'With material'),
-    ('Paint Work', 'sqft', 45, 'Royale Luxury Emulsion / Asian Royale on all indoor walls, with putty, primer and 2 coats of colour'),
-    ('3D Design', LUMP_SUM, 45000, '3D design for reference (living room, kitchen & bedrooms), one revision, 10-12 views'),
-    ('Floor Protection', LUMP_SUM, 7500, 'Floor protection sheet on all areas during work'),
-    ('Debris Removal and Deep Cleaning', LUMP_SUM, 22000, 'Debris removal\nDeep cleaning with machine'),
-    ('Door Laminate Change', 'nos', 12000, 'Removing and pasting laminate on both sides (single laminate); same hardware'),
-    ('Door Frame Paneling', 'nos', 12500, 'Door frame paneling with laminate finish'),
-    ('LED Mirror', 'nos', 9500, 'Bathroom LED mirror with single light'),
-    ('Vanity Storage', 'sqft', 2100, 'Below-counter vanity storage in BWP ply with laminate finish'),
-    ('Bathroom PVC Ceiling', 'sqft', 500, 'PVC ceiling in bathroom'),
-    # Living room & passage
+    ('#', 'Living Room & Passage'),
     ('Safety Door', 'sqft', 1500, 'Safety door in block board, both sides laminate finish, including safety grill '
      '(lock, handle and grill at base price)'),
     ('Safety Door Paneling', 'sqft', 850, 'Safety door paneling in 12 mm ply with laminate finish'),
@@ -212,13 +212,18 @@ STARTER = [
     ('AC Paneling', 'sqft', 750, 'AC paneling in 12 mm BWR ply + 4 mm HDMR'),
     ('Wall Paneling', 'sqft', 950, 'Wall paneling with fluted sheet / mirror / metal strips as per design'),
     ('Loft Shutter', 'sqft', 950, 'Loft shutters in BWR ply with laminate finish'),
-    # Kitchen
+    ('Sofa', 'nos', 55000, 'Fabric cost extra as per selection'),
+    ('#', 'Kitchen'),
     ('Kitchen Below Platform', 'sqft', 2450, 'Below-platform units in BWP ply with laminate finish, tandem drawers, '
      'masala pull-out and profile handles'),
     ('Kitchen Above Platform', 'sqft', 1850, 'Middle and upper units in BWR ply, laminate finish inside and outside, '
      'with shelves'),
     ('Kitchen Balcony Storage', 'sqft', 1750, 'Balcony storage in BWP ply with laminate finish'),
-    # Bedrooms
+    ('#', 'Bathrooms'),
+    ('LED Mirror', 'nos', 9500, 'Bathroom LED mirror with single light'),
+    ('Vanity Storage', 'sqft', 2100, 'Below-counter vanity storage in BWP ply with laminate finish'),
+    ('Bathroom PVC Ceiling', 'sqft', 500, 'PVC ceiling in bathroom'),
+    ('#', 'Bedrooms'),
     ('Wardrobe', 'sqft', 1850, 'Wardrobe in BWR ply, laminate finish inside and outside, soft-close drawer channels, '
      'shutters, drawers and shelves'),
     ('Bed with Storage', 'sqft', 1850, 'Bed in 18 mm BWR ply, laminate finish, top-open storage on hydraulic fittings'),
@@ -226,9 +231,18 @@ STARTER = [
     ('Side Table', 'nos', 15000, 'Side table in BWR ply with laminate finish, 2 drawers'),
     ('Dresser Unit', 'sqft', 1650, 'Dresser in BWR ply, laminate finish, soft-close drawers and mirror'),
     ('Mirror (Miralite 5 mm)', 'sqft', 320, 'Saint-Gobain 5 mm silver mirror (Miralite), non-toughened'),
-    ('Sofa', 'nos', 55000, 'Fabric cost extra as per selection'),
-    ('Laminate Variation Cost', LUMP_SUM, 25000, 'Approximate, for the laminates finally selected'),
 ]
+
+
+def starter_lines():
+    """[(category, name, unit, rate, description)] from STARTER (its ('#', category) rows start a group)."""
+    out, cat = [], 'Other'
+    for row in STARTER:
+        if row[0] == '#':
+            cat = row[1]
+            continue
+        out.append((cat,) + tuple(row))
+    return out
 
 
 def add_starter_lines():
@@ -236,6 +250,7 @@ def add_starter_lines():
     from .models import BoqItem
     if BoqItem.query.first() is not None:
         return 0
-    for name, unit, rate, description in STARTER:
-        db.session.add(BoqItem(name=name, unit=unit, rate=rate, description=description))
-    return len(STARTER)
+    lines = starter_lines()
+    for category, name, unit, rate, description in lines:
+        db.session.add(BoqItem(name=name, unit=unit, rate=rate, description=description, category=category))
+    return len(lines)

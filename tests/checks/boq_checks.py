@@ -40,7 +40,9 @@ with app.app_context():
     boq.set_enabled(True); db.session.commit()
     n = BoqItem.query.count()
     fc0 = BoqItem.query.filter_by(name='False Ceiling').first()
-    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Wardrobe…)', n == len(boq.STARTER)
+    ok('starter lines come grouped (Services, Electrical Fitting, Kitchen…)', BoqItem.query.filter_by(name='Fan Fitting').first().category
+       == 'Electrical Fitting' and BoqItem.query.filter_by(name='Wardrobe').first().category == 'Bedrooms')
+    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Wardrobe…)', n == len(boq.starter_lines())
        and fc0 and fc0.unit == 'sqft' and fc0.rate == 120 and BoqItem.query.filter_by(name='Electric Wiring').first().unit == 'point')
     boq.set_enabled(False); boq.set_enabled(True); db.session.commit()
     ok('…only once: turning it on again adds nothing', BoqItem.query.count() == n)
@@ -108,6 +110,8 @@ with app.app_context():
 t = c.get('/projects/new').text
 ok('new quotation offers the saved lines with their defaults', '"name": "False Ceiling"' in t and '"rate": 120' in t
    and 'modal_boq_default' in t)
+ok('"Add from my lines" checklist, lines grouped by the section they were first used in', 'id="boqPickModal"' in t
+   and '"category": "Other Service"' in t)
 
 
 def boq_quote(rate, save_default=False, name='Again'):
@@ -135,12 +139,12 @@ r = c.get('/admin/rates').text
 ok('Admin → Rates lists the saved BOQ lines', 'id="boq-lines"' in r and 'value="False Ceiling"' in r and 'name="boq_submit"' in r)
 with app.app_context():
     ids = {b.name: str(b.id) for b in BoqItem.query.all()}
-form = {'boq_submit': '1', 'bq_id': [], 'bq_name': [], 'bq_desc': [], 'bq_unit': [], 'bq_rate': [], 'bq_delete': [ids['3D Design']]}
+form = {'boq_submit': '1', 'bq_id': [], 'bq_name': [], 'bq_desc': [], 'bq_unit': [], 'bq_rate': [], 'bq_cat': [], 'bq_delete': [ids['3D Design']]}
 for name, desc, unit, rate in (('False Ceiling', 'Gypsum, with cove', 'Sq.ft', '140'), ('Electric wiring', 'Conduit, polycab wire', 'nos', '900'),
                                ('Other Light and Fitting Charges', 'Rate card', 'nos', '0'), ('3D Design', '', 'LS', '45000')):
     form['bq_id'].append(ids[name]); form['bq_name'].append(name); form['bq_desc'].append(desc)
-    form['bq_unit'].append(unit); form['bq_rate'].append(rate)
-for k, v in (('bq_id', ''), ('bq_name', 'Painting'), ('bq_desc', 'Royale, 2 coats'), ('bq_unit', 'sqft'), ('bq_rate', '45')):
+    form['bq_unit'].append(unit); form['bq_rate'].append(rate); form['bq_cat'].append('Services')
+for k, v in (('bq_id', ''), ('bq_name', 'Painting'), ('bq_desc', 'Royale, 2 coats'), ('bq_unit', 'sqft'), ('bq_rate', '45'), ('bq_cat', 'Services')):
     form[k].append(v)
 r = c.post('/admin/rates', data=form, follow_redirects=True)
 with app.app_context():

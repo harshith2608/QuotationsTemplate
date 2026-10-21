@@ -303,6 +303,7 @@
           time it's used on a quotation. On the next quotation, pick it by name and its description, unit and rate fill in;
           change them there for that quotation only, or here (or with "Save as my default") for every new quotation.
         </p>
+        <datalist id="boq-cats">{% for c in boq_lines|map(attribute='category')|select|unique %}<option value="{{ c }}">{% endfor %}</datalist>
         <datalist id="boq-units-admin">{% for u in boq_units %}<option value="{{ u }}">{% endfor %}</datalist>
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -311,6 +312,7 @@
               <thead class="ki-table-head">
                 <tr>
                   <th class="ps-3" style="min-width:220px">Line &amp; description</th>
+                  <th style="min-width:150px">Group</th>
                   <th style="min-width:110px">Unit</th>
                   <th style="min-width:140px">Rate</th>
                   <th class="text-center" style="width:80px">Remove</th>
@@ -324,6 +326,7 @@
                     <input type="text" name="bq_name" class="form-control form-control-sm fw-semibold mb-1" value="{{ b.name }}" maxlength="100" aria-label="Line name">
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="{{ [((b.description or '').count('\n') + 1), 6]|min }}" maxlength="2000" placeholder="Description (optional)" aria-label="Description">{{ b.description or '' }}</textarea>
                   </td>
+                  <td><input type="text" name="bq_cat" class="form-control form-control-sm" value="{{ b.category or '' }}" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="Group"></td>
                   <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="{{ b.unit or 'nos' }}" maxlength="20" list="boq-units-admin" aria-label="Unit"></td>
                   <td>
                     <div class="input-group input-group-sm">
@@ -343,6 +346,7 @@
                     <input type="text" name="bq_name" class="form-control form-control-sm mb-1" placeholder="Add a line, e.g. False Ceiling…" maxlength="100" aria-label="New line name">
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="1" maxlength="2000" placeholder="Description (optional)" aria-label="New line description"></textarea>
                   </td>
+                  <td><input type="text" name="bq_cat" class="form-control form-control-sm" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="New line group"></td>
                   <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="sqft" maxlength="20" list="boq-units-admin" aria-label="New line unit"></td>
                   <td>
                     <div class="input-group input-group-sm">

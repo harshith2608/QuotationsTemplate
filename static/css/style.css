@@ -245,6 +245,11 @@ body {
 .ki-priced-only .item-table th.h-c2 { min-width: 100px !important; width: 110px; }
 .ki-priced-only .item-table th.h-c3 { min-width: 130px !important; width: 140px; }
 .ki-priced-only .item-table th.h-c5 { min-width: 96px !important; }
+/* lines added from "Add from my lines" whose quantity is still to be typed */
+.item-table tr.ki-needs-qty > td { background: #fff8e1; }
+.item-table tr.ki-needs-qty input[id^="item_qty_"] { border-color: #f59e0b; }
+.ki-pick-row { cursor: pointer; }
+.ki-pick-row:hover { background: #f8fafc; }
 .item-table tr:has(+ tr.ki-desc-row) td { border-bottom: 0; }
 .item-table .ki-item-desc { font-size: .8rem; color: #455a64; resize: vertical; min-height: 30px; }
 

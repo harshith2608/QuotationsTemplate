@@ -216,7 +216,8 @@ def _save_project_data(project, rooms_data, remember=True):
                     if mode and l_ > 0 and (mode == 'length' or w_ > 0):
                         item.length, item.width = l_, (w_ if mode == 'area' else 0)
                         item.quantity = quantity = boq.quantity_from_size(item.unit, l_, w_, n_)
-                    boq_used.append((item_name[:100], description, item.unit, unit_price, bool(id_.get('save_default'))))
+                    boq_used.append((item_name[:100], description, item.unit, unit_price, bool(id_.get('save_default')),
+                                     room_name))
                 if description:
                     item.description = description
                 db.session.add(item)
@@ -454,6 +455,24 @@ def create_project():
         flash('Quotation created successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
 
+    # Start from an earlier quotation (Duplicate) or a template: everything but the customer
+    from . import quote_templates as QT
+    start, started_from = None, None
+    if request.args.get('from', type=int):
+        from . import access, plywood as _ply
+        src = Project.query.get(request.args.get('from', type=int))
+        if src and src.status != 'draft' and access.can_view(src, current_user):
+            start = QT.start_from_project(src)
+            form_cat = _form_catalog(src)                       # its materials and plywood
+            started_from = f'quotation #{src.id} ({src.customer_name})'
+    elif request.args.get('template'):
+        tpl = QT.get(request.args.get('template'))
+        if tpl:
+            start = QT.start_from_template(tpl)
+            from . import plywood as _ply
+            if tpl.get('plywood') and _ply.known(tpl['plywood']):
+                form_cat['plywood_form']['selected'] = tpl['plywood']
+            started_from = f'the "{tpl["name"]}" template'
     return render_template('projects/form.html',
                            title='New Quotation',
                            master_rooms=master_rooms,
@@ -461,9 +480,50 @@ def create_project():
                            **form_cat,
                            item_rates=item_rates,
                            price_list=_get_price_list(),
-                           form_data={},
-                           rooms_json='[]',
+                           form_data={'plywood_thickness': start['plywood_thickness']} if start else {},
+                           rooms_json=start['rooms_json'] if start else '[]',
+                           start=start, started_from=started_from, templates=QT.all_templates(),
+                           chosen_template=request.args.get('template', ''),
                            project=None)
+
+
+@projects_bp.route('/projects/<int:project_id>/template', methods=['POST'])
+@login_required
+@admin_required
+def save_as_template(project_id):
+    """Save this quotation's rooms, lines, discount and plywood as a template for new quotations."""
+    from . import quote_templates as QT
+    project = Project.query.get_or_404(project_id)
+    try:
+        QT.save(request.form.get('name'), project)
+    except ValueError as exc:
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash(f'Saved as the template "{" ".join(request.form.get("name", "").split())}". New quotations can start from it.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project_id))
+
+
+@projects_bp.route('/templates', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_templates():
+    """Rename or delete quotation templates."""
+    from . import quote_templates as QT
+    if request.method == 'POST':
+        tid = request.form.get('id', '')
+        try:
+            if request.form.get('action') == 'delete':
+                QT.delete(tid)
+                flash('Template deleted.', 'success')
+            else:
+                QT.rename(tid, request.form.get('name'))
+                flash('Template renamed.', 'success')
+            db.session.commit()
+        except ValueError as exc:
+            flash(str(exc), 'danger')
+        return redirect(url_for('projects.manage_templates'))
+    return render_template('projects/templates.html', title='Quotation templates', templates=QT.all_templates())
 
 
 @projects_bp.route('/projects/<int:project_id>')

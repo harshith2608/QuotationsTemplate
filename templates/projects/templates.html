@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Quotation templates{% endblock %}
+{% block content %}
+<div class="mt-3 mb-3" style="max-width:820px">
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-bookmarks me-2 text-primary"></i>Quotation templates</h4>
+  <p class="text-muted">Start a new quotation from a template instead of from blank: every room, line, description and rate
+    is copied, then you change the customer and the quantities. Save any quotation as a template from its page
+    (<strong>Save as template</strong>). Templates are not quotations: they don't appear in your lists or reports.</p>
+  {% if not templates %}
+  <div class="alert alert-light border">No templates yet. Open a quotation you'd like to reuse, e.g. a typical 2 BHK, and click
+    <strong>Save as template</strong>.</div>
+  {% endif %}
+  {% for t in templates %}
+  <div class="card shadow-sm border-0 mb-2">
+    <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+      <form method="post" class="d-flex gap-2 align-items-center flex-grow-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="id" value="{{ t.id }}">
+        <input type="text" name="name" class="form-control form-control-sm fw-semibold" value="{{ t.name }}" maxlength="60" style="max-width:280px" aria-label="Template name">
+        <span class="small text-muted text-nowrap">{{ t.rooms }} rooms · {{ t.lines }} lines</span>
+        <button class="btn btn-sm btn-outline-primary" type="submit" name="action" value="rename">Rename</button>
+      </form>
+      <a class="btn btn-sm btn-primary ki-btn-primary" href="{{ url_for('projects.create_project', template=t.id) }}">New quotation from it</a>
+      <form method="post" onsubmit="return confirm('Delete the template {{ t.name|e }}? Quotations made from it are not affected.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="id" value="{{ t.id }}">
+        <button class="btn btn-sm btn-outline-danger" type="submit" name="action" value="delete"><i class="bi bi-trash"></i></button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -30,6 +30,7 @@ def upgrade():
                     sa.Column('name', sa.String(100), nullable=False, unique=True),
                     sa.Column('description', sa.Text(), nullable=True),
                     sa.Column('unit', sa.String(20), nullable=True),
+                    sa.Column('category', sa.String(60), nullable=True),
                     sa.Column('rate', sa.Text(), nullable=False))      # EncryptedFloat (stored encrypted)
 
 
