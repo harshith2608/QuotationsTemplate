@@ -3,8 +3,9 @@
 Recreates a real bill of quantities from a JSON file kept OUTSIDE the repository (it holds a customer's details):
     {"company", "tagline", "customer": {"name", "mobile", "address"}, "discount", "notes", "payment_terms",
      "rooms": [{"name", "items": [{"name", "type": "boq", "quantity", "unit", "unit_price", "description"}]}]}
-The first lines are typed with pauses that explain them; the rest are added quickly. Recorded on a FRESH local
-business with BOQ lines on (the script sets the company, BOQ layout, terms and notes through the app's settings).
+The first lines are picked from the business's saved BOQ lines (the starter set it gets when BOQ lines are turned
+on), with pauses that explain them; the rest are added quickly. Recorded on a FRESH local business with BOQ lines on
+(the script sets the company, BOQ layout, terms and notes through the app's settings).
 
     python tools/tutorials/boq_walkthrough.py http://localhost:5096 <workdir> <admin password> <quote.json>
     python tools/tutorials/boq_walkthrough.py --render <workdir>
@@ -20,7 +21,16 @@ TITLE = 'A turnkey BOQ in QuoteRoom'
 SUBTITLE = 'Every line with its description, quantity, unit and rate. The total works itself out.'
 OUTRO = 'Try it free for 7 days: quote-room.co.in'
 LABEL = 'BOQ walkthrough'
-TYPED = 4                 # lines of the first section typed in full, with explanations
+TYPED = 4                 # lines of the first section added through the Add Item window, with explanations
+# those lines: (saved line to pick, keep its description, explanation) — the rest of each line comes from the JSON
+PICKS = [
+    ('False Ceiling', False, ('Your saved line', ['Pick it: description, unit and rate fill in',
+                                                   'Change anything for this quotation'])),
+    ('Electric Wiring', True, None),
+    ('Light and Fitting Charges', True, ('A note with no amount', ['Rate 0: printed as information, e.g. a rate card'])),
+    ('Electrical Fitting Charges', False, ('Changed for this quotation', ['Its own breakdown and amount here',
+                                                                        'Tick "Save as my default" to keep it'])),
+]
 
 
 def record(base, work, password, data_path):
@@ -56,7 +66,13 @@ def record(base, work, password, data_path):
 
         rec.slide('Interiors & turnkey', 'A real 2 BHK BOQ, line by line', [
             'Description, quantity, unit and rate on every line',
-            'Sq.ft, R.ft, Nos., points or lump sum'])
+            'Your saved lines fill in by themselves'])
+        page.goto(base + '/admin/rates#boq-lines')
+        page.wait_for_timeout(500)
+        rec.scroll_to(page.locator('#boq-lines'), 'Admin → Rates → BOQ Lines.', offset=80)
+        rec.explain(page.locator('#boq-lines table'), 'Your BOQ lines', ['Ready-made: false ceiling, wiring, wardrobe…',
+                                                                         'Edit rates and descriptions any time'],
+                    kicker='Admin → Rates')
         page.goto(base + '/admin/settings?tab=documents')
         rec.explain(page.locator('#il_boq').locator('xpath=ancestor::div[contains(@class,"card")][1]'),
                     'The BOQ layout', ['Sections A, B, C: your rooms', 'Sr. No., Qty, Unit, Rate, Amount'],
@@ -79,19 +95,29 @@ def record(base, work, password, data_path):
             rec.type(page.locator(f'#room_name_room_{n}'), name, caption, per_frame=4, hold=0.4)
             page.locator(f'#room_name_room_{n}').press('Escape')
 
-        def typed_line(n, it, caption, explain=None):
+        def picked_line(n, it, pick, keep_desc, explain):
+            caption = f"Add a BOQ line: {pick}."
             rec.tap(page.locator(f'#room_card_room_{n} button', has_text='Add Item'), caption, wait=600, after_hold=0.2)
             rec.tap(page.locator('label[for=modal_type_boq]'), caption, after_hold=0.3)
-            rec.type(page.locator('#modal_item_name'), it['name'], caption, per_frame=4, hold=0.2)
-            if it.get('description'):
-                rec.type(page.locator('#modal_item_desc'), it['description'], caption, per_frame=14, hold=0.3)
+            rec.type(page.locator('#modal_item_name'), pick[:5], caption, per_frame=2, hold=0.4)
+            rec.tap(page.locator('.ki-ac-dropdown li', has_text=pick).first, caption, after_hold=0.5)
+            after_edit = explain and explain[0].startswith('Changed')      # explained once the line is changed
+            if explain and not after_edit:
+                rec.explain(page.locator('#itemModal .modal-content'), *explain)
+                explain = None
             page.locator('#modal_boq_qty').fill(str(it['quantity']))
-            page.locator('#modal_boq_unit').fill(it['unit'])
-            page.locator('#modal_boq_rate').fill(str(it['unit_price']) if it['unit_price'] else '0')
-            page.locator('#modal_boq_rate').dispatch_event('input')
+            page.locator('#modal_boq_qty').dispatch_event('input')
+            if not keep_desc and it.get('description'):
+                page.locator('#modal_item_desc').fill(it['description'])
+                page.locator('#modal_item_desc').dispatch_event('input')
+            if it['unit_price'] and float(page.input_value('#modal_boq_rate') or 0) != it['unit_price']:
+                rec.type(page.locator('#modal_boq_rate'), str(it['unit_price']), caption, per_frame=3, hold=0.3)
+                page.locator('#modal_boq_rate').dispatch_event('input')
             page.wait_for_timeout(250)
             if explain:
                 rec.explain(page.locator('#itemModal .modal-content'), *explain)
+                if explain[0].startswith('Changed'):
+                    rec.tap(page.locator('#modal_boq_default'), 'Tick "Save as my default" to keep it for next time.', after_hold=0.6)
             else:
                 rec.shot(caption, 1.2)
             rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, wait=600, after_hold=0.5)
@@ -102,15 +128,10 @@ def record(base, work, password, data_path):
                           [f'room_{n}', items])
             page.wait_for_timeout(400)
 
-        explains = {
-            0: ('A BOQ line', ['Its own description, quantity, unit and rate', 'Amount = quantity × rate']),
-            2: ('A note with no amount', ['Rate 0: printed as information, e.g. a rate card']),
-            3: ('A lump sum', ['Unit "lump sum": the amount as one figure']),
-        }
         first = rooms[0]
         add_room(1, first['name'], f"Section A: {first['name']}.")
-        for i, it in enumerate(first['items'][:TYPED]):
-            typed_line(1, it, f"Add a BOQ line: {it['name']}.", explains.get(i))
+        for it, (pick, keep_desc, explain) in zip(first['items'][:TYPED], PICKS):
+            picked_line(1, it, pick, keep_desc, explain)
         rec.explain(page.locator('#room_card_room_1'), 'In the quotation', ['Edit any line right here',
                                                                            'Descriptions stay with the line'])
         quick_lines(1, first['items'][TYPED:], '')
