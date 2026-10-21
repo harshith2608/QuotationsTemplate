@@ -272,10 +272,15 @@ body {
   white-space: nowrap;
 }
 .item-table td { vertical-align: middle; }
+/* a narrow laptop (or a long metric size) scrolls the table inside its room card instead of spilling out of it */
+.item-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .item-table input, .item-table select {
   font-size: 0.875rem;
   padding: 5px 8px;
   height: auto;
+}
+.item-table select.form-select, .item-table select.form-select-sm {   /* more room for "Laminates – Frame Work" */
+  padding-right: 22px; background-position: right 6px center; background-size: 12px 10px; text-overflow: ellipsis;
 }
 .item-table .form-control:focus,
 .item-table .form-select:focus {

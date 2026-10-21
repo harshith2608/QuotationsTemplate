@@ -410,12 +410,12 @@ function addRoom(presetName) {
         <table class="table table-sm table-bordered item-table mb-2">
           <thead>
             <tr>
-              <th style="min-width:150px">Item Name</th>
-              <th style="min-width:155px">Length${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
-              <th style="min-width:155px">Width${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
-              <th style="min-width:64px" title="How many identical pieces">No's</th>
-              <th style="min-width:180px">Material &amp; Work</th>
-              <th style="min-width:80px">Area (${escHtml(UNITS.areaLabel)})</th>
+              <th style="min-width:130px">Item Name</th>
+              <th style="min-width:122px">Length${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
+              <th style="min-width:122px">Width${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
+              <th style="min-width:56px" title="How many identical pieces">No's</th>
+              <th style="min-width:192px">Material &amp; Work</th>
+              <th style="min-width:72px">Area (${escHtml(UNITS.areaLabel)})</th>
               <th style="width:36px"></th>
             </tr>
           </thead>
