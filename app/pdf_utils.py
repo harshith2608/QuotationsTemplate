@@ -162,12 +162,21 @@ def _section_elements(styles, dark, project=None, rooms=None):
     out = []
     values = layout.variables(project, rooms) if project is not None else None
     for title, lines in layout.sections(settings, _get_terms_lines(), values):
-        out.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6))
-        out.append(Paragraph(escape(title), head))
-        for i, line in enumerate(lines, 1):
-            out.append(Paragraph(f'{i}.&nbsp;&nbsp;{escape(line)}', body))
+        points = [Paragraph(f'{i}.&nbsp;&nbsp;{escape(line)}', body) for i, line in enumerate(lines, 1)]
+        out.append(KeepTogether([HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6),
+                                 Paragraph(escape(title), head)] + points[:1]))   # the heading stays with its first point
+        out += points[1:]
         out.append(Spacer(1, 10))
     return out
+
+
+def _with_thanks(elements, paragraph):
+    """End the PDF with the thank-you line kept on the same page as what comes before it."""
+    tail = []
+    while elements and isinstance(elements[-1], Spacer):        # the gap after the last section
+        tail.insert(0, elements.pop())
+    last = elements.pop() if elements else None
+    elements.append(KeepTogether(([last] if last is not None else []) + tail + [Spacer(1, 8), paragraph]))
 
 
 def _room_rows_elements(project, page_width, palette, styles):
@@ -263,6 +272,8 @@ def _boq_elements(project, page_width, palette, styles):
         data.append([sec['letter'], Paragraph(head, title), '', '', '', ''])
         cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-1, k)),
                  ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
+        if sec['lines']:
+            cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
         for ln in sec['lines']:
             text = f'<b>{escape(ln["title"])}</b>'
             if ln['description']:
@@ -415,7 +426,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('TOPPADDING', (0, 0), (-1, -1), 8),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ]))
-        elements.append(room_header)
+        room_head = room_header                # kept with the start of its table (below)
 
         # Items table
         item_rows = [['Item Name', 'Length', 'Width', 'Material', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
@@ -459,7 +470,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         # Room total row
         item_rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
 
-        item_table = Table(item_rows, colWidths=col_widths)
+        item_table = Table(item_rows, colWidths=col_widths, repeatRows=1)
         item_table.setStyle(TableStyle([
             # Header row
             ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
@@ -489,7 +500,13 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
-        elements.append(item_table)
+        # the room's name, the column headings and the first items never end a page on their own
+        if len(item_rows) <= 6:
+            elements.append(KeepTogether([room_head, item_table]))
+        else:
+            room_head.keepWithNext = True
+            item_table.setStyle(TableStyle([('NOSPLIT', (0, 0), (-1, 2))]))
+            elements += [room_head, item_table]
         elements.append(Spacer(1, 8))
 
     # ------- COST SUMMARY -------
@@ -587,8 +604,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
 
     # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
     elements += _section_elements(styles, BRAND_DARK, project, rooms)
-    elements.append(Spacer(1, 8))
-    elements.append(Paragraph(
+    _with_thanks(elements, Paragraph(
         _thank_you_text(),
         ParagraphStyle('Footer', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
@@ -864,8 +880,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
 
     # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
     elements += _section_elements(styles, BRAND_DARK, project, _rooms2)
-    elements.append(Spacer(1, 8))
-    elements.append(Paragraph(
+    _with_thanks(elements, Paragraph(
         _thank_you_text(),
         ParagraphStyle('Footer2', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
