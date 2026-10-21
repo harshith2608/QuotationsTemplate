@@ -913,7 +913,7 @@ def settings():
             for key in ('material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions',
                         layout.DESCRIPTIONS_KEY):
                 AppSetting.set(key, request.form.get(key, '').strip())
-            if request.form.get('initial_layout') in layout.LAYOUTS:
+            if request.form.get('initial_layout') in layout.layouts():
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
         elif tab == 'units':
             from . import units
@@ -951,7 +951,7 @@ def settings():
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     from . import layout
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links,
-                           initial_layout=layout.initial_layout(), layouts=layout.LAYOUTS,
+                           initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            section_variables=layout.VARIABLES,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),

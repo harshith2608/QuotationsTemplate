@@ -78,7 +78,7 @@
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}<div class="q-muted">{% if it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
+            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.unit_price %} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
           </tr>
         {% endfor %}
@@ -97,11 +97,31 @@
         <div class="fw-semibold small" style="color:var(--p)">{{ r.no }}. {{ r.title }}</div>
         {% if r.description %}{% for d in r.description.split('\n') %}<div class="small q-muted">{{ d }}</div>{% endfor %}{% endif %}
         <ul class="small mb-1 ps-3">
-          {% for it in r['items'] %}<li>{{ it.name }}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
+          {% for it in r['items'] %}<li>{{ it.name }}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count is string %} · {{ it.count }}{% elif it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
         </ul>
       </div>
       <div class="fw-semibold small text-nowrap">&#8377;{{ "{:,.2f}".format(r.amount) }}</div>
     </div>
+    {% endfor %}
+  </div>
+  {% elif boq_sections %}
+  <div class="q-card">
+    <div class="fw-semibold mb-2">Bill of quantities</div>
+    {% for sec in boq_sections %}
+    <div class="fw-semibold small mt-3 mb-1" style="color:var(--p)">{{ sec.letter }}. {{ sec.name }}</div>
+    {% if sec.description %}<div class="small q-muted" style="white-space:pre-line">{{ sec.description }}</div>{% endif %}
+    <div class="table-responsive"><table class="table table-sm small mb-0">
+      <tbody>
+      {% for ln in sec.lines %}
+        <tr>
+          <td class="text-muted" style="width:2em">{{ ln.no }}</td>
+          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}
+            {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>{% endif %}</td>
+          <td class="text-end text-nowrap">{% if ln.amount %}&#8377;{{ "{:,.2f}".format(ln.amount) }}{% else %}—{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
     {% endfor %}
   </div>
   {% else %}
@@ -118,14 +138,15 @@
     <div class="fw-semibold mb-2">Price</div>
     <table class="table table-sm small mb-0">
       <tbody>
-      {% if room_rows %}
+      {% if room_rows or boq_sections %}
       <tr><td>Basic Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>
       {% else %}
       {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ s.area|area }})</span></td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(s.amount) }}</td></tr>{% endfor %}
       {% if snap.fittings_total %}<tr><td>{{ snap.fittings_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.fittings_total) }}</td></tr>{% endif %}
+      {% if snap.boq_total %}<tr><td>{{ snap.boq_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.boq_total) }}</td></tr>{% endif %}
       {% endif %}
       {% if snap.discount.amount %}
-        {% if not room_rows %}<tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>{% endif %}
+        {% if not (room_rows or boq_sections) %}<tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>{% endif %}
         <tr class="text-danger"><td>Discount{% if snap.discount.type == 'percentage' %} ({{ '%g'|format(snap.discount.value) }}%){% endif %}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(snap.discount.amount) }}</td></tr>
       {% endif %}
       <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>

@@ -139,6 +139,18 @@ ok('trial page: WhatsApp card with the request\'s name and number, suggested dra
    'id="whatsapp"' in t and 'id="waName" type="text" value="Ravi"' in t and 'value="919876543210"' in t
    and 'value="quote" data-body=' in t and 'selected>Going well: make a real quotation (suggested)' in t
    and 'trial ends on' in t and '₹4,999' in t and 'class="btn btn-wa"' in t)
+ok('trial page: Features card with BOQ lines off', 'id="features"' in t and 'Turn on BOQ lines' in t)
+r = c.post('/trials/ravi-modular/boq', data={'on': '1'}, follow_redirects=True)
+with app.app_context():
+    from app.models import AppSetting as _AS2
+    with tenancy.tenant_context('ravi-modular'):
+        _boq_on = _AS2.get('feature_boq') == '1'
+ok('console turns BOQ lines on for one trial only', 'BOQ lines turned on' in r.text and 'Turn off BOQ lines' in r.text and _boq_on)
+r = c.post('/trials/ravi-modular/boq', data={'on': '0'}, follow_redirects=True)
+with app.app_context():
+    with tenancy.tenant_context('ravi-modular'):
+        _boq_on = _AS2.get('feature_boq') == '1'
+ok('…and off again (audited)', 'BOQ lines turned off' in r.text and not _boq_on and '<td>boq</td>' in r.text)
 ok('dashboard: WhatsApp button per running trial', 'href="/trials/ravi-modular#whatsapp">WhatsApp</a>' in c.get('/').text)
 with app.app_context():
     from types import SimpleNamespace as _NS

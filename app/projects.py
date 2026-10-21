@@ -9,7 +9,7 @@ from .models import (Project, Room, Item, MasterRoom, MasterItem, ItemRate,
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
                      PaymentLink, Notification, PriceListItem)
 from .decorators import admin_required
-from .catalog import STAGES, FIXED_ITEMS_LABEL
+from .catalog import STAGES, BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
 from .branding import get_brand
 from . import billing
 
@@ -121,6 +121,11 @@ def _form_catalog(project, rooms=None):
     cat['plywood_form'] = ply
     from . import layout
     cat['room_descriptions'] = layout.description_options()
+    from . import boq
+    has_boq = project is not None and any(i.is_boq for r in (rooms if rooms is not None else project.rooms_with_items())
+                                          for i in r.item_list)
+    # BOQ lines on for the business, or already on this quotation (kept and editable if turned off later)
+    cat['boq_form'] = {'enabled': boq.ready() and (boq.enabled() or has_boq), 'units': boq.UNITS}
     return cat
 
 
@@ -155,6 +160,9 @@ def _save_project_data(project, rooms_data):
     project_ply = plywood.project_plywood(project)
     valid_combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     fallback_combo = M.default_combo()
+    from . import boq
+    boq_ready = boq.ready()
+    boq_on = boq_ready and boq.enabled()
 
     for rd in rooms_data:
         room_name = rd.get('name', '').strip()
@@ -176,8 +184,12 @@ def _save_project_data(project, rooms_data):
             item_name = id_.get('name', '').strip()
             if not item_name:
                 continue
-            if id_.get('type') == 'fixed':
-                # Fittings & accessories: quantity × unit price, no dimensions
+            description = boq.clean_description(id_.get('description')) if boq_ready else None
+            kind = id_.get('type')
+            if kind == 'boq' and not boq_on:
+                kind = 'fixed'                 # BOQ lines turned off: keep the line, priced the same way
+            if kind in ('fixed', 'boq'):
+                # Fittings & accessories, or a BOQ line: quantity × unit price, no dimensions
                 try:
                     quantity = float(id_.get('quantity', 1))
                     unit_price = float(id_.get('unit_price', 0))
@@ -185,9 +197,14 @@ def _save_project_data(project, rooms_data):
                     continue
                 if quantity <= 0 or unit_price < 0:
                     continue
-                db.session.add(Item(room_id=room.id, name=item_name[:100], item_type='fixed',
-                                    quantity=quantity, unit_price=unit_price,
-                                    length=0, width=0, area=0, wood_type='', work_type=''))
+                item = Item(room_id=room.id, name=item_name[:100], item_type=kind,
+                            quantity=quantity, unit_price=unit_price,
+                            length=0, width=0, area=0, wood_type='', work_type='')
+                if boq_ready and kind == 'boq':
+                    item.unit = boq.clean_unit(id_.get('unit'))
+                if description:
+                    item.description = description
+                db.session.add(item)
                 grand_total += quantity * unit_price
                 continue
             try:
@@ -217,6 +234,8 @@ def _save_project_data(project, rooms_data):
                 work_type=work_type,
                 quantity=count if count > 1 else None
             )
+            if description:
+                item.description = description
             item_ply = None
             if ply_ready:                      # only once the database has the column
                 item_ply = plywood.clean_choice(id_.get('plywood'))
@@ -516,6 +535,7 @@ def view_project(project_id):
                            settings=settings,
                            stage_history=project.stage_changes.all(),
                            fixed_total=fixed_total,
+                           boq_total=project.boq_items_total(rooms),
                            can_change_stage=_can_change_stage(project),
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            title=f'Quotation – {project.customer_name}')
@@ -663,8 +683,9 @@ def edit_project(project_id):
 
 
 def _build_rooms_json(project, rooms=None):
-    from . import plywood
+    from . import boq, plywood
     from . import layout
+    boq_ready = boq.ready()
     rooms_data = []
     for room in (rooms if rooms is not None else project.rooms_with_items()):
         room_dict = {
@@ -682,6 +703,7 @@ def _build_rooms_json(project, rooms=None):
                     'unit_price': item.unit_price,
                     'plywood': plywood.item_plywood(item),
                     'count': item.count,
+                    **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),
                 }
                 for item in room.item_list
             ],
@@ -959,7 +981,10 @@ def whatsapp_share(project_id):
     for room in rooms:
         lines.append(f"\n🏠 *{room.name}*")
         for item in room.item_list:
-            if item.is_fixed:
+            if item.is_boq:
+                lines.append(f"  • {item.name}: {item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
+                             if item.unit_price else f"  • {item.name}")
+            elif item.is_fixed:
                 lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{item.unit_price:,.0f}")
             else:
                 own_ply = plywood.item_plywood(item)
@@ -976,6 +1001,9 @@ def whatsapp_share(project_id):
             lines.append(f"  • {plywood.label(key, project)}: {units.area(area)} × Rs.{units.rate_value(rate):,.0f}{units.rate_label()} = Rs.{area * rate:,.0f}")
     if fixed_total > 0:
         lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{fixed_total:,.0f}")
+    boq_total = project.boq_items_total(rooms)
+    if boq_total > 0:
+        lines.append(f"  • {BOQ_ITEMS_LABEL}: Rs.{boq_total:,.0f}")
 
     lines.append("")
     if project.discount_amount > 0:

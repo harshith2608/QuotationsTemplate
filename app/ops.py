@@ -297,6 +297,22 @@ def admin_usernames(slug):
         return [u.username for u in User.query.filter_by(role='admin').order_by(User.id)]
 
 
+def boq_status(slug):
+    from . import boq
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        return boq.console_status()
+
+
+def set_boq(slug, on):
+    """Turn BOQ lines on or off for a trial."""
+    from . import boq
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        if on and not boq.console_status()['ready']:
+            raise OpsError('This trial needs the latest database update first (Updates → Update all).')
+        boq.set_enabled(on)
+        db.session.commit()
+
+
 def unlock_company(slug, fields):
     """Unlock company identity fields (name / gstin / logo) so the trial's admin can change them once."""
     from . import branding

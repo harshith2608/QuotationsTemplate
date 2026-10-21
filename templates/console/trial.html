@@ -99,6 +99,23 @@
   </form>
 </div>
 
+<h2 id="features">Features</h2>
+<div class="card stack">
+  {% if boq %}
+  <div><strong>BOQ lines (turnkey)</strong> · <span class="badge {{ 'b-active' if boq.on else 'b-other' }}">{{ 'on' if boq.on else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">Quotations get a "BOQ line" (description, quantity, unit, rate: false ceiling,
+    electrical points, lump-sum work…), a description on any item, and a "BOQ" layout for the customer's PDF
+    (Settings → Quotation PDFs). Turning it off keeps existing lines; new quotations just don't offer them.</p>
+  {% if not boq.ready %}<p class="small" style="margin:0;color:var(--bad)">Needs the latest database update first (Updates → Update all).</p>{% endif %}
+  <form method="post" action="{{ url_for('console.trial_boq', slug=t.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.on else '1' }}">
+    <button class="btn {{ '' if boq.on else 'btn-primary' }}" type="submit" {% if not boq.ready and not boq.on %}disabled{% endif %}>
+      {{ 'Turn off BOQ lines' if boq.on else 'Turn on BOQ lines' }}</button>
+  </form>
+  {% else %}<p class="muted small" style="margin:0">Available once the business is running.</p>{% endif %}
+</div>
+
 <h2>Company details lock</h2>
 <div class="card stack">
   <p class="muted small">Name, GSTIN and logo lock after the customer first saves them. Unlock lets them change it once (it locks again on save).

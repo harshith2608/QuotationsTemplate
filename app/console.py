@@ -602,19 +602,21 @@ def _trial_or_404(slug):
 @login_required
 def trial_detail(slug):
     t = _trial_or_404(slug)
-    admins, locked = [], set()
+    admins, locked, boq_state = [], set(), None
     if t['status'] == 'active':
         from . import branding
         admins = ops.admin_usernames(slug)
         with tenancy.tenant_context(slug, t['schema_name']):
             locked = branding.locked_fields()
+        boq_state = ops.boq_status(slug)
     with db.engine.connect() as conn:
         history = conn.execute(text('SELECT at, action, detail FROM public.console_audit WHERE target = :s '
                                     'ORDER BY at DESC LIMIT 30'), {'s': slug}).mappings().all()
     contact = trial_contact(t)
     drafts, suggested = follow_ups(t)
     return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history,
-                           extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested)
+                           extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested,
+                           boq=boq_state)
 
 
 @console_bp.route('/trials/<slug>/extend', methods=['POST'])
@@ -668,6 +670,21 @@ def unlock_company(slug):
             audit('trial_unlock', slug, ', '.join(fields))
             flash(f'Unlocked {", ".join(fields)} for one change.', 'ok')
     return redirect(url_for('console.trial_detail', slug=slug))
+
+
+@console_bp.route('/trials/<slug>/boq', methods=['POST'])
+@login_required
+def trial_boq(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        ops.set_boq(slug, on)
+    except ops.OpsError as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('trial_boq', slug, 'on' if on else 'off')
+        flash(f'BOQ lines turned {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
 @console_bp.route('/trials/<slug>/delete', methods=['POST'])
@@ -890,12 +907,13 @@ def customer_detail(slug):
             audit('customer_ready', slug)
     # Only once setup is finished: the setup page refreshes itself, which would hide a one-time password
     username, password = (c.take_pending_password(slug) if row['status'] == 'active' and row['secrets'] else (None, None))
-    live, rev, admins, locked, live_error = None, None, [], set(), None
+    live, rev, admins, locked, live_error, boq_state = None, None, [], set(), None, None
     if row['status'] == 'active':
         try:
             live, rev = c.live_status(slug)
             admins = c.admin_usernames(slug)
             locked = c.locked_fields(slug)
+            boq_state = c.boq_status(slug)
         except Exception as exc:
             live_error = str(exc)
     secrets_ = c.unseal(row['secrets']) if row['secrets'] else {}
@@ -916,7 +934,7 @@ def customer_detail(slug):
                            wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,
                            head=c.head_revision(), admins=admins, locked=locked, live_error=live_error,
                            pooler_note=secrets_.get('pooler_note'), history=history, url=c.app_url(slug),
-                           badge=c.plan_badge(row))
+                           badge=c.plan_badge(row), boq=boq_state)
 
 
 @console_bp.route('/customers/<slug>/retry', methods=['POST'])
@@ -989,6 +1007,21 @@ def customer_unlock(slug):
             audit('customer_unlock', slug, ', '.join(fields))
             flash(f'Unlocked {", ".join(fields)} for one change.', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug))
+
+
+@console_bp.route('/customers/<slug>/boq', methods=['POST'])
+@login_required
+def customer_boq(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_boq(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_boq', slug, 'on' if on else 'off')
+        flash(f'BOQ lines turned {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 
 @console_bp.route('/customers/<slug>/delete', methods=['POST'])

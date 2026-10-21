@@ -207,13 +207,13 @@ def build_brand(saved):
 def prefetch_common():
     """Read, in ONE query, the settings nearly every page needs: brand, units, plan, invoice and payment settings
     (AppSetting keeps them for the rest of the request). Returns the raw values."""
-    from . import billing, layout, plan, units
+    from . import billing, boq, layout, plan, units
     from .models import AppSetting
     keys = ([f[0] for f in FIELDS.values()] + [LOGO_VERSION_KEY] + list(units.KEYS)
             + [plan.PLAN_KEY, plan.STARTED_KEY, plan.ENDS_KEY] + list(billing.INVOICE_KEYS)
             + ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code', 'razorpay_key_id', 'admin_email',
                'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'terms_conditions', 'plywood_seeded', 'setup_guide',
-               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY]
+               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, boq.KEY]
             + [k for k, _ in layout.SECTION_KEYS])
     return AppSetting.prefetch(keys)
 

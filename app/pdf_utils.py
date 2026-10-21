@@ -13,7 +13,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from . import db
 from .models import AppSetting
-from .catalog import FIXED_ITEMS_LABEL
+from .catalog import BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
 from . import materials as M
 from . import units
 from .branding import get_brand, tint, luminance, readable_text_on, load_logo_png
@@ -213,7 +213,13 @@ def _room_rows_elements(project, page_width, palette, styles):
             cmds.append(('BACKGROUND', (0, 0), (-1, -1), BRAND_LIGHT))
         t.setStyle(TableStyle(cmds))
         out.append(t)
-    # Totals
+    return out + _totals_elements(snap, page_width, palette)
+
+
+def _totals_elements(snap, page_width, palette):
+    """Basic Total, discount and Total under an Initial Quotation table."""
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
     tot = [['Basic Total', f'Rs. {_money(snap["subtotal"])}']]
     cmds = [('FONTSIZE', (0, 0), (-1, -1), 10), ('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('PADDING', (0, 0), (-1, -1), 7),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('BACKGROUND', (0, 0), (-1, 0), BRAND_LIGHT),
@@ -229,8 +235,46 @@ def _room_rows_elements(project, page_width, palette, styles):
              ('FONTNAME', (0, k), (-1, k), 'Helvetica-Bold'), ('FONTSIZE', (0, k), (-1, k), 12)]
     tt = Table(tot, colWidths=[page_width * 0.72, page_width * 0.28])
     tt.setStyle(TableStyle(cmds))
-    out += [Spacer(1, 6), tt]
-    return out
+    return [Spacer(1, 6), tt]
+
+
+def _boq_elements(project, page_width, palette, styles):
+    """The BOQ layout of the Initial Quotation (layout.boq_rows): sections A, B, C… with numbered lines — description,
+    quantity, unit, rate and amount — then Basic Total, discount and Total."""
+    from . import billing, layout
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
+    snap = billing.quotation_snapshot(project)
+    small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
+    title = ParagraphStyle('BQT', parent=small, fontName='Helvetica-Bold')
+    muted = ParagraphStyle('BQM', parent=small, textColor=colors.HexColor('#37474f'))
+    cw = [page_width * f for f in (0.07, 0.49, 0.09, 0.09, 0.11, 0.15)]
+    grid = colors.HexColor('#bdbdbd')
+    data = [['Sr. No.', 'Description', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
+    cmds = [('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (4, -1), 'CENTER'), ('ALIGN', (5, 0), (5, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
+            ('GRID', (0, 0), (-1, -1), 0.5, grid)]
+    for sec in layout.boq_rows(snap):
+        k = len(data)
+        head = escape(sec['name'])
+        if sec['description']:
+            head += f'<br/><font size="7" color="#455a64">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
+        data.append([sec['letter'], Paragraph(head, title), '', '', '', ''])
+        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-1, k)),
+                 ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
+        for ln in sec['lines']:
+            text = f'<b>{escape(ln["title"])}</b>'
+            if ln['description']:
+                text += '<br/>' + escape(ln['description']).replace('\n', '<br/>')
+            amount = _money(ln['amount']) if ln['amount'] else '—'
+            data.append([str(ln['no']), Paragraph(text, muted if ln['description'] else small),
+                         f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit'],
+                         _money(ln['rate'], ',.0f') if ln['rate'] else '', amount])
+    table = Table(data, colWidths=cw, repeatRows=1)
+    table.setStyle(TableStyle(cmds))
+    return [table] + _totals_elements(snap, page_width, palette)
 
 
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
@@ -354,6 +398,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     _item_rates_map = plywood.rate_map()
     _project_ply = plywood.project_plywood(project)
     material_style = ParagraphStyle('ItemMaterial', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
+    material_style_left = ParagraphStyle('ItemName', parent=material_style, alignment=0)
 
     rooms = project.rooms_with_items()
     for room in rooms:
@@ -379,11 +424,17 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         room_total_cost = 0.0
         for item in room.item_list:
             if item.is_fixed:
-                # Fitting/accessory: quantity × unit price, no dimensions
+                # Fitting/accessory or BOQ line: quantity × unit price, no dimensions
                 subtotal = item.cost(_item_rates_map, _project_ply)
                 room_total_cost += subtotal
-                item_rows.append([item.name, '—', '—',
-                                  f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}', '—', f'{_money(subtotal)}'])
+                desc = item.note
+                name = Paragraph(f'{escape(item.name)}' + (f'<br/><font size="7" color="#546e7a">'
+                                 f'{escape(desc).replace(chr(10), "<br/>")}</font>' if desc else ''), material_style_left)
+                if item.is_boq:
+                    what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'
+                else:
+                    what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}'
+                item_rows.append([name, '—', '—', what, '—', f'{_money(subtotal)}'])
                 continue
             work_type  = item.work_type or ''
             _key       = plywood.item_key(item, _project_ply)
@@ -391,8 +442,11 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             subtotal   = item.area * rate
             room_total_area += item.area
             room_total_cost += subtotal
+            _nm = escape(item.name + (f' × {item.count}' if item.count > 1 else ''))
+            if item.note:
+                _nm += f'<br/><font size="7" color="#546e7a">{escape(item.note).replace(chr(10), "<br/>")}</font>'
             item_rows.append([
-                item.name + (f' × {item.count}' if item.count > 1 else ''),
+                Paragraph(_nm, material_style_left),
                 ft_in(item.length),
                 ft_in(item.width),
                 Paragraph(escape(plywood.finish_label(_key, project)), material_style),   # wraps: never cut off
@@ -461,6 +515,10 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     if fixed_total > 0:
         combo_total += fixed_total
         combo_data.append([FIXED_ITEMS_LABEL, '—', f'{_money(fixed_total)}'])
+    boq_total = project.boq_items_total(rooms)
+    if boq_total > 0:
+        combo_total += boq_total
+        combo_data.append([BOQ_ITEMS_LABEL, '—', f'{_money(boq_total)}'])
     combo_data.append(['', 'Subtotal', f'Rs. {_money(combo_total)}'])
 
     combo_table = Table(combo_data, colWidths=[page_width * p for p in [0.57, 0.22, 0.21]])
@@ -693,7 +751,15 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
 
     from . import layout, plywood
     _rooms2 = project.rooms_with_items()
-    if layout.initial_layout() == layout.LAYOUT_ROOMS:
+    if layout.initial_layout() == layout.LAYOUT_BOQ:
+        # ------- BOQ: sections A, B, C… with every line's description, quantity, unit, rate and amount -------
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        elements.append(Paragraph("Bill of Quantities", section_style))
+        elements.append(Spacer(1, 8))
+        elements += _boq_elements(project, page_width, (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG,
+                                                        ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND), styles)
+        elements.append(Spacer(1, 20))
+    elif layout.initial_layout() == layout.LAYOUT_ROOMS:
         # ------- ROOM BY ROOM: items with sizes and No's, one amount per room, a Hardware row per room -------
         elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
         elements.append(Paragraph("Quotation", section_style))
@@ -725,10 +791,14 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                 total_area_all += area
                 cost_data.append([plywood.label(key, project), f'{_money(subtotal)}'])
         # Customer copy: all fittings & accessories as one line (itemised in the Full Quotation)
-        fixed_total2 = project.fixed_items_total()
+        fixed_total2 = project.fixed_items_total(_rooms2)
         if fixed_total2 > 0:
             mat_total += fixed_total2
             cost_data.append([FIXED_ITEMS_LABEL, f'{_money(fixed_total2)}'])
+        boq_total2 = project.boq_items_total(_rooms2)
+        if boq_total2 > 0:
+            mat_total += boq_total2
+            cost_data.append([BOQ_ITEMS_LABEL, f'{_money(boq_total2)}'])
         cost_data.append(['Total', f'Rs. {_money(mat_total)}'])
 
         cost_table = Table(cost_data, colWidths=cost_cw)

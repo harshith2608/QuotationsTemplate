@@ -395,7 +395,9 @@
       </div>
       {% endfor %}
       <div class="form-text">By room: each room with what it's made of, its items with sizes and No's, and one amount; each
-        room's fittings as a "Hardware" row. Your Full Quotation (every rate and amount) doesn't change.</div>
+        room's fittings as a "Hardware" row.{% if 'boq' in layouts %} BOQ: sections A, B, C (your rooms), each line
+        numbered with its description, quantity, unit, rate and amount, like a turnkey bill of quantities.{% endif %}
+        Your Full Quotation (every rate and amount) doesn't change.</div>
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3" id="room-descriptions">

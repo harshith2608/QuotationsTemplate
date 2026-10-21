@@ -234,6 +234,8 @@ body {
 }
 
 .ki-badge-fitting { background:#f3e8ff; color:#6b21a8; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+.ki-badge-boq { background:#e0f2fe; color:#075985; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+.ki-item-note { white-space: pre-line; max-width: 46ch; }
 
 /* ---- Grand Total Row ---- */
 .ki-grand-total-row td {

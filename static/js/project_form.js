@@ -24,6 +24,16 @@ function splitCombo(value) {
 }
 function comboLabel(wood, work) { return work ? `${wood} – ${work}` : (wood || ''); }
 const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
+// BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
+// also carry a description
+const BOQ = !!CATALOG.boq;
+function descBox(ik, value, handler) {
+  if (!BOQ) return '';
+  return `<textarea class="form-control form-control-sm mt-1 ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
+            placeholder="Description (optional)" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>`;
+}
+function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
+function descOf(ik) { const el = document.getElementById('item_desc_' + ik); return el ? el.value.trim() : ''; }
 
 // ─── Plywood pricing ──────────────────────────────────────────────────────────
 // Rates are for the business's default plywood. A plywood material on another plywood has its own rate under the key
@@ -339,16 +349,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const rk = addRoom(rd.name);
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
-        if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price); return; }
+        if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.unit_price, id.description); return; }
+        if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description); return; }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
-        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '', id.count || 1);
+        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '', id.count || 1, id.description || '');
       });
     });
   }
 
   updateNoRoomsHint();
   recalcAll();
+  document.querySelectorAll('.ki-item-desc').forEach(autoGrow);
 
   // Attach auto-save listeners to customer fields (new form only)
   ['customer_name', 'mobile', 'email'].forEach(id => {
@@ -361,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const itemModalEl = document.getElementById('itemModal');
   if (itemModalEl) {
     itemModalEl.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
+      if (e.key === 'Enter' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'TEXTAREA') {
         e.preventDefault();
         saveItemFromModal();
       }
@@ -486,13 +498,13 @@ let _modalRoomKey = null;
 
 // Public: called by "Add Item" button — opens modal for user entry.
 // Also called internally with preset values when loading existing data.
-function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount) {
+function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount, presetDesc) {
   if (presetName === undefined && presetLFt === undefined) {
     // User clicked "Add Item" — open modal
     openItemModal(rk);
     return;
   }
-  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount);
+  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount, presetDesc);
 }
 
 function openItemModal(rk) {
@@ -510,6 +522,10 @@ function openItemModal(rk) {
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
   const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
+  const descEl = document.getElementById('modal_item_desc');   if (descEl) descEl.value = '';
+  const bq = document.getElementById('modal_boq_qty');   if (bq) bq.value = 1;
+  const bu = document.getElementById('modal_boq_unit');  if (bu) bu.value = 'sqft';
+  const br = document.getElementById('modal_boq_rate');  if (br) br.value = '';
   const priceEl = document.getElementById('modal_item_price'); if (priceEl) priceEl.value = '';
   modalPriceTouched = false;
   const measuredRadio = document.getElementById('modal_type_measured');
@@ -539,10 +555,12 @@ function modalCalcArea() {
 function setModalItemType(type) {
   modalItemType = type;
   document.getElementById('modal_fixed_fields')?.classList.toggle('d-none', type !== 'fixed');
-  document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type === 'fixed');
+  document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq');
+  document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type !== 'measured');
   const nameEl = document.getElementById('modal_item_name');
-  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : 'e.g. Wardrobe';
+  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling' : 'e.g. Wardrobe';
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
+  if (type === 'boq') modalCalcBoq();
   syncModalPly();
 }
 
@@ -570,13 +588,76 @@ function modalCalcFixed() {
   if (el) el.textContent = '₹' + (qty * price).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
-function _insertFixedRow(rk, name, quantity, unitPrice) {
+function modalCalcBoq() {
+  const qty  = parseFloat(document.getElementById('modal_boq_qty')?.value) || 0;
+  const rate = parseFloat(document.getElementById('modal_boq_rate')?.value) || 0;
+  const el = document.getElementById('modal_boq_amount');
+  if (el) el.textContent = '₹' + (qty * rate).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+// ─── BOQ lines ───────────────────────────────────────────────────────────────
+function _insertBoqRow(rk, name, quantity, unit, rate, desc) {
+  itemCounter++;
+  const ik = 'item_' + itemCounter;
+  if (!rooms[rk]) return;
+  const qty = quantity !== undefined && quantity !== null ? quantity : 1;
+  const r = rate !== undefined && rate !== null ? rate : '';
+  rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
+                          unit_price: parseFloat(r) || 0, description: desc || '' };
+  const tbody = document.getElementById('items_tbody_' + rk);
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.className = 'item-row item-row-boq';
+  tr.id = 'item_row_' + ik;
+  tr.innerHTML = `
+    <td>
+      <input type="text" class="form-control form-control-sm" id="item_name_${ik}" placeholder="e.g. False Ceiling"
+             value="${escHtml(name || '')}" oninput="onBoqField('${rk}','${ik}')" autocomplete="off">
+      ${descBox(ik, desc, `onBoqField('${rk}','${ik}')`)}
+    </td>
+    <td colspan="3">
+      <div class="input-group input-group-sm">
+        <input type="number" class="form-control text-center px-1" id="item_qty_${ik}" min="0" step="any"
+               value="${qty}" oninput="onBoqField('${rk}','${ik}')" style="max-width:72px" title="Quantity">
+        <input type="text" class="form-control px-1" id="item_unit_${ik}" list="boq-units" maxlength="20"
+               value="${escHtml(unit || 'nos')}" oninput="onBoqField('${rk}','${ik}')" style="max-width:76px" title="Unit">
+        <span class="input-group-text px-2 small text-muted">× ₹</span>
+        <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
+               value="${r}" oninput="onBoqField('${rk}','${ik}')" title="Rate">
+      </div>
+    </td>
+    <td class="text-center"><span class="badge ki-badge-boq">BOQ</span></td>
+    <td class="text-center"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
+    <td class="text-center">
+      <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </td>`;
+  tbody.appendChild(tr);
+  const d = document.getElementById('item_desc_' + ik); if (d) autoGrow(d);
+  onBoqField(rk, ik);
+}
+
+function onBoqField(rk, ik) {
+  if (!rooms[rk] || !rooms[rk].items[ik]) return;
+  const quantity   = parseFloat(document.getElementById('item_qty_' + ik)?.value) || 0;
+  const unit_price = parseFloat(document.getElementById('item_price_' + ik)?.value) || 0;
+  rooms[rk].items[ik] = { type: 'boq', name: document.getElementById('item_name_' + ik)?.value.trim() || '',
+                          quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
+                          unit_price, description: descOf(ik) };
+  const amtEl = document.getElementById('item_amount_' + ik);
+  if (amtEl) amtEl.textContent = unit_price ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—';
+  recalcAll();
+}
+
+function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
   const qty = quantity !== undefined && quantity !== null ? quantity : 1;
   const price = unitPrice !== undefined && unitPrice !== null ? unitPrice : '';
-  rooms[rk].items[ik] = { type: 'fixed', name: name || '', quantity: parseFloat(qty) || 0, unit_price: parseFloat(price) || 0 };
+  rooms[rk].items[ik] = { type: 'fixed', name: name || '', quantity: parseFloat(qty) || 0, unit_price: parseFloat(price) || 0,
+                          description: desc || '' };
 
   const tbody = document.getElementById('items_tbody_' + rk);
   if (!tbody) return;
@@ -590,6 +671,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice) {
                placeholder="e.g. Magic Corner" value="${escHtml(name || '')}"
                oninput="onFixedField('${rk}','${ik}')" autocomplete="off">
       </div>
+      ${descBox(ik, desc, `onFixedField('${rk}','${ik}')`)}
     </td>
     <td colspan="3">
       <div class="input-group input-group-sm">
@@ -627,7 +709,7 @@ function onFixedField(rk, ik) {
   if (match && priceEl && priceEl.value === '') priceEl.value = match.price;
   const quantity   = parseFloat(qtyEl?.value) || 0;
   const unit_price = parseFloat(priceEl?.value) || 0;
-  rooms[rk].items[ik] = { type: 'fixed', name: nameEl?.value.trim() || '', quantity, unit_price };
+  rooms[rk].items[ik] = { type: 'fixed', name: nameEl?.value.trim() || '', quantity, unit_price, description: descOf(ik) };
   const amtEl = document.getElementById('item_amount_' + ik);
   if (amtEl) amtEl.textContent = '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   recalcAll();
@@ -635,9 +717,11 @@ function onFixedField(rk, ik) {
 
 // Serialise one item for the server; returns null if incomplete
 function _itemPayload(item) {
-  if (item.type === 'fixed') {
+  if (item.type === 'fixed' || item.type === 'boq') {
     if (!item.name || !(item.quantity > 0) || !(item.unit_price >= 0)) return null;
-    return { type: 'fixed', name: item.name, quantity: item.quantity, unit_price: item.unit_price };
+    return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
+             ...(item.type === 'boq' ? { unit: item.unit || 'nos' } : {}),
+             ...(item.description ? { description: item.description } : {}) };
   }
   const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
   const wDec = ftInToDecimal(item.widthFt  || 0, item.widthIn  || 0);
@@ -647,7 +731,8 @@ function _itemPayload(item) {
     name: item.name, length: lDec, width: wDec, count,
     wood_type: item.wood_type, work_type: item.work_type,
     plywood: usesPly(item.wood_type) ? (item.plywood || '') : '',
-    area: parseFloat((lDec * wDec * count).toFixed(4))
+    area: parseFloat((lDec * wDec * count).toFixed(4)),
+    ...(item.description ? { description: item.description } : {})
   };
 }
 
@@ -657,6 +742,19 @@ function saveItemFromModal() {
   if (!name) { if (nameEl) nameEl.classList.add('is-invalid'); return; }
   if (nameEl) nameEl.classList.remove('is-invalid');
 
+  const desc = document.getElementById('modal_item_desc')?.value.trim() || '';
+  if (modalItemType === 'boq') {
+    const qtyEl = document.getElementById('modal_boq_qty'), rateEl = document.getElementById('modal_boq_rate');
+    const qty = parseFloat(qtyEl?.value) || 0;
+    const rate = rateEl?.value === '' ? 0 : parseFloat(rateEl?.value);
+    qtyEl?.classList.toggle('is-invalid', !(qty > 0));
+    rateEl?.classList.toggle('is-invalid', isNaN(rate) || rate < 0);
+    if (!(qty > 0) || isNaN(rate) || rate < 0) return;
+    _insertBoqRow(_modalRoomKey, name, qty, document.getElementById('modal_boq_unit')?.value.trim() || 'nos', rate, desc);
+    const inst = bootstrap.Modal.getInstance(document.getElementById('itemModal'));
+    if (inst) inst.hide();
+    return;
+  }
   if (modalItemType === 'fixed') {
     const qty   = parseFloat(document.getElementById('modal_item_qty')?.value) || 0;
     const price = parseFloat(document.getElementById('modal_item_price')?.value);
@@ -665,7 +763,7 @@ function saveItemFromModal() {
     qtyEl?.classList.toggle('is-invalid', !(qty > 0));
     priceEl?.classList.toggle('is-invalid', isNaN(price) || price < 0);
     if (!(qty > 0) || isNaN(price) || price < 0) return;
-    _insertFixedRow(_modalRoomKey, name, qty, price);
+    _insertFixedRow(_modalRoomKey, name, qty, price, desc);
     const inst = bootstrap.Modal.getInstance(document.getElementById('itemModal'));
     if (inst) inst.hide();
     return;
@@ -679,7 +777,7 @@ function saveItemFromModal() {
   const ply = document.getElementById('modal_item_ply')?.value || '';
   const cnt = Math.min(Math.max(parseInt(document.getElementById('modal_item_count')?.value, 10) || 1, 1), 999);
 
-  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply, cnt);
+  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply, cnt, desc);
 
   const modalEl = document.getElementById('itemModal');
   const instance = bootstrap.Modal.getInstance(modalEl);
@@ -688,7 +786,7 @@ function saveItemFromModal() {
 
 // Internal: inserts an item row directly into the table (used when loading
 // existing data and after modal save).
-function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount) {
+function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork, presetPly, presetCount, presetDesc) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -709,7 +807,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const ply = presetPly || '';
   rooms[rk].items[ik] = {
     name, lengthFt: lFt, lengthIn: lIn, widthFt: wFt, widthIn: wIn,
-    wood_type: wood, work_type: work, plywood: ply, count, area
+    wood_type: wood, work_type: work, plywood: ply, count, area, description: presetDesc || ''
   };
 
   const tbody = document.getElementById('items_tbody_' + rk);
@@ -728,6 +826,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
                oninput="onItemField('${rk}','${ik}')"
                autocomplete="off">
       </div>
+      ${descBox(ik, presetDesc, `onItemField('${rk}','${ik}')`)}
     </td>
     <td>
       <div class="input-group input-group-sm">
@@ -789,6 +888,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   // Wire up autocomplete for item name input
   const itemNameInput = document.getElementById('item_name_' + ik);
   if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
+  const descEl = document.getElementById('item_desc_' + ik); if (descEl) autoGrow(descEl);
   if (area > 0) recalcAll();
 }
 
@@ -836,7 +936,8 @@ function onItemField(rk, ik) {
     work_type: comboParts[1],
     plywood:   plyEl ? plyEl.value : '',
     count,
-    area
+    area,
+    description: descOf(ik)
   };
   syncPlyVisibility(ik, comboParts[0]);
 
@@ -849,11 +950,12 @@ function recalcAll() {
   const comboAreas = {};  // { 'wood|work': area }
   let totalArea = 0;
 
-  let fixedTotal = 0;
+  let fixedTotal = 0, boqTotal = 0;
   Object.entries(rooms).forEach(([rk, room]) => {
     let roomArea = 0;
     Object.values(room.items).forEach(item => {
       if (item.type === 'fixed') { fixedTotal += (item.quantity || 0) * (item.unit_price || 0); return; }
+      if (item.type === 'boq') { boqTotal += (item.quantity || 0) * (item.unit_price || 0); return; }
       const a = item.area || 0;
       roomArea += a;
       totalArea += a;
@@ -864,10 +966,10 @@ function recalcAll() {
     if (badge) badge.textContent = showArea(roomArea) + ' ' + UNITS.areaLabel;
   });
 
-  let grandTotal = fixedTotal;
+  let grandTotal = fixedTotal + boqTotal;
   Object.entries(comboAreas).forEach(([key, area]) => { grandTotal += area * (itemRates[key] || 0); });
 
-  renderSummary(comboAreas, grandTotal, fixedTotal);
+  renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal);
 
   const fmt = '₹' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gtEl = document.getElementById('grand-total-display');
@@ -954,10 +1056,10 @@ const COMBO_COLORS = {
   'Veneer|Frame Work':   { bg:'#fed7aa', color:'#7c2d12' },
 };
 
-function renderSummary(comboAreas, grandTotal, fixedTotal) {
+function renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal) {
   const panel = document.getElementById('summary-content');
   if (!panel) return;
-  const hasData = Object.values(comboAreas).some(a => a > 0) || fixedTotal > 0;
+  const hasData = Object.values(comboAreas).some(a => a > 0) || fixedTotal > 0 || boqTotal > 0;
   if (!hasData) {
     panel.innerHTML = '<p class="text-muted text-center small py-2">Add rooms and items to see cost breakdown.</p>';
     return;
@@ -985,6 +1087,14 @@ function renderSummary(comboAreas, grandTotal, fixedTotal) {
         <span class="summary-wood-label"><span class="badge me-1 ki-badge-fitting">${escHtml(CATALOG.fixedLabel || 'Fittings & Accessories')}</span></span>
         <span class="text-muted small"></span>
         <span class="summary-wood-value">₹${fixedTotal.toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      </div>`;
+  }
+  if (boqTotal > 0) {
+    html += `
+      <div class="summary-wood-row">
+        <span class="summary-wood-label"><span class="badge me-1 ki-badge-boq">${escHtml(CATALOG.boqLabel || 'Other work')}</span></span>
+        <span class="text-muted small"></span>
+        <span class="summary-wood-value">₹${boqTotal.toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   }
   panel.innerHTML = html;

@@ -432,6 +432,22 @@ def locked_fields(slug):
         return branding.locked_fields()
 
 
+def boq_status(slug):
+    from . import boq
+    with open_customer(slug):
+        return boq.console_status()
+
+
+def set_boq(slug, on):
+    """Turn BOQ lines on or off for a customer."""
+    from . import boq
+    with open_customer(slug):
+        if on and not boq.console_status()['ready']:
+            raise CustomerError('This customer needs the latest database update first (Updates → Update all).')
+        boq.set_enabled(on)
+        db.session.commit()
+
+
 def unlock_company(slug, fields):
     from . import branding
     with open_customer(slug):

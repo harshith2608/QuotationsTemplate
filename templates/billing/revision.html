@@ -63,7 +63,8 @@
       <tbody>
       {% for it in room['items'] %}
         <tr><td>{{ it.name }}</td>
-          {% if it.type == 'fixed' %}<td>{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}</td><td></td>
+          {% if it.type == 'boq' %}<td>{{ '%g'|format(it.quantity) }} {{ it.unit }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}</td><td>BOQ</td>
+          {% elif it.type == 'fixed' %}<td>{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}</td><td></td>
           {% else %}<td>{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }}</td><td>{{ it.material }}</td>{% endif %}
           <td class="text-end">&#8377;{{ "{:,.2f}".format(it.amount) }}</td></tr>
       {% endfor %}

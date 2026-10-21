@@ -113,6 +113,10 @@ class Project(db.Model):
             if plywood.table_ready():
                 from sqlalchemy.orm import undefer
                 q = q.options(undefer(Item.plywood))          # one query, not one per item
+            from . import boq
+            if boq.ready():
+                from sqlalchemy.orm import undefer
+                q = q.options(undefer(Item.description), undefer(Item.unit))
             for item in q:
                 items_by_room[item.room_id].append(item)
         for room in rooms:
@@ -133,7 +137,13 @@ class Project(db.Model):
         """Sum of all fittings & accessories (quantity × unit price)."""
         return round(sum((i.quantity or 0) * (i.unit_price or 0)
                          for room in (rooms if rooms is not None else self.rooms_with_items())
-                         for i in room.item_list if i.is_fixed), 2)
+                         for i in room.item_list if i.is_fitting), 2)
+
+    def boq_items_total(self, rooms=None):
+        """Sum of all BOQ lines (quantity × rate)."""
+        return round(sum((i.quantity or 0) * (i.unit_price or 0)
+                         for room in (rooms if rooms is not None else self.rooms_with_items())
+                         for i in room.item_list if i.is_boq), 2)
 
     def get_wood_totals(self, rooms=None):
         """Returns dict of {wood_type: total_area}. Pass preloaded rooms to avoid re-querying."""
@@ -191,10 +201,13 @@ class Room(db.Model):
 
 class Item(db.Model):
     """
-    A line in a room. Two kinds:
+    A line in a room. Three kinds:
       * 'measured' — length × width = area, priced by the material/work rate per sqft
       * 'fixed'    — fittings & accessories (e.g. Magic Corner): quantity × unit price,
                      no dimensions (length/width/area are 0, wood/work types empty)
+      * 'boq'      — a BOQ line (turnkey work, when the business has BOQ lines on, see app/boq.py): its own
+                     description, quantity, unit (sqft, rft, nos, lump sum…) and rate; priced like a fitting
+    Fittings and BOQ lines are both "priced" (quantity × unit price, is_fixed); is_fitting / is_boq tell them apart.
     """
     __tablename__ = 'items'
     __mapper_args__ = {'eager_defaults': False}   # never read the plywood column back after saving
@@ -211,10 +224,34 @@ class Item(db.Model):
     unit_price = db.Column(EncryptedFloat, nullable=True)
     plywood = db.deferred(db.Column(db.String(60), nullable=True,    # this item's own plywood; None = the quotation's
                                     server_default=db.FetchedValue()))  # (left out of INSERTs unless set: safe before the update)
+    # BOQ lines (and any item): a description and a unit; deferred like plywood, so items save before the update
+    description = db.deferred(db.Column(db.Text, nullable=True, server_default=db.FetchedValue()))
+    unit = db.deferred(db.Column(db.String(20), nullable=True, server_default=db.FetchedValue()))
 
     @property
     def is_fixed(self):
+        """Priced as quantity × unit price, no area: a fitting or a BOQ line."""
+        return self.item_type in ('fixed', 'boq')
+
+    @property
+    def is_fitting(self):
         return self.item_type == 'fixed'
+
+    @property
+    def is_boq(self):
+        return self.item_type == 'boq'
+
+    @property
+    def note(self):
+        """The item's description, or '' (never reads the column before the database update)."""
+        from . import boq
+        return (self.description or '') if boq.ready() else ''
+
+    @property
+    def unit_text(self):
+        """A BOQ line's unit as printed ('Sq.ft', 'Nos.', 'LS'…)."""
+        from . import boq
+        return boq.unit_text((self.unit if boq.ready() else '') or 'nos')
 
     @property
     def count(self):

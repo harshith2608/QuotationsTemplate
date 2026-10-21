@@ -40,6 +40,8 @@ def ready():
 
 # ── Quotation snapshot (revisions, invoices, online approval) ───────────────
 
+PRICED = ('fixed', 'boq')       # snapshot item types priced as quantity × unit price (fittings, BOQ lines)
+
 def _item_rates():
     from . import plywood
     return plywood.rate_map()
@@ -49,9 +51,11 @@ def quotation_snapshot(project, rooms=None):
     """Everything the customer is quoted, as plain data: customer, rooms and items with rates and amounts,
     the material summary and the totals. Uses the current rates (as the quotation pages do)."""
     from . import materials as M
-    from .catalog import FIXED_ITEMS_LABEL
+    from .catalog import BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
     from . import plywood
     from . import layout
+    from . import boq
+    boq_ready = boq.ready()
     rates = _item_rates()
     rooms = rooms if rooms is not None else project.rooms_with_items()
     project_ply = plywood.project_plywood(project)
@@ -60,9 +64,14 @@ def quotation_snapshot(project, rooms=None):
         items = []
         for i in room.item_list:
             if i.is_fixed:
-                items.append({'name': i.name, 'type': 'fixed', 'quantity': round(i.quantity or 0, 4),
-                              'unit_price': round(i.unit_price or 0, 2),
-                              'amount': round((i.quantity or 0) * (i.unit_price or 0), 2)})
+                row = {'name': i.name, 'type': i.item_type, 'quantity': round(i.quantity or 0, 4),
+                       'unit_price': round(i.unit_price or 0, 2),
+                       'amount': round((i.quantity or 0) * (i.unit_price or 0), 2)}
+                if i.is_boq:
+                    row['unit'] = (i.unit if boq_ready else '') or 'nos'
+                if boq_ready and i.description:
+                    row['description'] = i.description     # only when set: older snapshots stay comparable
+                items.append(row)
             else:
                 key = plywood.item_key(i, project_ply)
                 rate = rates.get(key, 0.0)
@@ -75,6 +84,8 @@ def quotation_snapshot(project, rooms=None):
                 own = plywood.item_plywood(i)
                 if own:
                     row['plywood'] = own               # only when set: older snapshots stay comparable
+                if boq_ready and i.description:
+                    row['description'] = i.description
                 items.append(row)
         room_row = {'name': room.name, 'items': items}
         desc = layout.room_description(room)
@@ -90,6 +101,7 @@ def quotation_snapshot(project, rooms=None):
             summary.append({'key': plywood.display_key(key, project), 'label': plywood.label(key, project), 'area': round(area, 2), 'rate': rate,
                             'amount': round(area * rate, 2)})
     fixed_total = project.fixed_items_total(rooms)
+    boq_total = project.boq_items_total(rooms)
     return {
         'customer': {'name': project.customer_name, 'mobile': project.mobile,
                      'email': project.email or '', 'address': project.address or ''},
@@ -97,6 +109,7 @@ def quotation_snapshot(project, rooms=None):
         'summary': summary,
         'fittings_label': FIXED_ITEMS_LABEL,
         'fittings_total': round(fixed_total, 2),
+        **({'boq_label': BOQ_ITEMS_LABEL, 'boq_total': boq_total} if boq_total else {}),
         'subtotal': round(project.grand_total or 0, 2),
         'discount': {'type': project.discount_type or 'none', 'value': project.discount_value or 0,
                      'amount': project.discount_amount},
@@ -174,8 +187,10 @@ def restore_preview(project, snap):
     for room in snap.get('rooms', []):
         items = []
         for it in room['items']:
-            if it['type'] == 'fixed':
-                items.append({'name': it['name'], 'type': 'fixed', 'quantity': it['quantity'], 'unit_price': it['unit_price']})
+            if it['type'] in PRICED:
+                items.append({'name': it['name'], 'type': it['type'], 'quantity': it['quantity'],
+                              'unit_price': it['unit_price'], 'unit': it.get('unit', ''),
+                              'description': it.get('description', '')})
                 subtotal += it['quantity'] * it['unit_price']
                 continue
             if f"{it['wood_type']}|{it['work_type']}" not in valid:
@@ -188,7 +203,7 @@ def restore_preview(project, snap):
                 changes[it['material']] = (it['material'], it['rate'], rate)
             items.append({'name': it['name'], 'type': 'measured', 'length': it['length'], 'width': it['width'],
                           'wood_type': it['wood_type'], 'work_type': it['work_type'], 'plywood': it.get('plywood'),
-                          'count': it.get('count', 1)})
+                          'count': it.get('count', 1), 'description': it.get('description', '')})
             subtotal += round(it['length'] * it['width'] * it.get('count', 1), 4) * rate
         rooms.append({'name': room['name'], 'items': items, 'description': room.get('description')})
     subtotal = round(subtotal, 2)
@@ -216,6 +231,8 @@ def _fmt_dim(feet):
 
 
 def _describe(item):
+    if item['type'] == 'boq':
+        return f"{item['quantity']:g} {item.get('unit') or 'nos'} × ₹{item['unit_price']:,.0f}"
     if item['type'] == 'fixed':
         return f"{item['quantity']:g} × ₹{item['unit_price']:,.0f}"
     count = f" × {item['count']}" if item.get('count', 1) > 1 else ''
@@ -419,9 +436,10 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
         lines = []
         for room in snapshot['rooms']:
             for it in room['items']:
-                if it['type'] == 'fixed':
-                    lines.append({'room': room['name'], 'description': it['name'], 'detail': '', 'hsn': hsn,
-                                  'qty': it['quantity'], 'unit': 'nos', 'rate': it['unit_price'], 'amount': it['amount']})
+                if it['type'] in PRICED:
+                    lines.append({'room': room['name'], 'description': it['name'], 'detail': it.get('description', ''),
+                                  'hsn': hsn, 'qty': it['quantity'], 'unit': it.get('unit') or 'nos',
+                                  'rate': it['unit_price'], 'amount': it['amount']})
                 else:
                     lines.append({'room': room['name'], 'description': it['name'],
                                   'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])}"
@@ -434,11 +452,11 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
     fittings = {}
     for room in snapshot['rooms']:
         for it in room['items']:
-            if it['type'] == 'fixed':
-                key = (it['name'], it['unit_price'])
+            if it['type'] in PRICED:
+                key = (it['name'], it['unit_price'], it.get('unit') or 'nos')
                 fittings[key] = fittings.get(key, 0) + it['quantity']
-    for (name, price), qty in fittings.items():
-        lines.append({'description': name, 'hsn': hsn, 'qty': round(qty, 4), 'unit': 'nos', 'rate': price,
+    for (name, price, unit), qty in fittings.items():
+        lines.append({'description': name, 'hsn': hsn, 'qty': round(qty, 4), 'unit': unit, 'rate': price,
                       'amount': round(qty * price, 2)})
     return lines
 

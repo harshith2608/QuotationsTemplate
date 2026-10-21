@@ -53,6 +53,7 @@
 <!-- Existing rooms data for edit mode -->
 <script id="existing-rooms-data" type="application/json">{{ rooms_json | replace('<', '\\u003c') | safe }}</script>
 <script id="price-list-data" type="application/json">{{ price_list | tojson }}</script>
+<datalist id="boq-units">{% for u in boq_form.units %}<option value="{{ u }}">{% endfor %}</datalist>
 <!-- Native datalists for room/item name suggestions -->
 <datalist id="master-rooms-list">
   {% for r in master_rooms %}<option value="{{ r }}">{% endfor %}
@@ -311,6 +312,10 @@
           <label class="btn btn-outline-primary" for="modal_type_measured"><i class="bi bi-rulers me-1"></i>Measured ({{ units.area_label() }})</label>
           <input type="radio" class="btn-check" name="modal_item_type" id="modal_type_fixed" value="fixed" onchange="setModalItemType('fixed')">
           <label class="btn btn-outline-primary" for="modal_type_fixed"><i class="bi bi-tag me-1"></i>Fixed price</label>
+          {% if boq_form.enabled %}
+          <input type="radio" class="btn-check" name="modal_item_type" id="modal_type_boq" value="boq" onchange="setModalItemType('boq')">
+          <label class="btn btn-outline-primary" for="modal_type_boq"><i class="bi bi-list-ol me-1"></i>BOQ line</label>
+          {% endif %}
         </div>
         <div class="mb-3">
           <label class="form-label fw-medium small mb-1">Item Name <span class="text-danger">*</span></label>
@@ -320,6 +325,39 @@
           </div>
           <div class="invalid-feedback">Item name is required.</div>
         </div>
+        {% if boq_form.enabled %}
+        <div class="mb-3">
+          <label class="form-label fw-medium small mb-1" for="modal_item_desc">Description <span class="text-muted fw-normal">(optional, printed under the item)</span></label>
+          <textarea class="form-control form-control-sm" id="modal_item_desc" rows="3" maxlength="2000"
+                    placeholder="e.g. Making safety door with block board, both side laminate finish, including safety grill"></textarea>
+        </div>
+        <!-- BOQ line: its own quantity, unit and rate -->
+        <div id="modal_boq_fields" class="d-none">
+          <div class="row g-2 mb-2">
+            <div class="col-4">
+              <label class="form-label fw-medium small mb-1" for="modal_boq_qty">Quantity</label>
+              <input type="number" class="form-control text-center" id="modal_boq_qty" value="1" min="0" step="any" inputmode="decimal" oninput="modalCalcBoq()">
+            </div>
+            <div class="col-3">
+              <label class="form-label fw-medium small mb-1" for="modal_boq_unit">Unit</label>
+              <input type="text" class="form-control px-2" id="modal_boq_unit" list="boq-units" value="sqft" maxlength="20" oninput="modalCalcBoq()">
+            </div>
+            <div class="col-5">
+              <label class="form-label fw-medium small mb-1" for="modal_boq_rate">Rate</label>
+              <div class="input-group">
+                <span class="input-group-text">&#8377;</span>
+                <input type="number" class="form-control text-end" id="modal_boq_rate" placeholder="0" min="0" step="any" inputmode="decimal" oninput="modalCalcBoq()">
+              </div>
+            </div>
+          </div>
+          <div class="small text-muted mb-3">Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate.
+            Rate 0 prints the line with no amount (e.g. a rate card).</div>
+          <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
+            <span class="small text-muted fw-medium">Amount</span>
+            <span class="fw-bold text-primary fs-6" id="modal_boq_amount">&#8377;0</span>
+          </div>
+        </div>
+        {% endif %}
         <!-- Fixed-price item: quantity × unit price (e.g. Magic Corner) -->
         <div id="modal_fixed_fields" class="d-none">
           <div class="row g-2 mb-3">
@@ -411,6 +449,8 @@
     defaultWood: {{ default_combo.split('|')[0]|tojson }},
     defaultWork: {{ default_combo.split('|', 1)[1]|tojson }},
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }},
+    boqLabel:    {{ catalog.BOQ_ITEMS_LABEL|tojson }},
+    boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
     descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}
   };
