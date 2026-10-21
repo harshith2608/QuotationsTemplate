@@ -643,7 +643,8 @@ function modalCalcBoq() {
   const qty  = parseFloat(document.getElementById('modal_boq_qty')?.value) || 0;
   const rate = parseFloat(document.getElementById('modal_boq_rate')?.value) || 0;
   const el = document.getElementById('modal_boq_amount');
-  if (el) el.textContent = '₹' + (qty * rate).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  if (el) el.textContent = !qty && rate ? 'Rate only (not added to the total)'
+                                        : '₹' + (qty * rate).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
 // ─── BOQ lines ───────────────────────────────────────────────────────────────
