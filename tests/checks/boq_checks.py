@@ -40,9 +40,12 @@ with app.app_context():
     boq.set_enabled(True); db.session.commit()
     n = BoqItem.query.count()
     fc0 = BoqItem.query.filter_by(name='False Ceiling').first()
-    ok('starter lines come grouped (Services, Electrical Fitting, Kitchen…)', BoqItem.query.filter_by(name='Fan Fitting').first().category
-       == 'Electrical Fitting' and BoqItem.query.filter_by(name='Wardrobe').first().category == 'Bedrooms')
-    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Wardrobe…)', n == len(boq.starter_lines())
+    ok('starter lines come grouped (Services, Electrical Fitting, Lights & Points…)', BoqItem.query.filter_by(name='Fan Fitting').first().category
+       == 'Electrical Fitting' and BoqItem.query.filter_by(name='COB Light 12 W').first().category == 'Lights & Points')
+    ok('no woodwork in the starter lines (wardrobes, kitchen units… are measured items, priced by material)',
+       not BoqItem.query.filter(BoqItem.name.in_(['Wardrobe', 'TV Unit', 'Kitchen Below Platform', 'Bed with Storage'])).count()
+       and BoqItem.query.filter_by(name='False Ceiling').first() is not None)
+    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Fan Fitting…)', n == len(boq.starter_lines())
        and fc0 and fc0.unit == 'sqft' and fc0.rate == 120 and BoqItem.query.filter_by(name='Electric Wiring').first().unit == 'point')
     boq.set_enabled(False); boq.set_enabled(True); db.session.commit()
     ok('…only once: turning it on again adds nothing', BoqItem.query.count() == n)

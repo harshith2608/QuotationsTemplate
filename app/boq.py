@@ -171,7 +171,9 @@ def remember(lines):
 
 
 # Starter lines, from typical turnkey 2 BHK quotations: offered when BOQ lines are turned on for a business with none
-# saved yet. Rates are examples to change (Admin → Rates → BOQ lines).
+# saved yet. Rates are examples to change (Admin → Rates → BOQ lines). Services, electrical and lights only: woodwork
+# (wardrobes, kitchen units, beds…) is priced by material as measured items; a designer who prices it per product adds
+# their own lines (remembered after the first quotation).
 STARTER = [
     ('#', 'Services'),
     ('False Ceiling', 'sqft', 120, 'Gypsum false ceiling with framework, as per design (living room, kitchen, passage, bedrooms)'),
@@ -203,34 +205,9 @@ STARTER = [
     ('Laser Light', 'nos', 900, '5 nos with 3 W LED each'),
     ('Switch / Socket Point', 'point', 1150, 'With switch or socket (GM base level switches and plates)'),
     ('Point Looping', 'point', 550, 'With material'),
-    ('#', 'Living Room & Passage'),
-    ('Safety Door', 'sqft', 1500, 'Safety door in block board, both sides laminate finish, including safety grill '
-     '(lock, handle and grill at base price)'),
-    ('Safety Door Paneling', 'sqft', 850, 'Safety door paneling in 12 mm ply with laminate finish'),
-    ('Shoe Rack', 'sqft', 1950, 'Shoe rack in 18 mm BWR ply, laminate finish inside and outside, with all hardware'),
-    ('TV Unit', 'sqft', 1450, 'TV unit in BWR ply with drawers and ply paneling'),
-    ('AC Paneling', 'sqft', 750, 'AC paneling in 12 mm BWR ply + 4 mm HDMR'),
-    ('Wall Paneling', 'sqft', 950, 'Wall paneling with fluted sheet / mirror / metal strips as per design'),
-    ('Loft Shutter', 'sqft', 950, 'Loft shutters in BWR ply with laminate finish'),
-    ('Sofa', 'nos', 55000, 'Fabric cost extra as per selection'),
-    ('#', 'Kitchen'),
-    ('Kitchen Below Platform', 'sqft', 2450, 'Below-platform units in BWP ply with laminate finish, tandem drawers, '
-     'masala pull-out and profile handles'),
-    ('Kitchen Above Platform', 'sqft', 1850, 'Middle and upper units in BWR ply, laminate finish inside and outside, '
-     'with shelves'),
-    ('Kitchen Balcony Storage', 'sqft', 1750, 'Balcony storage in BWP ply with laminate finish'),
     ('#', 'Bathrooms'),
     ('LED Mirror', 'nos', 9500, 'Bathroom LED mirror with single light'),
-    ('Vanity Storage', 'sqft', 2100, 'Below-counter vanity storage in BWP ply with laminate finish'),
     ('Bathroom PVC Ceiling', 'sqft', 500, 'PVC ceiling in bathroom'),
-    ('#', 'Bedrooms'),
-    ('Wardrobe', 'sqft', 1850, 'Wardrobe in BWR ply, laminate finish inside and outside, soft-close drawer channels, '
-     'shutters, drawers and shelves'),
-    ('Bed with Storage', 'sqft', 1850, 'Bed in 18 mm BWR ply, laminate finish, top-open storage on hydraulic fittings'),
-    ('Designer Headboard', 'sqft', 1250, 'Headboard in 12 mm BWR ply with cushioning'),
-    ('Side Table', 'nos', 15000, 'Side table in BWR ply with laminate finish, 2 drawers'),
-    ('Dresser Unit', 'sqft', 1650, 'Dresser in BWR ply, laminate finish, soft-close drawers and mirror'),
-    ('Mirror (Miralite 5 mm)', 'sqft', 320, 'Saint-Gobain 5 mm silver mirror (Miralite), non-toughened'),
 ]
 
 
