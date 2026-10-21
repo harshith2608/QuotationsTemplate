@@ -42,6 +42,25 @@ class WalkRecorder(DeskRecorder):
         self.items.append({'kind': 'slide', 'kicker': kicker, 'title': title, 'points': list(points),
                            'hold': hold or _read_time(title, points, cap=2.8)})
 
+    def pdf_view(self, url, caption, page_no=0, frac=0.0, hold=2.6, width=0.70):
+        """A PDF page across the screen, scrolled `frac` of the way down (0 = top, 1 = bottom), readable."""
+        import fitz
+        if not hasattr(self, '_pdf_cache') or self._pdf_cache[0] != url:
+            self._pdf_cache = (url, self.page.request.get(url).body())
+        doc = fitz.open(stream=self._pdf_cache[1], filetype='pdf')
+        sw, sh = int(WIN['width'] * WIN_DPR), int(WIN['height'] * WIN_DPR)
+        pg = doc[page_no]
+        k = (sw * width) / pg.rect.width
+        pix = pg.get_pixmap(matrix=fitz.Matrix(k, k))
+        from PIL import Image
+        full = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
+        top = int(max(0, full.height - (sh - 40)) * frac)
+        canvas = Image.new('RGB', (sw, sh), (82, 86, 89))
+        canvas.paste(full.crop((0, top, full.width, min(full.height, top + sh - 40))), ((sw - full.width) // 2, 20))
+        path = os.path.join(self.dir, f'{len(self.items):04d}-pdf.png')
+        canvas.save(path)
+        self.image(path, caption, hold)
+
     def explain(self, locators, title, points=(), kicker='', hold=None, pad=8):
         """Pause on the current screen and explain the part covered by `locators` (one locator or a list)."""
         locators = locators if isinstance(locators, (list, tuple)) else [locators]

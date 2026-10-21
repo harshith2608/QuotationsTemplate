@@ -27,10 +27,18 @@ const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
 // also carry a description
 const BOQ = !!CATALOG.boq;
-function descBox(ik, value, handler) {
-  if (!BOQ) return '';
-  return `<textarea class="form-control form-control-sm mt-1 ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
-            placeholder="Description (optional)" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>`;
+// The description sits on its own full-width row under the item's row (the name column is too narrow for it)
+function addDescRow(tr, ik, value, handler) {
+  if (!BOQ) return;
+  const d = document.createElement('tr');
+  d.className = 'ki-desc-row';
+  d.id = 'item_descrow_' + ik;
+  d.innerHTML = `<td colspan="7" class="pt-0">
+      <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
+                placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
+    </td>`;
+  tr.after(d);
+  autoGrow(d.querySelector('textarea'));
 }
 function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
 function descOf(ik) { const el = document.getElementById('item_desc_' + ik); return el ? el.value.trim() : ''; }
@@ -613,7 +621,6 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc) {
     <td>
       <input type="text" class="form-control form-control-sm" id="item_name_${ik}" placeholder="e.g. False Ceiling"
              value="${escHtml(name || '')}" oninput="onBoqField('${rk}','${ik}')" autocomplete="off">
-      ${descBox(ik, desc, `onBoqField('${rk}','${ik}')`)}
     </td>
     <td colspan="3">
       <div class="input-group input-group-sm">
@@ -634,7 +641,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc) {
       </button>
     </td>`;
   tbody.appendChild(tr);
-  const d = document.getElementById('item_desc_' + ik); if (d) autoGrow(d);
+  addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`);
   onBoqField(rk, ik);
 }
 
@@ -671,7 +678,6 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
                placeholder="e.g. Magic Corner" value="${escHtml(name || '')}"
                oninput="onFixedField('${rk}','${ik}')" autocomplete="off">
       </div>
-      ${descBox(ik, desc, `onFixedField('${rk}','${ik}')`)}
     </td>
     <td colspan="3">
       <div class="input-group input-group-sm">
@@ -694,6 +700,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </button>
     </td>`;
   tbody.appendChild(tr);
+  addDescRow(tr, ik, desc, `onFixedField('${rk}','${ik}')`);
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && priceList.length) initAutocomplete(nameInput, () => priceList.map(p => p.name));
   onFixedField(rk, ik);
@@ -826,7 +833,6 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
                oninput="onItemField('${rk}','${ik}')"
                autocomplete="off">
       </div>
-      ${descBox(ik, presetDesc, `onItemField('${rk}','${ik}')`)}
     </td>
     <td>
       <div class="input-group input-group-sm">
@@ -884,11 +890,11 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
     </td>
   `;
   tbody.appendChild(tr);
+  addDescRow(tr, ik, presetDesc, `onItemField('${rk}','${ik}')`);
   applyUnitInputs(tr);
   // Wire up autocomplete for item name input
   const itemNameInput = document.getElementById('item_name_' + ik);
   if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
-  const descEl = document.getElementById('item_desc_' + ik); if (descEl) autoGrow(descEl);
   if (area > 0) recalcAll();
 }
 
@@ -896,6 +902,7 @@ function removeItem(rk, ik) {
   const row = document.getElementById('item_row_' + ik);
   _destroyAc(row);
   if (row) row.remove();
+  document.getElementById('item_descrow_' + ik)?.remove();
   if (rooms[rk] && rooms[rk].items) delete rooms[rk].items[ik];
   recalcAll();
 }

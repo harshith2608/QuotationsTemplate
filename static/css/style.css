@@ -236,6 +236,10 @@ body {
 .ki-badge-fitting { background:#f3e8ff; color:#6b21a8; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
 .ki-badge-boq { background:#e0f2fe; color:#075985; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
 .ki-item-note { white-space: pre-line; max-width: 46ch; }
+/* an item's description: its own row under the item, full width, no line between them */
+.item-table tr.ki-desc-row td { border-top: 0; }
+.item-table tr:has(+ tr.ki-desc-row) td { border-bottom: 0; }
+.item-table .ki-item-desc { font-size: .8rem; color: #455a64; resize: vertical; min-height: 30px; }
 
 /* ---- Grand Total Row ---- */
 .ki-grand-total-row td {
