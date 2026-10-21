@@ -30,7 +30,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3 mb-3">
   <div>
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb mb-1">
@@ -45,7 +45,7 @@
     </h4>
   </div>
   {% if not project and templates %}
-  <div class="d-flex align-items-center gap-2">
+  <div class="d-flex align-items-center gap-2 ki-start-from">
     <label class="small text-muted text-nowrap" for="startFrom">Start from</label>
     <select class="form-select form-select-sm" id="startFrom" style="min-width:200px"
             onchange="location.href = '{{ url_for('projects.create_project') }}' + (this.value ? '?template=' + encodeURIComponent(this.value) : '')">

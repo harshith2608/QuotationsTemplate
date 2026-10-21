@@ -235,20 +235,48 @@ body {
 
 .ki-badge-fitting { background:#f3e8ff; color:#6b21a8; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
 .ki-badge-boq { background:#e0f2fe; color:#075985; font-size:0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
-.ki-item-note { white-space: pre-line; max-width: 46ch; }
+.ki-item-note { white-space: pre-line; overflow-wrap: anywhere; }
 /* an item's description: its own row under the item, full width, no line between them */
 .item-table tr.ki-desc-row td { border-top: 0; }
 /* a room priced line by line (BOQ lines, fittings): no Type column; more room for the name and the rate */
 .ki-priced-only .item-table th.h-c4, .ki-priced-only .item-table tr.item-row > td:nth-child(5) { display: none; }
-.ki-priced-only .item-table th:first-child { min-width: 220px !important; }
-.ki-priced-only .item-table th.h-c1 { min-width: 70px !important; width: 80px; }
-.ki-priced-only .item-table th.h-c2 { min-width: 100px !important; width: 110px; }
-.ki-priced-only .item-table th.h-c3 { min-width: 130px !important; width: 140px; }
-.ki-priced-only .item-table th.h-c5 { min-width: 96px !important; }
+.ki-priced-only .item-table th:first-child { min-width: 170px !important; }
+.ki-priced-only .item-table th.h-c1 { min-width: 64px !important; width: 80px; }
+.ki-priced-only .item-table th.h-c2 { min-width: 92px !important; width: 110px; }
+.ki-priced-only .item-table th.h-c3 { min-width: 112px !important; width: 140px; }
+.ki-priced-only .item-table th.h-c5 { min-width: 82px !important; }
 /* lines added from "Add from my lines" whose quantity is still to be typed */
 .item-table tr.ki-needs-qty > td { background: #fff8e1; }
 .item-table tr.ki-needs-qty input[id^="item_qty_"] { border-color: #f59e0b; }
 .ki-pick-row { cursor: pointer; }
+/* item names wrap onto a second line instead of being cut off */
+.item-table textarea.ki-name { resize: none; overflow: hidden; min-height: 31px; line-height: 1.35; }
+.ki-mixed .item-table th { white-space: normal; }
+.ki-mixed .item-table th:first-child { min-width: 118px !important; }
+.ki-mixed .item-table th.h-c1, .ki-mixed .item-table th.h-c2 { min-width: 112px !important; }
+.ki-mixed .item-table th.h-c3 { min-width: 100px !important; }        /* No's, or a line's rate */
+.ki-mixed .item-table th.h-c4 { min-width: 176px !important; }
+@media (max-width: 575.98px) {
+  .ki-start-from { width: 100%; }
+  .ki-start-from select { flex: 1 1 auto; min-width: 0 !important; }
+  /* a room priced line by line, on a phone: each line stacked (name, then Qty · Unit · Rate · Amount), no side scroll */
+  .ki-priced-only .item-table-wrap { overflow-x: visible; }
+  .ki-priced-only .item-table, .ki-priced-only .item-table tbody { display: block; width: 100%; }
+  .ki-priced-only .item-table thead { display: none; }
+  .ki-priced-only .item-table tr.item-row { display: grid; grid-template-columns: 64px 1fr 1.1fr auto; gap: 4px 6px;
+    align-items: end; padding-top: 8px; border-top: 1px solid var(--ki-border, #dee2e6); }
+  .ki-priced-only .item-table tr.item-row > td { display: block; border: 0; padding: 0; min-width: 0; }
+  .ki-priced-only .item-table tr.item-row > td:nth-child(1) { grid-column: 1 / 4; grid-row: 1; }
+  .ki-priced-only .item-table tr.item-row > td:nth-child(7) { grid-column: 4; grid-row: 1; align-self: start; }
+  .ki-priced-only .item-table tr.item-row > td:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .ki-priced-only .item-table tr.item-row > td:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .ki-priced-only .item-table tr.item-row > td:nth-child(4) { grid-column: 3; grid-row: 2; }
+  .ki-priced-only .item-table tr.item-row > td:nth-child(6) { grid-column: 4; grid-row: 2; text-align: right; }
+  .ki-priced-only .item-table tr.item-row > td[data-label]::before { content: attr(data-label); display: block;
+    font-size: .68rem; font-weight: 600; text-transform: uppercase; color: var(--ki-muted, #6c757d); margin-bottom: 2px; }
+  .ki-priced-only .item-table tr.ki-desc-row, .ki-priced-only .item-table tr.ki-desc-row > td { display: block; border: 0; }
+  .ki-priced-only .item-table tr.ki-desc-row > td { padding: 4px 0 8px; }
+}
 .ki-pick-row:hover { background: #f8fafc; }
 .item-table tr:has(+ tr.ki-desc-row) td { border-bottom: 0; }
 .item-table .ki-item-desc { font-size: .8rem; color: #455a64; resize: vertical; min-height: 30px; }

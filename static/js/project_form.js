@@ -65,10 +65,10 @@ function qtyFromSize(unit, l, w, n) {
 }
 function sizeInputs(prefix, which, ftIn, handler) {
   return `<div class="input-group input-group-sm" style="width:auto">
-      <input type="number" class="form-control text-center px-1" id="${prefix}_${which}ft" placeholder="0" min="0" max="999" step="1"
+      <input type="number" class="form-control text-center px-1" id="${prefix}_${which}ft" min="0" max="999" step="1"
              value="${ftIn && (ftIn.ft || ftIn.inch) ? ftIn.ft : ''}" oninput="${handler}" style="max-width:56px" title="Feet">
       <span class="input-group-text px-1 small text-muted">ft</span>
-      <input type="number" class="form-control text-center px-1" id="${prefix}_${which}in" placeholder="0" min="0" max="11" step="1"
+      <input type="number" class="form-control text-center px-1" id="${prefix}_${which}in" min="0" max="11" step="1"
              value="${ftIn && (ftIn.ft || ftIn.inch) ? ftIn.inch : ''}" oninput="${handler}" style="max-width:52px" title="Inches (0–11)">
       <span class="input-group-text px-1 small text-muted">in</span>
     </div>`;
@@ -133,6 +133,7 @@ function updateRoomHeader(rk, hasMeasured, hasPriced) {
   });
   const was = card.classList.contains('ki-priced-only');
   card.classList.toggle('ki-priced-only', hasPriced && !hasMeasured);   // no Type column, more room for name and rate
+  card.classList.toggle('ki-mixed', hasPriced && hasMeasured);           // two-part headers wrap
   if (was !== card.classList.contains('ki-priced-only')) updateRoomDescriptionLabel(rk);
 }
 function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
@@ -506,7 +507,7 @@ function addRoom(presetName) {
   div.innerHTML = `
     <div class="card-header d-flex align-items-center gap-2 py-2">
       <i class="bi bi-door-open text-primary"></i>
-      <div class="ki-ac-wrap" style="max-width:280px">
+      <div class="ki-ac-wrap" style="flex:1 1 auto; max-width:460px; min-width:0">
         <input type="text"
                class="form-control form-control-sm fw-semibold"
                id="room_name_${rk}"
@@ -782,10 +783,10 @@ function renderBoqPicker() {
         <label class="ki-pick-row d-flex gap-2 align-items-start py-1 border-bottom" for="bp_${i}">
           <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="bp_${i}" value="${i}"
                  ${ticked.has(String(i)) ? 'checked' : ''} onchange="countBoqPicks()">
-          <span class="flex-grow-1">
+          <span class="flex-grow-1" style="min-width:0">
             <span class="fw-semibold small">${escHtml(b.name)}</span>
             ${inRoom.has(b.name.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : ''}
-            ${b.description ? `<span class="d-block small text-muted text-truncate" style="max-width:520px">${escHtml(b.description.split('\n')[0])}</span>` : ''}
+            ${b.description ? `<span class="d-block small text-muted text-truncate">${escHtml(b.description.split('\n')[0])}</span>` : ''}
           </span>
           <span class="small text-nowrap text-muted">${b.rate ? '₹' + Number(b.rate).toLocaleString('en-IN') : '—'} / ${escHtml(b.unit)}</span>
         </label>`).join('')}
@@ -831,19 +832,20 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   tr.id = 'item_row_' + ik;
   tr.innerHTML = `
     <td>
-      <input type="text" class="form-control form-control-sm" id="item_name_${ik}" placeholder="e.g. False Ceiling"
-             value="${escHtml(name || '')}" oninput="onBoqField('${rk}','${ik}')" autocomplete="off">
+      <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. False Ceiling"
+                  oninput="autoGrow(this); onBoqField('${rk}','${ik}')" onkeydown="if (event.key === 'Enter') event.preventDefault()"
+                  autocomplete="off">${escHtml(name || '')}</textarea>
     </td>
-    <td>
+    <td data-label="Qty">
       <input type="number" class="form-control form-control-sm text-center px-1" id="item_qty_${ik}" min="0" step="any"
              value="${qty || ''}" placeholder="—" oninput="onBoqField('${rk}','${ik}')"
              title="Quantity (leave empty for a rate-only line)">
     </td>
-    <td>
+    <td data-label="Unit">
       <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit"
               onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
     </td>
-    <td>
+    <td data-label="Rate">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -851,13 +853,14 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-boq">BOQ</span></td>
-    <td class="text-center"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
+    <td class="text-center" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
         <i class="bi bi-x-lg"></i>
       </button>
     </td>`;
   tbody.appendChild(tr);
+  const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
              sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`));
   applyUnitInputs(document.getElementById('item_descrow_' + ik));
@@ -915,17 +918,17 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
   tr.innerHTML = `
     <td>
       <div class="ki-ac-wrap">
-        <input type="text" class="form-control form-control-sm" id="item_name_${ik}"
-               placeholder="e.g. Magic Corner" value="${escHtml(name || '')}"
-               oninput="onFixedField('${rk}','${ik}')" autocomplete="off">
+        <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. Magic Corner"
+                  oninput="autoGrow(this); onFixedField('${rk}','${ik}')" onkeydown="if (event.key === 'Enter') event.preventDefault()"
+                  autocomplete="off">${escHtml(name || '')}</textarea>
       </div>
     </td>
-    <td>
+    <td data-label="Qty">
       <input type="number" class="form-control form-control-sm text-center px-1" id="item_qty_${ik}" min="0" step="any"
              value="${qty}" oninput="onFixedField('${rk}','${ik}')" title="Quantity">
     </td>
-    <td class="small text-muted text-center" id="item_unit_${ik}">${escHtml((_findPrice(name) || {}).unit || 'nos')}</td>
-    <td>
+    <td class="small text-muted text-center" data-label="Unit" id="item_unit_${ik}">${escHtml((_findPrice(name) || {}).unit || 'nos')}</td>
+    <td data-label="Rate">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -933,7 +936,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-fitting">Fitting</span></td>
-    <td class="text-center">
+    <td class="text-center" data-label="Amount">
       <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
     </td>
     <td class="text-center">
@@ -943,6 +946,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </button>
     </td>`;
   tbody.appendChild(tr);
+  const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
   addDescRow(tr, ik, desc, `onFixedField('${rk}','${ik}')`);
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && priceList.length) initAutocomplete(nameInput, () => priceList.map(p => p.name));
@@ -1076,12 +1080,9 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   tr.innerHTML = `
     <td>
       <div class="ki-ac-wrap">
-        <input type="text" class="form-control form-control-sm"
-               id="item_name_${ik}"
-               placeholder="e.g. Wardrobe"
-               value="${escHtml(name)}"
-               oninput="onItemField('${rk}','${ik}')"
-               autocomplete="off">
+        <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. Wardrobe"
+                  oninput="autoGrow(this); onItemField('${rk}','${ik}')" onkeydown="if (event.key === 'Enter') event.preventDefault()"
+                  autocomplete="off">${escHtml(name)}</textarea>
       </div>
     </td>
     <td>
@@ -1140,6 +1141,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
     </td>
   `;
   tbody.appendChild(tr);
+  const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
   addDescRow(tr, ik, presetDesc, `onItemField('${rk}','${ik}')`);
   applyUnitInputs(tr);
   // Wire up autocomplete for item name input
