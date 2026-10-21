@@ -21,9 +21,10 @@ from static_ads import MUTED, PAPER, TAPE, background, brand, font, rounded_mask
 READ_WPS = 2.6                    # words per second, comfortably readable with the screen to look at too
 
 
-def _read_time(title, points, base=1.6, minimum=4.0):
+def _read_time(title, points, base=1.2, cap=3.0):
+    """Short pauses (the owner asked for 2-3 seconds): a little longer for more text, never more than `cap`."""
     words = len(title.split()) + sum(len(p.split()) for p in points)
-    return max(minimum, base + words / READ_WPS + 0.7 * len(points))
+    return min(cap, max(2.2, base + words / 6))
 
 
 class WalkRecorder(DeskRecorder):
@@ -31,7 +32,7 @@ class WalkRecorder(DeskRecorder):
         if kicker.lower().startswith('step'):
             self.section = f'{kicker} · {title}'          # shown above the explanations that follow
         self.items.append({'kind': 'slide', 'kicker': kicker, 'title': title, 'points': list(points),
-                           'hold': hold or _read_time(title, points, base=2.0)})
+                           'hold': hold or _read_time(title, points, cap=2.8)})
 
     def explain(self, locators, title, points=(), kicker='', hold=None, pad=8):
         """Pause on the current screen and explain the part covered by `locators` (one locator or a list)."""
@@ -65,7 +66,7 @@ def _mix(c, a, bg=(14, 34, 28)):
     return tuple(int(v * a + b * (1 - a)) for v, b in zip(c, bg))
 
 
-def _points(d, x, y, points, t, width, size=36, first=0.7, gap=0.9):
+def _points(d, x, y, points, t, width, size=36, first=0.3, gap=0.3):
     for i, p in enumerate(points):
         a = _fade(t, first + i * gap)
         if a <= 0:
@@ -89,7 +90,7 @@ def explain_frame(bg, screen, it, t):
     # dim everything but the explained part
     shot = screen.resize((EX_W, sh), Image.LANCZOS).convert('RGBA')
     x0, y0, x1, y1 = [v * k for v in it['box']]
-    a = _fade(t, 0.1, 0.5)
+    a = _fade(t, 0.0, 0.3)
     dim = Image.new('RGBA', shot.size, (6, 14, 11, int(165 * a)))
     hole = Image.new('L', shot.size, 255)
     ImageDraw.Draw(hole).rounded_rectangle([x0, y0, x1, y1], radius=10, fill=0)
@@ -111,7 +112,7 @@ def explain_frame(bg, screen, it, t):
     for line in _wrap(it['title'], 54, 'heavy', width)[:3]:
         d.text((PANEL_X, y), line, font=font(54, 'heavy'), fill=_mix(PAPER, _fade(t, 0.2)))
         y += 66
-    _points(d, PANEL_X, y + 30, it['points'], t, width, size=34)
+    _points(d, PANEL_X, y + 30, it['points'], t, width, size=38)
     return img
 
 
@@ -126,14 +127,14 @@ def slide_frame(it, t):
     for line in _wrap(it['title'], 80, 'heavy', width)[:2]:
         d.text((x, y), line, font=font(80, 'heavy'), fill=_mix(PAPER, _fade(t, 0.15)))
         y += 96
-    _points(d, x, y + 40, it['points'], t, width, size=40, first=0.8, gap=0.8)
+    _points(d, x, y + 40, it['points'], t, width, size=44)
     return img
 
 
 def render(workdir, path, subtitle, outro, style='lofi'):
     tl = json.load(open(os.path.join(workdir, 'timeline.json')))
     bg = background(LW, LH).convert('RGBA')
-    segments = [('title', None, 3.0)] + [(it.get('kind', 'shot'), it, it['hold']) for it in tl['items']] + [('end', None, 4.0)]
+    segments = [('title', None, 2.6)] + [(it.get('kind', 'shot'), it, it['hold']) for it in tl['items']] + [('end', None, 3.5)]
     total = sum(s[2] for s in segments)
     music = make_music(total + 0.5, os.path.join(R.OUT, 'music-walkthrough.wav'), style=style)
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{LW}x{LH}', '-r', str(FPS),
@@ -158,9 +159,9 @@ def render(workdir, path, subtitle, outro, style='lofi'):
             elif kind == 'end':
                 img = end_card(outro, t)
             elif kind == 'slide':
-                img = last if (last is not None and t > 0.8 + 0.8 * len(it['points']) + 0.5) else slide_frame(it, t)
+                img = last if (last is not None and t > 0.3 + 0.3 * len(it['points']) + 0.5) else slide_frame(it, t)
             elif kind == 'explain':
-                img = last if (last is not None and t > 0.7 + 0.9 * len(it['points']) + 0.5) else explain_frame(bg, screen(it['png']), it, t)
+                img = last if (last is not None and t > 0.3 + 0.3 * len(it['points']) + 0.5) else explain_frame(bg, screen(it['png']), it, t)
             else:
                 img = frame(bg, screen(it['png']), tl['chapter'], it['caption'], it['tap'], t if it['tap'] else None)
             last = img

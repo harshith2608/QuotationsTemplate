@@ -51,204 +51,181 @@ def record(base, work, password):
         page = browser.new_context(viewport=DESK, device_scale_factor=DESK_DPR).new_page()
         rec = WalkRecorder(page, os.path.join(work, 'walk'), LABEL, TITLE)
 
-        rec.slide('What we will do', 'From sign-in to your first quotation', [
-            'Your company details, logo and colours',
-            'Your unit of measurement',
-            'Your rates: materials, plywood, fittings & accessories',
-            'Your quotation PDF and how customers pay you',
-            'Then a real quotation, using all of it'])
+        rec.slide('Interiors & turnkey', 'From sign-in to your first quotation', [
+            'Your details, units and rates',
+            'Woodwork, false ceiling, painting, electrical, civil'])
 
         # ── sign in → setup guide ──
         page.goto(base + '/login')
-        rec.shot('Open the link from your welcome message.', 2.0)
+        rec.shot('Open the link from your welcome message.', 1.4)
         rec.type(page.locator('input[name=username]'), 'admin', 'Sign in with the username and password we sent you.')
         rec.type(page.locator('input[name=password]'), password, 'Sign in with the username and password we sent you.', per_frame=4)
         rec.tap(page.locator('button[type=submit]'), 'Click Sign In.', wait=1200)
         rec.explain([page.locator('h4', has_text='Setup guide').locator('xpath=..'), page.locator('#step-logo')],
-                    'Your setup guide', [
-                        'Opens by itself the first time you sign in',
-                        'Seven short steps; each one opens the right page',
-                        'Come back any time: Admin menu, Setup guide'], kicker='Getting started')
+                    'Your setup guide', ['7 short steps, each opens the right page',
+                                         'Back any time from the Admin menu'], kicker='Getting started')
         rec.tap(page.locator('a, button', has_text='Start:').first, 'Click Start.', wait=1000)
 
         # ── 1. company ──
-        rec.slide('Step 1 of 7', 'Your company details', [
-            'Printed on every quotation, invoice and WhatsApp message',
-            'Name and GSTIN lock once saved, so check them'], hold=5.5)
-        rec.explain(page.locator('.ki-setup-banner'), 'This bar guides you', [
-            'Which step you are on',
-            'Fill in the page, save, then "Done, next step"'])
+        rec.slide('Step 1 of 7', 'Your company details', ['On every quotation, invoice and message'])
+        rec.explain(page.locator('.ki-setup-banner'), 'This bar guides you', ['Fill in, save, then "Done, next step"'])
         for name, value, caption in (
                 ('company_name', 'Sharma Interiors', 'Your company name, as it should appear on quotations.'),
-                ('company_mobile', '+91 98480 12345', 'Your phone number.'),
-                ('company_email', 'hello@sharmainteriors.example', 'Your email.'),
-                ('company_gstin', '36ABCDE1234F1Z5', 'Your GSTIN, only if you give GST invoices.')):
-            rec.type(page.locator(f'[name={name}]'), value, caption, per_frame=3)
-        rec.type(page.locator('[name=company_address]'), 'Plot 21, Madhapur, Hyderabad 500081', 'Your address.', per_frame=4)
+                ('company_mobile', '+91 98480 12345', 'Phone, email and GSTIN.'),
+                ('company_email', 'hello@sharmainteriors.example', 'Phone, email and GSTIN.'),
+                ('company_gstin', '36ABCDE1234F1Z5', 'Phone, email and GSTIN.')):
+            rec.type(page.locator(f'[name={name}]'), value, caption, per_frame=4, hold=0.4)
+        rec.type(page.locator('[name=company_address]'), 'Plot 21, Madhapur, Hyderabad 500081', 'Your address.', per_frame=6, hold=0.4)
         rec.scroll_to(page.locator('#confirm_identity'), 'Tick "These details are correct" and save.')
-        rec.tap(page.locator('#confirm_identity'), 'Tick "These details are correct" and save.', after_hold=0.6)
+        rec.tap(page.locator('#confirm_identity'), 'Tick "These details are correct" and save.', after_hold=0.4)
         rec.tap(page.get_by_role('button', name='Save Company Details'), 'Tick "These details are correct" and save.', wait=1000)
         done_next(rec, page)
 
         # ── 2. logo & colours ──
-        rec.slide('Step 2 of 7', 'Logo & colours', ['Your logo and colours on the app and on every PDF'], hold=4.0)
+        rec.slide('Step 2 of 7', 'Logo & colours', ['On the app and every PDF'])
         page.locator('#logoInput').set_input_files(logo)
         page.wait_for_timeout(600)
-        rec.scroll_to(page.locator('#logoBox'), 'Upload your logo (PNG or JPG).')
-        rec.shot('Upload your logo (PNG or JPG).', 1.6)
-        rec.tap(page.locator('#confirm_logo'), 'Tick "This is my company\'s logo".', after_hold=0.6)
+        rec.scroll_to(page.locator('#logoBox'), 'Upload your logo.')
+        rec.tap(page.locator('#confirm_logo'), 'Upload your logo.', after_hold=0.4)
         rec.scroll_to(page.locator('#presetGrid'), 'Pick your brand colours.')
-        rec.tap(page.locator('[data-preset="Teal"]'), 'Pick your brand colours.', after_hold=1.4)
+        rec.tap(page.locator('[data-preset="Teal"]'), 'Pick your brand colours.', after_hold=1.0)
         rec.tap(page.get_by_role('button', name='Save Appearance').first, 'Save.', wait=1400)
         done_next(rec, page)
 
         # ── 3. units ──
-        rec.slide('Step 3 of 7', 'Your unit of measurement', ['Measure the way your team already does'], hold=4.0)
-        rec.explain(page.locator('.card', has_text='Units of measurement').first, 'Sizes and areas', [
-            'Feet & inches, mm, cm or inches',
-            'Rates per sqft or per sq m',
-            'Change it later and nothing is lost: sizes are only shown differently'])
+        rec.slide('Step 3 of 7', 'Your unit of measurement', ['Measure the way your team already does'])
+        rec.explain(page.locator('.card', has_text='Units of measurement').first, 'Sizes and areas',
+                    ['Feet & inches, mm, cm or inches', 'Rates per sqft or per sq m'])
         rec.tap(page.get_by_role('button', name='Save Units'), 'We keep feet & inches and sqft here. Save.', wait=1000)
         done_next(rec, page)
 
         # ── 4. rates ──
-        rec.slide('Step 4 of 7', 'Your rates', [
-            'Every measured item: area × your rate',
-            'The rate depends on the material and the work type',
-            'Fittings & accessories: quantity × price',
-            'Set them once; every quotation uses them'])
-        rec.explain(page.locator('#materials table'), 'Materials & work types', [
-            'One row per material: Acrylic, Laminates, Veneer…',
-            'Box Work and Frame Work can have different rates',
-            '"On plywood": the material is priced on the plywood you choose'])
+        rec.slide('Step 4 of 7', 'Your rates', ['By area: size × your rate', 'Per piece or lump sum: quantity × price'])
+        rec.explain(page.locator('#materials table'), 'Materials & work types',
+                    ['A rate for each material', 'Box Work and Frame Work can differ'])
         for name, box, frame in (('Acrylic', '1450', '1250'), ('Laminates', '950', '800'), ('Veneer', '1100', '950')):
             inputs = rate_row(page, name).locator('input[type=number]')
-            rec.type(inputs.nth(0), box, f'Type your own rates: {name}.', per_frame=4, hold=0.4)
-            rec.type(inputs.nth(1), frame, f'Type your own rates: {name}.', per_frame=4, hold=0.4)
+            rec.type(inputs.nth(0), box, 'Type your own rates.', per_frame=4, hold=0.2)
+            rec.type(inputs.nth(1), frame, 'Type your own rates.', per_frame=4, hold=0.2)
         rec.tap(page.locator('button[name=item_rates_submit][value=save]'), 'Save Materials & Rates.', wait=1200)
 
-        # a new material
-        rec.scroll_to(page.locator('#mat_name'), 'Need something else? Add your own material.', offset=260)
-        rec.explain(page.locator('#mat_name').locator('xpath=ancestor::form[1]'), 'Add your own material', [
-            'Glass, PU, Duco, Wallpaper, Mirror… anything you sell by area',
-            'One rate, or separate Box Work and Frame Work rates',
-            'Tick "Priced on plywood" if it is built on a board'])
-        rec.type(page.locator('#mat_name'), 'Lacquered Glass', 'Example: Lacquered Glass for a kitchen back-splash.', per_frame=3)
-        rec.type(page.locator('#mat_rate'), '650', 'One rate: ₹650 per sqft.', per_frame=3)
-        rec.tap(page.locator('#mat_name').locator('xpath=ancestor::form[1]').locator('button[type=submit]').last,
-                'Click Add.', wait=1200)
-        rec.explain(rate_row(page, 'Lacquered Glass'), 'Added', [
-            'Ready to pick on every new quotation',
-            'Hide a material you stop offering: old quotations keep it'])
+        # new materials: glass for the kitchen, then turnkey work priced by area
+        add_form = page.locator('#mat_name').locator('xpath=ancestor::form[1]')
+        rec.scroll_to(page.locator('#mat_name'), 'Add anything you sell by area.', offset=260)
+        rec.explain(add_form, 'Add your own materials', ['Glass, PU, wallpaper…', 'Turnkey work too: false ceiling, painting, flooring'])
+        for name, rate, caption, typed in (('Lacquered Glass', '650', 'Lacquered Glass: ₹650 per sqft.', True),
+                                           ('False Ceiling', '110', 'False Ceiling: ₹110 per sqft.', True),
+                                           ('Painting', '28', 'Painting: ₹28 per sqft.', False)):
+            if typed:
+                rec.type(page.locator('#mat_name'), name, caption, per_frame=4, hold=0.2)
+                rec.type(page.locator('#mat_rate'), rate, caption, per_frame=3, hold=0.4)
+            else:
+                page.locator('#mat_name').fill(name)
+                page.locator('#mat_rate').fill(rate)
+                rec.shot(caption, 0.8)
+            rec.tap(add_form.locator('button[type=submit]').last, caption, wait=1100, after_hold=0.4)
+            rec.scroll_to(page.locator('#mat_name'), caption, offset=330, steps=2)
+        rec.explain([rate_row(page, 'Lacquered Glass'), rate_row(page, 'Painting')], 'Added',
+                    ['One rate per sqft', 'Ready on every new quotation'])
 
         # plywood
         rec.scroll_to(page.locator('#plywood'), 'Next: the plywood you offer.', offset=90)
-        rec.explain(page.locator('#plywood table'), 'Plywood', [
-            'Your rates above are for the default plywood',
-            'For other boards, enter the difference per sqft, e.g. +150',
-            'Each quotation picks its plywood; the customer sees the final rate'])
-        new_ply = page.locator('input[name=ply_new_name]')
-        rec.type(new_ply, '18mm BWP Marine', 'Add a board you offer: 18mm BWP Marine…', per_frame=3)
-        rec.type(page.locator('input[name=ply_new_adj]'), '150', '…₹150 per sqft more than the default.', per_frame=3)
-        if page.locator('input[name=ply_new_details]').count():
-            rec.type(page.locator('input[name=ply_new_details]'), 'Century Club Prime, 15-year warranty',
-                     'Details for your Material Specifications (optional).', per_frame=5)
+        rec.explain(page.locator('#plywood table'), 'Plywood', ['Rates above are for your default board',
+                                                                'Others: the difference per sqft'])
+        rec.type(page.locator('input[name=ply_new_name]'), '18mm BWP Marine', 'Add a board: 18mm BWP Marine, +₹150 per sqft.', per_frame=4, hold=0.2)
+        rec.type(page.locator('input[name=ply_new_adj]'), '150', 'Add a board: 18mm BWP Marine, +₹150 per sqft.', per_frame=3, hold=0.6)
         rec.tap(page.locator('button[name=plywood_submit]'), 'Save Plywood.', wait=1200)
 
-        # fittings & accessories
-        rec.scroll_to(page.locator('#price-list'), 'Last: fittings & accessories.', offset=90)
-        rec.explain(page.locator('#price-list table'), 'Fittings & accessories', [
-            'Priced per piece, not by area',
-            'Magic Corner, tandem drawers, hinges, profile lights…',
-            'On a quotation, pick one and its price fills in'])
+        # price list: fittings, and turnkey items per point or lump sum
+        rec.scroll_to(page.locator('#price-list'), 'Last: your price list.', offset=90)
+        rec.explain(page.locator('#price-list table'), 'Fittings & per-piece work',
+                    ['Magic Corner, drawers, hinges…', 'Electrical points, lump-sum work'])
         magic = page.locator('#price-list tr', has=page.locator('input[value="Magic Corner"]')).locator('input[name=pl_price]')
-        rec.type(magic, '16500', 'Change any price to yours.', per_frame=5)
-        new_row = page.locator('#price-list input[name=pl_name][placeholder]').first
-        rec.type(new_row, 'Soft-close Hinge', 'Add your own: Soft-close Hinge…', per_frame=3)
-        new_tr = new_row.locator('xpath=ancestor::tr[1]')
-        rec.type(new_tr.locator('input[name=pl_price]'), '180', '…₹180 a piece.', per_frame=3)
+        rec.type(magic, '16500', 'Change any price to yours.', per_frame=5, hold=0.5)
+        for i, (name, price, unit, caption) in enumerate((
+                ('Electrical Point', '850', 'point', 'Electrical Point: ₹850 a point.'),
+                ('Demolition & Debris Removal', '25000', 'lump sum', 'Demolition: ₹25,000 lump sum.'))):
+            row = page.locator('#price-list input[name=pl_name][placeholder]').nth(0).locator('xpath=ancestor::tr[1]')
+            rec.type(row.locator('input[name=pl_name]'), name, caption, per_frame=5, hold=0.2)
+            row.locator('input[name=pl_price]').fill(price)
+            row.locator('input[name=pl_unit]').fill(unit)
+            page.locator('#price-list input[name=pl_name][placeholder]').nth(0).evaluate('e => e.removeAttribute("placeholder")')
+            rec.shot(caption, 0.9)
         rec.tap(page.locator('button[name=price_list_submit]'), 'Save Price List.', wait=1200)
         done_next(rec, page)
 
         # ── 5. quotation PDF ──
-        rec.slide('Step 5 of 7', 'Your quotation PDF', [
-            'What your customer receives',
-            'Your terms, your words'], hold=4.5)
-        rec.explain(page.locator('.card', has_text='Initial Quotation').first, 'Two quotations', [
-            'Initial Quotation for the customer: by room or by material',
-            'Full Quotation with every rate and amount, when you need it'])
+        rec.slide('Step 5 of 7', 'Your quotation PDF', ['Your terms, your words'])
+        rec.explain(page.locator('.card', has_text='Initial Quotation').first, 'What the customer gets',
+                    ['By room or by material', 'Full Quotation with every rate'])
         terms = page.locator('textarea[name=payment_terms]')
         if terms.count():
             rec.scroll_to(terms, 'Your payment terms, one per line.', offset=220)
             rec.type(terms, '10% advance with order confirmation\n50% after design sign-off\n40% on delivery to site',
-                     'Your payment terms, one per line.', per_frame=8)
-            rec.explain(terms.locator('xpath=ancestor::*[contains(@class,"card")][1]'), 'Terms and notes', [
-                'Payment terms, delivery terms, notes, terms & conditions',
-                'Leave a box empty to leave it out',
-                'Insert adds details that change per quotation, like the plywood'])
+                     'Your payment terms, one per line. Delivery terms and notes the same way.', per_frame=12, hold=1.2)
         rec.tap(page.get_by_role('button', name='Save Quotation Settings'), 'Save.', wait=1200)
         done_next(rec, page)
 
         # ── 6. payments ──
-        rec.slide('Step 6 of 7', 'How customers pay you', ['Printed on your quotations and invoices'], hold=4.0)
-        rec.type(page.locator('[name=upi_id]'), 'sharmainteriors@okhdfcbank', 'Your UPI ID…', per_frame=4)
+        rec.slide('Step 6 of 7', 'How customers pay you', ['UPI and bank, on quotations and invoices'])
+        rec.type(page.locator('[name=upi_id]'), 'sharmainteriors@okhdfcbank', 'Your UPI ID and bank details.', per_frame=6, hold=0.2)
         for name, value in (('account_name', 'Sharma Interiors'), ('bank_name', 'HDFC Bank'),
                             ('account_number', '50200012345678'), ('ifsc_code', 'HDFC0001234')):
             loc = page.locator(f'[name={name}]')
             if loc.count():
-                rec.type(loc, value, '…and your bank details.', per_frame=4, hold=0.3)
-        rec.explain([page.locator('[name=upi_id]').locator('xpath=ancestor::*[contains(@class,"card")][1]'),
-                     page.locator('[name=ifsc_code]').locator('xpath=ancestor::*[contains(@class,"card")][1]')], 'Getting paid', [
-            'Customers pay you directly: UPI or bank transfer',
-            'Online card and UPI payments with Razorpay are optional'])
-        rec.tap(page.locator('button[type=submit]', has_text='Save').last, 'Save.', wait=1200)
+                loc.fill(value)
+        rec.shot('Your UPI ID and bank details.', 1.0)
+        rec.tap(page.locator('button[type=submit]', has_text='Save').last, 'Save. (Online payments with Razorpay are optional.)', wait=1200)
         done_next(rec, page)
 
         # ── 7. first quotation ──
-        rec.slide('Step 7 of 7', 'Your first quotation', [
-            'A kitchen with cabinets, a glass back-splash and fittings',
-            'Your rates fill in by themselves'], hold=5.0)
+        rec.slide('Step 7 of 7', 'Your first quotation', ['A kitchen, a living room and civil work'])
         if '/projects/new' not in page.url:
             page.goto(base + '/projects/new')
-        rec.type(page.locator('#customer_name'), 'Kavya Menon', 'Customer name and mobile.', per_frame=3)
-        rec.type(page.locator('#mobile'), '9000012345', 'Customer name and mobile.', per_frame=4)
-        rec.explain(page.locator('.card', has_text='Plywood').first, 'Plywood for this quotation', [
-            'Your default is picked',
-            'Choose BWP Marine and every board item is re-priced'])
-        rec.tap(page.locator('#no-rooms-hint button, button', has_text='Add First Room').first, 'Add a room.', wait=600)
-        rec.type(page.locator('#room_name_room_1'), 'Kitchen', 'Add a room: Kitchen.', per_frame=3)
-        page.locator('#room_name_room_1').press('Escape')
+        rec.type(page.locator('#customer_name'), 'Kavya Menon', 'Customer name and mobile.', per_frame=4, hold=0.2)
+        rec.type(page.locator('#mobile'), '9000012345', 'Customer name and mobile.', per_frame=5, hold=0.4)
+        rec.explain(page.locator('.card', has_text='Plywood').first, 'Plywood for this quotation',
+                    ['Your default is picked', 'Change it: board items re-price'])
 
-        def measured(name, l_ft, l_in, w_ft, w_in, combo, caption, explain=None):
-            rec.tap(page.locator('#room_card_room_1 button', has_text='Add Item'), caption, wait=600, after_hold=0.4)
-            rec.type(page.locator('#modal_item_name'), name, caption, per_frame=3)
+        def add_room(n, name, caption):
+            if n == 1:
+                rec.tap(page.locator('button', has_text='Add First Room').first, caption, wait=600, after_hold=0.2)
+            else:
+                rec.tap(page.locator('#add-room-btn-wrap button'), caption, wait=600, after_hold=0.2)
+            rec.type(page.locator(f'#room_name_room_{n}'), name, caption, per_frame=4, hold=0.3)
+            page.locator(f'#room_name_room_{n}').press('Escape')
+
+        def combo_for(text):
+            opts = page.locator('#modal_item_combo option').all()
+            for o in opts:
+                if o.inner_text().strip().startswith(text):
+                    return o.get_attribute('value')
+            raise RuntimeError(f'no material {text}')
+
+        def open_item(n, caption):
+            rec.tap(page.locator(f'#room_card_room_{n} button', has_text='Add Item'), caption, wait=600, after_hold=0.2)
+
+        def measured(n, name, l_ft, l_in, w_ft, w_in, combo, caption, explain=None):
+            open_item(n, caption)
+            rec.type(page.locator('#modal_item_name'), name, caption, per_frame=4, hold=0.2)
             for sel, val in (('#modal_item_lft', l_ft), ('#modal_item_lin', l_in), ('#modal_item_wft', w_ft), ('#modal_item_win', w_in)):
                 page.locator(sel).fill(val)
-            page.locator('#modal_item_combo').select_option(label=combo) if not '|' in combo else page.locator('#modal_item_combo').select_option(combo)
+            page.locator('#modal_item_combo').select_option(combo_for(combo))
+            page.locator('#modal_item_combo').dispatch_event('change')
             page.wait_for_timeout(400)
             if explain:
                 rec.explain(page.locator('#itemModal .modal-content'), *explain)
             else:
-                rec.shot(caption, 1.6)
-            rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, wait=600, after_hold=0.6)
+                rec.shot(caption, 1.0)
+            rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, wait=600, after_hold=0.3)
 
-        measured('Base Cabinet', '10', '0', '2', '9', 'Acrylic|Box Work', 'Add each item with its size.',
-                 ('A measured item', ['Length and width in your unit',
-                                      'Pick the material and work type',
-                                      'The area and the amount work themselves out']))
-        measured('Overhead Cabinet', '10', '0', '2', '6', 'Laminates|Box Work', 'Add each item with its size.')
-        combos = page.locator('#modal_item_combo option').all_inner_texts()
-        glass = next((c for c in combos if 'Lacquered Glass' in c), 'Lacquered Glass')
-        measured('Back-splash', '10', '0', '2', '0', glass, 'Your new material is there: Lacquered Glass.',
-                 ('Your new material', ['Lacquered Glass, at the rate you set', 'Not on plywood: one rate per sqft']))
-
-        def fixed(name, qty, caption, explain=None):
-            rec.tap(page.locator('#room_card_room_1 button', has_text='Add Item'), caption, wait=600, after_hold=0.3)
-            rec.tap(page.locator('label[for=modal_type_fixed]'), caption, after_hold=0.4)
-            rec.type(page.locator('#modal_item_name'), name[:6], caption, per_frame=2)
+        def fixed(n, name, qty, caption, explain=None):
+            open_item(n, caption)
+            rec.tap(page.locator('label[for=modal_type_fixed]'), caption, after_hold=0.2)
+            rec.type(page.locator('#modal_item_name'), name[:5], caption, per_frame=2, hold=0.3)
             sug = page.locator('.ki-ac-dropdown li', has_text=name).first
             if sug.count():
-                rec.tap(sug, caption, after_hold=0.5)
+                rec.tap(sug, caption, after_hold=0.3)
             else:
                 page.locator('#modal_item_name').fill(name)
             page.locator('#modal_item_qty').fill(qty)
@@ -257,28 +234,35 @@ def record(base, work, password):
             if explain:
                 rec.explain(page.locator('#itemModal .modal-content'), *explain)
             else:
-                rec.shot(caption, 1.6)
-            rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, wait=600, after_hold=0.6)
+                rec.shot(caption, 1.0)
+            rec.tap(page.locator('#itemModal .modal-footer button', has_text='Add Item'), caption, wait=600, after_hold=0.3)
 
-        fixed('Magic Corner', '1', 'Fittings: choose Fixed price.',
-              ('Fittings & accessories', ['"Fixed price", then pick from your price list', 'The price fills in; quantity × price']))
-        fixed('Soft-close Hinge', '16', 'Soft-close hinges: 16 pieces.')
-        rec.explain(page.locator('#room_card_room_1'), 'The whole kitchen', [
-            'Cabinets by area, glass at its own rate, fittings per piece',
-            'Edit or remove any item before you save'])
+        add_room(1, 'Kitchen', 'Add a room: Kitchen.')
+        measured(1, 'Base Cabinet', '10', '0', '2', '9', 'Acrylic – Box', 'Add each item with its size.',
+                 ('A measured item', ['Size in your unit, then the material', 'Area and amount work themselves out']))
+        measured(1, 'Overhead Cabinet', '10', '0', '2', '6', 'Laminates – Box', 'Add each item with its size.')
+        measured(1, 'Back-splash', '10', '0', '2', '0', 'Lacquered Glass', 'Your new material: Lacquered Glass.')
+        fixed(1, 'Magic Corner', '1', 'Fittings: Fixed price, pick from your list.',
+              ('Fittings', ['Pick from your price list', 'Quantity × price']))
+
+        add_room(2, 'Living Room', 'Next room: Living Room.')
+        measured(2, 'False Ceiling', '14', '0', '12', '0', 'False Ceiling', 'False ceiling, by area.',
+                 ('Turnkey work by area', ['False ceiling at your rate per sqft', 'Painting and flooring the same way']))
+        measured(2, 'Wall Painting', '46', '0', '10', '0', 'Painting', 'Painting: 46 ft of wall, 10 ft high.')
+        fixed(2, 'Electrical Point', '12', 'Electrical: 12 points.',
+              ('Per point', ['12 points × ₹850', 'Any per-piece work: lights, fixtures']))
+
+        add_room(3, 'Civil Work', 'Group work your way, e.g. Civil Work.')
+        fixed(3, 'Demolition & Debris Removal', '1', 'Demolition: one lump sum.',
+              ('Lump sum', ['Quantity 1 at the agreed amount', 'Rooms can be trades: Civil, Electrical…']))
+
         summary = page.locator('.card', has_text='Live Cost Summary').first
-        rec.explain(summary, 'The total adds up as you go', [
-            'Room by room, with an optional discount',
-            'Your rates, every time: no calculator'])
-        rec.tap(page.locator('button:visible', has_text='Save Quotation').last, 'Click Save Quotation.', wait=1600, after_hold=1.0)
+        rec.explain(summary, 'The total adds up as you go', ['Room by room, with an optional discount'])
+        rec.tap(page.locator('button:visible', has_text='Save Quotation').last, 'Click Save Quotation.', wait=1600, after_hold=0.6)
         pid = page.url.rstrip('/').split('/')[-1]
-        rec.pdf(f'{base}/projects/{pid}/pdf/customer', 'Your branded PDF, ready to send on WhatsApp.', hold=3.4)
+        rec.pdf(f'{base}/projects/{pid}/pdf/customer', 'Your branded PDF, ready to send on WhatsApp.', hold=3.0)
 
-        rec.slide('You are set up', 'Next quotations take minutes', [
-            'Your details, logo, rates and terms are saved',
-            'Rooms and items, and the total works itself out',
-            'Send the PDF or a link your customer accepts online',
-            'The setup guide stays in the Admin menu'])
+        rec.slide('You are set up', 'Next quotations take minutes', ['Send the PDF, or a link they accept online'])
         rec.save()
         browser.close()
 
