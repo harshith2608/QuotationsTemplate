@@ -198,8 +198,8 @@ def _save_project_data(project, rooms_data, remember=True):
                     unit_price = float(id_.get('unit_price', 0))
                 except (ValueError, TypeError):
                     continue
-                if quantity <= 0 or unit_price < 0:
-                    continue
+                if quantity < 0 or unit_price < 0 or (quantity == 0 and kind != 'boq'):
+                    continue                   # a BOQ line with no quantity is a rate-only line (rate card)
                 item = Item(room_id=room.id, name=item_name[:100], item_type=kind,
                             quantity=quantity, unit_price=unit_price,
                             length=0, width=0, area=0, wood_type='', work_type='')
@@ -989,7 +989,9 @@ def whatsapp_share(project_id):
         for item in room.item_list:
             if item.is_boq:
                 lines.append(f"  • {item.name}: {item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
-                             if item.unit_price else f"  • {item.name}")
+                             if item.unit_price and item.quantity else
+                             f"  • {item.name}: rate Rs.{item.unit_price:,.0f} per {item.unit_text}" if item.unit_price
+                             else f"  • {item.name}")
             elif item.is_fixed:
                 lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{item.unit_price:,.0f}")
             else:

@@ -436,6 +436,8 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
         lines = []
         for room in snapshot['rooms']:
             for it in room['items']:
+                if it['type'] in PRICED and not it['quantity']:
+                    continue                   # a rate-only BOQ line isn't billed
                 if it['type'] in PRICED:
                     lines.append({'room': room['name'], 'description': it['name'], 'detail': it.get('description', ''),
                                   'hsn': hsn, 'qty': it['quantity'], 'unit': it.get('unit') or 'nos',
@@ -452,7 +454,7 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
     fittings = {}
     for room in snapshot['rooms']:
         for it in room['items']:
-            if it['type'] in PRICED:
+            if it['type'] in PRICED and it['quantity']:
                 key = (it['name'], it['unit_price'], it.get('unit') or 'nos')
                 fittings[key] = fittings.get(key, 0) + it['quantity']
     for (name, price, unit), qty in fittings.items():

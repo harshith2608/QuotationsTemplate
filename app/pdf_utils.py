@@ -429,7 +429,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 desc = item.note
                 name = Paragraph(f'{escape(item.name)}' + (f'<br/><font size="7" color="#546e7a">'
                                  f'{escape(desc).replace(chr(10), "<br/>")}</font>' if desc else ''), material_style_left)
-                if item.is_boq:
+                if item.is_boq and not item.quantity:
+                    what = f'Rate only: Rs. {_money(item.unit_price, ",.0f")} / {item.unit_text}'
+                elif item.is_boq:
                     what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'
                 else:
                     what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}'

@@ -636,7 +636,7 @@ function _syncBoqDefault() {
   if (hint) hint.textContent = b
     ? (changed ? 'Changed for this quotation only, unless you tick "Save as my default".'
                : `Your saved line: ₹${(b.rate || 0).toLocaleString('en-IN')}${b.unit ? ' per ' + b.unit : ''}. Change anything for this quotation.`)
-    : 'Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate. Rate 0 prints the line with no amount (e.g. a rate card). New lines are saved for next time.';
+    : 'Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate. No quantity: a rate-only line (a rate card, not added to the total). New lines are saved for next time.';
 }
 
 function modalCalcBoq() {
@@ -651,7 +651,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
-  const qty = quantity !== undefined && quantity !== null ? quantity : 1;
+  const qty = quantity !== undefined && quantity !== null ? quantity : 1;     // 0: a rate-only line
   const r = rate !== undefined && rate !== null ? rate : '';
   rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
                           unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault };
@@ -668,7 +668,8 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
     <td colspan="3">
       <div class="input-group input-group-sm">
         <input type="number" class="form-control text-center px-1" id="item_qty_${ik}" min="0" step="any"
-               value="${qty}" oninput="onBoqField('${rk}','${ik}')" style="max-width:72px" title="Quantity">
+               value="${qty || ''}" placeholder="rate" oninput="onBoqField('${rk}','${ik}')" style="max-width:72px"
+               title="Quantity (leave empty for a rate-only line)">
         <input type="text" class="form-control px-1" id="item_unit_${ik}" list="boq-units" maxlength="20"
                value="${escHtml(unit || 'nos')}" oninput="onBoqField('${rk}','${ik}')" style="max-width:76px" title="Unit">
         <span class="input-group-text px-2 small text-muted">× ₹</span>
@@ -707,7 +708,8 @@ function onBoqField(rk, ik) {
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
                           unit_price, description: descOf(ik), save_default: keepDefault };
   const amtEl = document.getElementById('item_amount_' + ik);
-  if (amtEl) amtEl.textContent = unit_price ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—';
+  if (amtEl) amtEl.textContent = unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })
+                                : (unit_price ? 'rate only' : '—');
   recalcAll();
 }
 
@@ -779,7 +781,8 @@ function onFixedField(rk, ik) {
 // Serialise one item for the server; returns null if incomplete
 function _itemPayload(item) {
   if (item.type === 'fixed' || item.type === 'boq') {
-    if (!item.name || !(item.quantity > 0) || !(item.unit_price >= 0)) return null;
+    // a BOQ line with no quantity is a rate-only line (printed with its rate, not added to the total)
+    if (!item.name || !(item.type === 'boq' ? item.quantity >= 0 : item.quantity > 0) || !(item.unit_price >= 0)) return null;
     return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
              ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}) } : {}),
              ...(item.description ? { description: item.description } : {}) };
@@ -806,11 +809,11 @@ function saveItemFromModal() {
   const desc = document.getElementById('modal_item_desc')?.value.trim() || '';
   if (modalItemType === 'boq') {
     const qtyEl = document.getElementById('modal_boq_qty'), rateEl = document.getElementById('modal_boq_rate');
-    const qty = parseFloat(qtyEl?.value) || 0;
+    const qty = qtyEl?.value === '' ? 0 : parseFloat(qtyEl?.value);      // empty: a rate-only line
     const rate = rateEl?.value === '' ? 0 : parseFloat(rateEl?.value);
-    qtyEl?.classList.toggle('is-invalid', !(qty > 0));
+    qtyEl?.classList.toggle('is-invalid', isNaN(qty) || qty < 0);
     rateEl?.classList.toggle('is-invalid', isNaN(rate) || rate < 0);
-    if (!(qty > 0) || isNaN(rate) || rate < 0) return;
+    if (isNaN(qty) || qty < 0 || isNaN(rate) || rate < 0) return;
     _insertBoqRow(_modalRoomKey, name, qty, document.getElementById('modal_boq_unit')?.value.trim() || 'nos', rate, desc,
                   !!document.getElementById('modal_boq_default')?.checked);
     const inst = bootstrap.Modal.getInstance(document.getElementById('itemModal'));

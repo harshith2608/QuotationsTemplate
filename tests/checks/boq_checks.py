@@ -149,6 +149,24 @@ with app.app_context():
        and saved['False Ceiling'].rate == 140 and saved['False Ceiling'].unit == 'sqft'
        and saved['Electric wiring'].rate == 900 and 'Painting' in saved and '3D Design' not in saved)
 
+# ── Rate-only lines (no quantity): a rate card ──
+c.post('/projects/new', data={'customer_name': 'Rate card', 'mobile': '9000000705', 'rooms_data': json.dumps([
+    {'name': 'Lights & Fittings (rates)', 'description': 'Exact price once the design is final', 'items': [
+        {'name': 'COB Light 12 W', 'type': 'boq', 'quantity': 0, 'unit': 'nos', 'unit_price': 420},
+        {'name': 'Profile Light 17 mm', 'type': 'boq', 'quantity': 0, 'unit': 'rft', 'unit_price': 550}]},
+    {'name': 'Work', 'items': [{'name': 'Fan Fitting', 'type': 'boq', 'quantity': 5, 'unit': 'nos', 'unit_price': 500}]}])})
+with app.app_context():
+    rp = Project.query.order_by(Project.id.desc()).first()
+    rsnap = billing.quotation_snapshot(rp)
+    rrows = layout.boq_rows(rsnap)
+    cob = rrows[0]['lines'][0]
+    ok('rate-only lines: saved with no quantity, shown with their rate, not added to the total',
+       rp.grand_total == 2500 and cob['qty'] == 0 and cob['rate'] == 420 and cob['amount'] == 0
+       and rrows[0]['description'] == 'Exact price once the design is final')
+    ok('rate-only lines aren\'t billed on an invoice', [l_['description'] for l_ in billing.invoice_lines(rsnap)] == ['Fan Fitting'])
+rv = c.get(f'/projects/{rp.id}').text
+ok('quotation page shows "Rate ₹420 / Nos."', 'Rate &#8377;420 / Nos.' in rv)
+
 e = c.get(f'/projects/{pid}/edit').text
 m = re.search(r'id="existing-rooms-data"[^>]*>(.*?)</script>', e, re.S)
 data = json.loads(m.group(1)) if m else []

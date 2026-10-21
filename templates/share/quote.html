@@ -116,8 +116,9 @@
         <tr>
           <td class="text-muted" style="width:2em">{{ ln.no }}</td>
           <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}
-            {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>{% endif %}</td>
-          <td class="text-end text-nowrap">{% if ln.amount %}&#8377;{{ "{:,.2f}".format(ln.amount) }}{% else %}—{% endif %}</td>
+            {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>
+            {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ "{:,.0f}".format(ln.rate) }} per {{ ln.unit }}</div>{% endif %}</td>
+          <td class="text-end text-nowrap">{% if ln.amount %}&#8377;{{ "{:,.2f}".format(ln.amount) }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

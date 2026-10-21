@@ -30,6 +30,7 @@ PICKS = {
     1: [('Fan Fitting', True, ('One line per item', ['Pick it, type the quantity', 'Quantity × rate, worked out for you']), False),
         ('Switch Board Shifting', True, None, False),
         ('Profile Light Fitting', True, ('Running feet too', ['175 R.ft × ₹100: no hand calculation']), False)],
+    2: [('COB Light 12 W', True, ('Rate only', ['No quantity: printed with its rate', 'Not added to the total']), False)],
 }
 
 
@@ -61,6 +62,8 @@ def record(base, work, password, data_path):
         page.fill('textarea[name=important_notes]', data.get('notes', ''))
         page.fill('textarea[name=terms_conditions]', '')
         page.fill('textarea[name=material_specs]', '')
+        descs = [d_ for r in rooms for d_ in (r.get('description') or [])]       # section notes (room descriptions)
+        page.fill('textarea[name=room_descriptions]', '\n'.join(descs))
         page.get_by_role('button', name='Save Quotation Settings').click()
         page.wait_for_timeout(800)
 
@@ -101,11 +104,11 @@ def record(base, work, password, data_path):
             rec.tap(page.locator('label[for=modal_type_boq]'), caption, after_hold=0.3)
             rec.type(page.locator('#modal_item_name'), pick[:5], caption, per_frame=2, hold=0.4)
             rec.tap(page.locator('.ki-ac-dropdown li', has_text=pick).first, caption, after_hold=0.5)
-            after_edit = explain and (explain[0].startswith('Changed') or 'feet' in explain[0])   # explained after edits
+            after_edit = explain and (explain[0].startswith('Changed') or explain[0] in ('Running feet too', 'Rate only'))
             if explain and not after_edit:
                 rec.explain(page.locator('#itemModal .modal-content'), *explain)
                 explain = None
-            page.locator('#modal_boq_qty').fill(str(it['quantity']))
+            page.locator('#modal_boq_qty').fill(str(it['quantity']) if it['quantity'] else '')   # empty: rate only
             page.locator('#modal_boq_qty').dispatch_event('input')
             if not keep_desc and it.get('description'):
                 page.locator('#modal_item_desc').fill(it['description'])
@@ -132,6 +135,11 @@ def record(base, work, password, data_path):
             n = r_i + 1
             label = f"Section {chr(64 + n)}: {room['name']}."
             add_room(n, room['name'], label)
+            for d_ in room.get('description') or []:          # section notes, ticked from the business's list
+                rec.tap(page.locator(f'#room_desc_btn_room_{n}'), 'Notes for this section, from your list.', wait=300, after_hold=0.2)
+                rec.tap(page.locator(f'#room_desc_room_{n} input[type=checkbox][value="{d_}"]'),
+                        'Notes for this section, from your list.', after_hold=0.4)
+                page.keyboard.press('Escape')
             picks = {pk[0].lower(): pk for pk in PICKS.get(r_i, [])}
             pending, quick_added = [], False
             for it in room['items']:                       # in order: picked lines through the window, others quickly
