@@ -8,7 +8,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, HRFlowable, Image)
+                                 TableStyle, HRFlowable, Image, KeepTogether)
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from . import db
@@ -235,7 +235,7 @@ def _totals_elements(snap, page_width, palette):
              ('FONTNAME', (0, k), (-1, k), 'Helvetica-Bold'), ('FONTSIZE', (0, k), (-1, k), 12)]
     tt = Table(tot, colWidths=[page_width * 0.72, page_width * 0.28])
     tt.setStyle(TableStyle(cmds))
-    return [Spacer(1, 6), tt]
+    return [Spacer(1, 6), KeepTogether([tt])]             # Basic Total, discount and Total on one page
 
 
 def _boq_elements(project, page_width, palette, styles):
@@ -247,7 +247,6 @@ def _boq_elements(project, page_width, palette, styles):
     snap = billing.quotation_snapshot(project)
     small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
     title = ParagraphStyle('BQT', parent=small, fontName='Helvetica-Bold')
-    muted = ParagraphStyle('BQM', parent=small, textColor=colors.HexColor('#37474f'))
     cw = [page_width * f for f in (0.07, 0.49, 0.09, 0.09, 0.11, 0.15)]
     grid = colors.HexColor('#bdbdbd')
     data = [['Sr. No.', 'Description', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
@@ -267,9 +266,9 @@ def _boq_elements(project, page_width, palette, styles):
         for ln in sec['lines']:
             text = f'<b>{escape(ln["title"])}</b>'
             if ln['description']:
-                text += '<br/>' + escape(ln['description']).replace('\n', '<br/>')
+                text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
             amount = _money(ln['amount']) if ln['amount'] else '—'
-            data.append([str(ln['no']), Paragraph(text, muted if ln['description'] else small),
+            data.append([str(ln['no']), Paragraph(text, small),
                          f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit'],
                          _money(ln['rate'], ',.0f') if ln['rate'] else '', amount])
     table = Table(data, colWidths=cw, repeatRows=1)
