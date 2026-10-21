@@ -28,12 +28,12 @@ const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // also carry a description
 const BOQ = !!CATALOG.boq;
 // The description sits on its own full-width row under the item's row (the name column is too narrow for it)
-function addDescRow(tr, ik, value, handler) {
+function addDescRow(tr, ik, value, handler, before) {
   if (!BOQ) return;
   const d = document.createElement('tr');
   d.className = 'ki-desc-row';
   d.id = 'item_descrow_' + ik;
-  d.innerHTML = `<td colspan="7" class="pt-0">
+  d.innerHTML = `<td colspan="7" class="pt-0">${before || ''}
       <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
                 placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
     </td>`;
@@ -53,6 +53,64 @@ function unitOptions(selected) {
   if (selected && !list.includes(selected)) list.push(selected);       // a unit typed before (or saved) stays
   return list.map(u => `<option value="${escHtml(u)}" ${u === (selected || 'nos') ? 'selected' : ''}>${escHtml(u)}</option>`).join('');
 }
+// Sizes on BOQ lines: an area unit takes length × width (× No's), a running unit takes length (× No's); typed in the
+// business's size unit (Settings → Units), kept in feet like every size
+const AREA_U = { 'sqft': 1, 'sq m': 0.09290304 }, LEN_U = { 'rft': 1, 'rmt': 0.3048 };
+function sizeMode(unit) { return unit in AREA_U ? 'area' : unit in LEN_U ? 'length' : null; }
+function qtyFromSize(unit, l, w, n) {
+  n = Math.max(parseInt(n, 10) || 1, 1);
+  if (unit in AREA_U) return Math.round(l * w * n * AREA_U[unit] * 100) / 100;
+  if (unit in LEN_U) return Math.round(l * n * LEN_U[unit] * 100) / 100;
+  return null;
+}
+function sizeInputs(prefix, which, ftIn, handler) {
+  return `<div class="input-group input-group-sm" style="width:auto">
+      <input type="number" class="form-control text-center px-1" id="${prefix}_${which}ft" placeholder="0" min="0" max="999" step="1"
+             value="${ftIn && (ftIn.ft || ftIn.inch) ? ftIn.ft : ''}" oninput="${handler}" style="max-width:56px" title="Feet">
+      <span class="input-group-text px-1 small text-muted">ft</span>
+      <input type="number" class="form-control text-center px-1" id="${prefix}_${which}in" placeholder="0" min="0" max="11" step="1"
+             value="${ftIn && (ftIn.ft || ftIn.inch) ? ftIn.inch : ''}" oninput="${handler}" style="max-width:52px" title="Inches (0–11)">
+      <span class="input-group-text px-1 small text-muted">in</span>
+    </div>`;
+}
+// The Size strip: "Size  L [ ] × W [ ] × No's [ ]  = 168 sqft" (prefix: 'boq_<ik>' in a row, 'modal_boq' in the window)
+function sizeStrip(prefix, l, w, n, handler) {
+  const L = l ? decimalToFtIn(l) : null, W = w ? decimalToFtIn(w) : null;
+  return `<div class="ki-boq-size d-flex flex-wrap align-items-center gap-2 mb-1 d-none" id="${prefix}_size">
+      <span class="small fw-semibold text-muted">Size</span>
+      <span class="small text-muted">Length</span>${sizeInputs(prefix, 'l', L, handler)}
+      <span class="ki-size-w d-flex align-items-center gap-2"><span class="small text-muted">× Width</span>${sizeInputs(prefix, 'w', W, handler)}</span>
+      <span class="small text-muted">× No's</span>
+      <input type="number" class="form-control form-control-sm text-center px-1" id="${prefix}_cnt" min="1" max="999" step="1"
+             value="${n && n > 1 ? n : 1}" oninput="${handler}" style="width:56px" title="Identical pieces">
+      <span class="small fw-semibold text-primary" id="${prefix}_sizeqty"></span>
+      <span class="small text-muted" id="${prefix}_sizehint">or leave empty and type the quantity</span>
+    </div>`;
+}
+// Reads a Size strip and sets the quantity: {mode, length, width, count, qty} (qty null = typed by hand)
+function applySize(prefix, unit, qtyEl) {
+  const strip = document.getElementById(prefix + '_size');
+  const mode = sizeMode(unit);
+  if (strip) {
+    strip.classList.toggle('d-none', !mode);
+    strip.querySelector('.ki-size-w')?.classList.toggle('d-none', mode !== 'area');
+  }
+  const val = id => parseFloat(document.getElementById(prefix + id)?.value) || 0;
+  const length = ftInToDecimal(val('_lft'), val('_lin')), width = ftInToDecimal(val('_wft'), val('_win'));
+  const count = Math.min(Math.max(parseInt(document.getElementById(prefix + '_cnt')?.value, 10) || 1, 1), 999);
+  const sized = !!mode && length > 0 && (mode === 'length' || width > 0);
+  const qty = sized ? qtyFromSize(unit, length, width, count) : null;
+  const out = document.getElementById(prefix + '_sizeqty'), hint = document.getElementById(prefix + '_sizehint');
+  if (out) out.textContent = sized ? `= ${qty.toLocaleString('en-IN')} ${unit}` : '';
+  if (hint) hint.classList.toggle('d-none', sized);
+  if (qtyEl && unit !== 'lump sum') {
+    if (sized) qtyEl.value = qty;
+    qtyEl.readOnly = sized;
+    qtyEl.classList.toggle('bg-light', sized);
+  }
+  return { mode, length: sized ? length : 0, width: sized && mode === 'area' ? width : 0, count: sized ? count : 1, qty };
+}
+
 // Lump sum: one amount, so the quantity is 1 and locked
 function syncLumpSum(unitEl, qtyEl) {
   if (!unitEl || !qtyEl) return;
@@ -364,6 +422,8 @@ document.addEventListener('DOMContentLoaded', () => {
   try { priceList = JSON.parse(document.getElementById('price-list-data').textContent || '[]'); } catch (e) { priceList = []; }
 
   document.getElementById('modal_item_combo')?.addEventListener('change', syncModalPly);
+  const sizeSlot = document.getElementById('modal_boq_size_slot');
+  if (sizeSlot) sizeSlot.innerHTML = sizeStrip('modal_boq', 0, 0, 1, 'modalCalcBoq()');
   applyUnitInputs(document.getElementById('itemModal'));
 
   // Modal item name: suggests room items for measured, the price list for fixed-price items
@@ -400,7 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const rk = addRoom(rd.name);
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
-        if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.unit_price, id.description); return; }
+        if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.unit_price, id.description, false,
+                                               id.length, id.width, id.count); return; }
         if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description); return; }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
@@ -581,6 +642,8 @@ function openItemModal(rk) {
   if (bu) { bu.innerHTML = unitOptions('sqft'); syncLumpSum(bu, document.getElementById('modal_boq_qty')); }
   const br = document.getElementById('modal_boq_rate');  if (br) br.value = '';
   const bd = document.getElementById('modal_boq_default'); if (bd) bd.checked = false;
+  ['modal_boq_lft', 'modal_boq_lin', 'modal_boq_wft', 'modal_boq_win'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const bc = document.getElementById('modal_boq_cnt'); if (bc) bc.value = 1;
   modalBoqTouched = false;
   const priceEl = document.getElementById('modal_item_price'); if (priceEl) priceEl.value = '';
   modalPriceTouched = false;
@@ -675,6 +738,7 @@ function _syncBoqDefault() {
 }
 
 function modalCalcBoq() {
+  applySize('modal_boq', document.getElementById('modal_boq_unit')?.value || 'nos', document.getElementById('modal_boq_qty'));
   const qty  = parseFloat(document.getElementById('modal_boq_qty')?.value) || 0;
   const rate = parseFloat(document.getElementById('modal_boq_rate')?.value) || 0;
   const el = document.getElementById('modal_boq_amount');
@@ -683,7 +747,7 @@ function modalCalcBoq() {
 }
 
 // ─── BOQ lines ───────────────────────────────────────────────────────────────
-function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
+function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -725,7 +789,9 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
       </button>
     </td>`;
   tbody.appendChild(tr);
-  addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`);
+  addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
+             sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`));
+  applyUnitInputs(document.getElementById('item_descrow_' + ik));
   syncLumpSum(document.getElementById('item_unit_' + ik), document.getElementById('item_qty_' + ik));
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
@@ -744,11 +810,14 @@ function onBoqField(rk, ik) {
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
   }
   const keepDefault = rooms[rk].items[ik].save_default;
+  const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
+  const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
   const quantity   = parseFloat(document.getElementById('item_qty_' + ik)?.value) || 0;
   const unit_price = parseFloat(document.getElementById('item_price_' + ik)?.value) || 0;
   rooms[rk].items[ik] = { type: 'boq', name: document.getElementById('item_name_' + ik)?.value.trim() || '',
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
-                          unit_price, description: descOf(ik), save_default: keepDefault };
+                          unit_price, description: descOf(ik), save_default: keepDefault,
+                          length: size.length, width: size.width, count: size.count };
   const amtEl = document.getElementById('item_amount_' + ik);
   if (amtEl) amtEl.innerHTML = unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })
                                 : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
@@ -830,7 +899,8 @@ function _itemPayload(item) {
     // a BOQ line with no quantity is a rate-only line (printed with its rate, not added to the total)
     if (!item.name || !(item.type === 'boq' ? item.quantity >= 0 : item.quantity > 0) || !(item.unit_price >= 0)) return null;
     return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
-             ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}) } : {}),
+             ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}),
+                                         ...(item.length ? { length: item.length, width: item.width || 0, count: item.count || 1 } : {}) } : {}),
              ...(item.description ? { description: item.description } : {}) };
   }
   const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
@@ -860,8 +930,10 @@ function saveItemFromModal() {
     qtyEl?.classList.toggle('is-invalid', isNaN(qty) || qty < 0);
     rateEl?.classList.toggle('is-invalid', isNaN(rate) || rate < 0);
     if (isNaN(qty) || qty < 0 || isNaN(rate) || rate < 0) return;
-    _insertBoqRow(_modalRoomKey, name, qty, document.getElementById('modal_boq_unit')?.value.trim() || 'nos', rate, desc,
-                  !!document.getElementById('modal_boq_default')?.checked);
+    const mUnit = document.getElementById('modal_boq_unit')?.value.trim() || 'nos';
+    const mSize = applySize('modal_boq', mUnit, qtyEl);
+    _insertBoqRow(_modalRoomKey, name, mSize.qty !== null ? mSize.qty : qty, mUnit, rate, desc,
+                  !!document.getElementById('modal_boq_default')?.checked, mSize.length, mSize.width, mSize.count);
     const inst = bootstrap.Modal.getInstance(document.getElementById('itemModal'));
     if (inst) inst.hide();
     return;

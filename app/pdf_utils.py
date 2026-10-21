@@ -435,7 +435,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                     what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'
                 else:
                     what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}'
-                item_rows.append([name, '—', '—', what, '—', f'{_money(subtotal)}'])
+                sized = item.is_boq and item.length
+                item_rows.append([name, ft_in(item.length) if sized else '—',
+                                  ft_in(item.width) if sized and item.width else '—', what, '—', f'{_money(subtotal)}'])
                 continue
             work_type  = item.work_type or ''
             _key       = plywood.item_key(item, _project_ply)

@@ -16,6 +16,10 @@ from . import db
 KEY = 'feature_boq'
 UNITS = ['sqft', 'rft', 'nos', 'point', 'sq m', 'rmt', 'set', 'lump sum']
 LUMP_SUM = 'lump sum'
+# Units whose quantity can come from a size: area (length × width × No's) and running length (length × No's).
+# Values: the unit per square foot / per foot (sizes are kept in feet, like every size in the app).
+AREA_UNITS = {'sqft': 1.0, 'sq m': 0.09290304}
+LENGTH_UNITS = {'rft': 1.0, 'rmt': 0.3048}
 DESCRIPTION_MAX = 2000
 UNIT_MAX = 20
 
@@ -71,6 +75,39 @@ def console_status():
     from . import tenancy
     from .models import AppSetting
     return {'ready': _columns_ready(tenancy.current_schema()), 'on': AppSetting.get(KEY, '') == '1'}
+
+
+def units_for_business():
+    """The unit list with the business's own area and running-length units first (Settings → Units)."""
+    from . import units
+    first = ['sq m', 'rmt'] if units.area_unit() == 'sqm' else ['sqft', 'rft']
+    return first + [u for u in UNITS if u not in first]
+
+
+def size_mode(unit):
+    """'area' (length × width), 'length' (running length) or None (a count, a point, a lump sum…)."""
+    return 'area' if unit in AREA_UNITS else 'length' if unit in LENGTH_UNITS else None
+
+
+def quantity_from_size(unit, length, width, count=1):
+    """The quantity in `unit` for a size in feet, e.g. 14 ft × 12 ft → 168 sqft (15.61 sq m); 12 ft → 12 rft."""
+    count = max(int(count or 1), 1)
+    if unit in AREA_UNITS:
+        return round(length * width * count * AREA_UNITS[unit], 2)
+    if unit in LENGTH_UNITS:
+        return round(length * count * LENGTH_UNITS[unit], 2)
+    return None
+
+
+def size_text(item):
+    """'14 ft × 12 ft × 2 No's' (area) or '12 ft × 4 No's' (running length) in the business's size unit, or ''."""
+    from . import units
+    length, width = item.get('length') or 0, item.get('width') or 0
+    if not length:
+        return ''
+    text = units.length(length) + (f' × {units.length(width)}' if width else '')
+    count = item.get('count') or 1
+    return text + (f" × {count} No's" if count > 1 else '')
 
 
 def clean_unit(value):

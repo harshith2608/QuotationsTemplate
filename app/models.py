@@ -242,6 +242,16 @@ class Item(db.Model):
         return self.item_type == 'boq'
 
     @property
+    def boq_count(self):
+        """No's of a BOQ line measured by size (its quantity / one piece's area or length), else 1."""
+        from . import boq
+        if not (self.is_boq and self.length):
+            return 1
+        unit = self.unit if boq.ready() else ''
+        one = boq.quantity_from_size(unit, self.length, self.width or 0, 1)
+        return max(int(round((self.quantity or 0) / one)), 1) if one else 1
+
+    @property
     def note(self):
         """The item's description, or '' (never reads the column before the database update)."""
         from . import boq

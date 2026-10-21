@@ -78,7 +78,7 @@
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.unit_price %} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
+            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{% if it.length %}{{ it.length|ft_in }}{% if it.width %} × {{ it.width|ft_in }}{% endif %}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {% endif %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.unit_price %} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
           </tr>
         {% endfor %}

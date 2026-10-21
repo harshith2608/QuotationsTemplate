@@ -69,6 +69,8 @@ def quotation_snapshot(project, rooms=None):
                        'amount': round((i.quantity or 0) * (i.unit_price or 0), 2)}
                 if i.is_boq:
                     row['unit'] = (i.unit if boq_ready else '') or 'nos'
+                    if i.length:                        # measured by size: kept so it prints and restores
+                        row.update(length=i.length, width=i.width or 0, count=i.boq_count)
                 if boq_ready and i.description:
                     row['description'] = i.description     # only when set: older snapshots stay comparable
                 items.append(row)
@@ -190,7 +192,8 @@ def restore_preview(project, snap):
             if it['type'] in PRICED:
                 items.append({'name': it['name'], 'type': it['type'], 'quantity': it['quantity'],
                               'unit_price': it['unit_price'], 'unit': it.get('unit', ''),
-                              'description': it.get('description', '')})
+                              'description': it.get('description', ''), 'length': it.get('length', 0),
+                              'width': it.get('width', 0), 'count': it.get('count', 1)})
                 subtotal += it['quantity'] * it['unit_price']
                 continue
             if f"{it['wood_type']}|{it['work_type']}" not in valid:
@@ -232,7 +235,9 @@ def _fmt_dim(feet):
 
 def _describe(item):
     if item['type'] == 'boq':
-        return f"{item['quantity']:g} {item.get('unit') or 'nos'} × ₹{item['unit_price']:,.0f}"
+        from . import boq
+        size = boq.size_text(item)
+        return (f"{size} = " if size else '') + f"{item['quantity']:g} {item.get('unit') or 'nos'} × ₹{item['unit_price']:,.0f}"
     if item['type'] == 'fixed':
         return f"{item['quantity']:g} × ₹{item['unit_price']:,.0f}"
     count = f" × {item['count']}" if item.get('count', 1) > 1 else ''
@@ -439,7 +444,9 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
                 if it['type'] in PRICED and not it['quantity']:
                     continue                   # a rate-only BOQ line isn't billed
                 if it['type'] in PRICED:
-                    lines.append({'room': room['name'], 'description': it['name'], 'detail': it.get('description', ''),
+                    from . import boq as _boq
+                    lines.append({'room': room['name'], 'description': it['name'],
+                                  'detail': ' · '.join(x for x in (_boq.size_text(it), it.get('description', '')) if x),
                                   'hsn': hsn, 'qty': it['quantity'], 'unit': it.get('unit') or 'nos',
                                   'rate': it['unit_price'], 'amount': it['amount']})
                 else:

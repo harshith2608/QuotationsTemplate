@@ -76,6 +76,8 @@ def boq_rows(snapshot):
             else:
                 unit = it.get('unit') or 'nos'
                 lump = unit == boq.LUMP_SUM
+                size = boq.size_text(it)
+                desc = '\n'.join(x for x in (desc, f'Size: {size}' if size else '') if x)
                 lines.append({'no': n, 'title': it['name'], 'description': desc, 'qty': it['quantity'],
                               'unit': boq.unit_text(unit), 'rate': None if lump or not it['unit_price'] else it['unit_price'],
                               'amount': it['amount']})
@@ -147,7 +149,7 @@ def room_rows(snapshot):
 def _room_item(it):
     if it['type'] == 'boq':                    # no sizes: its quantity and unit, e.g. "696 Sq.ft"
         from . import boq
-        return {'name': it['name'], 'length': None, 'width': None,
+        return {'name': it['name'], 'length': it.get('length') or None, 'width': it.get('width') or None,
                 'count': f"{boq.qty_text(it['quantity'])} {boq.unit_text(it.get('unit'))}".strip()}
     return {'name': it['name'], 'length': it['length'], 'width': it['width'], 'count': it.get('count', 1)}
 

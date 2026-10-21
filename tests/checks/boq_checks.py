@@ -167,6 +167,29 @@ with app.app_context():
 rv = c.get(f'/projects/{rp.id}').text
 ok('quotation page shows "Rate ₹420 / Nos."', 'Rate &#8377;420 / Nos.' in rv)
 
+# ── Sizes: the quantity worked out from length × width (area units) or length (running units) ──
+c.post('/projects/new', data={'customer_name': 'Sizes', 'mobile': '9000000706', 'rooms_data': json.dumps([
+    {'name': 'Hall', 'items': [
+        {'name': 'False Ceiling', 'type': 'boq', 'quantity': 1, 'unit': 'sqft', 'unit_price': 120, 'length': 14, 'width': 12},
+        {'name': 'Ceiling (metric)', 'type': 'boq', 'quantity': 1, 'unit': 'sq m', 'unit_price': 1300, 'length': 14, 'width': 12},
+        {'name': 'Profile Light', 'type': 'boq', 'quantity': 1, 'unit': 'rft', 'unit_price': 550, 'length': 12, 'count': 4},
+        {'name': 'Panel', 'type': 'boq', 'quantity': 1, 'unit': 'sqft', 'unit_price': 950, 'length': 3, 'width': 2.5, 'count': 2},
+        {'name': 'Total typed', 'type': 'boq', 'quantity': 696, 'unit': 'sqft', 'unit_price': 120}]}])})
+with app.app_context():
+    sp = Project.query.order_by(Project.id.desc()).first()
+    si = {i.name: i for i in Item.query.join(Item.room).filter(Room.project_id == sp.id)}
+    ok('size → quantity: 14 ft × 12 ft = 168 sqft; 15.61 sq m; 12 ft × 4 = 48 rft; 3 × 2.5 × 2 = 15 sqft (the server works it out)',
+       si['False Ceiling'].quantity == 168 and si['Ceiling (metric)'].quantity == 15.61 and si['Profile Light'].quantity == 48
+       and si['Panel'].quantity == 15 and si['Panel'].boq_count == 2 and si['Profile Light'].boq_count == 4)
+    ok('…or the quantity typed with no size', si['Total typed'].quantity == 696 and si['Total typed'].length == 0)
+    ssnap = billing.quotation_snapshot(sp)
+    lines = {l_['title']: l_ for sec in layout.boq_rows(ssnap) for l_ in sec['lines']}
+    ok('BOQ rows print the size: "Size: 14 ft × 12 ft", "12 ft × 4 No\'s"', 'Size: 14 ft × 12 ft' in lines['False Ceiling']['description']
+       and "Size: 12 ft × 4 No's" in lines['Profile Light']['description'] and 'Size' not in lines['Total typed']['description'])
+    ok('total from the sizes', round(sp.grand_total, 2) == round(168 * 120 + 15.61 * 1300 + 48 * 550 + 15 * 950 + 696 * 120, 2))
+es = c.get(f'/projects/{sp.id}/edit').text
+ok('edit form gets the size and No\'s back', '"length": 12.0' in es and '"count": 4' in es)
+
 e = c.get(f'/projects/{pid}/edit').text
 m = re.search(r'id="existing-rooms-data"[^>]*>(.*?)</script>', e, re.S)
 data = json.loads(m.group(1)) if m else []
