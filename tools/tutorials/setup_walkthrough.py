@@ -14,7 +14,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 from landscape import DESK, DESK_DPR
-from recorder import OUT
+from recorder import DPR, OUT, VIEW, Recorder
 from walkthrough import WalkRecorder, render
 
 TITLE = 'Set up, step by step'
@@ -262,7 +262,30 @@ def record(base, work, password):
         pid = page.url.rstrip('/').split('/')[-1]
         rec.pdf(f'{base}/projects/{pid}/pdf/customer', 'Your branded PDF, ready to send on WhatsApp.', hold=3.0)
 
-        rec.slide('You are set up', 'Next quotations take minutes', ['Send the PDF, or a link they accept online'])
+        # ── the customer accepts online ──
+        quote_url = f'{base}/projects/{pid}'
+        page.goto(quote_url)
+        rec.scroll_to(page.locator('#approval'), 'Or send a link your customer accepts online.', offset=200)
+        rec.tap(page.locator('#approval button', has_text='Create approval link'), 'Click Create approval link…', wait=1000)
+        link = page.locator('#approvalUrl').input_value().replace(Recorder.PUBLIC, base)
+        rec.explain(page.locator('#approval'), 'Approval link', ['Send it on WhatsApp', 'Your customer accepts online'],
+                    kicker='Getting a yes')
+        cust = browser.new_context(viewport=VIEW, device_scale_factor=DPR, is_mobile=True, has_touch=True).new_page()
+        crec = Recorder(cust, rec.dir, rec.chapter, rec.title)
+        crec.items = rec.items
+        cust.goto(link)
+        crec.shot('Kavya opens it on her phone. No app, no login.', 2.2)
+        crec.scroll_to(cust.get_by_text('Living Room').first, 'Every room and item, with sizes…', offset=160)
+        crec.shot('Every room and item, with sizes…', 1.6)
+        crec.scroll_to(cust.locator('#respond'), 'She ticks the box and taps Accept.', offset=200)
+        crec.tap(cust.locator('#accAgree'), 'She ticks the box and taps Accept.', after_hold=0.3)
+        crec.tap(cust.locator('#respond button[type=submit]').first, 'She ticks the box and taps Accept.', wait=1200, after_hold=0.4)
+        cust.evaluate('window.scrollTo(0, 0)')
+        crec.shot('Accepted!', 1.6)
+        page.goto(quote_url)
+        rec.shot('Back on your laptop: Confirmed, with a notification.', 2.6)
+
+        rec.slide('You are set up', 'Next quotations take minutes', ['Measure, quote, send, get a yes'])
         rec.save()
         browser.close()
 
