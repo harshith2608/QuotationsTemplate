@@ -21,16 +21,16 @@ TITLE = 'A turnkey BOQ in QuoteRoom'
 SUBTITLE = 'Every line with its description, quantity, unit and rate. The total works itself out.'
 OUTRO = 'Try it free for 7 days: quote-room.co.in'
 LABEL = 'BOQ walkthrough'
-TYPED = 4                 # lines of the first section added through the Add Item window, with explanations
-# those lines: (saved line to pick, keep its description, explanation) — the rest of each line comes from the JSON
-PICKS = [
-    ('False Ceiling', False, ('Your saved line', ['Pick it: description, unit and rate fill in',
-                                                   'Change anything for this quotation'])),
-    ('Electric Wiring', True, None),
-    ('Light and Fitting Charges', True, ('A note with no amount', ['Rate 0: printed as information, e.g. a rate card'])),
-    ('Electrical Fitting Charges', False, ('Changed for this quotation', ['Its own breakdown and amount here',
-                                                                        'Tick "Save as my default" to keep it'])),
-]
+# Lines added through the Add Item window, per section (index): (saved line to pick, keep its description,
+# explanation, tick "Save as my default"). The rest of each line comes from the JSON; other lines are added quickly.
+PICKS = {
+    0: [('False Ceiling', False, ('Changed for this quotation', ["This quotation's own breakdown",
+                                                                 'Your saved default stays as it is']), False),
+        ('Electric Wiring', True, None, False)],
+    1: [('Fan Fitting', True, ('One line per item', ['Pick it, type the quantity', 'Quantity × rate, worked out for you']), False),
+        ('Switch Board Shifting', True, None, False),
+        ('Profile Light Fitting', True, ('Running feet too', ['175 R.ft × ₹100: no hand calculation']), False)],
+}
 
 
 def record(base, work, password, data_path):
@@ -95,13 +95,13 @@ def record(base, work, password, data_path):
             rec.type(page.locator(f'#room_name_room_{n}'), name, caption, per_frame=4, hold=0.4)
             page.locator(f'#room_name_room_{n}').press('Escape')
 
-        def picked_line(n, it, pick, keep_desc, explain):
-            caption = f"Add a BOQ line: {pick}."
+        def picked_line(n, it, pick, keep_desc, explain, tick=False):
+            caption = f"Add a BOQ line: {pick}."         # `it` has the same name: picked, then its quantity etc.
             rec.tap(page.locator(f'#room_card_room_{n} button', has_text='Add Item'), caption, wait=600, after_hold=0.2)
             rec.tap(page.locator('label[for=modal_type_boq]'), caption, after_hold=0.3)
             rec.type(page.locator('#modal_item_name'), pick[:5], caption, per_frame=2, hold=0.4)
             rec.tap(page.locator('.ki-ac-dropdown li', has_text=pick).first, caption, after_hold=0.5)
-            after_edit = explain and explain[0].startswith('Changed')      # explained once the line is changed
+            after_edit = explain and (explain[0].startswith('Changed') or 'feet' in explain[0])   # explained after edits
             if explain and not after_edit:
                 rec.explain(page.locator('#itemModal .modal-content'), *explain)
                 explain = None
@@ -116,7 +116,7 @@ def record(base, work, password, data_path):
             page.wait_for_timeout(250)
             if explain:
                 rec.explain(page.locator('#itemModal .modal-content'), *explain)
-                if explain[0].startswith('Changed'):
+                if tick:
                     rec.tap(page.locator('#modal_boq_default'), 'Tick "Save as my default" to keep it for next time.', after_hold=0.6)
             else:
                 rec.shot(caption, 1.2)
@@ -128,21 +128,29 @@ def record(base, work, password, data_path):
                           [f'room_{n}', items])
             page.wait_for_timeout(400)
 
-        first = rooms[0]
-        add_room(1, first['name'], f"Section A: {first['name']}.")
-        for it, (pick, keep_desc, explain) in zip(first['items'][:TYPED], PICKS):
-            picked_line(1, it, pick, keep_desc, explain)
-        rec.explain(page.locator('#room_card_room_1'), 'In the quotation', ['Edit any line right here',
-                                                                           'Descriptions stay with the line'])
-        quick_lines(1, first['items'][TYPED:], '')
-        rec.scroll_to(page.locator('#room_card_room_1 tbody tr.item-row').nth(TYPED), '…and the rest of the lines, the same way.', offset=120)
-        rec.shot('…and the rest of the lines, the same way.', 1.4)
-        for n, room in enumerate(rooms[1:], 2):
-            add_room(n, room['name'], f"Section {chr(64 + n)}: {room['name']}.")
-            quick_lines(n, room['items'], '')
-            rec.scroll_to(page.locator(f'#room_card_room_{n}'), f"Section {chr(64 + n)}: {room['name']}.", offset=90)
-            rec.shot(f"Section {chr(64 + n)}: {room['name']}.", 1.6)
-
+        for r_i, room in enumerate(rooms):
+            n = r_i + 1
+            label = f"Section {chr(64 + n)}: {room['name']}."
+            add_room(n, room['name'], label)
+            picks = {pk[0].lower(): pk for pk in PICKS.get(r_i, [])}
+            pending, quick_added = [], False
+            for it in room['items']:                       # in order: picked lines through the window, others quickly
+                pk = picks.get(it['name'].lower())
+                if pk is None:
+                    pending.append(it)
+                    continue
+                if pending:
+                    quick_lines(n, pending, ''); pending, quick_added = [], True
+                picked_line(n, it, *pk)
+            if pending:
+                quick_lines(n, pending, ''); quick_added = True
+            if quick_added:
+                caption = '…and the rest of the lines, the same way.' if picks else label
+                rec.scroll_to(page.locator(f'#room_card_room_{n} tbody tr.item-row').last, caption, offset=420)
+                rec.shot(caption, 1.4)
+            if r_i == 1:
+                rec.explain(page.locator(f'#room_card_room_{n}'), 'A section of its own', ['Every line adds up by itself',
+                                                                                          'Saved for your next quotation'])
         if data.get('discount'):
             page.locator('#discount_type_select').select_option('fixed')
             page.locator('#discount_type_select').dispatch_event('change')

@@ -137,14 +137,26 @@ STARTER = [
     # Services
     ('False Ceiling', 'sqft', 120, 'Gypsum false ceiling with framework, as per design (living room, kitchen, passage, bedrooms)'),
     ('Electric Wiring', 'point', 850, 'Conduit, Polycab wire (1.5 sq.mm considered); excluding switches, sockets & plates'),
-    ('Light and Fitting Charges', 'nos', 0,
-     'COB light 12 W 3 inch Rs 420, panel light 15 W 3-in-1 Rs 500, profile light 17 mm Rs 550 per rft, profile light 35 mm '
-     'Rs 850 per rft, point with switch or socket Rs 1150, point looping with material Rs 550, fan fitting including bracket '
-     'Rs 500, hanging light fitting Rs 250, strip light Rs 150 per rft, wardrobe / kitchen cabinet lights Rs 550 per rft.\n'
-     'Hanging lights as per design and selection; exact price once the design is final.'),
-    ('Electrical Fitting Charges', LUMP_SUM, 0,
-     'Fan fitting including bracket: 5 x 500\nSwitch board shifting: 7 x 850\nProfile light fitting: R.ft x 100\n'
-     'Cove light fitting: R.ft x 75\nCOB light fitting: nos x 150\nExhaust fan fixing: 2 x 350'),
+    # Electrical fitting (labour), one line each
+    ('Fan Fitting', 'nos', 500, 'Fan fitting including bracket'),
+    ('Exhaust Fan Fixing', 'nos', 350, ''),
+    ('Switch Board Shifting', 'nos', 350, ''),
+    ('New Switch Board', 'nos', 850, ''),
+    ('Switch Board Replacement', 'nos', 500, 'Removing old switch board and fitting new'),
+    ('Profile Light Fitting', 'rft', 100, ''),
+    ('Cove Light Fitting', 'rft', 75, ''),
+    ('COB Light Fitting', 'nos', 150, ''),
+    ('Hanging Light Fitting', 'nos', 250, 'Hanging lights as per design and selection, priced separately'),
+    # Lights & points (supply)
+    ('COB Light 12 W', 'nos', 420, '3 inch'),
+    ('Panel Light 15 W', 'nos', 500, '3-in-1'),
+    ('Profile Light 17 mm', 'rft', 550, ''),
+    ('Profile Light 35 mm', 'rft', 850, ''),
+    ('Strip Light', 'rft', 150, ''),
+    ('Wardrobe / Cabinet Profile Light', 'rft', 550, 'Micro switch Rs 700 extra'),
+    ('Laser Light', 'nos', 900, '5 nos with 3 W LED each'),
+    ('Switch / Socket Point', 'point', 1150, 'With switch or socket (GM base level switches and plates)'),
+    ('Point Looping', 'point', 550, 'With material'),
     ('Paint Work', 'sqft', 45, 'Royale Luxury Emulsion / Asian Royale on all indoor walls, with putty, primer and 2 coats of colour'),
     ('3D Design', LUMP_SUM, 45000, '3D design for reference (living room, kitchen & bedrooms), one revision, 10-12 views'),
     ('Floor Protection', LUMP_SUM, 7500, 'Floor protection sheet on all areas during work'),
