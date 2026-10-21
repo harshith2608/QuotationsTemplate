@@ -31,17 +31,23 @@ def ready():
         return True
     if has_app_context() and '_boq_ready' in g:
         return g._boq_ready
-    from sqlalchemy import inspect
-    try:
-        cols = {c['name'] for c in inspect(db.session.connection()).get_columns('items', schema=schema)}
-        found = {'description', 'unit'} <= cols
-    except Exception:
-        found = False
+    found = _columns_ready(schema)
     if found:
         _ready_forever[schema] = True
     if has_app_context():
         g._boq_ready = found
     return found
+
+
+def _columns_ready(schema):
+    """items.description and items.unit, and the boq_items table, exist (the database update has run)."""
+    from sqlalchemy import inspect
+    try:
+        insp = inspect(db.session.connection())
+        cols = {c['name'] for c in insp.get_columns('items', schema=schema)}
+        return {'description', 'unit'} <= cols and insp.has_table('boq_items', schema=schema)
+    except Exception:
+        return False
 
 
 def enabled():
@@ -58,14 +64,9 @@ def set_enabled(on):
 def console_status():
     """{'ready', 'on'} for the console, checked afresh (the console opens many businesses' databases in one process,
     so the per-schema memory in ready() can't be trusted there)."""
-    from sqlalchemy import inspect
     from . import tenancy
     from .models import AppSetting
-    try:
-        cols = {c['name'] for c in inspect(db.session.connection()).get_columns('items', schema=tenancy.current_schema())}
-    except Exception:
-        cols = set()
-    return {'ready': {'description', 'unit'} <= cols, 'on': AppSetting.get(KEY, '') == '1'}
+    return {'ready': _columns_ready(tenancy.current_schema()), 'on': AppSetting.get(KEY, '') == '1'}
 
 
 def clean_unit(value):
@@ -96,3 +97,31 @@ def unit_text(unit):
 
 def qty_text(quantity):
     return f'{quantity:,.2f}'.rstrip('0').rstrip('.') if quantity else '—'
+
+
+# ── Saved BOQ lines (Admin → Rates → BOQ lines) ──────────────────────────────
+
+def saved_lines():
+    """[{name, description, unit, rate}] for the quotation form, by name."""
+    from .models import BoqItem
+    return [{'name': b.name, 'description': b.description or '', 'unit': b.unit or 'nos', 'rate': b.rate or 0}
+            for b in BoqItem.query.order_by(BoqItem.name).all()]
+
+
+def remember(lines):
+    """After a quotation is saved: a BOQ line used for the first time is saved with its description, unit and rate;
+    one already saved keeps its defaults unless the line asked to update them ("Save as my default").
+    lines: [(name, description, unit, rate, save_default)]."""
+    from sqlalchemy import func
+    from .models import BoqItem
+    done = set()
+    for name, description, unit, rate, save_default in lines:
+        key = name.strip().lower()
+        if not key or key in done:
+            continue
+        done.add(key)
+        row = BoqItem.query.filter(func.lower(BoqItem.name) == key).first()
+        if row is None:
+            db.session.add(BoqItem(name=name.strip()[:100], description=description, unit=unit, rate=rate))
+        elif save_default:
+            row.description, row.unit, row.rate = description, unit, rate

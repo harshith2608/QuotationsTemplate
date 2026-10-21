@@ -350,8 +350,12 @@
               </div>
             </div>
           </div>
-          <div class="small text-muted mb-3">Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate.
-            Rate 0 prints the line with no amount (e.g. a rate card).</div>
+          <div class="small text-muted mb-2" id="modal_boq_hint">Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate.
+            Rate 0 prints the line with no amount (e.g. a rate card). New lines are saved for next time.</div>
+          <div class="form-check mb-3 d-none" id="modal_boq_default_wrap">
+            <input class="form-check-input" type="checkbox" id="modal_boq_default">
+            <label class="form-check-label small" for="modal_boq_default">Save as my default (description, unit and rate for next time)</label>
+          </div>
           <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
             <span class="small text-muted fw-medium">Amount</span>
             <span class="fw-bold text-primary fs-6" id="modal_boq_amount">&#8377;0</span>
@@ -451,6 +455,7 @@
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }},
     boqLabel:    {{ catalog.BOQ_ITEMS_LABEL|tojson }},
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
+    boqSaved:    {{ boq_form.saved|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
     descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}
   };

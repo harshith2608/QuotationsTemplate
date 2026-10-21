@@ -283,6 +283,48 @@ def _save_price_list():
     return errors
 
 
+def _save_boq_lines():
+    """Apply edits, additions and deletions from the saved BOQ lines form. Returns error messages."""
+    from sqlalchemy import func
+    from . import boq
+    from .models import BoqItem
+    errors = []
+    ids, names = request.form.getlist('bq_id'), request.form.getlist('bq_name')
+    descs, units, rates = request.form.getlist('bq_desc'), request.form.getlist('bq_unit'), request.form.getlist('bq_rate')
+    delete_ids = {d for d in request.form.getlist('bq_delete') if d}
+    existing = {str(b.id): b for b in BoqItem.query.all()}
+    seen = set()
+    for item_id, name, desc, unit, rate in zip(ids, names, descs, units, rates):
+        name = ' '.join(name.split())[:100]
+        if item_id in delete_ids:
+            if item_id in existing:
+                db.session.delete(existing[item_id])
+            continue
+        if not name:
+            continue                       # blank "add" rows are simply ignored
+        if name.lower() in seen:
+            errors.append(f'"{name}" appears twice in your BOQ lines.')
+            continue
+        try:
+            rate_val = max(0.0, float(rate or 0))
+        except ValueError:
+            errors.append(f'Rate for "{name}" must be a number.')
+            continue
+        seen.add(name.lower())
+        values = dict(name=name, description=boq.clean_description(desc), unit=boq.clean_unit(unit), rate=rate_val)
+        row = existing.get(item_id)
+        if row:
+            for k, v in values.items():
+                setattr(row, k, v)
+        else:
+            clash = BoqItem.query.filter(func.lower(BoqItem.name) == name.lower()).first()
+            if clash and str(clash.id) not in ids:
+                errors.append(f'"{name}" is already in your BOQ lines.')
+                continue
+            db.session.add(BoqItem(**values))
+    return errors
+
+
 @admin_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
     from . import materials as M
@@ -296,6 +338,18 @@ def rates():
             return render_template('admin/rates.html', title='Manage Rates', materials=[],
                                    price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                                    work_types=WORK_TYPES)
+
+    from . import boq
+    if request.method == 'POST' and 'boq_submit' in request.form and boq.enabled():
+        errors = _save_boq_lines()
+        if errors:
+            db.session.rollback()
+            for err in errors:
+                flash(err, 'danger')
+        else:
+            db.session.commit()
+            flash('BOQ lines updated. New quotations use these as defaults.', 'success')
+        return redirect(url_for('admin.rates') + '#boq-lines')
 
     if request.method == 'POST' and 'price_list_submit' in request.form:
         errors = _save_price_list()
@@ -385,7 +439,13 @@ def rates():
     return render_template('admin/rates.html', title='Manage Rates', materials=rows,
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                            work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,
-                           ply_details=ply_ready and plywood.details_ready())
+                           ply_details=ply_ready and plywood.details_ready(),
+                           boq_lines=_boq_lines() if boq.enabled() else None, boq_units=boq.UNITS)
+
+
+def _boq_lines():
+    from .models import BoqItem
+    return BoqItem.query.order_by(BoqItem.name).all()
 
 
 def _plywood_ready():

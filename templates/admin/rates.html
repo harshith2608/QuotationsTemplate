@@ -291,6 +291,80 @@
     </div>
   </div>
 
+  {% if boq_lines is defined and boq_lines is not none %}
+  <div class="col-12" id="boq-lines">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header">
+        <i class="bi bi-list-ol me-2"></i>BOQ Lines
+      </div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Your saved BOQ lines: false ceiling, electrical points, painting, lump-sum work… A line is saved here the first
+          time it's used on a quotation. On the next quotation, pick it by name and its description, unit and rate fill in;
+          change them there for that quotation only, or here (or with "Save as my default") for every new quotation.
+        </p>
+        <datalist id="boq-units-admin">{% for u in boq_units %}<option value="{{ u }}">{% endfor %}</datalist>
+        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="table-responsive">
+            <table class="table table-bordered align-middle mb-3">
+              <thead class="ki-table-head">
+                <tr>
+                  <th class="ps-3" style="min-width:220px">Line &amp; description</th>
+                  <th style="min-width:110px">Unit</th>
+                  <th style="min-width:140px">Rate</th>
+                  <th class="text-center" style="width:80px">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in boq_lines %}
+                <tr>
+                  <td>
+                    <input type="hidden" name="bq_id" value="{{ b.id }}">
+                    <input type="text" name="bq_name" class="form-control form-control-sm fw-semibold mb-1" value="{{ b.name }}" maxlength="100" aria-label="Line name">
+                    <textarea name="bq_desc" class="form-control form-control-sm" rows="{{ [((b.description or '').count('\n') + 1), 6]|min }}" maxlength="2000" placeholder="Description (optional)" aria-label="Description">{{ b.description or '' }}</textarea>
+                  </td>
+                  <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="{{ b.unit or 'nos' }}" maxlength="20" list="boq-units-admin" aria-label="Unit"></td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" value="{{ b.rate | round(2) }}" aria-label="Rate">
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox" name="bq_delete" value="{{ b.id }}" aria-label="Remove {{ b.name }}">
+                  </td>
+                </tr>
+                {% endfor %}
+                {% for _ in range(2) %}
+                <tr class="table-light">
+                  <td>
+                    <input type="hidden" name="bq_id" value="">
+                    <input type="text" name="bq_name" class="form-control form-control-sm mb-1" placeholder="Add a line, e.g. False Ceiling…" maxlength="100" aria-label="New line name">
+                    <textarea name="bq_desc" class="form-control form-control-sm" rows="1" maxlength="2000" placeholder="Description (optional)" aria-label="New line description"></textarea>
+                  </td>
+                  <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="sqft" maxlength="20" list="boq-units-admin" aria-label="New line unit"></td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" placeholder="0" aria-label="New line rate">
+                    </div>
+                  </td>
+                  <td></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" name="boq_submit" value="1" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Save BOQ Lines
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- How Rates Work -->
   <div class="col-12 col-lg-6">
     <div class="card shadow-sm border-0">

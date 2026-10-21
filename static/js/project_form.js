@@ -40,6 +40,12 @@ function addDescRow(tr, ik, value, handler) {
   tr.after(d);
   autoGrow(d.querySelector('textarea'));
 }
+const BOQ_SAVED = CATALOG.boqSaved || [];
+function _findBoq(name) {
+  const n = (name || '').trim().toLowerCase();
+  return n ? BOQ_SAVED.find(b => b.name.toLowerCase() === n) : null;
+}
+let modalBoqTouched = false;      // the user typed a description/unit/rate: picking a saved line doesn't overwrite them
 function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
 function descOf(ik) { const el = document.getElementById('item_desc_' + ik); return el ? el.value.trim() : ''; }
 
@@ -332,8 +338,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Modal item name: suggests room items for measured, the price list for fixed-price items
   const modalNameInput = document.getElementById('modal_item_name');
   if (modalNameInput) {
-    initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name) : masterItems);
-    modalNameInput.addEventListener('input', () => { if (modalItemType === 'fixed') _applyPriceListPrice(); });
+    initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name)
+                                          : modalItemType === 'boq' ? BOQ_SAVED.map(b => b.name) : masterItems);
+    modalNameInput.addEventListener('input', () => {
+      if (modalItemType === 'fixed') _applyPriceListPrice();
+      if (modalItemType === 'boq') _applySavedBoq();
+    });
+    ['modal_item_desc', 'modal_boq_unit', 'modal_boq_rate'].forEach(id =>
+      document.getElementById(id)?.addEventListener('input', () => { modalBoqTouched = true; _syncBoqDefault(); }));
   }
 
   // Restore the saved discount (edit mode) BEFORE the first recalculation: recalcAll()
@@ -534,6 +546,8 @@ function openItemModal(rk) {
   const bq = document.getElementById('modal_boq_qty');   if (bq) bq.value = 1;
   const bu = document.getElementById('modal_boq_unit');  if (bu) bu.value = 'sqft';
   const br = document.getElementById('modal_boq_rate');  if (br) br.value = '';
+  const bd = document.getElementById('modal_boq_default'); if (bd) bd.checked = false;
+  modalBoqTouched = false;
   const priceEl = document.getElementById('modal_item_price'); if (priceEl) priceEl.value = '';
   modalPriceTouched = false;
   const measuredRadio = document.getElementById('modal_type_measured');
@@ -568,7 +582,7 @@ function setModalItemType(type) {
   const nameEl = document.getElementById('modal_item_name');
   if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling' : 'e.g. Wardrobe';
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
-  if (type === 'boq') modalCalcBoq();
+  if (type === 'boq') _applySavedBoq();
   syncModalPly();
 }
 
@@ -596,6 +610,35 @@ function modalCalcFixed() {
   if (el) el.textContent = '₹' + (qty * price).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
+// A saved BOQ line picked by name: fill its description, unit and rate (they can still be changed for this quotation)
+function _applySavedBoq() {
+  const b = _findBoq(document.getElementById('modal_item_name')?.value);
+  if (b && !modalBoqTouched) {
+    const d = document.getElementById('modal_item_desc'); if (d) d.value = b.description || '';
+    const u = document.getElementById('modal_boq_unit');  if (u) u.value = b.unit || 'nos';
+    const r = document.getElementById('modal_boq_rate');  if (r) r.value = b.rate || 0;
+  }
+  _syncBoqDefault();
+  modalCalcBoq();
+}
+
+// "Save as my default" is offered when a saved line was changed for this quotation
+function _syncBoqDefault() {
+  const b = _findBoq(document.getElementById('modal_item_name')?.value);
+  const wrap = document.getElementById('modal_boq_default_wrap');
+  if (!wrap) return;
+  const changed = b && ((document.getElementById('modal_item_desc')?.value.trim() || '') !== (b.description || '').trim()
+    || (document.getElementById('modal_boq_unit')?.value.trim() || 'nos') !== (b.unit || 'nos')
+    || (parseFloat(document.getElementById('modal_boq_rate')?.value) || 0) !== (b.rate || 0));
+  wrap.classList.toggle('d-none', !changed);
+  if (!changed) { const cb = document.getElementById('modal_boq_default'); if (cb) cb.checked = false; }
+  const hint = document.getElementById('modal_boq_hint');
+  if (hint) hint.textContent = b
+    ? (changed ? 'Changed for this quotation only, unless you tick "Save as my default".'
+               : `Your saved line: ₹${(b.rate || 0).toLocaleString('en-IN')}${b.unit ? ' per ' + b.unit : ''}. Change anything for this quotation.`)
+    : 'Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate. Rate 0 prints the line with no amount (e.g. a rate card). New lines are saved for next time.';
+}
+
 function modalCalcBoq() {
   const qty  = parseFloat(document.getElementById('modal_boq_qty')?.value) || 0;
   const rate = parseFloat(document.getElementById('modal_boq_rate')?.value) || 0;
@@ -604,14 +647,14 @@ function modalCalcBoq() {
 }
 
 // ─── BOQ lines ───────────────────────────────────────────────────────────────
-function _insertBoqRow(rk, name, quantity, unit, rate, desc) {
+function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
   const qty = quantity !== undefined && quantity !== null ? quantity : 1;
   const r = rate !== undefined && rate !== null ? rate : '';
   rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
-                          unit_price: parseFloat(r) || 0, description: desc || '' };
+                          unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault };
   const tbody = document.getElementById('items_tbody_' + rk);
   if (!tbody) return;
   const tr = document.createElement('tr');
@@ -642,16 +685,27 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc) {
     </td>`;
   tbody.appendChild(tr);
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`);
+  const nameInput = document.getElementById('item_name_' + ik);
+  if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
 }
 
 function onBoqField(rk, ik) {
   if (!rooms[rk] || !rooms[rk].items[ik]) return;
+  // Picking a saved line's name in a row with no rate or description yet fills them in
+  const saved = _findBoq(document.getElementById('item_name_' + ik)?.value);
+  const priceEl = document.getElementById('item_price_' + ik), descEl = document.getElementById('item_desc_' + ik);
+  if (saved && priceEl && priceEl.value === '' && (!descEl || descEl.value === '')) {
+    priceEl.value = saved.rate || 0;
+    const unitEl = document.getElementById('item_unit_' + ik); if (unitEl) unitEl.value = saved.unit || 'nos';
+    if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
+  }
+  const keepDefault = rooms[rk].items[ik].save_default;
   const quantity   = parseFloat(document.getElementById('item_qty_' + ik)?.value) || 0;
   const unit_price = parseFloat(document.getElementById('item_price_' + ik)?.value) || 0;
   rooms[rk].items[ik] = { type: 'boq', name: document.getElementById('item_name_' + ik)?.value.trim() || '',
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
-                          unit_price, description: descOf(ik) };
+                          unit_price, description: descOf(ik), save_default: keepDefault };
   const amtEl = document.getElementById('item_amount_' + ik);
   if (amtEl) amtEl.textContent = unit_price ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—';
   recalcAll();
@@ -727,7 +781,7 @@ function _itemPayload(item) {
   if (item.type === 'fixed' || item.type === 'boq') {
     if (!item.name || !(item.quantity > 0) || !(item.unit_price >= 0)) return null;
     return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
-             ...(item.type === 'boq' ? { unit: item.unit || 'nos' } : {}),
+             ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}) } : {}),
              ...(item.description ? { description: item.description } : {}) };
   }
   const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
@@ -757,7 +811,8 @@ function saveItemFromModal() {
     qtyEl?.classList.toggle('is-invalid', !(qty > 0));
     rateEl?.classList.toggle('is-invalid', isNaN(rate) || rate < 0);
     if (!(qty > 0) || isNaN(rate) || rate < 0) return;
-    _insertBoqRow(_modalRoomKey, name, qty, document.getElementById('modal_boq_unit')?.value.trim() || 'nos', rate, desc);
+    _insertBoqRow(_modalRoomKey, name, qty, document.getElementById('modal_boq_unit')?.value.trim() || 'nos', rate, desc,
+                  !!document.getElementById('modal_boq_default')?.checked);
     const inst = bootstrap.Modal.getInstance(document.getElementById('itemModal'));
     if (inst) inst.hide();
     return;

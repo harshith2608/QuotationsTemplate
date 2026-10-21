@@ -69,7 +69,7 @@ def save_draft():
         project.plywood = plywood.clean_choice(data.get('plywood'))
     # Save rooms/items (replaces any previously auto-saved rooms for this draft)
     if rooms_data:
-        grand_total = _save_project_data(project, rooms_data)
+        grand_total = _save_project_data(project, rooms_data, remember=False)
         project.grand_total = grand_total
 
     db.session.commit()

@@ -496,6 +496,21 @@ class PriceListItem(db.Model):
         return f'<PriceListItem {self.name}: {self.price}>'
 
 
+class BoqItem(db.Model):
+    """A saved BOQ line (businesses with BOQ lines on): remembered the first time it's used on a quotation, then
+    offered by name with its description, unit and rate as defaults. A quotation can change them for itself; the
+    default only changes from Admin → Rates or with "Save as my default" (app/boq.py)."""
+    __tablename__ = 'boq_items'
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    unit        = db.Column(db.String(20), nullable=True)
+    rate        = db.Column(EncryptedFloat, nullable=False, default=0.0)
+
+    def __repr__(self):
+        return f'<BoqItem {self.name}: {self.rate}>'
+
+
 class Lead(db.Model):
     """A free-trial request from the marketing site's form. Survives the nightly demo reset."""
     __tablename__ = 'leads'

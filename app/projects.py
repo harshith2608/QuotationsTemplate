@@ -125,7 +125,8 @@ def _form_catalog(project, rooms=None):
     has_boq = project is not None and any(i.is_boq for r in (rooms if rooms is not None else project.rooms_with_items())
                                           for i in r.item_list)
     # BOQ lines on for the business, or already on this quotation (kept and editable if turned off later)
-    cat['boq_form'] = {'enabled': boq.ready() and (boq.enabled() or has_boq), 'units': boq.UNITS}
+    on = boq.ready() and (boq.enabled() or has_boq)
+    cat['boq_form'] = {'enabled': on, 'units': boq.UNITS, 'saved': boq.saved_lines() if on else []}
     return cat
 
 
@@ -143,8 +144,9 @@ def _set_project_plywood(project, form):
     project.plywood_thickness = ''
 
 
-def _save_project_data(project, rooms_data):
-    """Delete existing rooms/items and save new ones. Returns grand_total."""
+def _save_project_data(project, rooms_data, remember=True):
+    """Delete existing rooms/items and save new ones. Returns grand_total. remember: learn its BOQ lines (not for
+    auto-saved drafts, where a name may be half-typed)."""
     # Remove existing rooms (cascade deletes items)
     for room in project.rooms.all():
         db.session.delete(room)
@@ -163,6 +165,7 @@ def _save_project_data(project, rooms_data):
     from . import boq
     boq_ready = boq.ready()
     boq_on = boq_ready and boq.enabled()
+    boq_used = []                        # BOQ lines on this quotation, to remember (boq.remember)
 
     for rd in rooms_data:
         room_name = rd.get('name', '').strip()
@@ -202,6 +205,7 @@ def _save_project_data(project, rooms_data):
                             length=0, width=0, area=0, wood_type='', work_type='')
                 if boq_ready and kind == 'boq':
                     item.unit = boq.clean_unit(id_.get('unit'))
+                    boq_used.append((item_name[:100], description, item.unit, unit_price, bool(id_.get('save_default'))))
                 if description:
                     item.description = description
                 db.session.add(item)
@@ -250,6 +254,8 @@ def _save_project_data(project, rooms_data):
             if not MasterItem.query.filter(MasterItem.name.ilike(item_name)).first():
                 db.session.add(MasterItem(name=item_name))
 
+    if boq_used and remember:
+        boq.remember(boq_used)
     return round(grand_total, 2)
 
 

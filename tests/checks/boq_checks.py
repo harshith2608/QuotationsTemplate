@@ -3,7 +3,7 @@ layout of the Initial Quotation; Full Quotation, customer link, WhatsApp text, i
 import io, json, re
 from pypdf import PdfReader
 from app import create_app, db, billing, boq, layout
-from app.models import AppSetting, Item, ItemRate, Project, Room
+from app.models import AppSetting, BoqItem, Item, ItemRate, Project, Room
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
@@ -89,6 +89,57 @@ with app.app_context():
     ok('restoring a revision keeps BOQ lines and their totals', round(prev['subtotal'], 2) == round(subtotal, 2)
        and any(i['type'] == 'boq' and i['unit'] == 'sqft' for r in prev['rooms'] for i in r['items']))
 
+# ── Saved BOQ lines ──
+with app.app_context():
+    saved = {b.name: b for b in BoqItem.query.all()}
+    fc_saved = saved.get('False Ceiling')
+    ok('BOQ lines are remembered the first time they are used (name, description, unit, rate)',
+       set(saved) == {'False Ceiling', 'Electric wiring', 'Other Light and Fitting Charges', '3D Design'}
+       and fc_saved.rate == 120 and fc_saved.unit == 'sqft' and fc_saved.description.startswith('Living Room, Kitchen'))
+t = c.get('/projects/new').text
+ok('new quotation offers the saved lines with their defaults', '"name": "False Ceiling"' in t and '"rate": 120' in t
+   and 'modal_boq_default' in t)
+
+
+def boq_quote(rate, save_default=False, name='Again'):
+    line = {'name': 'False Ceiling', 'type': 'boq', 'quantity': 100, 'unit': 'sqft', 'unit_price': rate,
+            'description': 'Hall only'}
+    if save_default:
+        line['save_default'] = True
+    c.post('/projects/new', data={'customer_name': name, 'mobile': '9000000703',
+                                  'rooms_data': json.dumps([{'name': 'Hall', 'items': [line]}])})
+
+
+boq_quote(135)
+with app.app_context():
+    b = BoqItem.query.filter_by(name='False Ceiling').first()
+    ok('a different rate on one quotation leaves the default alone', b.rate == 120 and b.description.startswith('Living Room'))
+boq_quote(130, save_default=True)
+with app.app_context():
+    b = BoqItem.query.filter_by(name='False Ceiling').first()
+    ok('"Save as my default" updates the saved line', b.rate == 130 and b.description == 'Hall only')
+c.post('/api/draft', json={'customer_name': 'Draft', 'mobile': '9000000704', 'rooms_data': [
+    {'name': 'Hall', 'items': [{'name': 'Half typ', 'type': 'boq', 'quantity': 1, 'unit': 'nos', 'unit_price': 10}]}]})
+with app.app_context():
+    ok('auto-saved drafts don\'t teach half-typed lines', BoqItem.query.filter_by(name='Half typ').first() is None)
+r = c.get('/admin/rates').text
+ok('Admin → Rates lists the saved BOQ lines', 'id="boq-lines"' in r and 'value="False Ceiling"' in r and 'name="boq_submit"' in r)
+with app.app_context():
+    ids = {b.name: str(b.id) for b in BoqItem.query.all()}
+form = {'boq_submit': '1', 'bq_id': [], 'bq_name': [], 'bq_desc': [], 'bq_unit': [], 'bq_rate': [], 'bq_delete': [ids['3D Design']]}
+for name, desc, unit, rate in (('False Ceiling', 'Gypsum, with cove', 'Sq.ft', '140'), ('Electric wiring', 'Conduit, polycab wire', 'nos', '900'),
+                               ('Other Light and Fitting Charges', 'Rate card', 'nos', '0'), ('3D Design', '', 'LS', '45000')):
+    form['bq_id'].append(ids[name]); form['bq_name'].append(name); form['bq_desc'].append(desc)
+    form['bq_unit'].append(unit); form['bq_rate'].append(rate)
+for k, v in (('bq_id', ''), ('bq_name', 'Painting'), ('bq_desc', 'Royale, 2 coats'), ('bq_unit', 'sqft'), ('bq_rate', '45')):
+    form[k].append(v)
+r = c.post('/admin/rates', data=form, follow_redirects=True)
+with app.app_context():
+    saved = {b.name: b for b in BoqItem.query.all()}
+    ok('Admin → Rates: edit a default, add a line, remove a line', 'BOQ lines updated' in r.text
+       and saved['False Ceiling'].rate == 140 and saved['False Ceiling'].unit == 'sqft'
+       and saved['Electric wiring'].rate == 900 and 'Painting' in saved and '3D Design' not in saved)
+
 e = c.get(f'/projects/{pid}/edit').text
 m = re.search(r'id="existing-rooms-data"[^>]*>(.*?)</script>', e, re.S)
 data = json.loads(m.group(1)) if m else []
@@ -124,6 +175,7 @@ ok('customer link in BOQ layout: sections, lines, units, Basic Total', 'Bill of 
 
 # ── Off again ──
 setting(boq.KEY, '')
+ok('off: no BOQ lines list in Admin → Rates', 'id="boq-lines"' not in c.get('/admin/rates').text)
 with app.app_context():
     ok('off again: the BOQ layout falls back to room by room', layout.initial_layout() == layout.LAYOUT_ROOMS)
 e = c.get(f'/projects/{pid}/edit').text
