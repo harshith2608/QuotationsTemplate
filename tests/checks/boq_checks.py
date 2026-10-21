@@ -47,10 +47,11 @@ with app.app_context():
        and BoqItem.query.filter_by(name='False Ceiling').first() is not None)
     ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Fan Fitting…)', n == len(boq.starter_lines())
        and fc0 and fc0.unit == 'sqft' and fc0.rate == 120 and BoqItem.query.filter_by(name='Electric Wiring').first().unit == 'point')
+    ok('turning BOQ lines on also picks the BOQ layout for the customer PDF', layout.initial_layout() == layout.LAYOUT_BOQ)
     boq.set_enabled(False); boq.set_enabled(True); db.session.commit()
     ok('…only once: turning it on again adds nothing', BoqItem.query.count() == n)
-    # the rest of these checks start from no saved lines
-    BoqItem.query.delete(); db.session.commit()
+    # the rest of these checks start from no saved lines, room-by-room layout
+    BoqItem.query.delete(); AppSetting.set(layout.LAYOUT_KEY, layout.LAYOUT_ROOMS); db.session.commit()
 t = c.get('/projects/new').text
 ok('on: BOQ line option, description box and units on the form', 'modal_type_boq' in t and 'modal_item_desc' in t
    and '<option value="lump sum">' in t)

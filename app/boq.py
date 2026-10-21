@@ -61,10 +61,14 @@ def enabled():
 
 
 def set_enabled(on):
-    """Turn BOQ lines on or off; turning on gives a business with no saved lines the starter set."""
-    from . import tenancy
+    """Turn BOQ lines on or off. Turning on also picks the BOQ layout for the customer's PDF (Settings → Quotation PDFs,
+    where it can be changed back) and gives a business with no saved lines the starter set. Turned off, the layout
+    falls back to room by room by itself (layout.initial_layout)."""
+    from . import layout, tenancy
     from .models import AppSetting
     AppSetting.set(KEY, '1' if on else '')
+    if on:
+        AppSetting.set(layout.LAYOUT_KEY, layout.LAYOUT_BOQ)
     if on and _columns_ready(tenancy.current_schema()):
         add_starter_lines()
 
