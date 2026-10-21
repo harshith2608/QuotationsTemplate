@@ -340,7 +340,10 @@
             </div>
             <div class="col-3">
               <label class="form-label fw-medium small mb-1" for="modal_boq_unit">Unit</label>
-              <input type="text" class="form-control px-2" id="modal_boq_unit" list="boq-units" value="sqft" maxlength="20" oninput="modalCalcBoq()">
+              <select class="form-select px-2" id="modal_boq_unit"
+                      onchange="syncLumpSum(this, document.getElementById('modal_boq_qty')); modalCalcBoq()">
+                {% for u in boq_form.units %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+              </select>
             </div>
             <div class="col-5">
               <label class="form-label fw-medium small mb-1" for="modal_boq_rate">Rate</label>
@@ -455,7 +458,8 @@
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }},
     boqLabel:    {{ catalog.BOQ_ITEMS_LABEL|tojson }},
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
-    boqSaved:    {{ boq_form.saved|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
+    boqSaved:    {{ boq_form.saved|tojson }},
+    boqUnits:    {{ boq_form.units|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
     descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}
   };

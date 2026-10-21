@@ -238,6 +238,13 @@ body {
 .ki-item-note { white-space: pre-line; max-width: 46ch; }
 /* an item's description: its own row under the item, full width, no line between them */
 .item-table tr.ki-desc-row td { border-top: 0; }
+/* a room priced line by line (BOQ lines, fittings): no Type column; more room for the name and the rate */
+.ki-priced-only .item-table th.h-c4, .ki-priced-only .item-table tr.item-row > td:nth-child(5) { display: none; }
+.ki-priced-only .item-table th:first-child { min-width: 220px !important; }
+.ki-priced-only .item-table th.h-c1 { min-width: 70px !important; width: 80px; }
+.ki-priced-only .item-table th.h-c2 { min-width: 100px !important; width: 110px; }
+.ki-priced-only .item-table th.h-c3 { min-width: 130px !important; width: 140px; }
+.ki-priced-only .item-table th.h-c5 { min-width: 96px !important; }
 .item-table tr:has(+ tr.ki-desc-row) td { border-bottom: 0; }
 .item-table .ki-item-desc { font-size: .8rem; color: #455a64; resize: vertical; min-height: 30px; }
 

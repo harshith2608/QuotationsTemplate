@@ -46,6 +46,37 @@ function _findBoq(name) {
   return n ? BOQ_SAVED.find(b => b.name.toLowerCase() === n) : null;
 }
 let modalBoqTouched = false;      // the user typed a description/unit/rate: picking a saved line doesn't overwrite them
+const BOQ_UNITS = (CATALOG.boqUnits && CATALOG.boqUnits.length) ? CATALOG.boqUnits
+  : ['sqft', 'rft', 'nos', 'point', 'sq m', 'rmt', 'set', 'lump sum'];
+function unitOptions(selected) {
+  const list = BOQ_UNITS.slice();
+  if (selected && !list.includes(selected)) list.push(selected);       // a unit typed before (or saved) stays
+  return list.map(u => `<option value="${escHtml(u)}" ${u === (selected || 'nos') ? 'selected' : ''}>${escHtml(u)}</option>`).join('');
+}
+// Lump sum: one amount, so the quantity is 1 and locked
+function syncLumpSum(unitEl, qtyEl) {
+  if (!unitEl || !qtyEl) return;
+  const lump = unitEl.value === 'lump sum';
+  if (lump) qtyEl.value = 1;
+  qtyEl.readOnly = lump;
+  qtyEl.classList.toggle('bg-light', lump);
+}
+// Column headers follow what the room holds: sizes for measured items, Qty / Unit / Rate for priced lines
+function updateRoomHeader(rk, hasMeasured, hasPriced) {
+  const card = document.getElementById('room_card_' + rk);
+  if (!card) return;
+  const th = c => card.querySelector('thead .h-' + c);
+  if (!th('c1')) return;
+  if (!th('c1').dataset.measured) ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => { th(c).dataset.measured = th(c).textContent; });
+  const m = c => th(c).dataset.measured;
+  const priced = { c1: 'Qty', c2: 'Unit', c3: 'Rate (₹)', c4: 'Type', c5: 'Amount' };
+  ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => {
+    th(c).textContent = hasPriced && !hasMeasured ? priced[c] : hasPriced ? `${m(c)} / ${priced[c]}` : m(c);
+  });
+  const was = card.classList.contains('ki-priced-only');
+  card.classList.toggle('ki-priced-only', hasPriced && !hasMeasured);   // no Type column, more room for name and rate
+  if (was !== card.classList.contains('ki-priced-only')) updateRoomDescriptionLabel(rk);
+}
 function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 240) + 'px'; }
 function descOf(ik) { const el = document.getElementById('item_desc_' + ik); return el ? el.value.trim() : ''; }
 
@@ -443,11 +474,11 @@ function addRoom(presetName) {
           <thead>
             <tr>
               <th style="min-width:130px">Item Name</th>
-              <th style="min-width:122px">Length${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
-              <th style="min-width:122px">Width${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
-              <th style="min-width:56px" title="How many identical pieces">No's</th>
-              <th style="min-width:192px">Material &amp; Work</th>
-              <th style="min-width:72px">Area (${escHtml(UNITS.areaLabel)})</th>
+              <th style="min-width:122px" class="h-c1">Length${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
+              <th style="min-width:122px" class="h-c2">Width${METRIC_SIZE ? ' (' + escHtml(UNITS.sizeLabel) + ')' : ''}</th>
+              <th style="min-width:56px" class="h-c3" title="How many identical pieces">No's</th>
+              <th style="min-width:192px" class="h-c4">Material &amp; Work</th>
+              <th style="min-width:72px" class="h-c5">Area (${escHtml(UNITS.areaLabel)})</th>
               <th style="width:36px"></th>
             </tr>
           </thead>
@@ -495,7 +526,9 @@ function updateRoomDescriptionLabel(rk) {
   const btn = document.getElementById('room_desc_btn_' + rk);
   if (!btn) return;
   const vals = roomDescriptionValues(rk);
-  btn.textContent = vals.length ? vals.join(' · ') : 'Material description: materials used (automatic)';
+  const priced = document.getElementById('room_card_' + rk)?.classList.contains('ki-priced-only');
+  btn.textContent = vals.length ? vals.join(' · ')
+    : priced ? 'Notes for this section (optional)' : 'Material description: materials used (automatic)';
 }
 function onRoomDescription(rk) { updateRoomDescriptionLabel(rk); scheduleDraftSave(); }
 
@@ -544,7 +577,8 @@ function openItemModal(rk) {
   const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
   const descEl = document.getElementById('modal_item_desc');   if (descEl) descEl.value = '';
   const bq = document.getElementById('modal_boq_qty');   if (bq) bq.value = 1;
-  const bu = document.getElementById('modal_boq_unit');  if (bu) bu.value = 'sqft';
+  const bu = document.getElementById('modal_boq_unit');
+  if (bu) { bu.innerHTML = unitOptions('sqft'); syncLumpSum(bu, document.getElementById('modal_boq_qty')); }
   const br = document.getElementById('modal_boq_rate');  if (br) br.value = '';
   const bd = document.getElementById('modal_boq_default'); if (bd) bd.checked = false;
   modalBoqTouched = false;
@@ -615,7 +649,8 @@ function _applySavedBoq() {
   const b = _findBoq(document.getElementById('modal_item_name')?.value);
   if (b && !modalBoqTouched) {
     const d = document.getElementById('modal_item_desc'); if (d) d.value = b.description || '';
-    const u = document.getElementById('modal_boq_unit');  if (u) u.value = b.unit || 'nos';
+    const u = document.getElementById('modal_boq_unit');
+    if (u) { u.innerHTML = unitOptions(b.unit || 'nos'); syncLumpSum(u, document.getElementById('modal_boq_qty')); }
     const r = document.getElementById('modal_boq_rate');  if (r) r.value = b.rate || 0;
   }
   _syncBoqDefault();
@@ -666,14 +701,18 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
       <input type="text" class="form-control form-control-sm" id="item_name_${ik}" placeholder="e.g. False Ceiling"
              value="${escHtml(name || '')}" oninput="onBoqField('${rk}','${ik}')" autocomplete="off">
     </td>
-    <td colspan="3">
+    <td>
+      <input type="number" class="form-control form-control-sm text-center px-1" id="item_qty_${ik}" min="0" step="any"
+             value="${qty || ''}" placeholder="—" oninput="onBoqField('${rk}','${ik}')"
+             title="Quantity (leave empty for a rate-only line)">
+    </td>
+    <td>
+      <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit"
+              onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
+    </td>
+    <td>
       <div class="input-group input-group-sm">
-        <input type="number" class="form-control text-center px-1" id="item_qty_${ik}" min="0" step="any"
-               value="${qty || ''}" placeholder="rate" oninput="onBoqField('${rk}','${ik}')" style="max-width:72px"
-               title="Quantity (leave empty for a rate-only line)">
-        <input type="text" class="form-control px-1" id="item_unit_${ik}" list="boq-units" maxlength="20"
-               value="${escHtml(unit || 'nos')}" oninput="onBoqField('${rk}','${ik}')" style="max-width:76px" title="Unit">
-        <span class="input-group-text px-2 small text-muted">× ₹</span>
+        <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
                value="${r}" oninput="onBoqField('${rk}','${ik}')" title="Rate">
       </div>
@@ -687,6 +726,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault) {
     </td>`;
   tbody.appendChild(tr);
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`);
+  syncLumpSum(document.getElementById('item_unit_' + ik), document.getElementById('item_qty_' + ik));
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
@@ -699,7 +739,8 @@ function onBoqField(rk, ik) {
   const priceEl = document.getElementById('item_price_' + ik), descEl = document.getElementById('item_desc_' + ik);
   if (saved && priceEl && priceEl.value === '' && (!descEl || descEl.value === '')) {
     priceEl.value = saved.rate || 0;
-    const unitEl = document.getElementById('item_unit_' + ik); if (unitEl) unitEl.value = saved.unit || 'nos';
+    const unitEl = document.getElementById('item_unit_' + ik);
+    if (unitEl) { unitEl.innerHTML = unitOptions(saved.unit || 'nos'); syncLumpSum(unitEl, document.getElementById('item_qty_' + ik)); }
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
   }
   const keepDefault = rooms[rk].items[ik].save_default;
@@ -709,8 +750,8 @@ function onBoqField(rk, ik) {
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
                           unit_price, description: descOf(ik), save_default: keepDefault };
   const amtEl = document.getElementById('item_amount_' + ik);
-  if (amtEl) amtEl.textContent = unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })
-                                : (unit_price ? 'rate only' : '—');
+  if (amtEl) amtEl.innerHTML = unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })
+                                : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
   recalcAll();
 }
 
@@ -736,12 +777,14 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
                oninput="onFixedField('${rk}','${ik}')" autocomplete="off">
       </div>
     </td>
-    <td colspan="3">
+    <td>
+      <input type="number" class="form-control form-control-sm text-center px-1" id="item_qty_${ik}" min="0" step="any"
+             value="${qty}" oninput="onFixedField('${rk}','${ik}')" title="Quantity">
+    </td>
+    <td class="small text-muted text-center" id="item_unit_${ik}">${escHtml((_findPrice(name) || {}).unit || 'nos')}</td>
+    <td>
       <div class="input-group input-group-sm">
-        <span class="input-group-text px-2 small text-muted">Qty</span>
-        <input type="number" class="form-control text-center px-1" id="item_qty_${ik}" min="0" step="any"
-               value="${qty}" oninput="onFixedField('${rk}','${ik}')" style="max-width:64px" title="Quantity">
-        <span class="input-group-text px-2 small text-muted">× ₹</span>
+        <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
                value="${price}" oninput="onFixedField('${rk}','${ik}')" title="Price per unit">
       </div>
@@ -771,6 +814,8 @@ function onFixedField(rk, ik) {
   // Picking a price-list name in an empty-price row fills the price
   const match = _findPrice(nameEl?.value);
   if (match && priceEl && priceEl.value === '') priceEl.value = match.price;
+  const unitCell = document.getElementById('item_unit_' + ik);
+  if (unitCell) unitCell.textContent = (match && match.unit) || 'nos';
   const quantity   = parseFloat(qtyEl?.value) || 0;
   const unit_price = parseFloat(priceEl?.value) || 0;
   rooms[rk].items[ik] = { type: 'fixed', name: nameEl?.value.trim() || '', quantity, unit_price, description: descOf(ik) };
@@ -1018,10 +1063,15 @@ function recalcAll() {
 
   let fixedTotal = 0, boqTotal = 0;
   Object.entries(rooms).forEach(([rk, room]) => {
-    let roomArea = 0;
+    let roomArea = 0, roomPriced = 0, hasMeasured = false, hasPriced = false;
     Object.values(room.items).forEach(item => {
-      if (item.type === 'fixed') { fixedTotal += (item.quantity || 0) * (item.unit_price || 0); return; }
-      if (item.type === 'boq') { boqTotal += (item.quantity || 0) * (item.unit_price || 0); return; }
+      if (item.type === 'fixed' || item.type === 'boq') {
+        const amt = (item.quantity || 0) * (item.unit_price || 0);
+        if (item.type === 'fixed') fixedTotal += amt; else boqTotal += amt;
+        roomPriced += amt; hasPriced = true;
+        return;
+      }
+      hasMeasured = true;
       const a = item.area || 0;
       roomArea += a;
       totalArea += a;
@@ -1029,7 +1079,11 @@ function recalcAll() {
       comboAreas[key] = (comboAreas[key] || 0) + a;
     });
     const badge = document.getElementById('room_total_badge_' + rk);
-    if (badge) badge.textContent = showArea(roomArea) + ' ' + UNITS.areaLabel;
+    // a room priced line by line shows its amount; one with measured items, its area
+    if (badge) badge.textContent = hasPriced && !hasMeasured
+      ? '₹' + roomPriced.toLocaleString('en-IN', { maximumFractionDigits: 0 })
+      : showArea(roomArea) + ' ' + UNITS.areaLabel;
+    updateRoomHeader(rk, hasMeasured, hasPriced);
   });
 
   let grandTotal = fixedTotal + boqTotal;
