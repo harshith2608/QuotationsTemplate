@@ -145,7 +145,11 @@ with app.app_context():
     from app.models import AppSetting as _AS2
     with tenancy.tenant_context('ravi-modular'):
         _boq_on = _AS2.get('feature_boq') == '1'
-ok('console turns BOQ lines on for one trial only', 'BOQ lines turned on' in r.text and 'Turn off BOQ lines' in r.text and _boq_on)
+    from app.models import BoqItem as _BQ
+    with tenancy.tenant_context('ravi-modular'):
+        _starter = _BQ.query.count()
+ok('console turns BOQ lines on for one trial only, with the starter lines', 'BOQ lines turned on' in r.text
+   and 'Turn off BOQ lines' in r.text and _boq_on and _starter >= 25)
 r = c.post('/trials/ravi-modular/boq', data={'on': '0'}, follow_redirects=True)
 with app.app_context():
     with tenancy.tenant_context('ravi-modular'):

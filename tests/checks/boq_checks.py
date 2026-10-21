@@ -36,7 +36,16 @@ s = c.get('/admin/settings?tab=documents').text
 ok('off: no BOQ layout in Settings → Quotation PDFs', 'il_boq' not in s)
 
 # ── On ──
-setting(boq.KEY, '1')
+with app.app_context():
+    boq.set_enabled(True); db.session.commit()
+    n = BoqItem.query.count()
+    fc0 = BoqItem.query.filter_by(name='False Ceiling').first()
+    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Wardrobe…)', n == len(boq.STARTER)
+       and fc0 and fc0.unit == 'sqft' and fc0.rate == 120 and BoqItem.query.filter_by(name='Electric Wiring').first().unit == 'point')
+    boq.set_enabled(False); boq.set_enabled(True); db.session.commit()
+    ok('…only once: turning it on again adds nothing', BoqItem.query.count() == n)
+    # the rest of these checks start from no saved lines
+    BoqItem.query.delete(); db.session.commit()
 t = c.get('/projects/new').text
 ok('on: BOQ line option, description box and units on the form', 'modal_type_boq' in t and 'modal_item_desc' in t
    and '<option value="lump sum">' in t)

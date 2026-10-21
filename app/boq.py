@@ -57,8 +57,12 @@ def enabled():
 
 
 def set_enabled(on):
+    """Turn BOQ lines on or off; turning on gives a business with no saved lines the starter set."""
+    from . import tenancy
     from .models import AppSetting
     AppSetting.set(KEY, '1' if on else '')
+    if on and _columns_ready(tenancy.current_schema()):
+        add_starter_lines()
 
 
 def console_status():
@@ -125,3 +129,64 @@ def remember(lines):
             db.session.add(BoqItem(name=name.strip()[:100], description=description, unit=unit, rate=rate))
         elif save_default:
             row.description, row.unit, row.rate = description, unit, rate
+
+
+# Starter lines, from typical turnkey 2 BHK quotations: offered when BOQ lines are turned on for a business with none
+# saved yet. Rates are examples to change (Admin → Rates → BOQ lines).
+STARTER = [
+    # Services
+    ('False Ceiling', 'sqft', 120, 'Gypsum false ceiling with framework, as per design (living room, kitchen, passage, bedrooms)'),
+    ('Electric Wiring', 'point', 850, 'Conduit, Polycab wire (1.5 sq.mm considered); excluding switches, sockets & plates'),
+    ('Light and Fitting Charges', 'nos', 0,
+     'COB light 12 W 3 inch Rs 420, panel light 15 W 3-in-1 Rs 500, profile light 17 mm Rs 550 per rft, profile light 35 mm '
+     'Rs 850 per rft, point with switch or socket Rs 1150, point looping with material Rs 550, fan fitting including bracket '
+     'Rs 500, hanging light fitting Rs 250, strip light Rs 150 per rft, wardrobe / kitchen cabinet lights Rs 550 per rft.\n'
+     'Hanging lights as per design and selection; exact price once the design is final.'),
+    ('Electrical Fitting Charges', LUMP_SUM, 0,
+     'Fan fitting including bracket: 5 x 500\nSwitch board shifting: 7 x 850\nProfile light fitting: R.ft x 100\n'
+     'Cove light fitting: R.ft x 75\nCOB light fitting: nos x 150\nExhaust fan fixing: 2 x 350'),
+    ('Paint Work', 'sqft', 45, 'Royale Luxury Emulsion / Asian Royale on all indoor walls, with putty, primer and 2 coats of colour'),
+    ('3D Design', LUMP_SUM, 45000, '3D design for reference (living room, kitchen & bedrooms), one revision, 10-12 views'),
+    ('Floor Protection', LUMP_SUM, 7500, 'Floor protection sheet on all areas during work'),
+    ('Debris Removal and Deep Cleaning', LUMP_SUM, 22000, 'Debris removal\nDeep cleaning with machine'),
+    ('Door Laminate Change', 'nos', 12000, 'Removing and pasting laminate on both sides (single laminate); same hardware'),
+    ('Door Frame Paneling', 'nos', 12500, 'Door frame paneling with laminate finish'),
+    ('LED Mirror', 'nos', 9500, 'Bathroom LED mirror with single light'),
+    ('Vanity Storage', 'sqft', 2100, 'Below-counter vanity storage in BWP ply with laminate finish'),
+    ('Bathroom PVC Ceiling', 'sqft', 500, 'PVC ceiling in bathroom'),
+    # Living room & passage
+    ('Safety Door', 'sqft', 1500, 'Safety door in block board, both sides laminate finish, including safety grill '
+     '(lock, handle and grill at base price)'),
+    ('Safety Door Paneling', 'sqft', 850, 'Safety door paneling in 12 mm ply with laminate finish'),
+    ('Shoe Rack', 'sqft', 1950, 'Shoe rack in 18 mm BWR ply, laminate finish inside and outside, with all hardware'),
+    ('TV Unit', 'sqft', 1450, 'TV unit in BWR ply with drawers and ply paneling'),
+    ('AC Paneling', 'sqft', 750, 'AC paneling in 12 mm BWR ply + 4 mm HDMR'),
+    ('Wall Paneling', 'sqft', 950, 'Wall paneling with fluted sheet / mirror / metal strips as per design'),
+    ('Loft Shutter', 'sqft', 950, 'Loft shutters in BWR ply with laminate finish'),
+    # Kitchen
+    ('Kitchen Below Platform', 'sqft', 2450, 'Below-platform units in BWP ply with laminate finish, tandem drawers, '
+     'masala pull-out and profile handles'),
+    ('Kitchen Above Platform', 'sqft', 1850, 'Middle and upper units in BWR ply, laminate finish inside and outside, '
+     'with shelves'),
+    ('Kitchen Balcony Storage', 'sqft', 1750, 'Balcony storage in BWP ply with laminate finish'),
+    # Bedrooms
+    ('Wardrobe', 'sqft', 1850, 'Wardrobe in BWR ply, laminate finish inside and outside, soft-close drawer channels, '
+     'shutters, drawers and shelves'),
+    ('Bed with Storage', 'sqft', 1850, 'Bed in 18 mm BWR ply, laminate finish, top-open storage on hydraulic fittings'),
+    ('Designer Headboard', 'sqft', 1250, 'Headboard in 12 mm BWR ply with cushioning'),
+    ('Side Table', 'nos', 15000, 'Side table in BWR ply with laminate finish, 2 drawers'),
+    ('Dresser Unit', 'sqft', 1650, 'Dresser in BWR ply, laminate finish, soft-close drawers and mirror'),
+    ('Mirror (Miralite 5 mm)', 'sqft', 320, 'Saint-Gobain 5 mm silver mirror (Miralite), non-toughened'),
+    ('Sofa', 'nos', 55000, 'Fabric cost extra as per selection'),
+    ('Laminate Variation Cost', LUMP_SUM, 25000, 'Approximate, for the laminates finally selected'),
+]
+
+
+def add_starter_lines():
+    """Give a business with no saved BOQ lines the starter set. Returns how many were added."""
+    from .models import BoqItem
+    if BoqItem.query.first() is not None:
+        return 0
+    for name, unit, rate, description in STARTER:
+        db.session.add(BoqItem(name=name, unit=unit, rate=rate, description=description))
+    return len(STARTER)
