@@ -51,3 +51,6 @@ htmlcov/
 
 # Rendered ad videos (large; kept out of git)
 ad-videos/
+
+# Client business data (price lists built from a firm's quotations): never committed
+private/
