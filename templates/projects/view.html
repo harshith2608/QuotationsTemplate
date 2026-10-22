@@ -39,6 +39,13 @@
       <button type="submit" class="btn btn-outline-secondary btn-sm fw-semibold"><i class="bi bi-bookmark-plus me-1"></i>Save as template</button>
     </form>
     {% endif %}
+    {% if single_pdf %}
+    <!-- Priced by item: one quotation PDF (the BOQ, every line with its rate and amount) -->
+    <a href="{{ url_for('projects.download_customer_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
+       class="btn btn-primary btn-sm fw-semibold">
+      <i class="bi bi-file-earmark-text me-1"></i>Quotation PDF
+    </a>
+    {% else %}
     <!-- Full Quotation: internal PDF with every room, item and measurement. Opens to view (share/save from the viewer) -->
     <a href="{{ url_for('projects.download_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
        class="btn btn-primary btn-sm fw-semibold">
@@ -49,6 +56,7 @@
        class="btn btn-outline-primary btn-sm fw-semibold">
       <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
     </a>
+    {% endif %}
     {% if q2c.email_ready and project.status != 'draft' %}
     <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#emailQuoteModal">
       <i class="bi bi-envelope me-1"></i>Email
@@ -690,6 +698,7 @@
     {% endif %}
     {% if sh and sh.share %}
       <p class="small mb-2">Your customer opens this link to see the quotation, download the PDF and tap <strong>Accept</strong>. Accepting moves a pending quotation to Confirmed and notifies you.</p>
+      {% if not single_pdf %}
       <form method="POST" action="{{ url_for('share.set_detail', project_id=project.id) }}" class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <span class="small fw-semibold">Customer sees:</span>
@@ -699,6 +708,7 @@
         </select>
         <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Change</button></noscript>
       </form>
+      {% endif %}
       <div class="input-group input-group-sm mb-2">
         <input type="text" class="form-control" value="{{ sh.url }}" readonly id="approvalUrl" aria-label="Approval link">
         <button class="btn btn-outline-secondary" type="button" onclick="copyText(document.getElementById('approvalUrl').value, this)">Copy</button>
@@ -718,6 +728,7 @@
       <p class="small text-muted mb-2">Send your customer a link to view this quotation and accept it online, no app or login needed.</p>
       <form method="POST" action="{{ url_for('share.create', project_id=project.id) }}" class="d-flex flex-wrap align-items-center gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if not single_pdf %}
         <span class="small fw-semibold">Customer sees:</span>
         <div class="btn-group btn-group-sm" role="group" aria-label="What the customer sees">
           <input type="radio" class="btn-check" name="detail" id="detSum" value="summary" checked>
@@ -725,10 +736,11 @@
           <input type="radio" class="btn-check" name="detail" id="detFull" value="full">
           <label class="btn btn-outline-primary" for="detFull">Full detailed quotation</label>
         </div>
+        {% endif %}
         <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
       </form>
-      <div class="form-text">Material breakdown: amounts per material, items listed by room without sizes (like the Initial Quotation PDF).
-        Full: every item with its size and amount, room by room (like the Full Quotation PDF).</div>
+      {% if not single_pdf %}<div class="form-text">Material breakdown: amounts per material, items listed by room without sizes (like the Initial Quotation PDF).
+        Full: every item with its size and amount, room by room (like the Full Quotation PDF).</div>{% endif %}
     {% endif %}
   </div>
 </div>
@@ -867,6 +879,10 @@
       <div class="modal-body">
         <label class="form-label small fw-semibold" for="eqTo">To</label>
         <input id="eqTo" type="email" name="to" class="form-control mb-3" required value="{{ project.email or '' }}" placeholder="customer@example.com">
+        {% if single_pdf %}
+        <input type="hidden" name="pdf" value="initial">
+        <p class="small text-muted mb-3"><i class="bi bi-paperclip me-1"></i>The quotation PDF is attached.</p>
+        {% else %}
         <label class="form-label small fw-semibold d-block">Attach</label>
         <div class="btn-group btn-group-sm mb-3" role="group" aria-label="PDF to attach">
           <input type="radio" class="btn-check" name="pdf" id="eqInit" value="initial" checked>
@@ -874,6 +890,7 @@
           <input type="radio" class="btn-check" name="pdf" id="eqFull" value="full">
           <label class="btn btn-outline-primary" for="eqFull">Full Quotation</label>
         </div>
+        {% endif %}
         {% if q2c.ready %}
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="with_link" value="1" id="eqLink" checked>

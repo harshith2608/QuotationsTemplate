@@ -184,7 +184,8 @@ def quotation_email(project_id):
     if not to:
         flash('Enter a valid customer email address.', 'warning')
         return _back(project)
-    full = request.form.get('pdf') == 'full'
+    from . import layout
+    full = request.form.get('pdf') == 'full' and not layout.single_pdf()     # priced by item: one quotation PDF
     link = ''
     if request.form.get('with_link') and billing.ready():
         share = _active_share(project)

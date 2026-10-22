@@ -386,7 +386,7 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="documents">
   <div class="card shadow-sm border-0 mb-3">
-    <div class="card-header ki-card-header"><i class="bi bi-layout-text-window me-2"></i>Initial Quotation (what your customer gets)</div>
+    <div class="card-header ki-card-header"><i class="bi bi-layout-text-window me-2"></i>{{ 'Your quotation PDF' if 'boq' in layouts else 'Initial Quotation' }} (what your customer gets)</div>
     <div class="card-body">
       {% for key, label in layouts.items() %}
       <div class="form-check mb-1">
@@ -397,7 +397,7 @@
       <div class="form-text">By room: each room with what it's made of, its items with sizes and No's, and one amount; each
         room's fittings as a "Hardware" row.{% if 'boq' in layouts %} BOQ: sections A, B, C (your rooms), each line
         numbered with its description, quantity, unit, rate and amount, like a turnkey bill of quantities.{% endif %}
-        Your Full Quotation (every rate and amount) doesn't change.</div>
+        {% if 'boq' in layouts %}Pricing by item, you have this one quotation PDF.{% else %}Your Full Quotation (every rate and amount) doesn't change.{% endif %}</div>
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3" id="room-descriptions">

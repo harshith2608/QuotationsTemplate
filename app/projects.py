@@ -598,8 +598,9 @@ def view_project(project_id):
     invoice_links = {i.id: invoice_url(i) for i in all_invoices if i.status == 'issued'}
     latest_rev = q2c['history'][0][0] if q2c['history'] else None
     q2c['changed_after_invoice'] = bool(invoice and latest_rev and latest_rev.created_at > invoice.created_at)
+    from . import layout as _layout
     return render_template('projects/view.html',
-                           project=project,
+                           project=project, single_pdf=_layout.single_pdf(),
                            rooms=rooms,
                            item_summary=item_summary,
                            item_rates=item_rates_flat,
@@ -987,11 +988,13 @@ def download_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
-    from .pdf_utils import generate_pdf
+    from .pdf_utils import generate_customer_pdf, generate_pdf
+    from . import layout
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
-    pdf_buffer = generate_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
+    make = generate_customer_pdf if layout.single_pdf() else generate_pdf      # priced by item: one quotation PDF
+    pdf_buffer = make(project, payment_settings=pay_settings, total_paid=total_paid)
     filename = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
     # ?download=1  → Content-Disposition: attachment  (force save to device)
     # default      → Content-Disposition: inline      (open in viewer / share sheet)

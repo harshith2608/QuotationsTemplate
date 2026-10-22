@@ -153,7 +153,7 @@ def view(token):
     from .models import AppSetting
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     from . import layout
-    chosen = layout.initial_layout() if share.detail != 'full' else None
+    chosen = layout.initial_layout() if share.detail != 'full' or layout.single_pdf() else None
     rows = layout.room_rows(snap) if chosen == layout.LAYOUT_ROOMS else None
     boq_sections = layout.boq_rows(snap) if chosen == layout.LAYOUT_BOQ else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
@@ -166,7 +166,9 @@ def pdf(token):
     from .models import AppSetting
     from .pdf_utils import generate_customer_pdf, generate_pdf
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
-    make = generate_pdf if share.detail == 'full' else generate_customer_pdf      # full or material breakdown
+    from . import layout
+    full = share.detail == 'full' and not layout.single_pdf()                     # priced by item: one quotation PDF
+    make = generate_pdf if full else generate_customer_pdf                        # full or material breakdown
     buf = make(project, payment_settings=pay, total_paid=billing.paid_total(project))
     name = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
     return _private(send_file(buf, mimetype='application/pdf', download_name=name, as_attachment=False))

@@ -54,6 +54,14 @@ def layouts():
     return {k: v for k, v in LAYOUTS.items() if k != LAYOUT_BOQ or boq.enabled()}
 
 
+def single_pdf():
+    """A business that prices by item has one quotation PDF (its Initial Quotation, the BOQ): the Full Quotation would
+    show the same lines, rates and amounts. Every "full" request (Full Quotation, email attachment, customer link)
+    gives that one."""
+    from . import boq
+    return boq.enabled()
+
+
 def boq_rows(snapshot):
     """Sections A, B, C… (the rooms), each with numbered lines: {'letter', 'name', 'description', 'lines': [{'no',
     'title', 'description', 'qty', 'unit', 'rate', 'amount', 'tbc'}]} (tbc: "Price to follow"). Measured items show their area, rate per area and

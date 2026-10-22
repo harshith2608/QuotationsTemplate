@@ -81,12 +81,19 @@ with app.app_context():
 pdf = pdftext(f'/projects/{pid}/pdf/customer')
 ok('the BOQ PDF prints "Price to follow" for it, the rate card line with its rate, the total without it',
    'Price to follow' in pdf and '1,09,200' in pdf.replace('109,200', '1,09,200') and '520' in pdf)
-fullq = pdftext(f'/projects/{pid}/pdf')
-ok('Full Quotation of a quotation priced by item: section totals in the summary, no areas, rate-only line with "—"',
+v = c.get(f'/projects/{pid}').text
+ok('priced by item: one "Quotation PDF" button (no Full / Initial), no "Customer sees" choice, nothing to pick when emailing',
+   'Quotation PDF' in v and 'Full Quotation' not in v and 'Initial Quotation' not in v and 'Customer sees' not in v
+   and 'id="eqFull"' not in v)
+ok('…and the Full Quotation address gives that same BOQ', 'Bill of Quantities' in pdftext(f'/projects/{pid}/pdf')
+   and 'Bill of Quantities' in pdftext(f'/projects/{pid}/pdf/customer'))
+with app.test_request_context():
+    from app.pdf_utils import generate_pdf
+    fullq = re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in PdfReader(generate_pdf(Project.query.get(pid))).pages))
+ok('(the Full Quotation itself, if they switch back: section totals, no areas, rate-only line with "—")',
    'Section Total' in fullq and 'Material & Work Type' not in fullq and 'sqft' not in fullq.replace('Sq.ft', '')
-   and re.search(r'COB Light — Nos\. 520 —', fullq) is not None)
-ok('Full Quotation and the quotation page show it too', 'price to follow' in pdftext(f'/projects/{pid}/pdf').lower()
-   and 'price to follow' in c.get(f'/projects/{pid}').text)
+   and re.search(r'COB Light — Nos\. 520 —', fullq) is not None and 'price to follow' in fullq.lower())
+ok('the quotation page shows Price to follow too', 'price to follow' in v)
 e = c.get(f'/projects/{pid}/edit').text
 ok('editing keeps it as Price to follow', '"tbc": true' in e)
 import urllib.parse
@@ -112,6 +119,8 @@ r = c.post('/admin/settings', data={'section': 'pricing', 'pricing_mode': 'mater
 with app.app_context():
     ok('switching to by material: BOQ lines off, setup guide step done', not boq.enabled()
        and dict((st.key, d) for st, d in setup_guide.status()['steps'])['pricing'])
+ok('by material: Full and Initial Quotation again', 'Full Quotation' in c.get(f'/projects/{pid}').text
+   and 'Customer sees' in c.get(f'/projects/{pid}').text)
 ok('by material: the rates step and the form are the material ones again', 'Your items &amp; rates' not in c.get('/admin/rates').text
    and 'byItem:      false' in c.get('/projects/new?blank=1').text)
 
