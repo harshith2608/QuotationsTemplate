@@ -1,18 +1,28 @@
 """A firm's own price list, loaded by the operator from the console (Load price list) into that one business.
 
-When a firm shares its old quotations, its items (title, description, unit, rate, group), a ready-made starting
-quotation or two, and its notes and payment terms are written into a JSON file — kept outside the repository, it is
-the firm's business data — and uploaded on that firm's trial or customer page. Nothing here is shared between firms:
-it goes into that business's own saved BOQ lines (boq_items), quotation templates and settings.
+When a firm shares its old quotations, how it prices, its items and rates, a ready-made starting quotation or two
+(templates), and its notes and payment terms are written into a JSON file — kept outside the repository, it is the
+firm's business data — and uploaded on that firm's trial or customer page. Nothing here is shared between firms: it
+goes into that business's own saved lines, rates, templates and settings.
 
+A firm that prices by item (turnkey, "pricing": "item", the default when there are "lines"):
     {"lines": [{"name": "Wardrobe", "description": "...", "unit": "sqft", "rate": 1950, "group": "Bedroom"}, ...],
      "templates": [{"name": "2 BHK turnkey",
                     "rooms": [{"name": "Kitchen", "items": ["Loft Shutter", {"name": "Tall Unit"},
                                                            {"name": "COB Light 12 W", "rate_only": true}]}]}],
      "settings": {"important_notes": "...", "payment_terms": "..."}}
-
 A template's items name lines from "lines" (or saved ones); they start with no size or quantity, so the quotation
 highlights them until one is typed (a lump sum starts at 1). "rate_only": printed with its rate, not added.
+
+A firm that prices by material ("pricing": "material"):
+    {"pricing": "material",
+     "materials": [{"name": "Laminates", "rates": {"Box Work": 850, "Frame Work": 650}}, {"name": "Glass", "rate": 400}],
+     "fittings": [{"name": "Magic Corner", "price": 18000, "unit": "nos"}],
+     "templates": [{"name": "2 BHK", "rooms": [{"name": "Kitchen", "items": [
+         {"name": "Kitchen Base Unit", "material": "Laminates", "work": "Box Work"},
+         {"name": "Magic Corner", "type": "fitting"}]}]}]}
+Template items with a material are measured items (size typed on the quotation); "type": "fitting" items take the
+fittings price.
 """
 import json
 
@@ -43,6 +53,9 @@ def parse(raw):
         raise PriceListError("That isn't a price list file (it should be the .json file prepared for this firm).")
     if not isinstance(data, dict) or not isinstance(data.get('lines', []), list):
         raise PriceListError("That isn't a price list file: it needs a list of \"lines\".")
+    pricing = data.get('pricing') or ('item' if data.get('lines') else 'material')
+    if pricing not in ('item', 'material'):
+        raise PriceListError('"pricing" should be "item" or "material".')
 
     lines, seen = [], set()
     for n, row in enumerate(data.get('lines') or [], 1):
@@ -64,6 +77,35 @@ def parse(raw):
                       'unit': boq.clean_unit(row.get('unit')), 'rate': round(rate, 2),
                       'group': _text(row.get('group'), 60) or None})
 
+    from .catalog import WORK_TYPES
+    materials = []
+    for m in data.get('materials') or []:
+        name = _text(m.get('name') if isinstance(m, dict) else '', 60)
+        if not name:
+            raise PriceListError('Each material needs a name.')
+        rates = m.get('rates')
+        try:
+            if isinstance(rates, dict):
+                bad = [w for w in rates if w not in WORK_TYPES]
+                if bad:
+                    raise PriceListError(f'"{name}": work types are {", ".join(WORK_TYPES)} (not {", ".join(bad)}).')
+                rates = {w: round(float(rates.get(w) or 0), 2) for w in WORK_TYPES}
+            else:
+                rates = {'': round(float(m.get('rate') or 0), 2)}
+        except (TypeError, ValueError):
+            raise PriceListError(f'"{name}": rates should be numbers.')
+        materials.append({'name': name, 'rates': rates})
+    fittings = []
+    for f in data.get('fittings') or []:
+        name = _text(f.get('name') if isinstance(f, dict) else '', 100)
+        if not name:
+            raise PriceListError('Each fitting needs a name.')
+        try:
+            price = round(float(f.get('price') or 0), 2)
+        except (TypeError, ValueError):
+            raise PriceListError(f'"{name}": the price should be a number.')
+        fittings.append({'name': name, 'price': price, 'unit': _text(f.get('unit'), 30) or None})
+
     by_name = {l['name'].lower(): l for l in lines}
     templates = []
     for t in data.get('templates') or []:
@@ -78,27 +120,49 @@ def parse(raw):
                 it = {'name': it} if isinstance(it, str) else it
                 if not isinstance(it, dict) or not _text(it.get('name'), 100):
                     raise PriceListError(f'"{t["name"]} → {r["name"]}": a line has no name.')
-                items.append({'name': _text(it['name'], 100), 'rate_only': bool(it.get('rate_only'))})
+                kind = 'measured' if it.get('material') else 'fitting' if it.get('type') in ('fitting', 'fixed') else 'line'
+                items.append({'name': _text(it['name'], 100), 'rate_only': bool(it.get('rate_only')), 'kind': kind,
+                              'material': _text(it.get('material'), 60), 'work': _text(it.get('work'), 50),
+                              'description': boq.clean_description(it.get('description'))})
             rooms.append({'name': _text(r['name'], 100), 'items': items})
         templates.append({'name': _text(t['name'], 60), 'rooms': rooms})
-    if not lines and not templates:
+    if not lines and not templates and not materials and not fittings:
         raise PriceListError('The file has no lines.')
 
     settings = {}
     for key, value in (data.get('settings') or {}).items():
         if key in SETTINGS and isinstance(value, str):
             settings[key] = value.strip()[:5000]
-    return {'lines': lines, 'templates': templates, 'settings': settings, '_by_name': by_name}
+    return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'templates': templates,
+            'settings': settings, '_by_name': by_name}
 
 
-def _template_rooms(template, saved):
+def _template_rooms(template, saved, fittings, combos):
     """A template's rooms as quotation rooms (the shape New Quotation starts from): each line from the saved lines,
-    with no size or quantity yet (a lump sum: 1; a rate-only line: 0, printed with its rate)."""
+    with no size or quantity yet (a lump sum: 1; a rate-only line: 0, printed with its rate); measured items with
+    their material and work type, and fittings with their price, waiting for a size or quantity."""
     from . import boq
     rooms, missing = [], []
     for r in template['rooms']:
         items = []
         for it in r['items']:
+            if it['kind'] == 'measured':
+                work = it['work'] if (it['material'], it['work']) in combos else ''
+                if (it['material'], work) not in combos:
+                    missing.append(f"{it['name']} ({' '.join(x for x in (it['material'], it['work']) if x)})")
+                    continue
+                items.append({'name': it['name'], 'type': 'measured', 'length': 0, 'width': 0, 'area': 0, 'count': 1,
+                              'wood_type': it['material'], 'work_type': work, 'description': it['description'] or '',
+                              'pending': True})
+                continue
+            if it['kind'] == 'fitting':
+                price = fittings.get(it['name'].lower())
+                if price is None:
+                    missing.append(it['name'])
+                    continue
+                items.append({'name': it['name'], 'type': 'fixed', 'quantity': 0, 'unit_price': price,
+                              'description': it['description'] or '', 'pending': True})
+                continue
             line = saved.get(it['name'].lower())
             if line is None:
                 missing.append(it['name'])
@@ -118,17 +182,44 @@ def apply(parsed, remove_starter=True, replace_settings=False):
     business never changed. Starting quotations replace any with the same name. Settings: only ones never saved,
     unless replace_settings. BOQ lines are turned on (with the BOQ layout). Returns a summary dict."""
     from sqlalchemy import func
-    from . import boq, quote_templates
-    from .models import AppSetting, BoqItem
+    from . import boq, materials as M, quote_templates
+    from .models import AppSetting, BoqItem, ItemRate, Material, PriceListItem
     from . import tenancy
-    if not boq._columns_ready(tenancy.current_schema()):
+    ready = boq._columns_ready(tenancy.current_schema())
+    if parsed['pricing'] == 'item' and not ready:
         raise PriceListError('This business needs the latest database update first (Updates → Update all).')
-    if AppSetting.get(boq.KEY, '') != '1':
-        boq.set_enabled(True)
+    if (AppSetting.get(boq.KEY, '') == '1') != (parsed['pricing'] == 'item'):
+        boq.set_pricing(boq.ITEM if parsed['pricing'] == 'item' else boq.MATERIAL)
         db.session.flush()
+    else:
+        from . import setup_guide
+        setup_guide.mark('pricing')
+
+    mats = 0
+    for m in parsed['materials']:
+        row = Material.query.filter(func.lower(Material.name) == m['name'].lower()).first()
+        if row is None:
+            top = db.session.query(func.max(Material.sort_order)).scalar() or 0
+            row = Material(name=m['name'], uses_work_types='' not in m['rates'], active=True, sort_order=top + 1)
+            db.session.add(row)
+        row.active = True
+        for work, rate in m['rates'].items():
+            r = ItemRate.query.filter_by(wood_type=row.name, work_type=work).first()
+            if r is None:
+                db.session.add(ItemRate(wood_type=row.name, work_type=work, rate_per_sqft=rate))
+            else:
+                r.rate_per_sqft = rate
+        mats += 1
+    for f in parsed['fittings']:
+        row = PriceListItem.query.filter(func.lower(PriceListItem.name) == f['name'].lower()).first()
+        if row is None:
+            db.session.add(PriceListItem(name=f['name'], price=f['price'], unit=f['unit']))
+        else:
+            row.price, row.unit = f['price'], f['unit']
+    db.session.flush()
 
     removed = 0
-    if remove_starter:
+    if remove_starter and ready:
         starter = {(name.lower(), unit, float(rate), description or '', category)
                    for category, name, unit, rate, description in boq.starter_lines()}
         mine = {l['name'].lower() for l in parsed['lines']}
@@ -139,7 +230,7 @@ def apply(parsed, remove_starter=True, replace_settings=False):
                 removed += 1
 
     added = updated = 0
-    for l in parsed['lines']:
+    for l in parsed['lines'] if ready else []:
         row = BoqItem.query.filter(func.lower(BoqItem.name) == l['name'].lower()).first()
         if row is None:
             db.session.add(BoqItem(name=l['name'], description=l['description'], unit=l['unit'], rate=l['rate'],
@@ -152,10 +243,12 @@ def apply(parsed, remove_starter=True, replace_settings=False):
     db.session.flush()
 
     saved = {r.name.lower(): {'name': r.name, 'description': r.description, 'unit': r.unit or 'nos',
-                              'rate': float(r.rate or 0)} for r in BoqItem.query.all()}
+                              'rate': float(r.rate or 0)} for r in BoqItem.query.all()} if ready else {}
+    fittings = {r.name.lower(): float(r.price or 0) for r in PriceListItem.query.all()}
+    combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     made, missing = [], []
     for t in parsed['templates']:
-        rooms, miss = _template_rooms(t, saved)
+        rooms, miss = _template_rooms(t, saved, fittings, combos)
         missing += miss
         quote_templates.put(t['name'], rooms)
         made.append(t['name'])
@@ -166,12 +259,19 @@ def apply(parsed, remove_starter=True, replace_settings=False):
             AppSetting.set(key, value)
             settings.append(key)
     db.session.commit()
-    return {'added': added, 'updated': updated, 'removed': removed, 'templates': made,
+    return {'added': added, 'updated': updated, 'removed': removed, 'templates': made, 'materials': mats,
+            'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'],
             'missing': sorted(set(missing)), 'settings': settings}
 
 
 def summary_text(result):
-    parts = [f"{result['added']} lines added", f"{result['updated']} updated"]
+    parts = ['priced by item' if result['pricing'] == 'item' else 'priced by material']
+    if result['added'] or result['updated']:
+        parts += [f"{result['added']} lines added", f"{result['updated']} updated"]
+    if result['materials']:
+        parts.append(f"{result['materials']} materials with their rates")
+    if result['fittings']:
+        parts.append(f"{result['fittings']} fittings")
     if result['removed']:
         parts.append(f"{result['removed']} unchanged starter lines removed")
     if result['templates']:

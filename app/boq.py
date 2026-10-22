@@ -6,8 +6,10 @@ rate 0 prints no amount, for a note such as a rate card). Any item can also carr
 the Initial Quotation (Settings → Quotation PDFs) prints every line with Sr. No., Description, Qty, Unit, Rate and
 Amount, sections A, B, C… being the quotation's rooms.
 
-Off by default; turned on per business from the console (trial or customer page). Needs the database update that
-adds items.description and items.unit (ready()).
+How a business prices its work is one choice (pricing_mode): "by material" (measured items priced by the material
+and work type rate, plus fittings) or "by item" (BOQ lines only: each item with its own rate). By item is BOQ lines
+on. Chosen by the business in Settings → Pricing (a setup guide step) or set from the console. Needs the database
+update that adds items.description and items.unit (ready()).
 """
 from flask import g, has_app_context
 
@@ -58,6 +60,21 @@ def enabled():
     """BOQ lines are on for this business (and its database is ready for them)."""
     from .models import AppSetting
     return AppSetting.get(KEY, '') == '1' and ready()
+
+
+MATERIAL, ITEM = 'material', 'item'
+
+
+def pricing_mode():
+    """'item' (each item has its own rate: BOQ lines) or 'material' (measured items priced by material, and fittings)."""
+    return ITEM if enabled() else MATERIAL
+
+
+def set_pricing(mode):
+    """Choose how this business prices its work (set_enabled for BOQ lines); the setup guide's step is then done."""
+    from . import setup_guide
+    set_enabled(mode == ITEM)
+    setup_guide.mark('pricing')
 
 
 def set_enabled(on):

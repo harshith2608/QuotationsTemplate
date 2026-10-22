@@ -439,12 +439,12 @@ def boq_status(slug):
 
 
 def set_boq(slug, on):
-    """Turn BOQ lines on or off for a customer."""
+    """Pricing by item (BOQ lines) or by material, for a customer."""
     from . import boq
     with open_customer(slug):
         if on and not boq.console_status()['ready']:
             raise CustomerError('This customer needs the latest database update first (Updates → Update all).')
-        boq.set_enabled(on)
+        boq.set_pricing(boq.ITEM if on else boq.MATERIAL)
         db.session.commit()
 
 

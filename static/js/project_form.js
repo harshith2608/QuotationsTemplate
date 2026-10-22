@@ -464,7 +464,16 @@ document.addEventListener('DOMContentLoaded', () => {
       (rd.items || []).forEach(id => {
         if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.tbc ? '' : id.unit_price, id.description,
                                                false, id.length, id.width, id.count, !!id.pending, !!id.tbc); return; }
-        if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description); return; }
+        if (id.type === 'fixed') {
+          const fk = _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description);
+          if (id.pending) markPending(rk, fk, true);
+          return;
+        }
+        if (id.pending && !id.length) {        // from a starting quotation: no size yet
+          const mk = _insertItemRow(rk, id.name, '', '', '', '', id.wood_type, id.work_type, id.plywood || '', 1, id.description || '');
+          markPending(rk, mk, true);
+          return;
+        }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
         addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '', id.count || 1, id.description || '');
@@ -553,8 +562,8 @@ function addRoom(presetName) {
           <i class="bi bi-plus-lg me-1"></i>Add line</button>
         ${BOQ_SAVED.length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openBoqPicker('${rk}')">
           <i class="bi bi-list-check me-1"></i>Add from my lines</button>` : ''}
-        <button type="button" class="btn btn-sm btn-link text-muted" onclick="addItem('${rk}')"
-                title="An item measured by material (Admin → Rates), or a fitting from your price list">Other item…</button>
+        ${CATALOG.byItem ? '' : `<button type="button" class="btn btn-sm btn-link text-muted" onclick="addItem('${rk}')"
+                title="An item measured by material (Admin → Rates), or a fitting from your price list">Other item…</button>`}
       </div>` : `<button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
         <i class="bi bi-plus me-1"></i>Add Item
       </button>`}
@@ -981,6 +990,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && priceList.length) initAutocomplete(nameInput, () => priceList.map(p => p.name));
   onFixedField(rk, ik);
+  return ik;
 }
 
 function onFixedField(rk, ik) {
@@ -995,7 +1005,9 @@ function onFixedField(rk, ik) {
   if (unitCell) unitCell.textContent = (match && match.unit) || 'nos';
   const quantity   = parseFloat(qtyEl?.value) || 0;
   const unit_price = parseFloat(priceEl?.value) || 0;
+  const wasPending = rooms[rk].items[ik].pending;
   rooms[rk].items[ik] = { type: 'fixed', name: nameEl?.value.trim() || '', quantity, unit_price, description: descOf(ik) };
+  if (wasPending) markPending(rk, ik, !(quantity > 0));
   const amtEl = document.getElementById('item_amount_' + ik);
   if (amtEl) amtEl.textContent = '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   recalcAll();
@@ -1179,6 +1191,16 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const itemNameInput = document.getElementById('item_name_' + ik);
   if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
   if (area > 0) recalcAll();
+  return ik;
+}
+
+// A line from a starting quotation still waiting for its size (or quantity): highlighted until typed, and removed on
+// saving if left empty (after asking)
+function markPending(rk, ik, on) {
+  if (!rooms[rk] || !rooms[rk].items[ik]) return;
+  rooms[rk].items[ik].pending = !!on;
+  document.getElementById('item_row_' + ik)?.classList.toggle('ki-needs-qty', !!on);
+  document.getElementById('item_descrow_' + ik)?.classList.toggle('ki-needs-qty', !!on);
 }
 
 function removeItem(rk, ik) {
@@ -1218,6 +1240,7 @@ function onItemField(rk, ik) {
 
   const comboParts = splitCombo(comboEl?.value || DEFAULT_COMBO);
   const plyEl = document.getElementById('item_ply_' + ik);
+  const wasPending = rooms[rk].items[ik].pending;
   rooms[rk].items[ik] = {
     name:      nameEl?.value.trim() || '',
     lengthFt:  lFt, lengthIn: lIn,
@@ -1229,6 +1252,7 @@ function onItemField(rk, ik) {
     area,
     description: descOf(ik)
   };
+  if (wasPending) markPending(rk, ik, !(area > 0));
   syncPlyVisibility(ik, comboParts[0]);
 
   if (areaEl) areaEl.textContent = showArea(area);
@@ -1450,13 +1474,13 @@ function _validateForm() {
   // Lines still waiting for a size or quantity (from a starting quotation or "Add from my lines"): the ones this home
   // doesn't need are left like that, so they're removed on saving (after asking) — never printed without an amount
   const pending = Object.entries(rooms).flatMap(([rk, r]) => Object.entries(r.items)
-    .filter(([, i]) => i.type === 'boq' && i.pending).map(([ik, i]) => ({ rk, ik, name: i.name })));
+    .filter(([, i]) => i.pending).map(([ik, i]) => ({ rk, ik, name: i.name })));
   if (pending.length) {
     const names = pending.slice(0, 6).map(p => p.name).join(', ') + (pending.length > 6 ? '…' : '');
     if (!confirm(`${pending.length} line${pending.length > 1 ? 's have' : ' has'} no size or quantity (${names}).\n\n`
         + `OK: remove ${pending.length > 1 ? 'them' : 'it'} from this quotation and save.\n`
         + 'Cancel: go back and fill them in.')) {
-      document.querySelector('.ki-needs-qty input[id^="item_qty_"]')?.closest('tr')?.scrollIntoView({ block: 'center' });
+      document.querySelector('tr.ki-needs-qty')?.scrollIntoView({ block: 'center' });
       return false;
     }
     pending.forEach(p => removeItem(p.rk, p.ik));

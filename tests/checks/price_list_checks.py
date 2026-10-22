@@ -90,3 +90,45 @@ with app.app_context():
     from app import share
     tok = share._active_share(Project.query.get(pid)).token
 ok('customer link shows price to follow', 'price to follow' in c.get(f'/q/{tok}').text)
+
+# ── Pricing: by item / by material (Settings → Pricing, a setup guide step) ──
+from app import setup_guide
+s = c.get('/admin/settings?tab=pricing').text
+ok('Settings → Pricing: the two ways, "by item" chosen', 'name="pricing_mode"' in s
+   and re.search(r'id="pm_item" value="item"\s+checked', s) is not None)
+f = c.get(f'/projects/new?template={tid}').text
+ok('by item: the form has no plywood card or "Other item…", Rates lists the items first', '"byItem": true' in f.replace('byItem:      true', '"byItem": true')
+   and 'Your items &amp; rates' in c.get('/admin/rates').text and 'Show them' in c.get('/admin/rates').text)
+ok('New Quotation offers the starting quotations first', 'Start from one of your quotations' in c.get('/projects/new').text
+   and 'Start from one of your quotations' not in c.get('/projects/new?blank=1').text)
+r = c.post('/admin/settings', data={'section': 'pricing', 'pricing_mode': 'material'}, follow_redirects=True)
+with app.app_context():
+    ok('switching to by material: BOQ lines off, setup guide step done', not boq.enabled()
+       and dict((st.key, d) for st, d in setup_guide.status()['steps'])['pricing'])
+ok('by material: the rates step and the form are the material ones again', 'Your items &amp; rates' not in c.get('/admin/rates').text
+   and 'byItem:      false' in c.get('/projects/new?blank=1').text)
+
+MAT = {'pricing': 'material',
+       'materials': [{'name': 'Laminates', 'rates': {'Box Work': 900, 'Frame Work': 700}}, {'name': 'Fluted Glass', 'rate': 650}],
+       'fittings': [{'name': 'Magic Corner', 'price': 18000, 'unit': 'nos'}],
+       'templates': [{'name': 'Modular kitchen', 'rooms': [{'name': 'Kitchen', 'items': [
+           {'name': 'Base Unit', 'material': 'Laminates', 'work': 'Box Work'},
+           {'name': 'Shutter Glass', 'material': 'Fluted Glass'},
+           {'name': 'Magic Corner', 'type': 'fitting'},
+           {'name': 'Ghost', 'material': 'Unobtainium'}]}]}]}
+with app.app_context():
+    from app.models import ItemRate, PriceListItem
+    res = price_list.apply(price_list.parse(json.dumps(MAT).encode()))
+    rates = {(r.wood_type, r.work_type): r.rate_per_sqft for r in ItemRate.query.all()}
+    ok('a by-material price list: material rates, a new single-rate material, fittings; still by material',
+       not boq.enabled() and rates[('Laminates', 'Box Work')] == 900 and rates[('Fluted Glass', '')] == 650
+       and PriceListItem.query.filter_by(name='Magic Corner').first().price == 18000
+       and res['missing'] == ['Ghost (Unobtainium)'])
+    mk = next(t for t in json.loads(AppSetting.get('quote_templates')) if t['name'] == 'Modular kitchen')['id']
+t = c.get(f'/projects/new?template={mk}').text
+items = {i['name']: i for r in json.loads(re.search(r'id="existing-rooms-data"[^>]*>(.*?)</script>', t, re.S).group(1))
+         for i in r['items']}
+ok('its starting quotation: measured items with their material waiting for a size, the fitting at its price',
+   items['Base Unit']['type'] == 'measured' and items['Base Unit']['pending'] and items['Base Unit']['wood_type'] == 'Laminates'
+   and items['Shutter Glass']['work_type'] == '' and items['Magic Corner']['type'] == 'fixed'
+   and items['Magic Corner']['unit_price'] == 18000 and items['Magic Corner']['pending'])

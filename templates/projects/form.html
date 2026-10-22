@@ -48,14 +48,31 @@
   <div class="d-flex align-items-center gap-2 ki-start-from">
     <label class="small text-muted text-nowrap" for="startFrom">Start from</label>
     <select class="form-select form-select-sm" id="startFrom" style="min-width:200px"
-            onchange="location.href = '{{ url_for('projects.create_project') }}' + (this.value ? '?template=' + encodeURIComponent(this.value) : '')">
-      <option value="">Blank quotation</option>
+            onchange="location.href = '{{ url_for('projects.create_project') }}' + (this.value ? '?template=' + encodeURIComponent(this.value) : '?blank=1')">
+      <option value="" {{ 'selected' if request.args.get('blank') }}>Blank quotation</option>
       {% for t in templates %}<option value="{{ t.id }}" {{ 'selected' if t.id == chosen_template }}>{{ t.name }} ({{ t.lines }} lines)</option>{% endfor %}
     </select>
     {% if current_user.is_admin %}<a class="small text-nowrap" href="{{ url_for('projects.manage_templates') }}">Manage</a>{% endif %}
   </div>
   {% endif %}
 </div>
+{% if not project and templates and not started_from and not request.args.get('blank') %}
+{# Starting quotations first: most quotations start from one, not from blank #}
+<div class="card shadow-sm border-0 mb-3 ki-start-cards">
+  <div class="card-body">
+    <div class="fw-semibold mb-1"><i class="bi bi-files me-1 text-primary"></i>Start from one of your quotations</div>
+    <p class="small text-muted mb-2">Every room, item, description and rate is filled in. You type the sizes for this home
+      and remove what it doesn't need.</p>
+    <div class="d-flex flex-wrap gap-2">
+      {% for t in templates[:6] %}
+      <a class="btn btn-primary" href="{{ url_for('projects.create_project', template=t.id) }}">
+        <i class="bi bi-file-earmark-text me-1"></i>{{ t.name }} <span class="small opacity-75">({{ t.lines }} lines)</span></a>
+      {% endfor %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('projects.create_project', blank=1) }}">Start blank</a>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% if started_from %}
 <div class="alert alert-info py-2 small"><i class="bi bi-files me-1"></i>Copied from {{ started_from }}: every room, line,
   description and rate. Enter the customer, then change the quantities and sizes for this home.</div>
@@ -177,9 +194,9 @@
     <div class="col-12 col-lg-4">
       <div class="summary-panel">
 
-      <!-- Plywood -->
+      <!-- Plywood (pricing by material only) -->
       {% set ply = plywood_form %}
-      <div class="card shadow-sm border-0 mb-3">
+      <div class="card shadow-sm border-0 mb-3 {{ 'd-none' if boq_form.by_item }}">
         <div class="card-header ki-card-header">
           <i class="bi bi-layers me-2"></i>Plywood
         </div>
@@ -282,7 +299,7 @@
       </div>
 
       <!-- Rates Reference -->
-      <div class="card shadow-sm border-0 mt-3" id="rates-card">
+      <div class="card shadow-sm border-0 mt-3 {{ 'd-none' if boq_form.by_item }}" id="rates-card">
         <div class="card-header ki-card-header py-2">
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
         </div>
@@ -498,6 +515,7 @@
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }},
     boqLabel:    {{ catalog.BOQ_ITEMS_LABEL|tojson }},
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
+    byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
     boqUnits:    {{ boq_form.units|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions

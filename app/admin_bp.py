@@ -768,7 +768,7 @@ PAYMENT_KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
                 'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']
 EMAIL_KEYS = ['admin_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']
 SECRET_KEYS = {'razorpay_key_secret', 'webhook_secret', 'smtp_pass'}
-SETTINGS_TABS = ('company', 'appearance', 'documents', 'units', 'invoices', 'email')
+SETTINGS_TABS = ('company', 'appearance', 'pricing', 'documents', 'units', 'invoices', 'email')
 
 
 def _save_plain_settings(keys):
@@ -977,6 +977,15 @@ def settings():
                 AppSetting.set(key, request.form.get(key, '').strip())
             if request.form.get('initial_layout') in layout.layouts():
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
+        elif tab == 'pricing':
+            from . import boq
+            mode = request.form.get('pricing_mode')
+            if mode not in (boq.MATERIAL, boq.ITEM):
+                errors.append('Choose how you price your work.')
+            elif mode == boq.ITEM and not boq.console_status()['ready']:
+                errors.append('Pricing by item needs the latest update of your app. Please contact support.')
+            else:
+                boq.set_pricing(mode)
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1011,8 +1020,9 @@ def settings():
     support_display, support_url = branding.support_contact()
     support_links = {key: branding.support_message_url(what, current_user, request.host_url)
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
-    from . import layout
-    return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links,
+    from . import layout, boq
+    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.console_status()['ready']}
+    return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            section_variables=layout.VARIABLES,
                            saved=saved, defaults=defaults, options=branding.ui_options(),

@@ -126,7 +126,8 @@ def _form_catalog(project, rooms=None):
                                           for i in r.item_list)
     # BOQ lines on for the business, or already on this quotation (kept and editable if turned off later)
     on = boq.ready() and (boq.enabled() or has_boq)
-    cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(), 'saved': boq.saved_lines() if on else []}
+    cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(), 'saved': boq.saved_lines() if on else [],
+                       'by_item': boq.enabled()}         # priced by item (Settings → Pricing): BOQ lines only
     return cat
 
 

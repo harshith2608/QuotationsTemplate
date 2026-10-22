@@ -19,10 +19,26 @@ SESSION_KEY = 'setup_step'
 
 class Step:
     def __init__(self, key, title, what, endpoint, args=None, saved=None, optional=False):
-        self.key, self.title, self.what, self.endpoint = key, title, what, endpoint
+        self.key, self._title, self._what, self.endpoint = key, title, what, endpoint
         self.args = args or {}
         self.saved = saved            # the page whose successful save completes it, e.g. 'admin.settings:company'
         self.optional = optional
+
+    def _by_item(self):
+        """The rates step reads differently for a business that prices by item."""
+        if self.key != 'rates':
+            return None
+        from . import boq
+        return boq.enabled()
+
+    @property
+    def title(self):
+        return 'Your items & rates' if self._by_item() else self._title
+
+    @property
+    def what(self):
+        return ('Each item you quote (wardrobe, false ceiling, side table…) with its description, unit and rate. They '
+                'fill in by themselves on every quotation.') if self._by_item() else self._what
 
     def url(self, **extra):
         return url_for(self.endpoint, **self.args, **extra)
@@ -38,6 +54,9 @@ STEPS = [
          'admin.settings', {'tab': 'appearance'}, saved='admin.settings:appearance'),
     Step('units', 'Units of measurement', 'Feet & inches, mm, cm or inches, and rates per sqft or per sq m.',
          'admin.settings', {'tab': 'units'}, saved='admin.settings:units'),
+    Step('pricing', 'How you price your work', 'By material (a rate per sqft for each material and work type) or by '
+         'item (wardrobe, false ceiling, side table… each with its own rate).', 'admin.settings', {'tab': 'pricing'},
+         saved='admin.settings:pricing'),
     Step('rates', 'Your rates, materials & plywood', 'Your rate for each material and work type, the plywood you offer, '
          'and your fittings price list (Magic Corner, hinges…).', 'admin.rates', saved='admin.rates'),
     Step('pdf', 'Your quotation PDF', 'Room by room or by material, room descriptions, material specifications, payment '
@@ -100,6 +119,9 @@ def _seen_done():
         done.add('payments')
     if s['smtp_host']:
         done.add('email')
+    from . import boq
+    if boq.enabled():
+        done.add('pricing')                    # priced by item: chosen (here or by the operator)
     return done, quotes
 
 

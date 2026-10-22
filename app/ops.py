@@ -304,12 +304,12 @@ def boq_status(slug):
 
 
 def set_boq(slug, on):
-    """Turn BOQ lines on or off for a trial."""
+    """Pricing by item (BOQ lines) or by material, for a trial."""
     from . import boq
     with tenancy.tenant_context(slug, schema_of(slug)):
         if on and not boq.console_status()['ready']:
             raise OpsError('This trial needs the latest database update first (Updates → Update all).')
-        boq.set_enabled(on)
+        boq.set_pricing(boq.ITEM if on else boq.MATERIAL)
         db.session.commit()
 
 

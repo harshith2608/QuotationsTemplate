@@ -478,12 +478,20 @@ rates, make a real quotation, quiet for a while, trial ending with the plan pric
 **Open in WhatsApp** opens your own WhatsApp with the message ready; check it and press send. Nothing is sent by the
 console. Suggested rhythm: day 1, day 3, two days before the end, the day it ends.
 
-### Turnkey firms: BOQ lines and their own price list
-A trial's (or customer's) page → **Features**: **Turn on BOQ lines** for a firm that quotes line by line (false
-ceiling, wiring, wardrobe per sq.ft…). If the firm shares its old quotations, have their items, descriptions, rates,
-a starting quotation (e.g. "2 BHK turnkey") and their notes and payment terms written into a `.json` price list, and
-upload it with **Load price list** on that firm's page. It goes into that business only (lines added or updated by
-name; untouched starter lines removed if ticked). Keep the file out of the repository: it is the firm's business data.
+### Setting up a firm: how they price, and their own starting quotations
+Every business makes one choice, **how they price** (Settings → Pricing, also a setup guide step; or on their console
+page → Features):
+- **By material**: a rate per sqft for each material and work type, sizes on each item, fittings from a price list
+  (modular / carpentry firms).
+- **By item**: each item with its own rate, description and unit (wardrobe per sqft, side table per piece, 3D design
+  lump sum), printed as a BOQ (turnkey firms). They only see items and rates, not materials or plywood.
+
+When a firm shares its old quotations, have them written into a `.json` price list (format at the top of
+`app/price_list.py`): how they price, their items and rates (or materials, rates and fittings), one or more starting
+quotations (e.g. "2 BHK turnkey") and their notes and payment terms. Upload it with **Load price list** on that firm's
+page: it goes into that business only. New Quotation then offers their starting quotations first: every room and item
+filled in, they type the sizes and remove what that home doesn't need. Keep the file out of the repository: it is the
+firm's business data. Firms can also save any quotation as a starting quotation themselves (Save as template).
 
 ### Trial → paying customer
 **With the console (section 3g):** after the payment arrives, **Customers → New paying customer → Convert a

@@ -139,7 +139,8 @@ ok('trial page: WhatsApp card with the request\'s name and number, suggested dra
    'id="whatsapp"' in t and 'id="waName" type="text" value="Ravi"' in t and 'value="919876543210"' in t
    and 'value="quote" data-body=' in t and 'selected>Going well: make a real quotation (suggested)' in t
    and 'trial ends on' in t and '₹4,999' in t and 'class="btn btn-wa"' in t)
-ok('trial page: Features card with BOQ lines off', 'id="features"' in t and 'Turn on BOQ lines' in t)
+ok('trial page: Features card, pricing by material', 'id="features"' in t and 'Switch to pricing by item' in t)
+import html as _html0
 r = c.post('/trials/ravi-modular/boq', data={'on': '1'}, follow_redirects=True)
 with app.app_context():
     from app.models import AppSetting as _AS2
@@ -149,13 +150,13 @@ with app.app_context():
     with tenancy.tenant_context('ravi-modular'):
         _starter = _BQ.query.count()
         _layout = _AS2.get('initial_layout')
-ok('console turns BOQ lines on for one trial only, with the starter lines and the BOQ layout', 'BOQ lines turned on' in r.text
-   and 'Turn off BOQ lines' in r.text and _boq_on and _starter >= 25 and _layout == 'boq')
+ok('console switches one trial to pricing by item: BOQ lines, the starter lines and the BOQ layout',
+   'now prices by item' in _html0.unescape(r.text) and 'Switch to pricing by material' in r.text and _boq_on and _starter >= 25 and _layout == 'boq')
 r = c.post('/trials/ravi-modular/boq', data={'on': '0'}, follow_redirects=True)
 with app.app_context():
     with tenancy.tenant_context('ravi-modular'):
         _boq_on = _AS2.get('feature_boq') == '1'
-ok('…and off again (audited)', 'BOQ lines turned off' in r.text and not _boq_on and '<td>boq</td>' in r.text)
+ok('…and back to by material (audited)', 'now prices by material' in _html0.unescape(r.text) and not _boq_on and '<td>boq</td>' in r.text)
 import io as _io, json as _json
 _pl = {'lines': [{'name': 'Wardrobe', 'unit': 'Sq.ft', 'rate': 1950, 'group': 'Bedroom', 'description': 'BWR ply, laminate'},
                  {'name': 'Site Cleaning', 'unit': 'LS', 'rate': 9000, 'group': 'Services'},

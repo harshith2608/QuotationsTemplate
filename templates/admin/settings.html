@@ -85,7 +85,7 @@
 {% endif %}
 
 <ul class="nav nav-pills ki-settings-nav mb-3 flex-nowrap overflow-auto">
-  {% for key, icon, label in [('company','building','Company'), ('appearance','palette','Appearance'),
+  {% for key, icon, label in [('company','building','Company'), ('appearance','palette','Appearance'), ('pricing','calculator','Pricing'),
                                ('documents','file-earmark-text','Quotation PDFs'), ('units','rulers','Units'), ('invoices','receipt','Invoices'),
                                ('email','envelope','Email')] %}
   <li class="nav-item">
@@ -507,6 +507,46 @@
     </div>
   </div>
   <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Units</button></div>
+</form>
+{% endif %}
+
+{# ───────────────────────────── PRICING ───────────────────────────── #}
+{% if tab == 'pricing' %}
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="pricing">
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-header ki-card-header"><i class="bi bi-calculator me-2"></i>How do you price your work?</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">One choice for your whole team. It decides what you fill in on a quotation and how
+        your rates are set up. You can change it later; quotations already made stay as they are.</p>
+      <div class="row g-3">
+        {% for key, head, lines, example in [
+             ('material', 'By material', ['A rate per ' ~ units.area_label() ~ ' for each material and work type (laminate box work, glass…)',
+                                          'You type each item\'s size: the area and the price work themselves out',
+                                          'Fittings & accessories (Magic Corner, hinges…) from your price list'],
+              'Wardrobe 7 ft × 8 ft, Laminate – Box Work at your rate'),
+             ('item', 'By item', ['Each item has its own rate: wardrobe, TV unit, false ceiling, side table, 3D design…',
+                                  'Per ' ~ units.area_label() ~ ', running ft, number or lump sum, with its description',
+                                  'A bill of quantities: Sr. No., Description, Qty, Unit, Rate, Amount'],
+              'Wardrobe 56 sqft × ₹1,950 · Side table 2 Nos. × ₹15,000 · 3D design ₹50,000 LS')] %}
+        <div class="col-12 col-md-6">
+          <label class="ki-pricing-option d-block h-100 p-3 border rounded-3" for="pm_{{ key }}">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="pricing_mode" id="pm_{{ key }}" value="{{ key }}"
+                     {{ 'checked' if pricing.mode == key }} {{ 'disabled' if key == 'item' and not pricing.item_ready and pricing.mode != 'item' }}>
+              <span class="form-check-label fw-bold">{{ head }}</span>
+            </div>
+            <ul class="small mb-2 ps-3">{% for l in lines %}<li>{{ l }}</li>{% endfor %}</ul>
+            <div class="small text-muted"><i class="bi bi-lightbulb me-1"></i>e.g. {{ example }}</div>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      {% if not pricing.item_ready %}<div class="form-text text-danger mt-2">Pricing by item needs the latest update of your app.</div>{% endif %}
+    </div>
+  </div>
+  <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
 </form>
 {% endif %}
 

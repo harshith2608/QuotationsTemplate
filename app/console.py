@@ -683,7 +683,7 @@ def trial_boq(slug):
         flash(str(exc), 'error')
     else:
         audit('trial_boq', slug, 'on' if on else 'off')
-        flash(f'BOQ lines turned {"on" if on else "off"} for "{slug}".', 'ok')
+        flash(f'"{slug}" now prices {"by item (BOQ lines)" if on else "by material"}.', 'ok')
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
@@ -1037,7 +1037,7 @@ def customer_boq(slug):
         flash(str(exc), 'error')
     else:
         audit('customer_boq', slug, 'on' if on else 'off')
-        flash(f'BOQ lines turned {"on" if on else "off"} for "{slug}".', 'ok')
+        flash(f'"{slug}" now prices {"by item (BOQ lines)" if on else "by material"}.', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 

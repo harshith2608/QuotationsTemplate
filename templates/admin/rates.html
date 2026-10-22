@@ -2,22 +2,33 @@
 {% block title %}Manage Rates{% endblock %}
 
 {% block content %}
+{# Priced by item (Settings → Pricing): the item list first; material rates, plywood and fittings only on request #}
+{% set by_item = boq_lines is defined and boq_lines is not none %}
+{% set hide = 'd-none' if by_item and not request.args.get('all') else '' %}
 <div class="d-flex align-items-center justify-content-between mt-3 mb-3">
   <h4 class="mb-0 fw-bold ki-page-title">
     <i class="bi bi-currency-rupee me-2 text-primary"></i>Rates Management
   </h4>
 </div>
 
+{% if by_item %}
+<div class="alert alert-info py-2 small">
+  <i class="bi bi-info-circle me-1"></i>
+  You price by item (Settings → Pricing): each item below has its own description, unit and rate, and fills in by itself
+  on a quotation. Changing a rate here applies to new lines; quotations already made keep theirs.
+</div>
+{% else %}
 <div class="alert alert-info py-2 small">
   <i class="bi bi-info-circle me-1"></i>
   Set your rate per {{ units.area_label() }} for each material. A quotation's total = Σ (area × rate) for every measured item,
   plus fittings. Rate changes apply when a quotation is next saved.
 </div>
+{% endif %}
 
 <div class="row g-3">
 
   <!-- Materials & rates -->
-  <div class="col-12" id="materials">
+  <div class="col-12 {{ hide }}" id="materials">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header">
         <i class="bi bi-layers me-2"></i>Materials &amp; Rates (&#8377;{{ units.rate_label() }})
@@ -140,7 +151,7 @@
 
   {% if ply_ready %}
   <!-- Plywood -->
-  <div class="col-12" id="plywood">
+  <div class="col-12 {{ hide }}" id="plywood">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header"><i class="bi bi-stack me-2"></i>Plywood</div>
       <div class="card-body">
@@ -222,7 +233,7 @@
   {% endif %}
 
   <!-- Fittings & accessories price list -->
-  <div class="col-12" id="price-list">
+  <div class="col-12 {{ hide }}" id="price-list">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header">
         <i class="bi bi-tags me-2"></i>Fittings &amp; Accessories Price List
@@ -292,10 +303,10 @@
   </div>
 
   {% if boq_lines is defined and boq_lines is not none %}
-  <div class="col-12" id="boq-lines">
+  <div class="col-12 {{ 'order-first' if by_item }}" id="boq-lines">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header">
-        <i class="bi bi-list-ol me-2"></i>BOQ Lines
+        <i class="bi bi-list-ol me-2"></i>{{ 'Your items & rates' if by_item else 'BOQ Lines' }}
       </div>
       <div class="card-body">
         <p class="small text-muted mb-3">
@@ -331,7 +342,7 @@
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
-                      <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" value="{{ b.rate | round(2) }}" aria-label="Rate">
+                      <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" value="{{ ('%.2f' % b.rate).rstrip('0').rstrip('.') }}" aria-label="Rate">
                     </div>
                   </td>
                   <td class="text-center">
@@ -369,8 +380,15 @@
   </div>
   {% endif %}
 
+  {% if hide %}
+  <div class="col-12 small text-muted">
+    Material rates, plywood and the fittings price list are for pricing by material.
+    <a href="{{ url_for('admin.rates', all=1) }}#materials">Show them</a> (older quotations with measured items still use them).
+  </div>
+  {% endif %}
+
   <!-- How Rates Work -->
-  <div class="col-12 col-lg-6">
+  <div class="col-12 col-lg-6 {{ hide }}">
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header py-2"><i class="bi bi-lightbulb me-2"></i>How Rates Work</div>
       <div class="card-body small text-muted">

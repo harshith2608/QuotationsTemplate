@@ -102,22 +102,22 @@
 <h2 id="features">Features</h2>
 <div class="card stack">
   {% if boq %}
-  <div><strong>BOQ lines (turnkey)</strong> · <span class="badge {{ 'b-active' if boq.on else 'b-other' }}">{{ 'on' if boq.on else 'off' }}</span></div>
-  <p class="muted small" style="margin:0">Quotations get a "BOQ line" (description, quantity, unit, rate: false ceiling,
-    electrical points, lump-sum work…), a description on any item and ready-made starter lines. Turning it on also
-    picks the "BOQ" layout for the customer's PDF (they can change it in Settings → Quotation PDFs). Turning it off keeps
-    existing lines; new quotations just don't offer them, and the PDF goes back to room by room.</p>
-  {% if not boq.ready %}<p class="small" style="margin:0;color:var(--bad)">Needs the latest database update first (Updates → Update all).</p>{% endif %}
+  <div><strong>How they price</strong> · <span class="badge {{ 'b-active' if boq.on else 'b-other' }}">{{ 'by item (BOQ lines)' if boq.on else 'by material' }}</span></div>
+  <p class="muted small" style="margin:0"><b>By material</b>: a rate per sqft for each material and work type, sizes on
+    each item, fittings from a price list (modular / carpentry firms). <b>By item</b>: each item with its own rate,
+    description and unit (wardrobe per sqft, side table per piece, 3D design lump sum), printed as a BOQ (turnkey firms).
+    The business can also choose this in Settings → Pricing. Quotations already made stay as they are.</p>
+  {% if not boq.ready %}<p class="small" style="margin:0;color:var(--bad)">Pricing by item needs the latest database update first (Updates → Update all).</p>{% endif %}
   <form method="post" action="{{ url_for('console.trial_boq', slug=t.slug) }}" class="row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="on" value="{{ '0' if boq.on else '1' }}">
-    <button class="btn {{ '' if boq.on else 'btn-primary' }}" type="submit" {% if not boq.ready and not boq.on %}disabled{% endif %}>
-      {{ 'Turn off BOQ lines' if boq.on else 'Turn on BOQ lines' }}</button>
+    <button class="btn" type="submit" {% if not boq.ready and not boq.on %}disabled{% endif %}>
+      {{ 'Switch to pricing by material' if boq.on else 'Switch to pricing by item (BOQ lines)' }}</button>
   </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Load price list</strong></div>
   <p class="muted small" style="margin:0">This firm's own lines (title, description, unit, rate), a ready-made starting
     quotation and their notes and payment terms, from the .json file prepared from their old quotations. Goes into this
-    business only. Lines are added or updated by name; turns BOQ lines on if they're off.</p>
+    business only. Lines are added or updated by name; switches them to pricing by item.</p>
   <form method="post" action="{{ url_for('console.trial_price_list', slug=t.slug) }}" enctype="multipart/form-data" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="file" name="file" accept=".json,application/json" required>
