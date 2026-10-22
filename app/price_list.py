@@ -8,11 +8,14 @@ goes into that business's own saved lines, rates, templates and settings.
 A firm that prices by item (turnkey, "pricing": "item", the default when there are "lines"):
     {"lines": [{"name": "Wardrobe", "description": "...", "unit": "sqft", "rate": 1950, "group": "Bedroom"}, ...],
      "templates": [{"name": "2 BHK turnkey",
-                    "rooms": [{"name": "Kitchen", "items": ["Loft Shutter", {"name": "Tall Unit"},
+                    "rooms": [{"name": "Kitchen", "description": ["Notes for this section"],
+                               "items": ["Loft Shutter", {"name": "Tall Unit"},
                                                            {"name": "COB Light 12 W", "rate_only": true}]}]}],
      "settings": {"important_notes": "...", "payment_terms": "..."}}
 A template's items name lines from "lines" (or saved ones); they start with no size or quantity, so the quotation
 highlights them until one is typed (a lump sum starts at 1). "rate_only": printed with its rate, not added.
+A section's "description" lines are its notes (printed under the section heading); they're also added to the
+business's list of room descriptions (Settings → Quotation PDFs), so they can be ticked on other quotations.
 
 A firm that prices by material ("pricing": "material"):
     {"pricing": "material",
@@ -124,7 +127,9 @@ def parse(raw):
                 items.append({'name': _text(it['name'], 100), 'rate_only': bool(it.get('rate_only')), 'kind': kind,
                               'material': _text(it.get('material'), 60), 'work': _text(it.get('work'), 50),
                               'description': boq.clean_description(it.get('description'))})
-            rooms.append({'name': _text(r['name'], 100), 'items': items})
+            desc = r.get('description') or []
+            desc = [_text(d, 300) for d in ([desc] if isinstance(desc, str) else desc) if _text(d, 300)]
+            rooms.append({'name': _text(r['name'], 100), 'items': items, 'description': desc})
         templates.append({'name': _text(t['name'], 60), 'rooms': rooms})
     if not lines and not templates and not materials and not fittings:
         raise PriceListError('The file has no lines.')
@@ -172,7 +177,7 @@ def _template_rooms(template, saved, fittings, combos):
                           'unit_price': line['rate'], 'description': line['description'] or '',
                           'length': 0, 'width': 0, 'count': 1,
                           **({} if lump or it['rate_only'] else {'pending': True})})
-        rooms.append({'name': r['name'], 'items': items, 'description': ''})
+        rooms.append({'name': r['name'], 'items': items, 'description': '\n'.join(r.get('description') or [])})
     return rooms, missing
 
 
@@ -253,7 +258,15 @@ def apply(parsed, remove_starter=True, replace_settings=False):
         quote_templates.put(t['name'], rooms)
         made.append(t['name'])
 
+    # Section notes used by the starting quotations join the business's room descriptions (never removing any)
+    from . import layout
+    notes = [d for t in parsed['templates'] for r in t['rooms'] for d in r.get('description') or []]
+    have = layout.description_options()
+    new_notes = [d for d in dict.fromkeys(notes) if d not in have]
     settings = []
+    if new_notes:
+        AppSetting.set(layout.DESCRIPTIONS_KEY, '\n'.join(have + new_notes))
+        settings.append(layout.DESCRIPTIONS_KEY)
     for key, value in parsed['settings'].items():
         if replace_settings or AppSetting.get(key) is None:
             AppSetting.set(key, value)

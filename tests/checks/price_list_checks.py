@@ -16,7 +16,7 @@ FILE = {'lines': [{'name': 'Wardrobe', 'unit': 'Sq.ft', 'rate': 1950, 'group': '
                   {'name': 'COB Light', 'unit': 'nos', 'rate': 520, 'group': 'Light rates'}],
         'templates': [{'name': 'Firm 2 BHK', 'rooms': [
             {'name': 'Bedroom', 'items': ['Wardrobe', 'Site Cleaning']},
-            {'name': 'Light rates', 'items': [{'name': 'COB Light', 'rate_only': True}]}]}],
+            {'name': 'Light rates', 'description': ['Rates as per final design'], 'items': [{'name': 'COB Light', 'rate_only': True}]}]}],
         'settings': {'payment_terms': 'Half before work starts.', 'important_notes': 'Final bill as per measurement.'}}
 
 
@@ -41,6 +41,9 @@ with app.app_context():
        boq.enabled() and AppSetting.get('initial_layout') == 'boq' and len(lines) == 3
        and lines['Wardrobe'] == ('sqft', 1950, 'Bedroom', 'BWR ply, laminate inside and outside')
        and lines['Site Cleaning'][0] == 'lump sum' and result['templates'] == ['Firm 2 BHK'])
+    ok('a section\'s notes: on the starting quotation and added to the room descriptions',
+       json.loads(AppSetting.get('quote_templates'))[0]['rooms'][1]['description'] == 'Rates as per final design'
+       and 'Rates as per final design' in AppSetting.get('room_descriptions'))
     ok('settings: filled in only where never saved', AppSetting.get('payment_terms') == 'Our own terms'
        and AppSetting.get('important_notes') == 'Final bill as per measurement.')
     tid = json.loads(AppSetting.get('quote_templates'))[0]['id']
