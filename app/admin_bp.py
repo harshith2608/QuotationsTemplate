@@ -982,7 +982,7 @@ def settings():
             mode = request.form.get('pricing_mode')
             if mode not in (boq.MATERIAL, boq.ITEM):
                 errors.append('Choose how you price your work.')
-            elif mode == boq.ITEM and not boq.console_status()['ready']:
+            elif mode == boq.ITEM and not boq.ready():
                 errors.append('Pricing by item needs the latest update of your app. Please contact support.')
             else:
                 boq.set_pricing(mode)
@@ -1021,7 +1021,7 @@ def settings():
     support_links = {key: branding.support_message_url(what, current_user, request.host_url)
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     from . import layout, boq
-    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.console_status()['ready']}
+    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready()} if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            section_variables=layout.VARIABLES,

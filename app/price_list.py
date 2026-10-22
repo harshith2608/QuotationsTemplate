@@ -200,46 +200,54 @@ def apply(parsed, remove_starter=True, replace_settings=False):
         from . import setup_guide
         setup_guide.mark('pricing')
 
+    # Everything already saved, read once (not one query per line)
+    have_mats = {r.name.lower(): r for r in Material.query.all()} if parsed['materials'] else {}
+    have_rates = {(r.wood_type, r.work_type): r for r in ItemRate.query.all()} if parsed['materials'] else {}
+    have_fits = {r.name.lower(): r for r in PriceListItem.query.all()}
     mats = 0
     for m in parsed['materials']:
-        row = Material.query.filter(func.lower(Material.name) == m['name'].lower()).first()
+        row = have_mats.get(m['name'].lower())
         if row is None:
             top = db.session.query(func.max(Material.sort_order)).scalar() or 0
             row = Material(name=m['name'], uses_work_types='' not in m['rates'], active=True, sort_order=top + 1)
             db.session.add(row)
         row.active = True
         for work, rate in m['rates'].items():
-            r = ItemRate.query.filter_by(wood_type=row.name, work_type=work).first()
+            r = have_rates.get((row.name, work))
             if r is None:
                 db.session.add(ItemRate(wood_type=row.name, work_type=work, rate_per_sqft=rate))
             else:
                 r.rate_per_sqft = rate
         mats += 1
     for f in parsed['fittings']:
-        row = PriceListItem.query.filter(func.lower(PriceListItem.name) == f['name'].lower()).first()
+        row = have_fits.get(f['name'].lower())
         if row is None:
-            db.session.add(PriceListItem(name=f['name'], price=f['price'], unit=f['unit']))
+            row = have_fits[f['name'].lower()] = PriceListItem(name=f['name'], price=f['price'], unit=f['unit'])
+            db.session.add(row)
         else:
             row.price, row.unit = f['price'], f['unit']
     db.session.flush()
 
+    have_lines = {r.name.lower(): r for r in BoqItem.query.all()} if ready else {}
     removed = 0
     if remove_starter and ready:
         starter = {(name.lower(), unit, float(rate), description or '', category)
                    for category, name, unit, rate, description in boq.starter_lines()}
         mine = {l['name'].lower() for l in parsed['lines']}
-        for row in BoqItem.query.all():
+        for row in list(have_lines.values()):
             key = (row.name.lower(), row.unit, float(row.rate or 0), row.description or '', row.category)
             if key in starter and row.name.lower() not in mine:
                 db.session.delete(row)
+                del have_lines[row.name.lower()]
                 removed += 1
 
     added = updated = 0
     for l in parsed['lines'] if ready else []:
-        row = BoqItem.query.filter(func.lower(BoqItem.name) == l['name'].lower()).first()
+        row = have_lines.get(l['name'].lower())
         if row is None:
-            db.session.add(BoqItem(name=l['name'], description=l['description'], unit=l['unit'], rate=l['rate'],
-                                   category=l['group']))
+            row = have_lines[l['name'].lower()] = BoqItem(name=l['name'], description=l['description'], unit=l['unit'],
+                                                          rate=l['rate'], category=l['group'])
+            db.session.add(row)
             added += 1
         else:
             row.name, row.description, row.unit, row.rate, row.category = (l['name'], l['description'], l['unit'],
@@ -247,9 +255,9 @@ def apply(parsed, remove_starter=True, replace_settings=False):
             updated += 1
     db.session.flush()
 
-    saved = {r.name.lower(): {'name': r.name, 'description': r.description, 'unit': r.unit or 'nos',
-                              'rate': float(r.rate or 0)} for r in BoqItem.query.all()} if ready else {}
-    fittings = {r.name.lower(): float(r.price or 0) for r in PriceListItem.query.all()}
+    saved = {k: {'name': r.name, 'description': r.description, 'unit': r.unit or 'nos', 'rate': float(r.rate or 0)}
+             for k, r in have_lines.items()}
+    fittings = {k: float(r.price or 0) for k, r in have_fits.items()}
     combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     made, missing = [], []
     for t in parsed['templates']:
