@@ -81,6 +81,10 @@ with app.app_context():
 pdf = pdftext(f'/projects/{pid}/pdf/customer')
 ok('the BOQ PDF prints "Price to follow" for it, the rate card line with its rate, the total without it',
    'Price to follow' in pdf and '1,09,200' in pdf.replace('109,200', '1,09,200') and '520' in pdf)
+fullq = pdftext(f'/projects/{pid}/pdf')
+ok('Full Quotation of a quotation priced by item: section totals in the summary, no areas, rate-only line with "—"',
+   'Section Total' in fullq and 'Material & Work Type' not in fullq and 'sqft' not in fullq.replace('Sq.ft', '')
+   and re.search(r'COB Light — Nos\. 520 —', fullq) is not None)
 ok('Full Quotation and the quotation page show it too', 'price to follow' in pdftext(f'/projects/{pid}/pdf').lower()
    and 'price to follow' in c.get(f'/projects/{pid}').text)
 e = c.get(f'/projects/{pid}/edit').text

@@ -410,119 +410,144 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     material_style = ParagraphStyle('ItemMaterial', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
     material_style_left = ParagraphStyle('ItemName', parent=material_style, alignment=0)
 
+    from . import layout as _layout
     rooms = project.rooms_with_items()
-    for room in rooms:
-        # Room header row
-        room_header = Table(
-            [[f'  {room.name.upper()}']],
-            colWidths=[page_width]
-        )
-        room_header.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), ROOM_HEADER_BG),
-            ('TEXTCOLOR', (0, 0), (-1, -1), TABLE_HEADER_FG),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('PADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        room_head = room_header                # kept with the start of its table (below)
+    section_totals = []                       # (room, amount): the summary of a quotation priced by item
 
-        # Items table
-        item_rows = [['Item Name', 'Length', 'Width', 'Material', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
+    def _name_cell(item, extra=''):
+        text = escape(item.name + (f' × {item.count}' if not item.is_fixed and item.count > 1 else ''))
+        notes = '\n'.join(x for x in (item.note, extra) if x)
+        if notes:
+            text += f'<br/><font size="7" color="#546e7a">{escape(notes).replace(chr(10), "<br/>")}</font>'
+        return Paragraph(text, material_style_left)
+
+    def _size_note(item):
+        if not (item.is_boq and item.length):
+            return ''
+        size = ft_in(item.length) + (f' × {ft_in(item.width)}' if item.width else '')
+        return f'Size: {size}' + (f' × {item.boq_count} Nos.' if item.boq_count > 1 else '')
+
+    for room in rooms:
+        items = room.item_list
+        priced_only = all(i.is_fixed for i in items)          # BOQ lines / fittings: no sizes or materials
         room_total_area = 0.0
         room_total_cost = 0.0
-        for item in room.item_list:
-            if item.is_fixed:
-                # Fitting/accessory or BOQ line: quantity × unit price, no dimensions
-                subtotal = item.cost(_item_rates_map, _project_ply)
-                room_total_cost += subtotal
-                desc = item.note
-                name = Paragraph(f'{escape(item.name)}' + (f'<br/><font size="7" color="#546e7a">'
-                                 f'{escape(desc).replace(chr(10), "<br/>")}</font>' if desc else ''), material_style_left)
-                if item.price_to_follow:
-                    what = f'{item.quantity:g} {item.unit_text}, price to follow' if item.quantity else 'Price to follow'
-                elif item.is_boq and not item.quantity:
-                    what = f'Rate only: Rs. {_money(item.unit_price, ",.0f")} / {item.unit_text}'
-                elif item.is_boq:
-                    what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'
-                else:
-                    what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}'
-                sized = item.is_boq and item.length
-                item_rows.append([name, ft_in(item.length) if sized else '—',
-                                  ft_in(item.width) if sized and item.width else '—', what, '—', f'{_money(subtotal)}'])
-                continue
-            work_type  = item.work_type or ''
-            _key       = plywood.item_key(item, _project_ply)
-            rate       = _item_rates_map.get(_key, 0.0)
-            subtotal   = item.area * rate
-            room_total_area += item.area
-            room_total_cost += subtotal
-            _nm = escape(item.name + (f' × {item.count}' if item.count > 1 else ''))
-            if item.note:
-                _nm += f'<br/><font size="7" color="#546e7a">{escape(item.note).replace(chr(10), "<br/>")}</font>'
-            item_rows.append([
-                Paragraph(_nm, material_style_left),
-                ft_in(item.length),
-                ft_in(item.width),
-                Paragraph(escape(plywood.finish_label(_key, project)), material_style),   # wraps: never cut off
-                f'{units.area_value(item.area):,.2f}',
-                f'{_money(subtotal)}'
-            ])
-        # Room total row
-        item_rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
+        head_text = f'<b>{escape(room.name.upper())}</b>'
+        notes = _layout.room_description(room) if priced_only else ''
+        if notes:
+            head_text += f'<br/><font size="7">{escape(notes).replace(chr(10), "<br/>")}</font>'
+        head_style = ParagraphStyle('RoomHead', parent=styles['Normal'], fontSize=9, leading=11, textColor=TABLE_HEADER_FG)
 
-        item_table = Table(item_rows, colWidths=col_widths, repeatRows=1)
+        if priced_only:
+            # Item | Qty | Unit | Rate | Amount — each line as quoted
+            widths = [page_width * f for f in (0.48, 0.11, 0.11, 0.13, 0.17)]
+            rows = [[Paragraph(head_text, head_style), '', '', '', ''],
+                    ['Item', 'Qty', 'Unit', 'Rate (Rs.)', 'Amount (Rs.)']]
+            for item in items:
+                amount = item.cost(_item_rates_map, _project_ply)
+                room_total_cost += amount
+                unit = item.unit_text if item.is_boq else 'Nos.'
+                if item.price_to_follow:
+                    cells = [f'{item.quantity:g}' if item.quantity else '—', unit, '—', 'Price to follow']
+                elif not item.quantity:                     # rate only: printed with its rate, not added
+                    cells = ['—', unit, _money(item.unit_price, ',.0f'), '—']
+                elif item.is_boq and item.unit_text == 'LS':
+                    cells = ['1', 'LS', _money(item.unit_price, ',.0f'), _money(amount)]
+                else:
+                    cells = [f'{item.quantity:g}', unit, _money(item.unit_price, ',.0f'), _money(amount)]
+                rows.append([_name_cell(item, _size_note(item))] + cells)
+            rates_only = room_total_cost == 0 and all(not i.quantity for i in items if not i.price_to_follow)
+            rows.append(['Rates for reference, not added to the total' if rates_only else 'Section Total', '', '', '',
+                         '—' if rates_only else f'Rs. {_money(room_total_cost)}'])
+            total_cmds = [('SPAN', (0, -1), (3, -1)), ('ALIGN', (0, -1), (3, -1), 'RIGHT' if not rates_only else 'LEFT'),
+                          ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'), ('ALIGN', (1, 1), (3, -2), 'CENTER'),
+                          ('ALIGN', (4, 1), (4, -1), 'RIGHT'), ('ALIGN', (3, 2), (3, -2), 'RIGHT')]
+            if rates_only:
+                total_cmds += [('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Oblique'), ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#546e7a'))]
+            section_totals.append((room, room_total_cost))
+        else:
+            widths = col_widths
+            rows = [[Paragraph(head_text, head_style), '', '', '', '', ''],
+                    ['Item Name', 'Length', 'Width', 'Material', f'Area ({units.area_label()})', 'Subtotal (Rs.)']]
+            for item in items:
+                if item.is_fixed:
+                    # Fitting/accessory or BOQ line in a room with measured items: quantity × unit price
+                    subtotal = item.cost(_item_rates_map, _project_ply)
+                    room_total_cost += subtotal
+                    if item.price_to_follow:
+                        what = f'{item.quantity:g} {item.unit_text}, price to follow' if item.quantity else 'Price to follow'
+                    elif item.is_boq and not item.quantity:
+                        what = f'Rate only: Rs. {_money(item.unit_price, ",.0f")} / {item.unit_text}'
+                    elif item.is_boq:
+                        what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'
+                    else:
+                        what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}'
+                    sized = item.is_boq and item.length
+                    rows.append([_name_cell(item), ft_in(item.length) if sized else '—',
+                                 ft_in(item.width) if sized and item.width else '—', Paragraph(escape(what), material_style),
+                                 '—', _money(subtotal) if item.quantity and not item.price_to_follow else '—'])
+                    continue
+                _key       = plywood.item_key(item, _project_ply)
+                rate       = _item_rates_map.get(_key, 0.0)
+                subtotal   = item.area * rate
+                room_total_area += item.area
+                room_total_cost += subtotal
+                rows.append([
+                    _name_cell(item),
+                    ft_in(item.length),
+                    ft_in(item.width),
+                    Paragraph(escape(plywood.finish_label(_key, project)), material_style),   # wraps: never cut off
+                    f'{units.area_value(item.area):,.2f}',
+                    f'{_money(subtotal)}'
+                ])
+            rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
+            total_cmds = [('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'), ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+                          ('ALIGN', (5, 1), (5, -1), 'RIGHT')]
+
+        item_table = Table(rows, colWidths=widths, repeatRows=2)
         item_table.setStyle(TableStyle([
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
-            ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('ALIGN', (1, 0), (-1, 0), 'CENTER'),
+            # Room name: the table's first row (repeated with the headings on a new page)
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), ROOM_HEADER_BG),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            # Column headings
+            ('BACKGROUND', (0, 1), (-1, 1), TABLE_HEADER_BG),
+            ('TEXTCOLOR', (0, 1), (-1, 1), TABLE_HEADER_FG),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+            ('ALIGN', (1, 1), (-1, 1), 'CENTER'),
             # Data rows
-            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTNAME', (0, 2), (-1, -2), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
-            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
-            ('ALIGN', (5, 1), (5, -1), 'RIGHT'),
-            # Alternating row colors
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fafafa')]),
+            ('ALIGN', (0, 2), (0, -1), 'LEFT'),
+            ('ROWBACKGROUNDS', (0, 2), (-1, -2), [colors.white, colors.HexColor('#fafafa')]),
             # Total row
             ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-            ('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'),
-            ('TEXTCOLOR', (3, -1), (-1, -1), BRAND_DARK),
-            ('ALIGN', (3, -1), (4, -1), 'CENTER'),
-            ('ALIGN', (5, -1), (5, -1), 'RIGHT'),
-            # Grid
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
-            ('LINEBELOW', (0, 0), (-1, 0), 1, BRAND_DARK),
+            ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
+            ('GRID', (0, 1), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+            ('LINEBELOW', (0, 1), (-1, 1), 1, BRAND_DARK),
             ('PADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        # the room's name, the column headings and the first items never end a page on their own
-        if len(item_rows) <= 6:
-            elements.append(KeepTogether([room_head, item_table]))
-        else:
-            room_head.keepWithNext = True
-            item_table.setStyle(TableStyle([('NOSPLIT', (0, 0), (-1, 2))]))
-            elements += [room_head, item_table]
+            # the room's name, the column headings and the first item never end a page on their own
+            ('NOSPLIT', (0, 0), (-1, min(2, len(rows) - 1))),
+        ] + total_cmds))
+        elements.append(item_table)
         elements.append(Spacer(1, 8))
 
     # ------- COST SUMMARY -------
     elements.append(Spacer(1, 6))
-    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-    elements.append(Paragraph("Cost Summary", section_style))
-    elements.append(Spacer(1, 6))
+    summary_head = [HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8),
+                    Paragraph("Cost Summary", section_style), Spacer(1, 6)]
 
     item_totals = project.get_item_totals(rooms)  # { 'wood|work': area }
     summary_cw = [page_width * p for p in [0.35, 0.22, 0.22, 0.21]]
+    by_sections = not any(a > 0 for a in item_totals.values())     # nothing measured: a total per section instead
 
     # Combined material + work cost table
-    elements.append(Spacer(1, 3))
-    combo_data = [['Material & Work Type', f'Total Area ({units.area_label()})', 'Amount (Rs.)']]   # no rate per area
+    combo_data = ([['Section', '', 'Amount (Rs.)']] if by_sections
+                  else [['Material & Work Type', f'Total Area ({units.area_label()})', 'Amount (Rs.)']])  # no rate per area
     combo_total = 0.0
     combo_area_total = 0.0
     for key in M.ordered_keys(item_totals):
@@ -533,14 +558,19 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             combo_total += subtotal
             combo_area_total += area
             combo_data.append([plywood.label(key, project), f'{units.area_value(area):,.2f}', f'{_money(subtotal)}'])
-    fixed_total = project.fixed_items_total(rooms)
-    if fixed_total > 0:
-        combo_total += fixed_total
-        combo_data.append([FIXED_ITEMS_LABEL, '—', f'{_money(fixed_total)}'])
-    boq_total = project.boq_items_total(rooms)
-    if boq_total > 0:
-        combo_total += boq_total
-        combo_data.append([BOQ_ITEMS_LABEL, '—', f'{_money(boq_total)}'])
+    if by_sections:
+        for r_i, (room, amount) in enumerate((r, a) for r, a in section_totals if a > 0):
+            combo_total += amount
+            combo_data.append([room.name, '', f'{_money(amount)}'])
+    else:
+        fixed_total = project.fixed_items_total(rooms)
+        if fixed_total > 0:
+            combo_total += fixed_total
+            combo_data.append([FIXED_ITEMS_LABEL, '—', f'{_money(fixed_total)}'])
+        boq_total = project.boq_items_total(rooms)
+        if boq_total > 0:
+            combo_total += boq_total
+            combo_data.append([BOQ_ITEMS_LABEL, '—', f'{_money(boq_total)}'])
     combo_data.append(['', 'Subtotal', f'Rs. {_money(combo_total)}'])
 
     combo_table = Table(combo_data, colWidths=[page_width * p for p in [0.57, 0.22, 0.21]])
@@ -561,8 +591,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ('PADDING', (0, 0), (-1, -1), 7),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(combo_table)
+    ] + ([('SPAN', (0, r), (1, r)) for r in range(len(combo_data) - 1)] if by_sections else [])))   # no area column
+    elements.append(KeepTogether(summary_head + [combo_table]))       # the heading never ends a page on its own
     elements.append(Spacer(1, 8))
 
     # Discount + Final total rows
@@ -586,7 +616,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append(['', units.area(combo_area_total), 'FINAL TOTAL', f'Rs. {_money(final_total)}'])
+    total_rows.append(['', '' if by_sections else units.area(combo_area_total), 'FINAL TOTAL', f'Rs. {_money(final_total)}'])
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
         ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),

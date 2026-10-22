@@ -208,9 +208,10 @@ ok('quotation page: BOQ badge, unit, description, Other work total', 'ki-badge-b
    and 'Conduit, polycab wire considered' in v and 'Other work (BOQ lines)' in v)
 
 full = pdftext(f'/projects/{pid}/pdf')
-ok('Full Quotation: BOQ lines with unit × rate and descriptions; Other work in the summary',
-   '696 Sq.ft × Rs. 120' in full and 'Conduit, polycab wire considered' in full and 'Other work (BOQ lines)' in full
-   and 'Openable, laminate finish' in full)
+ok('Full Quotation: a section of BOQ lines prints Qty, Unit, Rate and Amount (no sizes or materials), with descriptions; '
+   'Other work in the summary of a quotation that also has measured items',
+   re.search(r'696 Sq\.ft 120 ', full) is not None and 'Section Total' in full and 'Conduit, polycab wire considered' in full
+   and 'Other work (BOQ lines)' in full and 'Openable, laminate finish' in full)
 
 # ── BOQ layout ──
 s = c.get('/admin/settings?tab=documents').text
