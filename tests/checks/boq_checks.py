@@ -207,7 +207,9 @@ v = c.get(f'/projects/{pid}').text
 ok('quotation page: BOQ badge, unit, description, Other work total', 'ki-badge-boq' in v and '696 Sq.ft' in v
    and 'Conduit, polycab wire considered' in v and 'Other work (BOQ lines)' in v)
 
-full = pdftext(f'/projects/{pid}/pdf')
+with app.test_request_context():                  # priced by item, /pdf gives the one quotation PDF: the generator itself
+    from app.pdf_utils import generate_pdf
+    full = re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in PdfReader(generate_pdf(Project.query.get(pid))).pages))
 ok('Full Quotation: a section of BOQ lines prints Qty, Unit, Rate and Amount (no sizes or materials), with descriptions; '
    'Other work in the summary of a quotation that also has measured items',
    re.search(r'696 Sq\.ft 120 ', full) is not None and 'Section Total' in full and 'Conduit, polycab wire considered' in full
