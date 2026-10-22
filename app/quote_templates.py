@@ -72,6 +72,20 @@ def save(name, project):
     return tid
 
 
+def put(name, rooms):
+    """Save ready-made rooms (a firm's price list, app/price_list.py) as the template `name`, replacing one with the
+    same name. Returns its id."""
+    name = ' '.join((name or '').split())[:NAME_MAX]
+    templates = [t for t in _load() if t['name'].lower() != name.lower()]
+    if len(templates) >= LIMIT:
+        raise ValueError(f'This business has {LIMIT} templates already.')
+    tid = secrets.token_hex(4)
+    templates.append({'id': tid, 'name': name, 'rooms': rooms, 'discount_type': 'none', 'discount_value': 0,
+                      'plywood_thickness': '', 'plywood': None, 'saved_at': datetime.utcnow().isoformat(timespec='seconds')})
+    _store(templates)
+    return tid
+
+
 def rename(template_id, name):
     name = ' '.join((name or '').split())[:NAME_MAX]
     templates = _load()

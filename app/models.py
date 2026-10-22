@@ -242,6 +242,11 @@ class Item(db.Model):
         return self.item_type == 'boq'
 
     @property
+    def price_to_follow(self):
+        """A BOQ line whose price isn't fixed yet (no rate): printed as "Price to follow", not added to the total."""
+        return self.is_boq and self.unit_price is None
+
+    @property
     def boq_count(self):
         """No's of a BOQ line measured by size (its quantity / one piece's area or length), else 1."""
         from . import boq

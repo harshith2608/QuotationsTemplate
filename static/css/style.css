@@ -280,6 +280,10 @@ body {
 .ki-pick-row:hover { background: #f8fafc; }
 .item-table tr:has(+ tr.ki-desc-row) td { border-bottom: 0; }
 .item-table .ki-item-desc { font-size: .8rem; color: #455a64; resize: vertical; min-height: 30px; }
+/* A long description stays short (3 lines) until it's clicked to edit */
+.item-table .ki-item-desc:not(:focus) { max-height: 4.4rem; overflow: hidden; }
+.item-table .ki-tbc { margin: 4px 0 0; }
+.item-table .ki-tbc .form-check-input { margin-top: .2rem; }
 
 /* ---- Grand Total Row ---- */
 .ki-grand-total-row td {

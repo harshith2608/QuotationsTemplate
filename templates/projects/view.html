@@ -371,7 +371,7 @@
                 <td class="text-center">
                   {% if item.is_boq %}<span class="badge ki-badge-boq">BOQ</span>
                   {% if item.length %}<div class="small text-muted mt-1">{{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }}{% endif %}</div>{% endif %}
-                  <div class="small text-muted mt-1">{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %} &times; &#8377;{{ "{:,.0f}".format(item.unit_price) }}{% endif %}{% else %}Rate &#8377;{{ "{:,.0f}".format(item.unit_price) }} / {{ item.unit_text }}{% endif %}</div>
+                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %} &times; &#8377;{{ "{:,.0f}".format(item.unit_price) }}{% endif %}{% else %}Rate &#8377;{{ "{:,.0f}".format(item.unit_price) }} / {{ item.unit_text }}{% endif %}</div>
                   {% else %}<span class="badge ki-badge-fitting">Fitting</span>
                   <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }} &times; &#8377;{{ "{:,.0f}".format(item.unit_price) }}</div>{% endif %}
                 </td>

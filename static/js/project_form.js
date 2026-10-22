@@ -28,7 +28,7 @@ const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // also carry a description
 const BOQ = !!CATALOG.boq;
 // The description sits on its own full-width row under the item's row (the name column is too narrow for it)
-function addDescRow(tr, ik, value, handler, before) {
+function addDescRow(tr, ik, value, handler, before, after) {
   if (!BOQ) return;
   const d = document.createElement('tr');
   d.className = 'ki-desc-row';
@@ -36,6 +36,7 @@ function addDescRow(tr, ik, value, handler, before) {
   d.innerHTML = `<td colspan="7" class="pt-0">${before || ''}
       <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
                 placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
+      ${after || ''}
     </td>`;
   tr.after(d);
   autoGrow(d.querySelector('textarea'));
@@ -461,8 +462,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const rk = addRoom(rd.name);
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
-        if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.unit_price, id.description, false,
-                                               id.length, id.width, id.count); return; }
+        if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.tbc ? '' : id.unit_price, id.description,
+                                               false, id.length, id.width, id.count, !!id.pending, !!id.tbc); return; }
         if (id.type === 'fixed') { _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description); return; }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
@@ -547,11 +548,16 @@ function addRoom(presetName) {
           <tbody id="items_tbody_${rk}"></tbody>
         </table>
       </div>
-      <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
+      ${BOQ ? `<div class="d-flex flex-wrap align-items-center gap-1">
+        <button type="button" class="btn btn-sm btn-primary" onclick="addBoqLine('${rk}')" title="A new line in this table: pick the item, type the size or quantity">
+          <i class="bi bi-plus-lg me-1"></i>Add line</button>
+        ${BOQ_SAVED.length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openBoqPicker('${rk}')">
+          <i class="bi bi-list-check me-1"></i>Add from my lines</button>` : ''}
+        <button type="button" class="btn btn-sm btn-link text-muted" onclick="addItem('${rk}')"
+                title="An item measured by material (Admin → Rates), or a fitting from your price list">Other item…</button>
+      </div>` : `<button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
         <i class="bi bi-plus me-1"></i>Add Item
-      </button>
-      ${BOQ && BOQ_SAVED.length ? `<button type="button" class="btn btn-sm btn-outline-primary ms-1" onclick="openBoqPicker('${rk}')">
-        <i class="bi bi-list-check me-1"></i>Add from my lines</button>` : ''}
+      </button>`}
     </div>
   `;
   container.appendChild(div);
@@ -808,7 +814,7 @@ function addBoqPicks() {
   const picks = Array.from(document.querySelectorAll('#boqPickList input:checked')).map(c => BOQ_SAVED[+c.value]);
   picks.forEach(b => {
     const lump = b.unit === 'lump sum';
-    _insertBoqRow(_pickRoom, b.name, lump ? 1 : 0, b.unit, b.rate, b.description, false, 0, 0, 1, !lump);
+    _insertBoqRow(_pickRoom, b.name, lump ? 1 : 0, b.unit, b.rate || '', b.description, false, 0, 0, 1, !lump);
   });
   bootstrap.Modal.getInstance(document.getElementById('boqPickModal'))?.hide();
   const first = document.querySelector(`#room_card_${_pickRoom} tr.ki-needs-qty input[id^="item_qty_"]`);
@@ -816,7 +822,14 @@ function addBoqPicks() {
 }
 
 // ─── BOQ lines ───────────────────────────────────────────────────────────────
-function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending) {
+// A new, empty line in the room's table (no window): the item name box opens the saved lines; picking one fills its
+// unit, rate and description, then the size or quantity box is next
+function addBoqLine(rk) {
+  const ik = _insertBoqRow(rk, '', '', 'nos', '', '', false, 0, 0, 1, true);
+  const nm = document.getElementById('item_name_' + ik);
+  if (nm) { nm.scrollIntoView({ block: 'center' }); setTimeout(() => nm.focus(), 50); }
+}
+function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending, tbc) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -824,7 +837,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   const r = rate !== undefined && rate !== null ? rate : '';
   rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
                           unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault,
-                          pending: !!pending };
+                          pending: !!pending, tbc: !!tbc };
   const tbody = document.getElementById('items_tbody_' + rk);
   if (!tbody) return;
   const tr = document.createElement('tr');
@@ -862,12 +875,17 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
-             sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`));
+             sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
+             `<label class="form-check form-check-inline small text-muted mb-0 ki-tbc" for="item_tbc_${ik}"
+                     title="The price isn't fixed yet: printed as &quot;Price to follow&quot; and not added to the total">
+               <input class="form-check-input" type="checkbox" id="item_tbc_${ik}" ${tbc ? 'checked' : ''}
+                      onchange="onBoqField('${rk}','${ik}')"> Price to follow</label>`);
   applyUnitInputs(document.getElementById('item_descrow_' + ik));
   syncLumpSum(document.getElementById('item_unit_' + ik), document.getElementById('item_qty_' + ik));
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
+  return ik;
 }
 
 function onBoqField(rk, ik) {
@@ -876,28 +894,40 @@ function onBoqField(rk, ik) {
   const saved = _findBoq(document.getElementById('item_name_' + ik)?.value);
   const priceEl = document.getElementById('item_price_' + ik), descEl = document.getElementById('item_desc_' + ik);
   if (saved && priceEl && priceEl.value === '' && (!descEl || descEl.value === '')) {
-    priceEl.value = saved.rate || 0;
+    priceEl.value = saved.rate || '';
     const unitEl = document.getElementById('item_unit_' + ik);
     if (unitEl) { unitEl.innerHTML = unitOptions(saved.unit || 'nos'); syncLumpSum(unitEl, document.getElementById('item_qty_' + ik)); }
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
+    // next: the length for a line measured by size, else the quantity (a lump sum: nothing more to type)
+    const next = sizeMode(saved.unit) ? document.getElementById(`boq_${ik}_lft`)
+               : saved.unit !== 'lump sum' ? document.getElementById('item_qty_' + ik) : null;
+    if (next) setTimeout(() => { if (document.activeElement?.id === 'item_name_' + ik || !document.activeElement || document.activeElement === document.body) next.focus(); }, 0);
+  }
+  const tbc = !!document.getElementById('item_tbc_' + ik)?.checked;
+  if (priceEl) {
+    priceEl.disabled = tbc;
+    priceEl.placeholder = tbc ? 'to follow' : '';
   }
   const keepDefault = rooms[rk].items[ik].save_default;
   let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
   const quantity   = parseFloat(document.getElementById('item_qty_' + ik)?.value) || 0;
-  const unit_price = parseFloat(document.getElementById('item_price_' + ik)?.value) || 0;
+  const unit_price = tbc ? 0 : parseFloat(document.getElementById('item_price_' + ik)?.value) || 0;
   rooms[rk].items[ik] = { type: 'boq', name: document.getElementById('item_name_' + ik)?.value.trim() || '',
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
                           unit_price, description: descOf(ik), save_default: keepDefault,
                           length: size.length, width: size.width, count: size.count,
-                          pending: pending && !(quantity > 0) };
+                          pending: pending && !(quantity > 0), tbc };
   const rowEl = document.getElementById('item_row_' + ik);
   rowEl?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
   document.getElementById('item_descrow_' + ik)?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
   const amtEl = document.getElementById('item_amount_' + ik);
-  if (amtEl) amtEl.innerHTML = unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })
-                                : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
+  const needs = sizeMode(unitNow) ? 'type the size' : 'type the qty';
+  if (amtEl) amtEl.innerHTML = tbc ? '<span class="small text-warning-emphasis text-nowrap">price to follow</span>'
+                              : rooms[rk].items[ik].pending ? `<span class="small text-warning-emphasis text-nowrap">${needs}</span>`
+                              : unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                              : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
   recalcAll();
 }
 
@@ -978,6 +1008,7 @@ function _itemPayload(item) {
     if (!item.name || !(item.type === 'boq' ? item.quantity >= 0 : item.quantity > 0) || !(item.unit_price >= 0)) return null;
     return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
              ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}),
+                                         ...(item.tbc ? { tbc: true } : {}),
                                          ...(item.length ? { length: item.length, width: item.width || 0, count: item.count || 1 } : {}) } : {}),
              ...(item.description ? { description: item.description } : {}) };
   }
@@ -1400,22 +1431,66 @@ function _validateForm() {
     if (itemsPayload.length > 0) roomsPayload.push({ name: roomName, items: itemsPayload, description: desc });
   });
 
+  // The numbers must be right: no BOQ line may print without its price by mistake
+  const problems = _boqProblems();
+  if (problems.length) {
+    problems.forEach(p => p.el?.classList.add('is-invalid'));
+    showFormAlert(problems.slice(0, 5).map(p => escHtml(p.text)).join('<br>')
+                  + (problems.length > 5 ? `<br>…and ${problems.length - 5} more` : ''), 'danger');
+    setTimeout(() => { problems[0].el?.scrollIntoView({ block: 'center' }); problems[0].el?.focus({ preventScroll: true }); }, 600);
+    return false;
+  }
+
   if (!hasItem) {
     showFormAlert('Please add at least one room with one complete item (name and size, or name, quantity and price).', 'warning');
     valid = false;
   }
 
   if (!valid) return false;
-  // Lines added from "Add from my lines" whose quantity was never typed would print as rate only: ask first
-  const pending = Object.values(rooms).flatMap(r => Object.values(r.items)).filter(i => i.type === 'boq' && i.pending);
-  if (pending.length && !confirm(`${pending.length} line${pending.length > 1 ? 's have' : ' has'} no quantity yet `
-      + `(${pending.slice(0, 4).map(i => i.name).join(', ')}${pending.length > 4 ? '…' : ''}).\n\n`
-      + 'They will print with their rate only and are not added to the total. Save anyway?')) {
-    document.querySelector('.ki-needs-qty input[id^="item_qty_"]')?.focus();
-    return false;
+  // Lines still waiting for a size or quantity (from a starting quotation or "Add from my lines"): the ones this home
+  // doesn't need are left like that, so they're removed on saving (after asking) — never printed without an amount
+  const pending = Object.entries(rooms).flatMap(([rk, r]) => Object.entries(r.items)
+    .filter(([, i]) => i.type === 'boq' && i.pending).map(([ik, i]) => ({ rk, ik, name: i.name })));
+  if (pending.length) {
+    const names = pending.slice(0, 6).map(p => p.name).join(', ') + (pending.length > 6 ? '…' : '');
+    if (!confirm(`${pending.length} line${pending.length > 1 ? 's have' : ' has'} no size or quantity (${names}).\n\n`
+        + `OK: remove ${pending.length > 1 ? 'them' : 'it'} from this quotation and save.\n`
+        + 'Cancel: go back and fill them in.')) {
+      document.querySelector('.ki-needs-qty input[id^="item_qty_"]')?.closest('tr')?.scrollIntoView({ block: 'center' });
+      return false;
+    }
+    pending.forEach(p => removeItem(p.rk, p.ik));
+    return _validateForm();
   }
   document.getElementById('rooms_data_field').value = JSON.stringify(roomsPayload);
   return true;
+}
+
+// BOQ lines that would print wrong: [{text, el}] — a line with numbers but no item name (it would be left out), or a
+// line with a quantity but no rate (it would add ₹0). "Price to follow" is the way to leave a price out on purpose.
+function _boqProblems() {
+  const out = [];
+  Object.entries(rooms).forEach(([rk, room]) => {
+    const roomName = document.getElementById('room_name_' + rk)?.value.trim() || 'A room';
+    Object.entries(room.items).forEach(([ik, it]) => {
+      if (it.type !== 'boq') return;
+      const qtyEl = document.getElementById('item_qty_' + ik), rateEl = document.getElementById('item_price_' + ik);
+      [qtyEl, rateEl, document.getElementById('item_name_' + ik)].forEach(e => e?.classList.remove('is-invalid'));
+      const typedRate = (rateEl?.value || '') !== '' && parseFloat(rateEl.value) >= 0;   // a typed 0: free, on purpose
+      if (!it.name) {
+        if (it.quantity > 0 || typedRate)
+          out.push({ text: `${roomName}: a line has a quantity or rate but no item name. Type the name, or remove the line.`,
+                     el: document.getElementById('item_name_' + ik) });
+        return;
+      }
+      if (it.tbc || it.pending) return;         // still waiting for a size: filled in, or removed on saving
+      if (it.quantity > 0 && !typedRate)
+        out.push({ text: `${roomName} → ${it.name}: no rate. Type the rate, or tick "Price to follow".`, el: rateEl });
+      else if (!(it.quantity > 0) && !typedRate)
+        out.push({ text: `${roomName} → ${it.name}: no quantity and no rate. Type them, tick "Price to follow", or remove the line.`, el: qtyEl });
+    });
+  });
+  return out;
 }
 
 function validateAndSubmit() {

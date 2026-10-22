@@ -478,6 +478,13 @@ rates, make a real quotation, quiet for a while, trial ending with the plan pric
 **Open in WhatsApp** opens your own WhatsApp with the message ready; check it and press send. Nothing is sent by the
 console. Suggested rhythm: day 1, day 3, two days before the end, the day it ends.
 
+### Turnkey firms: BOQ lines and their own price list
+A trial's (or customer's) page → **Features**: **Turn on BOQ lines** for a firm that quotes line by line (false
+ceiling, wiring, wardrobe per sq.ft…). If the firm shares its old quotations, have their items, descriptions, rates,
+a starting quotation (e.g. "2 BHK turnkey") and their notes and payment terms written into a `.json` price list, and
+upload it with **Load price list** on that firm's page. It goes into that business only (lines added or updated by
+name; untouched starter lines removed if ticked). Keep the file out of the repository: it is the firm's business data.
+
 ### Trial → paying customer
 **With the console (section 3g):** after the payment arrives, **Customers → New paying customer → Convert a
 trial** → choose the trial, type the business name (and WhatsApp number), choose the plan → **Create

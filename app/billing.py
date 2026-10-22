@@ -69,6 +69,8 @@ def quotation_snapshot(project, rooms=None):
                        'amount': round((i.quantity or 0) * (i.unit_price or 0), 2)}
                 if i.is_boq:
                     row['unit'] = (i.unit if boq_ready else '') or 'nos'
+                    if i.price_to_follow:
+                        row['tbc'] = True              # "Price to follow": only when set, older snapshots stay comparable
                     if i.length:                        # measured by size: kept so it prints and restores
                         row.update(length=i.length, width=i.width or 0, count=i.boq_count)
                 if boq_ready and i.description:
@@ -193,7 +195,8 @@ def restore_preview(project, snap):
                 items.append({'name': it['name'], 'type': it['type'], 'quantity': it['quantity'],
                               'unit_price': it['unit_price'], 'unit': it.get('unit', ''),
                               'description': it.get('description', ''), 'length': it.get('length', 0),
-                              'width': it.get('width', 0), 'count': it.get('count', 1)})
+                              'width': it.get('width', 0), 'count': it.get('count', 1),
+                              **({'tbc': True} if it.get('tbc') else {})})
                 subtotal += it['quantity'] * it['unit_price']
                 continue
             if f"{it['wood_type']}|{it['work_type']}" not in valid:
@@ -237,6 +240,8 @@ def _describe(item):
     if item['type'] == 'boq':
         from . import boq
         size = boq.size_text(item)
+        if item.get('tbc'):
+            return (f"{size} = " if size else '') + f"{item['quantity']:g} {item.get('unit') or 'nos'}, price to follow"
         return (f"{size} = " if size else '') + f"{item['quantity']:g} {item.get('unit') or 'nos'} × ₹{item['unit_price']:,.0f}"
     if item['type'] == 'fixed':
         return f"{item['quantity']:g} × ₹{item['unit_price']:,.0f}"
@@ -441,8 +446,8 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
         lines = []
         for room in snapshot['rooms']:
             for it in room['items']:
-                if it['type'] in PRICED and not it['quantity']:
-                    continue                   # a rate-only BOQ line isn't billed
+                if it['type'] in PRICED and (not it['quantity'] or it.get('tbc')):
+                    continue                   # a rate-only or price-to-follow BOQ line isn't billed
                 if it['type'] in PRICED:
                     from . import boq as _boq
                     lines.append({'room': room['name'], 'description': it['name'],
@@ -461,7 +466,7 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
     fittings = {}
     for room in snapshot['rooms']:
         for it in room['items']:
-            if it['type'] in PRICED and it['quantity']:
+            if it['type'] in PRICED and it['quantity'] and not it.get('tbc'):
                 key = (it['name'], it['unit_price'], it.get('unit') or 'nos')
                 fittings[key] = fittings.get(key, 0) + it['quantity']
     for (name, price, unit), qty in fittings.items():

@@ -156,6 +156,35 @@ with app.app_context():
     with tenancy.tenant_context('ravi-modular'):
         _boq_on = _AS2.get('feature_boq') == '1'
 ok('…and off again (audited)', 'BOQ lines turned off' in r.text and not _boq_on and '<td>boq</td>' in r.text)
+import io as _io, json as _json
+_pl = {'lines': [{'name': 'Wardrobe', 'unit': 'Sq.ft', 'rate': 1950, 'group': 'Bedroom', 'description': 'BWR ply, laminate'},
+                 {'name': 'Site Cleaning', 'unit': 'LS', 'rate': 9000, 'group': 'Services'},
+                 {'name': 'Fan Fitting', 'unit': 'nos', 'rate': 450, 'group': 'Lights'}],
+       'templates': [{'name': '2 BHK firm', 'rooms': [{'name': 'Bedroom', 'items': ['Wardrobe', 'Site Cleaning', 'Nope']},
+                                                      {'name': 'Rates', 'items': [{'name': 'Fan Fitting', 'rate_only': True}]}]}],
+       'settings': {'payment_terms': 'Half before work starts.'}}
+r = c.post('/trials/ravi-modular/price-list', data={'remove_starter': '1', 'file': (_io.BytesIO(_json.dumps(_pl).encode()), 'firm.json')},
+           content_type='multipart/form-data', follow_redirects=True)
+with app.app_context():
+    with tenancy.tenant_context('ravi-modular'):
+        _lines = {b.name: (b.unit, b.rate, b.category) for b in _BQ.query.all()}
+        _tpl = _json.loads(_AS2.get('quote_templates') or '[]')
+        _pay, _on = _AS2.get('payment_terms'), _AS2.get('feature_boq') == '1'
+ok('console loads a firm\'s own price list into that trial: its lines (units cleaned), BOQ lines back on, untouched '
+   'starter lines removed', 'Price list loaded' in r.text and _on
+   and _lines.get('Wardrobe') == ('sqft', 1950, 'Bedroom') and _lines.get('Site Cleaning') == ('lump sum', 9000, 'Services')
+   and _lines.get('Fan Fitting') == ('nos', 450, 'Lights') and len(_lines) == 3)
+_items = {i['name']: i for room in (_tpl[0]['rooms'] if _tpl else []) for i in room['items']}
+ok('…its starting quotation: lines filled from the list, sizes still to type (lump sum: 1, rate card: rate only)',
+   len(_tpl) == 1 and _tpl[0]['name'] == '2 BHK firm' and _items['Wardrobe'].get('pending') and _items['Wardrobe']['quantity'] == 0
+   and _items['Wardrobe']['unit_price'] == 1950 and _items['Site Cleaning']['quantity'] == 1 and not _items['Site Cleaning'].get('pending')
+   and _items['Fan Fitting']['quantity'] == 0 and not _items['Fan Fitting'].get('pending')
+   and 'Nope' not in _items and 'left out of the starting quotation: Nope' in r.text)
+ok('…and settings never saved are filled in (audited)', _pay == 'Half before work starts.' and '<td>price list</td>' in r.text)
+r = c.post('/trials/ravi-modular/price-list', data={'file': (_io.BytesIO(b'{"lines": [{"name": "X", "rate": "abc"}]}'), 'bad.json')},
+           content_type='multipart/form-data', follow_redirects=True)
+import html as _html
+ok('a bad price list file is refused with the reason', '"X": the rate should be a number' in _html.unescape(r.text))
 ok('dashboard: WhatsApp button per running trial', 'href="/trials/ravi-modular#whatsapp">WhatsApp</a>' in c.get('/').text)
 with app.app_context():
     from types import SimpleNamespace as _NS

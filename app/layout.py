@@ -56,7 +56,7 @@ def layouts():
 
 def boq_rows(snapshot):
     """Sections A, B, C… (the rooms), each with numbered lines: {'letter', 'name', 'description', 'lines': [{'no',
-    'title', 'description', 'qty', 'unit', 'rate', 'amount'}]}. Measured items show their area, rate per area and
+    'title', 'description', 'qty', 'unit', 'rate', 'amount', 'tbc'}]} (tbc: "Price to follow"). Measured items show their area, rate per area and
     size; fittings their quantity and price; BOQ lines exactly as typed. Amounts come from the snapshot."""
     from . import boq, units
     out = []
@@ -80,7 +80,7 @@ def boq_rows(snapshot):
                 desc = '\n'.join(x for x in (desc, f'Size: {size}' if size else '') if x)
                 lines.append({'no': n, 'title': it['name'], 'description': desc, 'qty': it['quantity'],
                               'unit': boq.unit_text(unit), 'rate': None if lump or not it['unit_price'] else it['unit_price'],
-                              'amount': it['amount']})
+                              'amount': it['amount'], 'tbc': bool(it.get('tbc'))})
         out.append({'letter': letter, 'name': room['name'], 'description': room.get('description') or '', 'lines': lines})
     return out
 

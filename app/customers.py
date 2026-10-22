@@ -448,6 +448,17 @@ def set_boq(slug, on):
         db.session.commit()
 
 
+def load_price_list(slug, parsed, remove_starter, replace_settings):
+    """Load a firm's own price list into this customer only (app/price_list.py). Returns the summary dict."""
+    from . import price_list
+    with open_customer(slug):
+        try:
+            return price_list.apply(parsed, remove_starter, replace_settings)
+        except (price_list.PriceListError, ValueError) as exc:
+            db.session.rollback()
+            raise CustomerError(str(exc))
+
+
 def unlock_company(slug, fields):
     from . import branding
     with open_customer(slug):

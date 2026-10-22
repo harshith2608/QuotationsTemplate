@@ -278,7 +278,7 @@ def _boq_elements(project, page_width, palette, styles):
             text = f'<b>{escape(ln["title"])}</b>'
             if ln['description']:
                 text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
-            amount = _money(ln['amount']) if ln['amount'] else '—'
+            amount = 'Price to follow' if ln.get('tbc') else _money(ln['amount']) if ln['amount'] else '—'
             data.append([str(ln['no']), Paragraph(text, small),
                          f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit'],
                          _money(ln['rate'], ',.0f') if ln['rate'] else '', amount])
@@ -440,7 +440,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 desc = item.note
                 name = Paragraph(f'{escape(item.name)}' + (f'<br/><font size="7" color="#546e7a">'
                                  f'{escape(desc).replace(chr(10), "<br/>")}</font>' if desc else ''), material_style_left)
-                if item.is_boq and not item.quantity:
+                if item.price_to_follow:
+                    what = f'{item.quantity:g} {item.unit_text}, price to follow' if item.quantity else 'Price to follow'
+                elif item.is_boq and not item.quantity:
                     what = f'Rate only: Rs. {_money(item.unit_price, ",.0f")} / {item.unit_text}'
                 elif item.is_boq:
                     what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'

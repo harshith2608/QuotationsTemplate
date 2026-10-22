@@ -200,8 +200,11 @@ def _save_project_data(project, rooms_data, remember=True):
                     continue
                 if quantity < 0 or unit_price < 0 or (quantity == 0 and kind != 'boq'):
                     continue                   # a BOQ line with no quantity is a rate-only line (rate card)
+                to_follow = kind == 'boq' and bool(id_.get('tbc'))     # "Price to follow": no rate yet
+                if to_follow:
+                    unit_price = 0.0
                 item = Item(room_id=room.id, name=item_name[:100], item_type=kind,
-                            quantity=quantity, unit_price=unit_price,
+                            quantity=quantity, unit_price=None if to_follow else unit_price,
                             length=0, width=0, area=0, wood_type='', work_type='')
                 if boq_ready and kind == 'boq':
                     item.unit = boq.clean_unit(id_.get('unit'))
@@ -216,7 +219,7 @@ def _save_project_data(project, rooms_data, remember=True):
                     if mode and l_ > 0 and (mode == 'length' or w_ > 0):
                         item.length, item.width = l_, (w_ if mode == 'area' else 0)
                         item.quantity = quantity = boq.quantity_from_size(item.unit, l_, w_, n_)
-                    boq_used.append((item_name[:100], description, item.unit, unit_price, bool(id_.get('save_default')),
+                    boq_used.append((item_name[:100], description, item.unit, unit_price, bool(id_.get('save_default')) and not to_follow,
                                      room_name))
                 if description:
                     item.description = description
@@ -778,6 +781,7 @@ def _build_rooms_json(project, rooms=None):
                     'area': item.area,
                     'quantity': item.quantity,
                     'unit_price': item.unit_price,
+                    **({'tbc': True} if item.price_to_follow else {}),
                     'plywood': plywood.item_plywood(item),
                     'count': item.boq_count if item.is_boq else item.count,
                     **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),
@@ -1058,7 +1062,9 @@ def whatsapp_share(project_id):
     for room in rooms:
         lines.append(f"\n🏠 *{room.name}*")
         for item in room.item_list:
-            if item.is_boq:
+            if item.price_to_follow:
+                lines.append(f"  • {item.name}: price to follow")
+            elif item.is_boq:
                 _size = (_ft_in(item.length) + (f" × {_ft_in(item.width)}" if item.width else '') + ' = ') if item.length else ''
                 lines.append(f"  • {item.name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
                              if item.unit_price and item.quantity else

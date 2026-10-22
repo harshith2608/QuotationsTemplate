@@ -687,6 +687,23 @@ def trial_boq(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/price-list', methods=['POST'])
+@login_required
+def trial_price_list(slug):
+    _trial_or_404(slug)
+    from . import price_list
+    try:
+        parsed = price_list.parse(request.files['file'].read() if 'file' in request.files else b'')
+        result = ops.load_price_list(slug, parsed, request.form.get('remove_starter') == '1',
+                                     request.form.get('replace_settings') == '1')
+    except (price_list.PriceListError, ops.OpsError) as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('trial_price_list', slug, f"{result['added']} added, {result['updated']} updated")
+        flash(f'Price list loaded for "{slug}": ' + price_list.summary_text(result), 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/trials/<slug>/delete', methods=['POST'])
 @login_required
 def delete_trial(slug):
@@ -1021,6 +1038,23 @@ def customer_boq(slug):
     else:
         audit('customer_boq', slug, 'on' if on else 'off')
         flash(f'BOQ lines turned {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/price-list', methods=['POST'])
+@login_required
+def customer_price_list(slug):
+    _customer_or_404(slug)
+    from . import price_list
+    try:
+        parsed = price_list.parse(request.files['file'].read() if 'file' in request.files else b'')
+        result = _customers().load_price_list(slug, parsed, request.form.get('remove_starter') == '1',
+                                              request.form.get('replace_settings') == '1')
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_price_list', slug, f"{result['added']} added, {result['updated']} updated")
+        flash(f'Price list loaded for "{slug}": ' + price_list.summary_text(result), 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 

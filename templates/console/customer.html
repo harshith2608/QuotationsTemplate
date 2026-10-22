@@ -103,6 +103,17 @@
     <button class="btn {{ '' if boq.on else 'btn-primary' }}" type="submit" {% if not boq.ready and not boq.on %}disabled{% endif %}>
       {{ 'Turn off BOQ lines' if boq.on else 'Turn on BOQ lines' }}</button>
   </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Load price list</strong></div>
+  <p class="muted small" style="margin:0">This firm's own lines (title, description, unit, rate), a ready-made starting
+    quotation and their notes and payment terms, from the .json file prepared from their old quotations. Goes into this
+    business only. Lines are added or updated by name; turns BOQ lines on if they're off.</p>
+  <form method="post" action="{{ url_for('console.customer_price_list', slug=row.slug) }}" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="file" accept=".json,application/json" required>
+    <label class="small"><input type="checkbox" name="remove_starter" value="1" checked> Remove the starter lines they haven't changed</label>
+    <label class="small"><input type="checkbox" name="replace_settings" value="1"> Replace their notes &amp; payment terms (otherwise only filled in where never saved)</label>
+    <div><button class="btn btn-primary" type="submit" {% if not boq.ready %}disabled{% endif %}>Load price list</button></div>
+  </form>
   {% else %}<p class="muted small" style="margin:0">Available once the business is running.</p>{% endif %}
 </div>
 
