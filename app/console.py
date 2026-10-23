@@ -1306,12 +1306,10 @@ def start_trial():
     done = _signup(lead_id)
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url())
-    form = {'company': lead.get('company_name') or '', 'slug': _free_address(lead.get('company_name') or lead['name']),
-            'username': 'admin'}
+    form = {'company': lead.get('company_name') or '', 'username': 'admin'}
     errors = {}
     if request.method == 'POST':
-        form = {k: (request.form.get(k) or '').strip() for k in ('company', 'slug', 'username')}
-        form['slug'] = form['slug'].lower()
+        form = {k: (request.form.get(k) or '').strip() for k in ('company', 'username')}
         password = request.form.get('password') or ''
         ip_hash = hashlib.sha256(_client_ip().encode()).hexdigest()
         with db.engine.connect() as conn:
@@ -1321,9 +1319,6 @@ def start_trial():
             errors['form'] = 'Too many new apps from here in the last hour. Please try again later.'
         if len(form['company']) < 2:
             errors['company'] = 'Enter your company name.'
-        problem = address_problem(form['slug'])
-        if problem:
-            errors['slug'] = problem
         if not re.fullmatch(r'[A-Za-z0-9._-]{3,40}', form['username']):
             errors['username'] = 'Use 3–40 letters, numbers, dots, dashes or underscores.'
         if len(password) < 8:
@@ -1334,30 +1329,39 @@ def start_trial():
             errors['terms'] = 'Please accept the terms to continue.'
         if not errors and not signup.turnstile_ok(request.form.get('cf-turnstile-response'), _client_ip()):
             errors['form'] = 'Please complete the check that you\'re not a robot.'
-        if not errors:
+        t = None
+        for _ in range(3) if not errors else ():   # the address comes from the firm's name (a number added if taken)
+            slug = _free_address(form['company'])
+            if not slug:
+                errors['company'] = 'Could not make a web address from this name. Add a word or two.'
+                break
             try:
-                t = ops.claim_trial(form['slug'], form['username'], password, 7, company=form['company'],
+                t = ops.claim_trial(slug, form['username'], password, 7, company=form['company'],
                                     phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'))
+                break
             except ops.OpsError as exc:
-                errors['slug'] = str(exc)
-            else:
-                with db.engine.begin() as conn:
-                    conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h)'),
-                                 {'i': lead_id, 's': t['slug'], 'h': ip_hash})
-                _link_lead(lead_id, 'trial', t['slug'])
-                audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}')
-                return render_template('console/start.html', ready=t['slug'], base=tenancy.base_domain(),
-                                       username=form['username'], site=_site_url(), new=True)
+                if 'is taken' not in str(exc):           # taken by someone else a moment ago: try the next one
+                    errors['form'] = str(exc)
+                    break
+        if t is not None:
+            with db.engine.begin() as conn:
+                conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h)'),
+                             {'i': lead_id, 's': t['slug'], 'h': ip_hash})
+            _link_lead(lead_id, 'trial', t['slug'])
+            audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}')
+            return render_template('console/start.html', ready=t['slug'], base=tenancy.base_domain(),
+                                   username=form['username'], site=_site_url(), new=True)
     return render_template('console/start.html', form=form, errors=errors, token=token, lead=lead,
-                           base=tenancy.base_domain(), site=_site_url(), turnstile=signup.turnstile_site_key())
+                           address=_free_address(form['company'] or lead['name']), base=tenancy.base_domain(),
+                           site=_site_url(), turnstile=signup.turnstile_site_key())
 
 
 @console_bp.route('/start/check')
 def start_check():
-    """Public: is this web address free? (for the /start page as you type)"""
+    """Public: the web address this firm name gets (for the /start page as they type the name)."""
     from flask import jsonify
     from . import signup
     if not signup.read_token(request.args.get('t', '')):
         abort(404)
-    problem = address_problem((request.args.get('slug') or '').strip().lower())
-    return jsonify({'ok': not problem, 'message': problem})
+    slug = _free_address((request.args.get('company') or '').strip())
+    return jsonify({'ok': bool(slug), 'slug': slug, 'address': f'{slug}.{tenancy.base_domain()}' if slug else ''})

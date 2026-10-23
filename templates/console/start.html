@@ -32,6 +32,9 @@
   button[disabled] { opacity: .7; cursor: wait; }
   .formerr { background:#fdecea; color: var(--bad); border-radius: 10px; padding: 10px 12px; font-size:.9rem; margin-bottom: 8px; }
   .tick { font-size: 2.6rem; color: var(--good); }
+  .addrbox { margin-top: 10px; padding: 10px 12px; background: #f1f6f3; border-radius: 10px; font-size: .9rem; color: var(--muted);
+             overflow-wrap: anywhere; }
+  .addrbox strong { color: var(--pine); }
   a { color: var(--pine); }
 </style>
 </head>
@@ -53,7 +56,7 @@
       or reply to us on WhatsApp.</p>
   {% else %}
     <h1>Set up your app</h1>
-    <p class="lead">Hi {{ lead.name }}! Choose your web address and a password. Your free 7-day trial starts right away.</p>
+    <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>
     {% if errors.form %}<div class="formerr">{{ errors.form }}</div>{% endif %}
     <form method="post" action="{{ url_for('console.start_trial') }}" id="startForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -62,11 +65,7 @@
       <input type="text" id="company" name="company" value="{{ form.company }}" maxlength="80" required>
       <div class="hint">On your quotations. You can correct it once later.</div>
       {% if errors.company %}<div class="err">{{ errors.company }}</div>{% endif %}
-
-      <label for="slug">Your web address</label>
-      <div class="addr"><input type="text" id="slug" name="slug" value="{{ form.slug }}" maxlength="30" autocapitalize="off"
-             autocomplete="off" spellcheck="false" required><span>.{{ base }}</span></div>
-      <div id="slugMsg" class="{{ 'err' if errors.slug else 'hint' }}">{{ errors.slug or 'Lowercase letters, numbers and hyphens.' }}</div>
+      <div class="addrbox">Your app's address: <strong id="address">{{ (address ~ '.' ~ base) if address else '…' }}</strong></div>
 
       <label for="username">Your username</label>
       <input type="text" id="username" name="username" value="{{ form.username }}" maxlength="40" autocapitalize="off" autocomplete="username" required>
@@ -94,18 +93,17 @@
 {% if not problem and not ready %}
 {% if turnstile %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}
 <script>
-  const slug = document.getElementById('slug'), msg = document.getElementById('slugMsg');
+  // The web address comes from the company name (shown as they type; a number is added if it's taken)
+  const company = document.getElementById('company'), address = document.getElementById('address');
   let timer;
-  slug.addEventListener('input', () => {
-    slug.value = slug.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  company.addEventListener('input', () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
-      if (slug.value.length < 2) return;
+      if (company.value.trim().length < 2) return;
       try {
-        const r = await fetch('{{ url_for("console.start_check") }}?t={{ token|urlencode }}&slug=' + encodeURIComponent(slug.value));
+        const r = await fetch('{{ url_for("console.start_check") }}?t={{ token|urlencode }}&company=' + encodeURIComponent(company.value));
         const d = await r.json();
-        msg.className = d.ok ? 'ok' : 'err';
-        msg.textContent = d.ok ? `✓ ${slug.value}.{{ base }} is free` : d.message;
+        if (d.ok) address.textContent = d.address;
       } catch (e) {}
     }, 350);
   });

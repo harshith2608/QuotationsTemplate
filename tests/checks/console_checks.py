@@ -373,14 +373,16 @@ ok('the link carries only a signed id: no name, phone or email', 'Meera' not in 
    and _su.read_token(_su.make_token(self_id, now=time.time() - 4 * 86400)) is None)
 anon = app.test_client()
 r = anon.get('/start?t=' + tok)
-ok('/start without signing in: the setup form, address suggested from the company name', r.status_code == 200
-   and 'Hi Meera Shah' in r.text and 'value="shah-studio"' in r.text and 'Shah Design Studio' in r.text)
+ok('/start without signing in: the setup form; the web address comes from the firm name (no address box)', r.status_code == 200
+   and 'Hi Meera Shah' in r.text and 'shah-studio.quote-room.test' in r.text and 'Shah Design Studio' in r.text
+   and 'name="slug"' not in r.text)
 ok('a bad or not-eligible link is refused', anon.get('/start?t=1.2.3').status_code == 404
    and anon.get('/start?t=' + _su.make_token(other_id)).status_code == 404)
-ok('address check as you type', anon.get(f'/start/check?t={tok}&slug=taken-one').get_json()['ok'] is False
-   and anon.get(f'/start/check?t={tok}&slug=shah-studio').get_json()['ok'] is True
-   and anon.get('/start/check?t=bad&slug=x').status_code == 404)
-base = dict(t=tok, company='Shah Design Studio', slug='shah-studio', username='meera', password='meera-pass-123')
+ok('the address follows the firm name as they type; a taken one gets a number', anon.get(
+       f'/start/check?t={tok}&company=Taken One Interiors').get_json()['address'] == 'taken-one-2.quote-room.test'
+   and anon.get(f'/start/check?t={tok}&company=Shah Design Studio').get_json()['slug'] == 'shah-studio'
+   and anon.get('/start/check?t=bad&company=x').status_code == 404)
+base = dict(t=tok, company='Shah Design Studio', username='meera', password='meera-pass-123')
 r = anon.post('/start', data=dict(base, password2='different-pass'))
 ok('mistakes are shown on the form (passwords differ, terms not ticked)', "passwords don't match" in _h.unescape(r.text)
    and 'accept the terms' in r.text)
