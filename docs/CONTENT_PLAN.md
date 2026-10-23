@@ -6,7 +6,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 
 ---
 
-## 1. Status at a glance (as of 15–16 Oct 2026)
+## 1. Status at a glance (as of 23 Oct 2026)
 
 | Piece | Format | Status | Files (in `ad-videos/`, git-ignored) | Generator |
 |---|---|---|---|---|
@@ -14,13 +14,13 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "Same job. Same price. Very different impression." | Single image 4:5 | **Scheduled** (one per day from 16 Oct, 11 AM IST) | `post-before-after.png` | `tools/ad_video/profile_posts.py` |
 | "What your customer receives" | Carousel, 6 slides 4:5 | **Scheduled** | `carousel-customer-sees-1…6.png` | `tools/ad_video/profile_posts.py` |
 | "One price. Your whole team." | Single image 4:5 | **Scheduled** | `post-one-price.png` | `tools/ad_video/profile_posts.py` |
-| "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Ready to post** | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
-| "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Ready to post** | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
+| "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Posted** (by 23 Oct) | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
+| "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Posted** (by 23 Oct) | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
 | "Excel vs QuoteRoom" carousel (10-slide framework: hook, example, diagrams, comparisons, CTA) | Carousel, 10 slides 4:5 | **Ready to post** | `carousel-excel-vs-1…10.png` | `tools/ad_video/carousel_excel_vs.py` |
-| "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Ready to post** | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
-| "Do you know your profit?" | Reel 22 s, 9:16, music | **Ready to post** | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
-| "Still typing every quotation from scratch?" (starting quotations, shown on a laptop) | Reel 22 s, 9:16 + 4:5, music | **Ready to post** (23 Oct) | `reel-templates-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_templates.py` (screens from the tutorial 14 recording) |
-| "Does your quotation have all 6?" | Single image 4:5 | **Ready to post** | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
+| "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Posted** (by 23 Oct) | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
+| "Do you know your profit?" | Reel 22 s, 9:16, music | **Posted** (by 23 Oct) | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
+| "Still typing every quotation from scratch?" (starting quotations, shown on a laptop) | Reel 22 s, 9:16 + 4:5, music | **Posted** (23 Oct) | `reel-templates-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_templates.py` (screens from the tutorial 14 recording) |
+| "Does your quotation have all 6?" | Single image 4:5 | **Posted** (by 23 Oct) | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
 
