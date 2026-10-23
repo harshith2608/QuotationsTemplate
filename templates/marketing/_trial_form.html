@@ -65,11 +65,15 @@
 </form>
 {%- endmacro %}
 
-{% macro trial_done(name='') -%}
+{% macro trial_done(name='', setup_url=None) -%}
 <div class="trial-done" data-trial-done {% if not name %}hidden{% endif %}>
   <div class="done-tick" aria-hidden="true">✓</div>
   <h2 tabindex="-1" data-done-title>Thanks{% if name %}, {{ name }}{% endif %}! Request received.</h2>
-  <p>We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.</p>
+  <div data-setup {% if not setup_url %}hidden{% endif %}>
+    <p><strong>Your app can be ready in a minute.</strong> Choose your web address and password, and start your free trial now.</p>
+    <a class="btn btn-primary" href="{{ setup_url or '#' }}" data-setup-link>Set up my app now</a>
+  </div>
+  <p data-wait {% if setup_url %}hidden{% endif %}>We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.</p>
   <p class="done-skip"><strong>While you wait, have a look around:</strong></p>
   <a class="btn btn-primary done-demo" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo</a>
 </div>

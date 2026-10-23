@@ -40,7 +40,7 @@ def migrate_all_trials(log=None):
     tenancy.ensure_registry()
     failed = []
     for r in tenancy.registry_rows():
-        if r['status'] != 'active':
+        if r['status'] not in ('active', 'spare'):
             continue
         log(f'→ {r["slug"]} ({r["schema_name"]})')
         try:
@@ -198,8 +198,11 @@ def phone_display(digits):
     return f'+{digits}' if digits else ''
 
 
+SPARE_PREFIX = 'spare-'
+
+
 def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=None, company=None, phone=None,
-                 city=None, email=None):
+                 city=None, email=None, spare=False):
     """Create schema, tables, admin login, default data and the trial plan. Returns a summary dict.
     `company` / `phone` / `city` / `email` (from the trial request) are filled in as the business's company name,
     phone, address and email, so the
@@ -236,6 +239,20 @@ def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=
                 log(line)
         except SeedError as exc:
             raise OpsError(str(exc))
+        if spare:                                  # ready-made: the details and the plan come when it's claimed
+            db.session.commit()
+    if spare:
+        with db.engine.begin() as conn:
+            conn.execute(text("UPDATE public.tenants SET status = 'spare' WHERE slug = :s"), {'s': slug})
+        return {'slug': slug, 'schema': schema}
+    end = _finish_trial(slug, schema, company, phone, city, email, days, log)
+    return {'slug': slug, 'schema': schema, 'username': admin_username, 'password': admin_password,
+            'ends_on': end, 'url': trial_url(slug), 'company': ' '.join((company or '').split())[:80]}
+
+
+def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda line: None):
+    """The trial's details from the request (company, phone, city, email), its plan from today, then live."""
+    with tenancy.tenant_context(slug, schema):
         company = ' '.join((company or '').split())[:80]
         if company:
             from . import branding
@@ -256,8 +273,82 @@ def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=
     with db.engine.begin() as conn:
         conn.execute(text("UPDATE public.tenants SET status = 'active' WHERE slug = :s"), {'s': slug})
     tenancy.clear_cache()
+    return end
+
+
+# ── Ready-made (spare) trials: a new trial in under a second ─────────────────
+
+def spare_count():
+    tenancy.ensure_registry()
+    with db.engine.connect() as conn:
+        return conn.execute(text("SELECT COUNT(*) FROM public.tenants WHERE status = 'spare'")).scalar()
+
+
+def top_up_spares(target=None, log=None):
+    """Keep `target` (SPARE_TRIALS, default 3) ready-made trials: empty, migrated, with an admin login to be renamed.
+    Returns how many were made."""
+    target = int(os.environ.get('SPARE_TRIALS', '3') if target is None else target)
+    made = 0
+    while spare_count() < target:
+        create_trial(SPARE_PREFIX + secrets.token_hex(3), 'admin', None, 7, log=log, spare=True)
+        made += 1
+    return made
+
+
+def claim_trial(slug, admin_username, admin_password, days=7, company=None, phone=None, city=None, email=None):
+    """A new trial at once: a ready-made one renamed to `slug` with this admin login and these details (or, with none
+    ready, a new one made now). Returns create_trial's summary."""
+    from werkzeug.security import generate_password_hash
+    from .models import User
+    need_postgres()
+    try:
+        slug = tenancy.validate_slug(slug)
+    except tenancy.TenantError as exc:
+        raise OpsError(str(exc))
+    admin_username = (admin_username or 'admin').strip()[:80] or 'admin'
+    if len(admin_password or '') < 8:
+        raise OpsError('The password must be at least 8 characters.')
+    schema = tenancy.schema_for(slug)
+    tenancy.ensure_registry()
+    with db.engine.begin() as conn:
+        if conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': slug}).first():
+            raise OpsError(f'"{slug}" is taken. Choose another address.')
+        spare = conn.execute(text("SELECT slug, schema_name FROM public.tenants WHERE status = 'spare' "
+                                  "ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED")).first()
+        if spare:
+            conn.execute(text(f'ALTER SCHEMA "{spare[1]}" RENAME TO "{schema}"'))
+            conn.execute(text("UPDATE public.tenants SET slug = :n, schema_name = :sc, status = 'creating', "
+                              "created_at = (now() AT TIME ZONE 'utc') WHERE slug = :o"),
+                         {'n': slug, 'sc': schema, 'o': spare[0]})
+    if not spare:
+        return create_trial(slug, admin_username, admin_password, days, company=company, phone=phone, city=city,
+                            email=email)
+    if _schema_revision(schema) != _head_revision():
+        migrate_schema(schema)                     # made before the latest update
+    with tenancy.tenant_context(slug, schema):
+        admin = User.query.filter_by(role='admin').order_by(User.id).first()
+        admin.username = admin_username
+        admin.password_hash = generate_password_hash(admin_password, method='pbkdf2:sha256')
+        db.session.commit()
+    end = _finish_trial(slug, schema, company, phone, city, email, days)
     return {'slug': slug, 'schema': schema, 'username': admin_username, 'password': admin_password,
-            'ends_on': end, 'url': trial_url(slug), 'company': company}
+            'ends_on': end, 'url': trial_url(slug), 'company': ' '.join((company or '').split())[:80]}
+
+
+def _schema_revision(schema):
+    with db.engine.connect() as conn:
+        try:
+            return conn.execute(text(f'SELECT version_num FROM "{schema}".alembic_version')).scalar()
+        except Exception:
+            return None
+
+
+def _head_revision():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    cfg = Config()
+    cfg.set_main_option('script_location', MIGRATIONS_DIR)
+    return ScriptDirectory.from_config(cfg).get_current_head()
 
 
 def trial_url(slug):
@@ -271,6 +362,8 @@ def list_trials():
     tenancy.ensure_registry()
     out = []
     for r in tenancy.registry_rows():
+        if r['status'] == 'spare':                # ready-made, not anyone's trial yet
+            continue
         item = dict(r, url=trial_url(r['slug']), status_obj=None)
         if r['status'] == 'active':
             try:

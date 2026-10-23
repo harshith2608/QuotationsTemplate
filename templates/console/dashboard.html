@@ -89,6 +89,20 @@
 </div>
 {% endif %}
 
+<h2>Self-serve trials</h2>
+<div class="card row" style="align-items:center">
+  <div class="grow small">
+    {% if self_serve %}Interior designers and furniture works who request a trial on the website set up their own app
+      (choose an address and password) and appear below, linked to their request.{% else %}<span class="muted">Off: set
+      <span class="mono">SIGNUP_SECRET</span> here and on the website (with <span class="mono">AUTO_TRIALS=1</span>,
+      <span class="mono">SIGNUP_URL</span>) to let them set up their own app.</span>{% endif %}
+    <br><strong>{{ spares }}</strong> ready-made trial{{ '' if spares == 1 else 's' }} (each sign-up takes one; the daily tick makes more).
+  </div>
+  <form method="post" action="{{ url_for('console.top_up_spares') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm" type="submit">Make more</button></form>
+</div>
+
 <h2>New trial (without a request)</h2>
 <div class="card">
   <form method="post" action="{{ url_for('console.create_trial') }}" class="row" data-confirm="Create this trial?">

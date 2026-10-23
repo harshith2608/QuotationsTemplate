@@ -43,6 +43,12 @@ MAX_FAILURES, LOCK_MINUTES = 5, 15
 EXTEND_CHOICES = ['3d', '7d', '14d', '30d']
 
 CONSOLE_DDL = [
+    """CREATE TABLE IF NOT EXISTS public.signups (
+        lead_id    INTEGER PRIMARY KEY,
+        slug       VARCHAR(40) NOT NULL,
+        ip_hash    VARCHAR(64),
+        created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+    )""",
     """CREATE TABLE IF NOT EXISTS public.console_audit (
         id      SERIAL PRIMARY KEY,
         at      TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
@@ -561,8 +567,23 @@ def dashboard():
         demo_stats = load_demo_stats()
     except Exception as exc:                 # the demo database being unreachable shouldn't break the dashboard
         demo_stats = {'error': str(exc)}
+    from . import signup
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain())
+                           extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
+                           spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+
+
+@console_bp.route('/spares', methods=['POST'])
+@login_required
+def top_up_spares():
+    try:
+        made = ops.top_up_spares()
+    except ops.OpsError as exc:
+        flash(f'Could not make ready-made trials: {exc}', 'error')
+    else:
+        audit('spares_top_up', None, f'{made} made')
+        flash(f'{made} ready-made trial(s) made; {ops.spare_count()} ready.' if made else 'Already enough ready-made trials.', 'ok')
+    return redirect(url_for('console.dashboard'))
 
 
 @console_bp.route('/trials', methods=['POST'])
@@ -1164,6 +1185,12 @@ def cron_tick():
     if not secret or not hmac.compare_digest(request.headers.get('Authorization', ''), f'Bearer {secret}'):
         abort(404)
     out = subscription.move_all_paid() if subscription.auto_move() else {}
+    try:
+        made = ops.top_up_spares()                  # ready-made trials for self-serve sign-ups
+        if made:
+            out['spares'] = made
+    except Exception as exc:
+        out['spares'] = f'failed: {exc}'
     c = _customers()
     for row in c.all_customers():
         if row['status'] == 'provisioning' and row.get('hosting') == 'shared':
@@ -1211,3 +1238,126 @@ def payment_receipt(payment_id):
         abort(404)
     return send_file(subscription.receipt_pdf(row), mimetype='application/pdf',
                      download_name=f'QuoteRoom-receipt-{row["receipt_no"]}.pdf')
+
+
+# ── Self-serve trials: the public /start page (app/signup.py) ────────────────────────────────────────────────
+
+def load_lead(lead_id):
+    """One trial request from the website's database (decrypted), or None."""
+    from sqlalchemy import inspect, select
+    from . import crypto
+    from .models import Lead
+    engine = _leads_engine_or_none()
+    if engine is None:
+        return None
+    t = Lead.__table__
+    with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
+        present = {c['name'] for c in inspect(conn).get_columns('leads')}
+        row = conn.execute(select(*[c for c in t.c if c.name in present]).where(t.c.id == lead_id)).mappings().first()
+    if not row:
+        return None
+    lead = dict(row)
+    for later in ('company_name', 'city', 'email'):
+        lead.setdefault(later, None)
+    return lead
+
+
+def address_problem(slug):
+    """Why this web address can't be used, or ''."""
+    try:
+        slug = tenancy.validate_slug(slug)
+    except tenancy.TenantError as exc:
+        return str(exc)
+    if slug.startswith(ops.SPARE_PREFIX):
+        return 'Choose another address.'
+    tenancy.ensure_registry()
+    with db.engine.connect() as conn:
+        taken = conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': slug}).first()
+        if not taken and conn.execute(text("SELECT to_regclass('public.customers')")).scalar():
+            taken = conn.execute(text("SELECT 1 FROM public.customers WHERE slug = :s AND status <> 'deleted'"),
+                                 {'s': slug}).first()
+    return f'{slug}.{tenancy.base_domain()} is taken. Try another.' if taken else ''
+
+
+def _free_address(text_):
+    base = suggest_slug(text_)
+    for n in range(0, 50):
+        slug = base if n == 0 else f'{base[:26]}-{n + 1}'
+        if not address_problem(slug):
+            return slug
+    return ''
+
+
+def _signup(lead_id):
+    with db.engine.connect() as conn:
+        return conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': lead_id}).scalar()
+
+
+@console_bp.route('/start', methods=['GET', 'POST'])
+def start_trial():
+    """Public: the business that asked for a trial on the website sets up its own app (signed, single-use link)."""
+    from . import signup
+    token = request.values.get('t', '')
+    lead_id = signup.read_token(token)
+    lead = load_lead(lead_id) if lead_id else None
+    if not lead or lead.get('business_type') not in signup.ELIGIBLE:
+        return render_template('console/start.html', problem='This link has expired or isn\'t valid. Request a free '
+                               'trial again on the website, or message us on WhatsApp.', site=_site_url()), 404
+    done = _signup(lead_id)
+    if done:
+        return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url())
+    form = {'company': lead.get('company_name') or '', 'slug': _free_address(lead.get('company_name') or lead['name']),
+            'username': 'admin'}
+    errors = {}
+    if request.method == 'POST':
+        form = {k: (request.form.get(k) or '').strip() for k in ('company', 'slug', 'username')}
+        form['slug'] = form['slug'].lower()
+        password = request.form.get('password') or ''
+        ip_hash = hashlib.sha256(_client_ip().encode()).hexdigest()
+        with db.engine.connect() as conn:
+            recent = conn.execute(text("SELECT COUNT(*) FROM public.signups WHERE ip_hash = :h AND created_at > "
+                                       "(now() AT TIME ZONE 'utc') - INTERVAL '1 hour'"), {'h': ip_hash}).scalar()
+        if recent >= signup.MAX_PER_IP_PER_HOUR:
+            errors['form'] = 'Too many new apps from here in the last hour. Please try again later.'
+        if len(form['company']) < 2:
+            errors['company'] = 'Enter your company name.'
+        problem = address_problem(form['slug'])
+        if problem:
+            errors['slug'] = problem
+        if not re.fullmatch(r'[A-Za-z0-9._-]{3,40}', form['username']):
+            errors['username'] = 'Use 3–40 letters, numbers, dots, dashes or underscores.'
+        if len(password) < 8:
+            errors['password'] = 'Use at least 8 characters.'
+        elif password != request.form.get('password2'):
+            errors['password2'] = 'The passwords don\'t match.'
+        if not request.form.get('terms'):
+            errors['terms'] = 'Please accept the terms to continue.'
+        if not errors and not signup.turnstile_ok(request.form.get('cf-turnstile-response'), _client_ip()):
+            errors['form'] = 'Please complete the check that you\'re not a robot.'
+        if not errors:
+            try:
+                t = ops.claim_trial(form['slug'], form['username'], password, 7, company=form['company'],
+                                    phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'))
+            except ops.OpsError as exc:
+                errors['slug'] = str(exc)
+            else:
+                with db.engine.begin() as conn:
+                    conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h)'),
+                                 {'i': lead_id, 's': t['slug'], 'h': ip_hash})
+                _link_lead(lead_id, 'trial', t['slug'])
+                audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}')
+                return render_template('console/start.html', ready=t['slug'], base=tenancy.base_domain(),
+                                       username=form['username'], site=_site_url(), new=True)
+    return render_template('console/start.html', form=form, errors=errors, token=token, lead=lead,
+                           base=tenancy.base_domain(), site=_site_url(), turnstile=signup.turnstile_site_key())
+
+
+@console_bp.route('/start/check')
+def start_check():
+    """Public: is this web address free? (for the /start page as you type)"""
+    from flask import jsonify
+    from . import signup
+    if not signup.read_token(request.args.get('t', '')):
+        abort(404)
+    problem = address_problem((request.args.get('slug') or '').strip().lower())
+    return jsonify({'ok': not problem, 'message': problem})

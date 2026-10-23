@@ -497,6 +497,11 @@ footer nav { display: flex; gap: 1.2rem; }
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
+        if (data.setup_url) {               // interior designers / furniture works: set up the app straight away
+          done.querySelector('[data-setup-link]').href = data.setup_url;
+          done.querySelector('[data-setup]').hidden = false;
+          done.querySelector('[data-wait]').hidden = true;
+        }
         done.hidden = false;
         done.querySelector('[data-done-title]').focus();
       } catch (err) {

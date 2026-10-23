@@ -24,6 +24,7 @@ ok('/free-trial page renders the form (no-JS / ad link)', 'data-trial-form' in t
 r = c.post('/trial-request', data=good, headers=J); d = r.get_json()
 ok('valid request → ok, no WhatsApp follow-up link', r.status_code == 200 and d['ok'] and d['name'] == 'Ravi Kumar'
    and 'whatsapp_url' not in d)
+ok('self-serve off (default): no "set up now" link', d.get('setup_url') is None)
 with app.app_context():
     l = Lead.query.one()
     ok('stored: name tidied, phone normalised, source kept', l.name == 'Ravi Kumar' and l.phone == '919876543210'
@@ -122,3 +123,22 @@ ok('before the update: request accepted and stored (without the company, city an
 r = c4.get('/leads', headers=auth('leads-pass-123'))
 ok('before the update: /leads and CSV still work', r.status_code == 200 and 'Ravi Kumar' in r.text
    and c4.get('/leads.csv', headers=auth('leads-pass-123')).status_code == 200)
+
+
+# Self-serve trials on: interior designers and furniture works get a signed "set up my app now" link (no personal data)
+os.environ.update(AUTO_TRIALS='1', SIGNUP_URL='https://ops.quote-room.test', SIGNUP_SECRET='signup-secret')
+from app import signup as _su
+c5 = create_app('development').test_client()
+r = c5.post('/trial-request', data=dict(good, phone='9811100044', company_name='Kiran Interiors'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.1'}); d = r.get_json()
+ok('self-serve on: an interior designer gets "set up my app now" (a signed link with only the request id)',
+   d['ok'] and d['setup_url'] and d['setup_url'].startswith('https://ops.quote-room.test/start?t=')
+   and '9811100044' not in d['setup_url'] and 'Kiran' not in d['setup_url']
+   and _su.read_token(d['setup_url'].split('t=', 1)[1].replace('%2E', '.')) is not None)
+r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type='other', business_other='Tiles'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.2'})
+ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
+t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
+ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
+for k in ('AUTO_TRIALS', 'SIGNUP_URL', 'SIGNUP_SECRET'):
+    os.environ.pop(k, None)

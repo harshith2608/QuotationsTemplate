@@ -278,6 +278,7 @@ def trial_request():
             return jsonify({'ok': False, 'errors': errors}), 400
         return render_template('marketing/free_trial.html', standalone_trial=True, errors=errors, form=request.form, **ctx), 400
 
+    lead_id = None
     if not bot:
         ip_hash = _ip_hash()
         now = datetime.utcnow()
@@ -289,7 +290,8 @@ def trial_request():
                 return jsonify({'ok': False, 'errors': {'form': msg}}), 429
             return render_template('marketing/free_trial.html', standalone_trial=True, errors={'form': msg}, form=request.form, **ctx), 429
         # Same number again within a day: don't store a duplicate (phones are encrypted, so compare in Python)
-        dup = any(l.phone == data['phone'] for l in Lead.query.filter(Lead.created_at > now - timedelta(days=1)))
+        dup = next((l for l in Lead.query.filter(Lead.created_at > now - timedelta(days=1)) if l.phone == data['phone']), None)
+        lead_id = dup.id if dup else None
         if not dup:
             source = ' · '.join(filter(None, [
                 (request.form.get('utm_source') or '')[:60], (request.form.get('utm_campaign') or '')[:60],
@@ -299,13 +301,17 @@ def trial_request():
             for col in LATER_LEAD_COLUMNS:  # only once the database update has added the column
                 if lead_has(col):
                     values[col] = data[col]
-            db.session.execute(Lead.__table__.insert().values(**values))
+            lead_id = db.session.execute(Lead.__table__.insert().values(**values)).inserted_primary_key[0]
         Lead.query.filter(Lead.created_at < now - timedelta(days=KEEP_LEADS_DAYS)).delete()
         db.session.commit()
 
+    # Interior designers and furniture works can set up their app straight away (app/signup.py)
+    from . import signup
+    setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
     if wants_json:
-        return jsonify({'ok': True, 'name': data['name']})
-    return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, name=data['name'], **ctx)
+        return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup})
+    return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, name=data['name'],
+                           setup_url=setup, **ctx)
 
 
 def _leads_password():

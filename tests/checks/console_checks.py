@@ -349,8 +349,80 @@ code_ = ("import os; os.environ.update(FLASK_ENV='production', SECRET_KEY='x', C
 r = subprocess.run([sys.executable, '-c', code_], capture_output=True, text=True, env=dict(os.environ))
 ok('production console refuses to start without its 2FA secret', r.returncode != 0 and 'CONSOLE_TOTP_SECRET' in r.stderr)
 
+# ── Self-serve trials: the website's link → the public /start page → a ready-made trial, renamed ──
+import html as _h
+os.environ['SIGNUP_SECRET'] = 'signup-secret-for-tests'
+from app import ops as _ops, signup as _su, plan as _pl
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    self_id = conn.execute(Lead.__table__.insert().values(name='Meera Shah', phone='919811100022', business_type='interiors',
+                           company_name='Shah Design Studio', city='Pune', email='meera@shahstudio.example',
+                           created_at=datetime.utcnow())).inserted_primary_key[0]
+    other_id = conn.execute(Lead.__table__.insert().values(name='Not Eligible', phone='919811100023', business_type='other',
+                            business_other='Tiles shop', company_name='Tiles', city='Pune',
+                            created_at=datetime.utcnow())).inserted_primary_key[0]
+with app.app_context():
+    _ops.create_trial('taken-one', 'admin', 'taken-pass-123', 7)
+    made = _ops.top_up_spares(2)
+    spares_before = _ops.spare_count()
+    listed = [t['slug'] for t in _ops.list_trials()]
+ok('ready-made trials are made and kept out of the trials list', made == 2 and spares_before == 2
+   and not any(s.startswith('spare-') for s in listed))
+tok = _su.make_token(self_id)
+ok('the link carries only a signed id: no name, phone or email', 'Meera' not in tok and '9811100022' not in tok
+   and _su.read_token(tok) == self_id and _su.read_token(tok[:-1] + ('0' if tok[-1] != '0' else '1')) is None
+   and _su.read_token(_su.make_token(self_id, now=time.time() - 4 * 86400)) is None)
+anon = app.test_client()
+r = anon.get('/start?t=' + tok)
+ok('/start without signing in: the setup form, address suggested from the company name', r.status_code == 200
+   and 'Hi Meera Shah' in r.text and 'value="shah-studio"' in r.text and 'Shah Design Studio' in r.text)
+ok('a bad or not-eligible link is refused', anon.get('/start?t=1.2.3').status_code == 404
+   and anon.get('/start?t=' + _su.make_token(other_id)).status_code == 404)
+ok('address check as you type', anon.get(f'/start/check?t={tok}&slug=taken-one').get_json()['ok'] is False
+   and anon.get(f'/start/check?t={tok}&slug=shah-studio').get_json()['ok'] is True
+   and anon.get('/start/check?t=bad&slug=x').status_code == 404)
+base = dict(t=tok, company='Shah Design Studio', slug='shah-studio', username='meera', password='meera-pass-123')
+r = anon.post('/start', data=dict(base, password2='different-pass'))
+ok('mistakes are shown on the form (passwords differ, terms not ticked)', "passwords don't match" in _h.unescape(r.text)
+   and 'accept the terms' in r.text)
+r = anon.post('/start', data=dict(base, password2='meera-pass-123', terms='1'))
+with app.app_context():
+    spares_after = _ops.spare_count()
+    with tenancy.tenant_context('shah-studio'):
+        admin = User.query.filter_by(role='admin').first()
+        from app.models import AppSetting as _AS
+        got = _AS.get_many(['company_name', 'company_mobile', 'company_address', 'company_email'])
+        st = _pl.load_status(on=_pl.today())
+    with db.engine.connect() as conn:
+        tstatus = conn.execute(text("select status from public.tenants where slug='shah-studio'")).scalar()
+        linked = conn.execute(text('select status, slug from public.console_lead_links where lead_id = :i'), {'i': self_id}).first()
+ok('"Create my app": a ready-made trial becomes theirs at once (their login, company, city, email; 7-day trial)',
+   'Your app is ready' in r.text and 'https://shah-studio.quote-room.test/login?u=meera' in r.text
+   and spares_after == spares_before - 1 and tstatus == 'active' and admin.username == 'meera'
+   and check_password_hash(admin.password_hash, 'meera-pass-123') and got['company_name'] == 'Shah Design Studio'
+   and got['company_address'] == 'Pune' and got['company_email'] == 'meera@shahstudio.example'
+   and st.plan == 'trial' and st.days_left == 7)
+from app.console import _session_tag
+signed = app.test_client()                                # (the client above was signed out by the password change)
+with app.test_request_context():
+    tag = _session_tag()
+with signed.session_transaction() as sess:
+    sess['console_at'], sess['console_tag'] = time.time(), tag
+ok('…linked to the request in the console (audited), and the link only works once', tuple(linked) == ('trial', 'shah-studio')
+   and 'already set up' in anon.get('/start?t=' + tok).text and 'trial self start' in signed.get('/activity').text)
+_dash = signed.get('/').text
+ok('the dashboard shows self-serve and the ready-made trials', 'Self-serve trials' in _dash and 'shah-studio' in _dash
+   and 'ready-made trial' in _dash)
+with app.app_context():
+    _ops.delete_trial('shah-studio')
+    while _ops.spare_count():                              # with none ready, a new one is made on the spot
+        with db.engine.connect() as conn:
+            sp = conn.execute(text("select slug from public.tenants where status='spare' limit 1")).scalar()
+        _ops.delete_trial(sp)
+    t2 = _ops.claim_trial('fresh-made', 'boss', 'boss-pass-123', 7, company='Fresh')
+ok('with no ready-made trial, one is made on the spot', t2['slug'] == 'fresh-made' and t2['username'] == 'boss')
+
 # Clean up the public console tables so other suites start from a clean trials database
 with app.app_context(), db.engine.begin() as conn:
-    for tname in ('console_audit', 'console_state', 'console_lead_links'):
+    for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups'):
         conn.execute(text(f'DROP TABLE IF EXISTS public.{tname}'))
     conn.execute(text('DELETE FROM public.tenants'))

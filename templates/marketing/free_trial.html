@@ -13,7 +13,7 @@
         <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
         {{ trial_form('page', errors or {}, form or {}) }}
       </div>
-      {{ trial_done(name or '') }}
+      {{ trial_done(name or '', setup_url) }}
     </div>
   </div>
 </section>
