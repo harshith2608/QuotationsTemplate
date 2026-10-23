@@ -2,7 +2,7 @@
 with the receipt, plan reminders, and a note to the operator about each payment. Not the businesses' own emails to
 their customers (those use each business's Admin → Settings → Email).
 
-    PLATFORM_SMTP_HOST=smtp.titan.email   PLATFORM_SMTP_PORT=465 (SSL; 587 = STARTTLS)
+    PLATFORM_SMTP_HOST=smtpout.secureserver.net (GoDaddy email)   PLATFORM_SMTP_PORT=465 (SSL; 587 = STARTTLS)
     PLATFORM_SMTP_USER=hello@quote-room.co.in   PLATFORM_SMTP_PASSWORD=<the mailbox password>
     PLATFORM_SMTP_FROM_NAME=QuoteRoom     (optional)
     OPERATOR_EMAIL=...                    (optional: who gets "payment received" notes; default the sending address)

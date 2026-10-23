@@ -411,15 +411,18 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    (`ops.quote-room.co.in`, Managed) → console `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
    `SPARE_TRIALS` (default 3) = how many ready-made trials to keep.
 6. **Daily task.** Console project → `CRON_SECRET` = a third generated secret (Vercel sends it to the daily task).
-6b. **Emails from hello@quote-room.co.in** (Titan): on the **website**, **trials** and **console** projects set
-   `PLATFORM_SMTP_HOST=smtp.titan.email`, `PLATFORM_SMTP_PORT=465`, `PLATFORM_SMTP_USER=hello@quote-room.co.in`,
+6b. **Emails from hello@quote-room.co.in** (GoDaddy email; DNS: MX/SPF/DKIM on `secureserver.net`): on the **website**,
+   **trials** and **console** projects set `PLATFORM_SMTP_HOST=smtpout.secureserver.net` (or the outgoing server shown in
+   the GoDaddy email dashboard), `PLATFORM_SMTP_PORT=465`, `PLATFORM_SMTP_USER=hello@quote-room.co.in`,
    `PLATFORM_SMTP_PASSWORD` (the mailbox password; type it in Vercel only). Optional `OPERATOR_EMAIL` (who gets the
    "Payment:" notes; default hello@). With email set up:
    - the website **emails** the set-up link instead of showing it (proves the email is theirs);
    - every payment sends "Payment received" with the receipt to the business, and a note to you;
    - the daily task emails "trial ends in 2 days / has ended" and "plan ends in 15 / 3 days / has ended", once each,
      with the link to Choose a plan.
-   Check SPF, DKIM (Titan admin → Domain → DKIM) and DMARC in GoDaddy DNS first, so these don't land in spam.
+   DNS (checked 24 Oct 2026): SPF `include:secureserver.net -all`, DKIM `secureserver1/2._domainkey`, DMARC `p=reject`,
+   all in place. Keep DKIM switched on in the email admin. Because DMARC rejects anything not sent through GoDaddy, any
+   other service that should send as @quote-room.co.in must be added to SPF first.
 7. **Time limits.** On the console **and** the trials project: **Settings → Functions → Max Duration → 60**.
 8. Redeploy the console, trials and website projects. Console → dashboard → **Self-serve trials → Make more** once.
 9. **Test end to end (test keys):** request a trial on the website as an interior designer → set up the app →
