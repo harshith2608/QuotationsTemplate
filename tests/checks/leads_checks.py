@@ -35,14 +35,19 @@ with app.app_context():
 
 bad = c.post('/trial-request', data={'name': 'R', 'phone': '12345', 'business_type': 'other'}, headers=J)
 e = bad.get_json()['errors']
-ok('validation errors per field', bad.status_code == 400 and set(e) == {'name', 'company_name', 'city', 'phone', 'business_other'})
-e = c.post('/trial-request', data={'name': 'Ab', 'company_name': 'Ab Co', 'city': 'Pune', 'phone': '9876543211', 'business_type': 'carpenter'}, headers=J).get_json()['errors']
+ok('validation errors per field (WhatsApp number and email are required)', bad.status_code == 400
+   and set(e) == {'name', 'company_name', 'city', 'phone', 'email', 'business_other'}
+   and e['email'] == 'Please enter your email address.' and 'WhatsApp' in e['phone'])
+e = c.post('/trial-request', data={'name': 'Ab', 'company_name': 'Ab Co', 'city': 'Pune', 'phone': '9876543211', 'email': 'ab@abco.example',
+                                   'business_type': 'carpenter'}, headers=J).get_json()['errors']
 ok('unknown business type rejected', set(e) == {'business_type'})
 e = c.post('/trial-request', data=dict(good, phone='9876543212', email='not-an-email'), headers=J).get_json()['errors']
 ok('a mistyped email is caught', set(e) == {'email'})
 r = c.post('/trial-request', data={'name': 'Meena', 'company_name': 'Meena Kitchens', 'city': 'Chennai', 'phone': '09123456789', 'business_type': 'other',
-                                   'business_other': 'Modular kitchens'}, headers=J)
-ok('"Others" with text accepted (0-prefixed number ok, email optional)', r.get_json()['ok'])
+                                   'business_other': 'Modular kitchens', 'email': 'meena@kitchens.example'}, headers=J)
+ok('"Others" with text accepted (0-prefixed number ok)', r.get_json()['ok'])
+e = c.post('/trial-request', data=dict(good, phone='9876543213', email=''), headers=J).get_json()['errors']
+ok('no email → asked for it', set(e) == {'email'})
 for num, valid in [('98765 43210', True), ('919876543210', True), ('5876543210', False), ('98765432', False), ('+1 415 555 0100', False)]:
     from app.marketing import normalise_phone
     ok(f'phone {num!r} → {"valid" if valid else "invalid"}', bool(normalise_phone(num)) == valid)

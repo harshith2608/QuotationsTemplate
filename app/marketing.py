@@ -194,11 +194,13 @@ def _validate_lead(form):
     if len(company) < 2:
         errors['company_name'] = 'Please enter your company name.'
     if not phone:
-        errors['phone'] = 'Please enter a 10-digit Indian mobile number.'
+        errors['phone'] = 'Please enter your 10-digit WhatsApp number.'
     if len(city) < 2:
         errors['city'] = 'Please enter your city.'
-    if email and not EMAIL_RE.match(email):
-        errors['email'] = 'Please check your email address (or leave it empty).'
+    if not email:
+        errors['email'] = 'Please enter your email address.'
+    elif not EMAIL_RE.match(email):
+        errors['email'] = 'Please check your email address.'
     if btype not in BUSINESS_TYPES:
         errors['business_type'] = 'Please choose your type of business.'
     elif btype == 'other' and len(other) < 2:
