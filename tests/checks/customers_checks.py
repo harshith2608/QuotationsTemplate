@@ -1,5 +1,6 @@
 """Paying-customer provisioning against a REAL PostgreSQL (one database + login per customer) with a fake Vercel."""
 import os, re, time
+import json as _json_mod
 from datetime import timedelta
 from urllib.parse import unquote
 import psycopg2
@@ -106,6 +107,29 @@ with app.app_context():
         AppSetting.set('material_specs', 'Plywood: {plywood_details} for all carcass and shutters')
         db.session.commit()
         trial_pid = p1.id
+        # Turnkey features: priced by item from a loaded price list (items + a starting quotation), and a BOQ quotation
+        # with a line measured by size, a "Price to follow" line and a rate-only line
+        import json as _j
+        from app import price_list as _pl
+        _pl.apply(_pl.parse(_j.dumps({'lines': [
+            {'name': 'Wardrobe', 'unit': 'sqft', 'rate': 1950, 'group': 'Bedroom', 'description': 'BWR ply, laminate'},
+            {'name': 'Lights & Fittings', 'unit': 'LS', 'rate': 50000, 'group': 'Services'},
+            {'name': 'COB Light', 'unit': 'nos', 'rate': 520, 'group': 'Light rates'}],
+            'templates': [{'name': '2 BHK turnkey', 'rooms': [{'name': 'Bedroom', 'items': ['Wardrobe'],
+                                                                'description': ['Sizes as per site']}]}]}).encode()))
+        p2 = Project(customer_name='Turnkey Customer', mobile='9000000002', created_by=u.id, grand_total=109200,
+                     discount_type='none', discount_value=0, status='complete')
+        db.session.add(p2); db.session.flush()
+        r2 = Room(project_id=p2.id, name='Bedroom', description='Sizes as per site')
+        db.session.add(r2); db.session.flush()
+        for kw in (dict(name='Wardrobe', quantity=56, unit_price=1950, unit='sqft', description='BWR ply, laminate',
+                        length=7, width=8),
+                   dict(name='Lights & Fittings', quantity=1, unit_price=None, unit='lump sum'),
+                   dict(name='COB Light', quantity=0, unit_price=520, unit='nos')):
+            kw.setdefault('length', 0); kw.setdefault('width', 0)
+            db.session.add(Item(room_id=r2.id, item_type='boq', area=0, wood_type='', work_type='', **kw))
+        db.session.commit()
+        boq_pid = p2.id
 
 # Convert: runs database → data → project → deploy, then waits for the build
 r = c.post('/customers', data={'source': 'trial', 'trial': 'sharma', 'name': 'Sharma Interiors', 'plan': '1y',
@@ -160,6 +184,19 @@ ok('recent features carried over: quotation + item plywood, room description, Ca
    ply_cols is not None and ply_cols[0] and ply_cols[1] and ply_cols[3] is True and 'BWP' in (desc or ''))
 ok('12-month plan started today', plan.get('plan_name') == '1y')
 with eng.connect() as conn:
+    tk = dict(conn.execute(text("select key, value from app_settings where key in ('feature_boq', 'initial_layout', "
+                                "'quote_templates', 'room_descriptions')")).all())
+    n_lines = conn.execute(text('select count(*) from boq_items')).scalar()
+    boq_items = conn.execute(text("select name, unit, description, unit_price, length from items "
+                                  "where item_type = 'boq' order by id")).all()
+_tpl = _json_mod.loads(tk.get('quote_templates') or '[]')
+ok('turnkey features carried over: priced by item, BOQ layout, saved lines, starting quotation, section notes',
+   tk.get('feature_boq') == '1' and tk.get('initial_layout') == 'boq' and n_lines == 3
+   and [t['name'] for t in _tpl] == ['2 BHK turnkey'] and 'Sizes as per site' in (tk.get('room_descriptions') or ''))
+ok('…and the BOQ lines: unit, description, size, "Price to follow" (no rate) and rate-only',
+   len(boq_items) == 3 and boq_items[0][1] == 'sqft' and boq_items[0][4] == 7 and boq_items[1][3] is None
+   and boq_items[2][3] is not None and boq_items[0][2])
+with eng.connect() as conn:
     enc = conn.execute(text('select pg_encoding_to_char(encoding) from pg_database where datname = current_database()')).scalar()
 ok('customer database is UTF-8', enc == 'UTF8')
 with app.app_context():
@@ -183,9 +220,21 @@ out["name"] = "Sharma Interiors" in v
 s = app.test_client(); s.post("/login", data={"username": "rahul", "password": "rahul-pass-123"})
 out["staff_edit"] = s.get(f"/projects/{pid}/edit").status_code
 out["staff_reports"] = s.get("/admin/reports").status_code
+bp = int(os.environ["BOQ_PID"])
+for u in [f"/projects/{bp}", f"/projects/{bp}/edit", f"/projects/{bp}/pdf", f"/projects/{bp}/pdf/customer", "/templates",
+          "/admin/settings?tab=pricing", "/projects/new"]:
+    r = c.get(u); out["boq " + u] = r.status_code
+out["start_cards"] = "2 BHK turnkey" in c.get("/projects/new").text
+bv = c.get(f"/projects/{bp}").text
+out["boq_page"] = "Quotation PDF" in bv and "price to follow" in bv and "Section Total" in bv
+import io
+from pypdf import PdfReader
+pdf = " ".join(pg.extract_text() for pg in PdfReader(io.BytesIO(c.get(f"/projects/{bp}/pdf/customer").data)).pages)
+out["boq_pdf"] = "Price to follow" in pdf and "1,09,200" in pdf.replace("109,200", "1,09,200")
 print("RESULT " + json.dumps(out))
 '''
-env_ = dict(os.environ, DATABASE_URL=s['direct_url'], DATA_ENCRYPTION_KEY=key, PID=str(trial_pid), FLASK_ENV='development')
+env_ = dict(os.environ, DATABASE_URL=s['direct_url'], DATA_ENCRYPTION_KEY=key, PID=str(trial_pid), BOQ_PID=str(boq_pid),
+            FLASK_ENV='development')
 res = subprocess.run([sys.executable, '-c', code_], capture_output=True, text=True, env=env_,
                      cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 m = re.search(r'RESULT (.*)', res.stdout)
@@ -193,6 +242,10 @@ out = _json.loads(m.group(1)) if m else {}
 pages = {k: v for k, v in out.items() if k.startswith('/')}
 ok(f'converted app: every main page works for the owner {pages or res.stderr[-400:]}',
    pages and all(v == 200 for v in pages.values()) and out.get('name'))
+ok(f'converted app: the turnkey quotation, its PDFs, starting quotations and Settings → Pricing all work '
+   f'{ {k: v for k, v in out.items() if k.startswith("boq ") or k in ("start_cards", "boq_page", "boq_pdf")} }',
+   all(v == 200 for k, v in out.items() if k.startswith('boq /')) and out.get('start_cards') and out.get('boq_page')
+   and out.get('boq_pdf'))
 ok('converted app: staff keep their "Can edit" access; reports stay admin-only',
    out.get('staff_edit') == 200 and out.get('staff_reports') in (302, 403))
 
