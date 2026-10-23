@@ -19,6 +19,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "Excel vs QuoteRoom" carousel (10-slide framework: hook, example, diagrams, comparisons, CTA) | Carousel, 10 slides 4:5 | **Ready to post** | `carousel-excel-vs-1…10.png` | `tools/ad_video/carousel_excel_vs.py` |
 | "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Ready to post** | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
 | "Do you know your profit?" | Reel 22 s, 9:16, music | **Ready to post** | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
+| "Still typing every quotation from scratch?" (starting quotations, shown on a laptop) | Reel 22 s, 9:16 + 4:5, music | **Ready to post** (23 Oct) | `reel-templates-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_templates.py` (screens from the tutorial 14 recording) |
 | "Does your quotation have all 6?" | Single image 4:5 | **Ready to post** | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
@@ -53,6 +54,7 @@ Same style as parts 1–5 (phone size, captions, ≤ 90 s each). ✅ = on the we
 | 🎬 11 | Online payments (Razorpay) | Setup guide, API keys, webhook address & secret, Test connection → payment link for an advance → customer pays → recorded automatically with a notification and the new balance | Admin → Payment settings, Payment link | 63 s |
 | 🎬 12 | Your quotation PDF | By room or by material; room descriptions (ticked per room); Material Specifications with Insert buttons ({plywood_details} etc.); Payment/Delivery Terms; T&C; Units (ft & in / mm / cm / in, sqft / sq m); the room-wise Initial Quotation that results | Settings → Quotation PDFs, Units, Edit quotation | 81 s |
 | 🎬 13 | QuoteRoom on your home screen | Android (⋮ → Add to Home screen) and iPhone (Share → Add to Home Screen); the business's own logo and name on the home screen; opens full screen | Browser menu (drawn mock-ups) | 26 s |
+| 🎬 14 | **Starting quotations** | New Quotation → pick "2 BHK turnkey" → everything filled in → type quantities/sizes → remove a line, Add line → Save (empty lines removed after asking) → section totals → PDF → Save as template, Duplicate, Manage | New Quotation, quotation page, Templates (laptop, presentation style) | 71 s |
 
 Later: a second "full walkthrough" for 6–9 ("Run your business"), and short Reels cut from 6, 7 and 11.
 

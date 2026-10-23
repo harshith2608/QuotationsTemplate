@@ -1,0 +1,51 @@
+{
+ "firm": "Fictional sample for the starting-quotations videos (not a real firm's data)",
+ "pricing": "item",
+ "lines": [
+  {"name": "False Ceiling", "unit": "sqft", "rate": 120, "group": "Services", "description": "Gypsum false ceiling with framework, as per design."},
+  {"name": "Electrical Wiring", "unit": "point", "rate": 900, "group": "Services", "description": "Concealed conduit and wiring; switches and plates extra."},
+  {"name": "Lights & Fittings", "unit": "lump sum", "rate": 45000, "group": "Services", "description": "As per the light rates below; final after the lighting design."},
+  {"name": "Painting", "unit": "sqft", "rate": 45, "group": "Services", "description": "Putty, primer and 2 coats of emulsion on all walls."},
+  {"name": "3D Design", "unit": "lump sum", "rate": 40000, "group": "Services", "description": "3D views of every room, with one revision."},
+  {"name": "Deep Cleaning", "unit": "lump sum", "rate": 15000, "group": "Services", "description": "Debris removal and machine cleaning at handover."},
+  {"name": "Safety Door", "unit": "sqft", "rate": 2400, "group": "Living Room", "description": "Block board with laminate on both sides, with safety grill."},
+  {"name": "Shoe Rack", "unit": "sqft", "rate": 2200, "group": "Living Room", "description": "BWR plywood with laminate, inside and outside."},
+  {"name": "TV Unit", "unit": "sqft", "rate": 1400, "group": "Living Room", "description": "BWR plywood with 4 drawers and back paneling."},
+  {"name": "Wall Paneling", "unit": "sqft", "rate": 850, "group": "Living Room", "description": "12 mm ply with laminate, as per design."},
+  {"name": "Crockery Unit", "unit": "sqft", "rate": 1800, "group": "Living Room", "description": "With glass shutters and LED profile."},
+  {"name": "Mandir", "unit": "sqft", "rate": 2200, "group": "Living Room", "description": "Laminate finish with back-lit jali."},
+  {"name": "Kitchen Base Units", "unit": "sqft", "rate": 2400, "group": "Kitchen", "description": "BWP plywood, tandem drawers, masala pull-out."},
+  {"name": "Kitchen Wall Units", "unit": "sqft", "rate": 1900, "group": "Kitchen", "description": "BWR plywood with one shelf inside."},
+  {"name": "Loft Shutters", "unit": "sqft", "rate": 950, "group": "Kitchen", "description": "BWR plywood with laminate."},
+  {"name": "Tall Unit", "unit": "sqft", "rate": 2100, "group": "Kitchen", "description": "Pantry unit with wire baskets."},
+  {"name": "Wardrobe", "unit": "sqft", "rate": 1850, "group": "Bedroom", "description": "BWR plywood, laminate inside and outside, soft-close drawers."},
+  {"name": "Bed with Storage", "unit": "sqft", "rate": 2200, "group": "Bedroom", "description": "Hydraulic top-open storage."},
+  {"name": "Side Table", "unit": "nos", "rate": 12000, "group": "Bedroom", "description": "With 2 drawers."},
+  {"name": "Headboard", "unit": "sqft", "rate": 1300, "group": "Bedroom", "description": "Cushioned headboard on 12 mm ply."},
+  {"name": "Study Table", "unit": "sqft", "rate": 1400, "group": "Bedroom", "description": "With 2 drawers and a wall shelf."},
+  {"name": "COB Light 3 inch", "unit": "nos", "rate": 500, "group": "Light Rates", "description": ""},
+  {"name": "Profile Light", "unit": "rft", "rate": 550, "group": "Light Rates", "description": ""},
+  {"name": "Fan Fitting", "unit": "nos", "rate": 450, "group": "Light Rates", "description": ""}
+ ],
+ "templates": [
+  {"name": "1 BHK basic", "rooms": [
+   {"name": "Services", "items": ["False Ceiling", "Electrical Wiring", "Painting", "Deep Cleaning"]},
+   {"name": "Living Room", "items": ["TV Unit", "Shoe Rack"]},
+   {"name": "Kitchen", "items": ["Kitchen Base Units", "Kitchen Wall Units", "Loft Shutters"]},
+   {"name": "Bedroom", "items": ["Wardrobe", "Bed with Storage", "Side Table"]}]},
+  {"name": "2 BHK turnkey", "rooms": [
+   {"name": "Services", "items": ["False Ceiling", "Electrical Wiring", "Lights & Fittings", "Painting", "3D Design", "Deep Cleaning"]},
+   {"name": "Living Room", "items": ["Safety Door", "Shoe Rack", "TV Unit", "Wall Paneling", "Mandir"]},
+   {"name": "Kitchen", "items": ["Kitchen Base Units", "Kitchen Wall Units", "Loft Shutters", "Tall Unit"]},
+   {"name": "Master Bedroom", "items": ["Wardrobe", "Bed with Storage", "Side Table", "Headboard"]},
+   {"name": "Bedroom 2", "items": ["Wardrobe", "Bed with Storage", "Study Table"]},
+   {"name": "Light Rates", "description": ["Rates for reference; final after the lighting design"],
+    "items": [{"name": "COB Light 3 inch", "rate_only": true}, {"name": "Profile Light", "rate_only": true},
+              {"name": "Fan Fitting", "rate_only": true}]}]}
+ ],
+ "settings": {
+  "payment_terms": "50% advance before work starts.\n40% when the carpentry is done.\n10% at handover.",
+  "important_notes": "Final bill as per actual measurement.\nGST extra as applicable.\nElectrical appliances are not included.",
+  "terms_conditions": ""
+ }
+}
