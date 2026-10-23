@@ -132,7 +132,7 @@
 
 <h2>Technical</h2>
 <div class="card small stack">
-  <div>Vercel project: <span class="mono">{{ row.vercel_project_name or '—' }}</span></div>
+  <div>Hosting: {% if row.hosting == 'shared' %}shared app (own database and key){% else %}own app · Vercel project: <span class="mono">{{ row.vercel_project_name or '—' }}</span>{% endif %}</div>
   <div>Database version: <span class="mono">{{ rev or '—' }}</span> {% if rev and rev == head %}<span class="badge b-active">latest</span>{% elif rev %}<span class="badge b-reminder">update available</span> (Updates page){% endif %}</div>
   {% if pooler_note %}<div style="color:var(--warn)">Note: {{ pooler_note }}</div>{% endif %}
   <form method="post" action="{{ url_for('console.customer_reveal', slug=row.slug) }}"

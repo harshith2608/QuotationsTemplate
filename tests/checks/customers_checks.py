@@ -66,7 +66,7 @@ class FakeVercel:
         return dict(p['env'])
 
 
-for leftover in ('sharma', 'acme', 'beta', 'legacy'):           # from an earlier interrupted run
+for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest'):           # from an earlier interrupted run
     providers.CustomerDatabases(ADMIN).drop(leftover)
 
 fake = FakeVercel()
@@ -132,7 +132,7 @@ with app.app_context():
         boq_pid = p2.id
 
 # Convert: runs database → data → project → deploy, then waits for the build
-r = c.post('/customers', data={'source': 'trial', 'trial': 'sharma', 'name': 'Sharma Interiors', 'plan': '1y',
+r = c.post('/customers', data={'hosting': 'own', 'source': 'trial', 'trial': 'sharma', 'name': 'Sharma Interiors', 'plan': '1y',
                                'phone': '919811111111'})
 ok('convert starts and opens the customer page', r.status_code == 302 and r.headers['Location'].endswith('/customers/sharma'))
 with app.app_context():
@@ -270,7 +270,7 @@ ok('customer secrets stored sealed (no URL or key in plain text)', blob.startswi
 
 # New customer without a trial: admin password shown once, only after setup finished
 fake.state = 'BUILDING'
-r = c.post('/customers', data={'source': 'new', 'slug': 'acme', 'name': 'Acme Interiors', 'plan': '6m', 'admin_username': 'boss'})
+r = c.post('/customers', data={'hosting': 'own', 'source': 'new', 'slug': 'acme', 'name': 'Acme Interiors', 'plan': '6m', 'admin_username': 'boss'})
 t = c.get('/customers/acme').text
 ok('password not shown (or used up) while the setup page is still refreshing', 'shown once' not in t and 'http-equiv="refresh"' in t)
 fake.state = 'READY'
@@ -288,7 +288,7 @@ ok('one customer\'s login can\'t open another customer\'s database', can(s['dire
    and not can(s2['direct_url'].rsplit('/', 1)[0] + '/c_sharma'))
 with app.app_context():
     ops.create_trial('still-trial', 'admin', 'still-pass-123', 7)
-r = c.post('/customers', data={'source': 'new', 'slug': 'still-trial', 'name': 'x', 'plan': '6m'}, follow_redirects=True)
+r = c.post('/customers', data={'hosting': 'own', 'source': 'new', 'slug': 'still-trial', 'name': 'x', 'plan': '6m'}, follow_redirects=True)
 with app.app_context():
     ok('an active trial\'s name can\'t be taken as a new customer', 'is an active trial' in r.text and cust.get('still-trial') is None)
 
@@ -327,7 +327,7 @@ with app.app_context():
 with app.app_context():
     ops.create_trial('legacy', 'admin', 'legacy-pass-123', 7)
 fake.domain_owner['legacy.quote-room.test'] = 'prj_some-other-project'
-c.post('/customers', data={'source': 'trial', 'trial': 'legacy', 'name': 'Legacy', 'plan': '6m'})
+c.post('/customers', data={'hosting': 'own', 'source': 'trial', 'trial': 'legacy', 'name': 'Legacy', 'plan': '6m'})
 c.get('/customers/legacy')
 with app.app_context():
     row = cust.get('legacy')
@@ -345,7 +345,7 @@ ok('with VERCEL_TRIALS_PROJECT set, Retry moves the address from the trials proj
 
 # Failure + retry
 fake.fail_create = 1
-c.post('/customers', data={'source': 'new', 'slug': 'beta', 'name': 'Beta', 'plan': '6m'})
+c.post('/customers', data={'hosting': 'own', 'source': 'new', 'slug': 'beta', 'name': 'Beta', 'plan': '6m'})
 with app.app_context():
     row = cust.get('beta')
 ok('a provider error stops setup at that step with the reason', row['status'] == 'failed' and row['step'] == 'data'
@@ -381,3 +381,89 @@ eng.dispose()
 for slug in ('sharma', 'beta', 'legacy'):
     with app.app_context():
         providers.CustomerDatabases(ADMIN).drop(slug)
+
+
+# ── Shared hosting: the trial converts in seconds into its own database, served by the shared trials app ──
+os.environ['MOVE_WAIT_SECONDS'] = '0'
+with app.app_context():
+    ops.create_trial('nest', 'owner', 'nest-pass-123', 7, company='Nest Interiors')
+    ops.create_trial('mover', 'admin', 'mover-pass-123', 7)
+    with tenant_context('nest'):
+        u = User.query.first()
+        db.session.add(Project(customer_name='Nest Customer', mobile='9000000077', created_by=u.id, grand_total=1000,
+                               discount_type='none', discount_value=0, status='complete'))
+        db.session.commit()
+r = c.post('/customers', data={'hosting': 'shared', 'source': 'trial', 'trial': 'nest', 'name': 'Nest Interiors',
+                               'plan': '6m', 'phone': '919822222222'})
+with app.app_context():
+    row = cust.get('nest')
+    with db.engine.connect() as conn:
+        tstatus = conn.execute(text("select status from public.tenants where slug='nest'")).scalar()
+ok('shared hosting: converted in one go (database → data → switch), no Vercel project',
+   row['status'] == 'active' and row['hosting'] == 'shared' and row['step'] == 'switch' and tstatus == 'converted'
+   and 'qr-nest' not in fake.projects)
+with app.app_context():
+    sn = cust.unseal(row['secrets'])
+eng_n = create_engine(sn['direct_url'].replace('postgresql://', 'postgresql+psycopg2://'))
+with eng_n.connect() as conn:
+    raw = conn.execute(text('select customer_name from projects')).scalar()
+ok('…its data is in its own database, encrypted with its own key', _dec(sn['data_key'], raw) == 'Nest Customer'
+   and sn['data_key'] != os.environ['DATA_ENCRYPTION_KEY'])
+t = c.get('/customers/nest').text
+ok('customer page shows the shared app', 'shared app (own database and key)' in t)
+with app.app_context():
+    ops.set_moving('mover', True)
+
+# The shared trials app (TENANT_MODE) serves the trial, the paying customer and the "moving" page
+code_s = """
+import json, os, re
+os.environ.pop("CONSOLE_MODE", None)
+from app import create_app
+app = create_app("development"); app.config["WTF_CSRF_ENABLED"] = False
+out = {}
+c = app.test_client()
+H = {"base_url": "http://nest.quote-room.test"}
+c.post("/login", data={"username": "owner", "password": "nest-pass-123"}, **H)
+v = c.get("/projects", **H)
+out["list"] = v.status_code; out["has_customer"] = "Nest Customer" in v.text
+pid = int(re.search(r"/projects/(\\d+)", v.text).group(1))
+for u in [f"/projects/{pid}", f"/projects/{pid}/pdf/customer", "/projects/new", "/admin/settings", "/admin/rates"]:
+    out[u] = c.get(u, **H).status_code
+r = c.post("/projects/new", data={"customer_name": "Saved After Move", "mobile": "9000000088", "discount_type": "none",
+           "discount_value": "0", "rooms_data": json.dumps([{"name": "Hall", "items": [{"name": "TV Unit", "type": "fixed",
+           "quantity": 1, "unit_price": 5000}]}])}, **H)
+out["save"] = r.status_code
+t = app.test_client()
+out["trial_login"] = t.post("/login", data={"username": "admin", "password": "still-pass-123"},
+                            base_url="http://still-trial.quote-room.test").status_code
+out["trial_page"] = t.get("/projects", base_url="http://still-trial.quote-room.test").status_code
+out["moving"] = app.test_client().get("/login", base_url="http://mover.quote-room.test").status_code
+out["unknown"] = app.test_client().get("/login", base_url="http://nobody.quote-room.test").status_code
+out["cross"] = c.get("/projects", base_url="http://still-trial.quote-room.test").status_code
+print("RESULT " + json.dumps(out))
+"""
+env_s = dict(os.environ, TENANT_MODE='1', FLASK_ENV='development')
+env_s.pop('CONSOLE_MODE', None)
+res = subprocess.run([sys.executable, '-c', code_s], capture_output=True, text=True, env=env_s,
+                     cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+m = re.search(r'RESULT (.*)', res.stdout)
+o = _json.loads(m.group(1)) if m else {}
+ok(f'shared app: the paying customer signs in with the same login and sees their data {o or res.stderr[-600:]}',
+   o.get('list') == 200 and o.get('has_customer'))
+ok('…every page and the PDF work from their own database',
+   all(o.get(k) == 200 for k in o if k.startswith('/')) and o.get('save') == 302)
+with eng_n.connect() as conn:
+    names = [_dec(sn['data_key'], r_) for r_ in conn.execute(text('select customer_name from projects')).scalars()]
+ok('…and a quotation saved after the move goes into their own database', 'Saved After Move' in names)
+ok('the same app still serves trials; a trial being moved shows "upgrading"; unknown addresses 404; '
+   'a customer\'s login doesn\'t open a trial', o.get('trial_page') == 200 and o.get('moving') == 503
+   and o.get('unknown') == 404 and o.get('cross') in (302, 401))
+with app.app_context():
+    ops.set_moving('mover', False)
+    with db.engine.connect() as conn:
+        ok('a move that is called off gives the trial back', conn.execute(
+            text("select status from public.tenants where slug='mover'")).scalar() == 'active')
+with app.app_context():
+    keys = [k for k, _ in cust.update_targets()]
+    res_u = cust.run_update('customer:nest')
+ok('Update all includes shared-hosting customers', 'customer:nest' in keys and res_u.startswith('up to date'))

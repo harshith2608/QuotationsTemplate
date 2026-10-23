@@ -9,7 +9,22 @@ from flask_wtf.csrf import CSRFProtect
 from whitenoise import WhiteNoise
 from config import config
 
-db = SQLAlchemy()
+from flask_sqlalchemy.session import Session as _FlaskSession
+
+
+class _TenantSession(_FlaskSession):
+    """In the shared app, a paying customer's requests use their own database (tenancy.resolve_tenant sets
+    g.tenant_engine); everything else uses the app's database as usual."""
+    def get_bind(self, mapper=None, clause=None, bind=None, **kwargs):
+        if bind is None:
+            from flask import g, has_app_context
+            engine = g.get('tenant_engine') if has_app_context() else None
+            if engine is not None:
+                return engine
+        return super().get_bind(mapper=mapper, clause=clause, bind=bind, **kwargs)
+
+
+db = SQLAlchemy(session_options={'class_': _TenantSession})
 migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
@@ -59,6 +74,7 @@ def create_app(config_name='default'):
         return app
 
     app.before_request(tenancy.resolve_tenant)
+    app.teardown_request(tenancy.release_tenant)
 
     from .auth import auth_bp
     from .main import main_bp

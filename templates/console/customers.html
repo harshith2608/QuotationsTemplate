@@ -2,8 +2,9 @@
 {% block title %}Customers{% endblock %}
 {% block content %}
 <h1>Paying customers</h1>
-<p class="muted small">Each customer gets their own database, their own app on Vercel and the address
-  <span class="mono">NAME.{{ base_domain or 'TENANT_BASE_DOMAIN' }}</span>.</p>
+<p class="muted small">Each customer gets their own database and encryption key, at the address
+  <span class="mono">NAME.{{ base_domain or 'TENANT_BASE_DOMAIN' }}</span>: in the shared app (instant), or in an app of
+  their own on Vercel.</p>
 
 {% if missing %}
 <div class="card stack" style="border-color:var(--warn)">
@@ -16,7 +17,7 @@
 <h2>New paying customer</h2>
 <div class="card">
   <form method="post" action="{{ url_for('console.customers_create') }}" class="stack"
-        data-confirm="Create this customer's database and app? (Takes about a minute.)">
+        data-confirm="Create this customer's database and move them to it?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row">
       <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
@@ -43,6 +44,13 @@
         <input id="phone" type="text" name="phone" inputmode="numeric" placeholder="919876543210"></div>
       <div><label for="plan">Plan</label>
         <select id="plan" name="plan">{% for p in plans %}<option value="{{ p }}" {% if p == '1y' %}selected{% endif %}>{{ '6 months' if p == '6m' else '12 months' }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="row">
+      <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+        <input type="radio" name="hosting" value="shared" checked> Shared app <span class="muted small">(recommended: ready in seconds)</span></label>
+      <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+        <input type="radio" name="hosting" value="own" {% if missing_own %}disabled title="Needs {{ missing_own|join(', ') }}"{% endif %}>
+        Their own app on Vercel <span class="muted small">(about a minute)</span></label>
     </div>
     <button class="btn btn-primary" type="submit">Create customer</button>
     <p class="muted small">Only after payment is received. The plan starts today.</p>

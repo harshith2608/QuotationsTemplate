@@ -94,6 +94,18 @@ def decrypt(value):
         raise EncryptionError(f'This data was encrypted with a different key than {ENV}.') from None
 
 
+def push_key(raw):
+    """Use another key until pop_key(token) (a paying customer's key for one request in the shared app)."""
+    return _override.set(raw)
+
+
+def pop_key(token):
+    try:
+        _override.reset(token)
+    except ValueError:                 # reset from another context: just clear the override
+        _override.set(None)
+
+
 @contextmanager
 def using_key(raw):
     """Temporarily encrypt with another key (used when copying a trial into its own database)."""

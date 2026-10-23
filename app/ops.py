@@ -127,6 +127,14 @@ def copy_trial(slug, target_url, to_key, plan_name):
     return copied, start, end
 
 
+def set_moving(slug, on):
+    """While a trial is copied into a paying customer's database, its address shows "being upgraded"."""
+    with db.engine.begin() as conn:
+        conn.execute(text("UPDATE public.tenants SET status = :st WHERE slug = :s AND status IN ('active', 'moving')"),
+                     {'s': slug, 'st': 'moving' if on else 'active'})
+    tenancy.clear_cache()
+
+
 def mark_converted(slug):
     """The trials app stops serving this trial (its data stays until deleted)."""
     with db.engine.begin() as conn:

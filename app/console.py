@@ -879,12 +879,13 @@ def _customers():
 @login_required
 def customers_list():
     c = _customers()
-    rows = c.all_customers() if not c.missing_settings() else []
+    rows = c.all_customers() if not c.missing_settings('shared') else []
     for r in rows:
         r['badge'] = c.plan_badge(r)
         r['url'] = c.app_url(r['slug'])
     active_trials = [t for t in ops.list_trials() if t['status'] == 'active']
-    return render_template('console/customers.html', rows=rows, missing=c.missing_settings(),
+    return render_template('console/customers.html', rows=rows, missing=c.missing_settings('shared'),
+                           missing_own=c.missing_settings('own'),
                            trials=active_trials, base_domain=tenancy.base_domain(), plans=c.PLANS)
 
 
@@ -898,11 +899,13 @@ def customers_create():
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
     try:
         row = c.start(slug, request.form.get('name', ''), request.form.get('plan', ''), source_trial=trial,
-                      admin_username=request.form.get('admin_username', 'admin'), phone=phone)
+                      admin_username=request.form.get('admin_username', 'admin'), phone=phone,
+                      hosting=request.form.get('hosting', 'shared'))
     except (c.CustomerError, ops.OpsError, tenancy.TenantError) as exc:
         flash(f'Could not start: {exc}', 'error')
         return redirect(url_for('console.customers_list'))
-    audit('customer_create', row['slug'], f'plan {row["plan"]}' + (f', from trial {trial}' if trial else ', new'))
+    audit('customer_create', row['slug'], f'plan {row["plan"]}, {row.get("hosting") or "own"} app'
+          + (f', from trial {trial}' if trial else ', new'))
     return redirect(url_for('console.customer_detail', slug=row['slug']))
 
 
@@ -945,7 +948,7 @@ def customer_detail(slug):
     with db.engine.connect() as conn:
         history = conn.execute(text("SELECT at, action, detail FROM public.console_audit WHERE target = :s "
                                     "ORDER BY at DESC LIMIT 30"), {'s': slug}).mappings().all()
-    return render_template('console/customer.html', row=row, c=c, steps=c.STEPS, step_labels=c.STEP_LABELS,
+    return render_template('console/customer.html', row=row, c=c, steps=c.steps_for(row), step_labels=c.STEP_LABELS,
                            next_step=c.next_step(row) if row['status'] in ('provisioning', 'failed') else None,
                            username=username, password=password, message=message,
                            wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,

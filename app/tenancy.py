@@ -16,6 +16,12 @@ How isolation works
     raises instead of silently using the public schema (fail closed).
   * Login identities are "<slug>:<user id>", so a session or remember-me
     cookie from one trial is rejected by every other trial.
+
+Paying customers in the same app ("shared" hosting, app/customers.py): once a trial is converted, its data
+lives in the customer's OWN database (in the same Neon project) with its own encryption key. Their requests
+use that database (g.tenant_engine, picked up by the session in app/__init__.py) and key; their secrets
+come sealed from public.customers (CONSOLE_VAULT_KEY). While a trial is being moved ("moving"), its address
+shows a short "being upgraded" page instead of risking writes that wouldn't be copied.
 Postgres only.
 """
 import os
@@ -48,8 +54,14 @@ NOT_FOUND_HTML = ('<!doctype html><meta charset="utf-8"><meta name="viewport" co
                   '<title>Not found</title><body style="font-family:system-ui;padding:3rem;text-align:center">'
                   '<h1>Not found</h1><p>This app doesn\'t exist or is no longer available.</p></body>')
 
-_CACHE_TTL = 60
-_cache = {}   # slug → (schema or None, fetched_at)
+_CACHE_TTL = 15          # short: a trial being moved stops taking writes within this many seconds (MOVE_WAIT)
+_cache = {}   # slug → (target or None, fetched_at); target: ('schema', name) | ('db', {url, key}) | ('moving', None)
+_engines = {}  # slug → (url, engine): a paying customer's own database
+
+MOVING_HTML = ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+               '<meta http-equiv="refresh" content="10"><title>Upgrading</title>'
+               '<body style="font-family:system-ui;padding:3rem;text-align:center"><h1>Moving you to your paid plan</h1>'
+               '<p>Your app is being upgraded. This takes less than a minute; this page reloads by itself.</p></body>')
 
 
 class TenantError(Exception):
@@ -105,20 +117,73 @@ def ensure_registry():
         conn.execute(text(REGISTRY_DDL))
 
 
-def lookup_schema(slug):
-    """Schema for an active trial, cached briefly. Uses its own connection, not the ORM session."""
+def lookup(slug):
+    """Where this address's data lives, cached briefly: ('schema', name) for an active trial, ('db', {url, key})
+    for a paying customer in their own database, ('moving', None) while being moved, or None. Own connections."""
     hit = _cache.get(slug)
     if hit and time.time() - hit[1] < _CACHE_TTL:
         return hit[0]
+    target = None
     try:
         with db.engine.connect() as conn:
-            row = conn.execute(text("SELECT schema_name FROM public.tenants WHERE slug = :s AND status = 'active'"),
-                               {'s': slug}).first()
-        schema = row[0] if row and SCHEMA_RE.match(row[0]) else None
+            row = conn.execute(text("SELECT schema_name, status FROM public.tenants WHERE slug = :s"), {'s': slug}).first()
+        if row and row[1] == 'active' and SCHEMA_RE.match(row[0]):
+            target = ('schema', row[0])
+        elif row and row[1] == 'moving':
+            target = ('moving', None)
     except Exception:
-        schema = None
-    _cache[slug] = (schema, time.time())
-    return schema
+        target = None
+    if target is None:
+        target = _shared_customer(slug)
+    _cache[slug] = (target, time.time())
+    return target
+
+
+def _shared_customer(slug):
+    """('db', {url, key}) for an active paying customer hosted in this app, else None."""
+    try:
+        with db.engine.connect() as conn:
+            if conn.execute(text("SELECT to_regclass('public.customers')")).scalar() is None:
+                return None
+            row = conn.execute(text("SELECT secrets FROM public.customers WHERE slug = :s AND status = 'active' "
+                                    "AND hosting = 'shared'"), {'s': slug}).first()
+        if not row:
+            return None
+        from .customers import unseal
+        s = unseal(row[0])
+        if s.get('app_url') and s.get('data_key'):
+            return ('db', {'url': s['app_url'], 'key': s['data_key']})
+    except Exception:
+        current_logger_warning(f'Could not open the paying customer "{slug}".')
+    return None
+
+
+def current_logger_warning(message):
+    try:
+        from flask import current_app
+        current_app.logger.warning(message)
+    except Exception:
+        pass
+
+
+def lookup_schema(slug):
+    """Schema for an active trial (None for anything else)."""
+    target = lookup(slug)
+    return target[1] if target and target[0] == 'schema' else None
+
+
+def customer_engine(slug, url):
+    """The engine for a paying customer's own database, made once per process (small pool: serverless)."""
+    hit = _engines.get(slug)
+    if hit and hit[0] == url:
+        return hit[1]
+    from sqlalchemy import create_engine
+    from .ops import normalize_url
+    engine = create_engine(normalize_url(url), pool_pre_ping=True, pool_size=2, max_overflow=3, pool_recycle=300)
+    if hit:
+        hit[1].dispose()
+    _engines[slug] = (url, engine)
+    return engine
 
 
 def clear_cache():
@@ -126,15 +191,31 @@ def clear_cache():
 
 
 def resolve_tenant():
-    """before_request hook (registered first): pick the trial from the Host, or 404."""
+    """before_request hook (registered first): pick the trial or paying customer from the Host, or 404."""
     if not tenant_mode():
         return None
     slug = slug_from_host(request.host)
-    schema = lookup_schema(slug) if slug else None
-    if not schema:
+    target = lookup(slug) if slug else None
+    if not target:
         return Response(NOT_FOUND_HTML, status=404, mimetype='text/html')
-    g.tenant_slug, g.tenant_schema = slug, schema
+    if target[0] == 'moving':
+        return Response(MOVING_HTML, status=503, mimetype='text/html', headers={'Retry-After': '10'})
+    g.tenant_slug = slug
+    if target[0] == 'schema':
+        g.tenant_schema = target[1]
+    else:                                         # a paying customer: their own database and encryption key
+        from . import crypto
+        g.tenant_engine = customer_engine(slug, target[1]['url'])
+        g.tenant_key_token = crypto.push_key(target[1]['key'])
     return None
+
+
+def release_tenant(exc=None):
+    """teardown hook: stop using the paying customer's key after the request."""
+    token = g.pop('tenant_key_token', None) if has_app_context() else None
+    if token is not None:
+        from . import crypto
+        crypto.pop_key(token)
 
 
 @contextmanager
@@ -152,6 +233,8 @@ def tenant_context(slug, schema=None):
 
 @event.listens_for(Session, 'after_begin')
 def _apply_tenant_schema(session, transaction, connection):
+    if has_app_context() and g.get('tenant_engine') is not None:
+        return                                   # a paying customer's own database: its default schema
     schema = current_schema()
     if schema:
         # SQLAlchemy 2.x: Connection.execution_options() updates this connection in place

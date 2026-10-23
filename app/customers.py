@@ -1,7 +1,14 @@
 """
 Paying customers, managed from the operator console.
 
-Each customer gets:
+Two ways to host a customer ("hosting"):
+  * "shared" (the default): their own Postgres database + login + encryption key, served by the shared trials app
+    at the same address (app/tenancy.py routes their requests to their database). Converting a trial takes
+    seconds: database → data → switch. Their databases live where CUSTOMERS_ADMIN_DATABASE_URL points (the trials
+    Neon project). The trials app needs CONSOLE_VAULT_KEY to open their sealed secrets.
+  * "own": their own app as well, as below.
+
+With "own" hosting, each customer gets:
   * their own Postgres database + login inside the shared Neon "customers" project (providers.CustomerDatabases)
   * their own Vercel project (qr-<slug>) with their own SECRET_KEY and DATA_ENCRYPTION_KEY
   * the address <slug>.<TENANT_BASE_DOMAIN> (a specific domain wins over the trials wildcard)
@@ -23,9 +30,11 @@ from . import crypto, db, migrate, ops, tenancy
 from . import plan as plan_mod
 from . import providers
 
-STEPS = ['database', 'data', 'project', 'deploy', 'domain']
+STEPS = ['database', 'data', 'project', 'deploy', 'domain']            # "own" hosting
+SHARED_STEPS = ['database', 'data', 'switch']                         # "shared" hosting
 STEP_LABELS = {'database': 'Create database', 'data': 'Set up data and plan', 'project': 'Create Vercel project',
-               'deploy': 'Start first build', 'domain': 'Connect address'}
+               'deploy': 'Start first build', 'domain': 'Connect address', 'switch': 'Switch the address to it'}
+HOSTING = ('shared', 'own')
 PLANS = ('6m', '1y')
 
 REGISTRY_DDL = """
@@ -57,10 +66,16 @@ def _env(name, default=''):
     return (os.environ.get(name) or default).strip()
 
 
-def missing_settings():
-    """Console env vars still needed before customers can be provisioned."""
-    need = ['CONSOLE_VAULT_KEY', 'CUSTOMERS_ADMIN_DATABASE_URL', 'VERCEL_TOKEN', 'TENANT_BASE_DOMAIN']
+def missing_settings(hosting='own'):
+    """Console env vars still needed before customers can be provisioned (shared hosting needs no Vercel token)."""
+    need = ['CONSOLE_VAULT_KEY', 'CUSTOMERS_ADMIN_DATABASE_URL', 'TENANT_BASE_DOMAIN']
+    if hosting == 'own':
+        need.insert(2, 'VERCEL_TOKEN')
     return [k for k in need if not _env(k)]
+
+
+def steps_for(row):
+    return SHARED_STEPS if (row or {}).get('hosting') == 'shared' else STEPS
 
 
 # ── Sealed secrets ───────────────────────────────────────────────────────────
@@ -94,6 +109,8 @@ def ensure_registry():
     if not _registry_ready:
         with db.engine.begin() as conn:
             conn.execute(text(REGISTRY_DDL))
+            conn.execute(text("ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS hosting VARCHAR(10) NOT NULL "
+                              "DEFAULT 'own'"))
         _registry_ready = True
 
 
@@ -192,10 +209,12 @@ def open_customer(slug):
 
 # ── Provisioning ─────────────────────────────────────────────────────────────
 
-def start(slug, name, plan, source_trial=None, admin_username='admin', phone=''):
+def start(slug, name, plan, source_trial=None, admin_username='admin', phone='', hosting='shared'):
     """Register a new customer and run provisioning. Returns the registry row."""
-    if missing_settings():
-        raise CustomerError('Set these console settings first: ' + ', '.join(missing_settings()))
+    if hosting not in HOSTING:
+        raise CustomerError('Choose where the customer\'s app runs.')
+    if missing_settings(hosting):
+        raise CustomerError('Set these console settings first: ' + ', '.join(missing_settings(hosting)))
     try:
         slug = tenancy.validate_slug(slug)
     except tenancy.TenantError as exc:
@@ -219,18 +238,19 @@ def start(slug, name, plan, source_trial=None, admin_username='admin', phone='')
                 raise CustomerError(f'"{slug}" is an active trial. Choose "Convert this trial" instead.')
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.customers WHERE slug = :s'), {'s': slug})
-        conn.execute(text('INSERT INTO public.customers (slug, name, status, plan, source_trial, phone, secrets) '
-                          "VALUES (:s, :n, 'provisioning', :p, :t, :ph, :sec)"),
-                     {'s': slug, 'n': name, 'p': plan, 't': source_trial, 'ph': (phone or '')[:20],
+        conn.execute(text('INSERT INTO public.customers (slug, name, status, plan, source_trial, phone, secrets, hosting) '
+                          "VALUES (:s, :n, 'provisioning', :p, :t, :ph, :sec, :h)"),
+                     {'s': slug, 'n': name, 'p': plan, 't': source_trial, 'ph': (phone or '')[:20], 'h': hosting,
                       'sec': seal({'admin_username': (admin_username or 'admin').strip()[:80] or 'admin'})})
     return resume(slug)
 
 
 def next_step(row):
+    steps = steps_for(row)
     if row['step'] is None:
-        return STEPS[0]
-    i = STEPS.index(row['step'])
-    return STEPS[i + 1] if i + 1 < len(STEPS) else None
+        return steps[0]
+    i = steps.index(row['step'])
+    return steps[i + 1] if i + 1 < len(steps) else None
 
 
 def resume(slug, log=None):
@@ -297,7 +317,19 @@ def _step_data(row, log):
     if already:
         return True                                       # data step finished in an earlier attempt
     if row['source_trial']:
-        copied, start_on, end = ops.copy_trial(row['source_trial'], s['direct_url'], s['data_key'], row['plan'])
+        shared = row.get('hosting') == 'shared'
+        if shared:                                        # stop taking writes at the trial address while copying
+            ops.set_moving(row['source_trial'], True)
+            wait = float(_env('MOVE_WAIT_SECONDS', str(tenancy._CACHE_TTL + 1)))
+            if wait > 0:
+                import time
+                time.sleep(wait)                          # every app instance has seen "moving" by now
+        try:
+            copied, start_on, end = ops.copy_trial(row['source_trial'], s['direct_url'], s['data_key'], row['plan'])
+        except Exception:
+            if shared:
+                ops.set_moving(row['source_trial'], False)    # the trial carries on as before; Retry tries again
+            raise
         log('Copied trial: ' + ', '.join(f'{k} {v}' for k, v in copied.items() if v))
     else:
         from .seed import bootstrap
@@ -364,8 +396,18 @@ def _step_domain(row, log):
     return True
 
 
+def _step_switch(row, log):
+    """Shared hosting: the address now opens the customer's own database (the trials app reads this registry)."""
+    _update(row['slug'], status='active', error=None)
+    if row['source_trial']:
+        ops.mark_converted(row['source_trial'])          # the trial schema is no longer served
+    tenancy.clear_cache()
+    log('Address switched to the customer\'s own database.')
+    return True
+
+
 STEP_FUNCS = {'database': _step_database, 'data': _step_data, 'project': _step_project,
-              'deploy': _step_deploy, 'domain': _step_domain}
+              'deploy': _step_deploy, 'domain': _step_domain, 'switch': _step_switch}
 
 
 def take_pending_password(slug):
@@ -503,6 +545,9 @@ def diagnose(slug, password=None):
     out = []
     expected = _url_identity(s.get('direct_url'))
     out.append(('Console writes to', True, expected or '—'))
+    if row and row.get('hosting') == 'shared':
+        out.append(('Hosting', True, 'shared app (its own database and key)'))
+        return out + _diagnose_database(slug, password)
     try:
         env = providers.vercel().get_env(row['vercel_project_id'])
     except Exception as exc:
@@ -535,6 +580,13 @@ def diagnose(slug, password=None):
         out.append(('Latest build', state == 'READY', f'{state} ({url})'))
     except Exception as exc:
         out.append(('Latest build', False, str(exc)))
+    return out + _diagnose_database(slug, password)
+
+
+def _diagnose_database(slug, password):
+    from werkzeug.security import check_password_hash
+    from .models import User
+    out = []
     try:
         with open_customer(slug):
             admins = User.query.filter_by(role='admin').order_by(User.id).all()
