@@ -1127,3 +1127,87 @@ def updates():
                 results.append((labels[key], False, str(exc)[:400]))
         audit('db_update', wanted, '; '.join(f'{l}: {"ok" if ok else "FAILED"}' for l, ok, _ in results))
     return render_template('console/updates.html', targets=targets, results=results, head=c.head_revision())
+
+
+# ── Plans bought in the app (Razorpay, the platform's account): payments, moving paid trials ──────────────
+
+@console_bp.route('/billing/razorpay-webhook', methods=['POST'])
+def platform_webhook():
+    """Razorpay → here on order.paid: record a payment whose browser closed before returning (once), add the plan,
+    then move a paid trial to its own database. Signed with PLATFORM_RAZORPAY_WEBHOOK_SECRET; no sign-in."""
+    import json
+    from flask import jsonify
+    from . import subscription
+    body = request.get_data()
+    if not subscription.verify_webhook(body, request.headers.get('X-Razorpay-Signature', '')):
+        current_app.logger.warning('Platform webhook rejected: bad or missing signature')
+        return jsonify({'error': 'invalid signature'}), 400
+    try:
+        result = subscription.handle_webhook(json.loads(body))
+    except Exception:
+        current_app.logger.exception('Platform webhook failed')
+        return jsonify({'error': 'not recorded'}), 500              # Razorpay retries later
+    moved = {}
+    if result in ('already recorded',) or result.startswith('paid'):     # a retry carries on an unfinished move
+        moved = subscription.move_all_paid() if subscription.auto_move() else {}
+    audit('platform_payment', None, f'{result}' + (f'; moved {moved}' if moved else ''))
+    return jsonify({'ok': True, 'result': result})
+
+
+@console_bp.route('/cron/tick')
+def cron_tick():
+    """Daily safety net (Vercel Cron, Authorization: Bearer CRON_SECRET): move paid trials not moved yet and carry
+    on any customer setup that stopped half-way."""
+    from flask import jsonify
+    from . import subscription
+    secret = (os.environ.get('CRON_SECRET') or '').strip()
+    if not secret or not hmac.compare_digest(request.headers.get('Authorization', ''), f'Bearer {secret}'):
+        abort(404)
+    out = subscription.move_all_paid() if subscription.auto_move() else {}
+    c = _customers()
+    for row in c.all_customers():
+        if row['status'] == 'provisioning' and row.get('hosting') == 'shared':
+            out[row['slug']] = (c.resume(row['slug']) or {}).get('status')
+    if out:
+        audit('cron_tick', None, str(out)[:500])
+    return jsonify({'ok': True, 'moved': out})
+
+
+@console_bp.route('/payments')
+@login_required
+def payments():
+    from . import subscription
+    rows = subscription.history(limit=300)
+    total = sum(r['amount_paise'] for r in rows) / 100
+    month = plan_mod.today().strftime('%Y-%m')
+    this_month = sum(r['amount_paise'] for r in rows if r['paid_at'] and r['paid_at'].strftime('%Y-%m') == month) / 100
+    return render_template('console/payments.html', rows=rows, total=total, this_month=this_month,
+                           pending=subscription.paid_trials(), keys_set=bool(os.environ.get('PLATFORM_RAZORPAY_WEBHOOK_SECRET')),
+                           auto=subscription.auto_move(), base_domain=tenancy.base_domain())
+
+
+@console_bp.route('/payments/move/<slug>', methods=['POST'])
+@login_required
+def payments_move(slug):
+    from . import subscription
+    try:
+        row = subscription.move_paid_trial(slug)
+    except Exception as exc:
+        flash(f'Could not move "{slug}": {exc}', 'error')
+        return redirect(url_for('console.payments'))
+    audit('payment_move', slug, (row or {}).get('status', ''))
+    flash(f'"{slug}" moved to its own database.' if (row or {}).get('status') == 'active'
+          else f'"{slug}": {(row or {}).get("error") or "not finished"}', 'ok' if (row or {}).get('status') == 'active' else 'error')
+    return redirect(url_for('console.customer_detail', slug=slug) if (row or {}).get('status') else url_for('console.payments'))
+
+
+@console_bp.route('/payments/<int:payment_id>/receipt')
+@login_required
+def payment_receipt(payment_id):
+    from flask import send_file
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row or row['status'] != 'paid':
+        abort(404)
+    return send_file(subscription.receipt_pdf(row), mimetype='application/pdf',
+                     download_name=f'QuoteRoom-receipt-{row["receipt_no"]}.pdf')

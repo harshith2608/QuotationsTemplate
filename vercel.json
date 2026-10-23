@@ -17,6 +17,10 @@
     {
       "path": "/demo/reset",
       "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/cron/tick",
+      "schedule": "0 3 * * *"
     }
   ]
 }

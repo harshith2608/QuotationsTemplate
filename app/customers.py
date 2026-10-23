@@ -209,8 +209,9 @@ def open_customer(slug):
 
 # ── Provisioning ─────────────────────────────────────────────────────────────
 
-def start(slug, name, plan, source_trial=None, admin_username='admin', phone='', hosting='shared'):
-    """Register a new customer and run provisioning. Returns the registry row."""
+def start(slug, name, plan, source_trial=None, admin_username='admin', phone='', hosting='shared', keep_plan=False):
+    """Register a new customer and run provisioning. Returns the registry row. keep_plan: the trial already has its
+    paid plan (bought in the app), so it isn't restarted from today."""
     if hosting not in HOSTING:
         raise CustomerError('Choose where the customer\'s app runs.')
     if missing_settings(hosting):
@@ -241,7 +242,8 @@ def start(slug, name, plan, source_trial=None, admin_username='admin', phone='',
         conn.execute(text('INSERT INTO public.customers (slug, name, status, plan, source_trial, phone, secrets, hosting) '
                           "VALUES (:s, :n, 'provisioning', :p, :t, :ph, :sec, :h)"),
                      {'s': slug, 'n': name, 'p': plan, 't': source_trial, 'ph': (phone or '')[:20], 'h': hosting,
-                      'sec': seal({'admin_username': (admin_username or 'admin').strip()[:80] or 'admin'})})
+                      'sec': seal({'admin_username': (admin_username or 'admin').strip()[:80] or 'admin',
+                                   **({'keep_plan': True} if keep_plan else {})})})
     return resume(slug)
 
 
@@ -320,12 +322,9 @@ def _step_data(row, log):
         shared = row.get('hosting') == 'shared'
         if shared:                                        # stop taking writes at the trial address while copying
             ops.set_moving(row['source_trial'], True)
-            wait = float(_env('MOVE_WAIT_SECONDS', str(tenancy._CACHE_TTL + 1)))
-            if wait > 0:
-                import time
-                time.sleep(wait)                          # every app instance has seen "moving" by now
         try:
-            copied, start_on, end = ops.copy_trial(row['source_trial'], s['direct_url'], s['data_key'], row['plan'])
+            copied, start_on, end = ops.copy_trial(row['source_trial'], s['direct_url'], s['data_key'],
+                                                   None if s.get('keep_plan') else row['plan'])
         except Exception:
             if shared:
                 ops.set_moving(row['source_trial'], False)    # the trial carries on as before; Retry tries again

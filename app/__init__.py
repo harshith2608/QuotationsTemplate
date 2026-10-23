@@ -66,9 +66,10 @@ def create_app(config_name='default'):
             missing = [k for k in ('CONSOLE_PASSWORD_HASH', 'CONSOLE_TOTP_SECRET') if not os.environ.get(k)]
             if missing:
                 raise RuntimeError(f"Missing required environment variable(s): {', '.join(missing)}")
-        from .console import console_bp
+        from .console import console_bp, platform_webhook
         app.config['SESSION_COOKIE_NAME'] = 'qr_console'
         app.register_blueprint(console_bp)
+        csrf.exempt(platform_webhook)                  # Razorpay is the caller (signature-checked)
         from .cli import register_cli
         register_cli(app)
         return app
@@ -94,8 +95,10 @@ def create_app(config_name='default'):
     app.register_blueprint(demo_bp)
     from .share import share_bp
     from .billing_bp import billing_bp
+    from .plan_bp import plan_bp
     app.register_blueprint(share_bp)
     app.register_blueprint(billing_bp)
+    app.register_blueprint(plan_bp)
     app.before_request(block_demo_writes)
     from .demo import count_demo_use, count_site_visit
     app.after_request(count_demo_use)
@@ -184,6 +187,9 @@ def create_app(config_name='default'):
         status = load_status()
         if not status.has_limit:
             return {'plan': status, 'renew_url': ''}
+        from . import subscription
+        if subscription.enabled():                   # pay in the app (Razorpay) instead of asking on WhatsApp
+            return {'plan': status, 'renew_url': url_for('plan.plan_page'), 'renew_in_app': True}
         return {'plan': status, 'renew_url': renew_message_url(status, user, request.host_url)}
 
     from .cli import register_cli

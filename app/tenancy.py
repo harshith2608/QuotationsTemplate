@@ -54,7 +54,8 @@ NOT_FOUND_HTML = ('<!doctype html><meta charset="utf-8"><meta name="viewport" co
                   '<title>Not found</title><body style="font-family:system-ui;padding:3rem;text-align:center">'
                   '<h1>Not found</h1><p>This app doesn\'t exist or is no longer available.</p></body>')
 
-_CACHE_TTL = 15          # short: a trial being moved stops taking writes within this many seconds (MOVE_WAIT)
+_CACHE_TTL = 15          # seconds an instance trusts what it looked up (a moved trial's schema is renamed meanwhile)
+STUCK_MOVE = 300         # a move that hasn't finished in 5 minutes is called off: the trial is given back
 _cache = {}   # slug → (target or None, fetched_at); target: ('schema', name) | ('db', {url, key}) | ('moving', None)
 _engines = {}  # slug → (url, engine): a paying customer's own database
 
@@ -115,6 +116,7 @@ def slug_from_host(host):
 def ensure_registry():
     with db.engine.begin() as conn:
         conn.execute(text(REGISTRY_DDL))
+        conn.execute(text('ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS moving_since TIMESTAMP'))
 
 
 def lookup(slug):
@@ -131,12 +133,26 @@ def lookup(slug):
             target = ('schema', row[0])
         elif row and row[1] == 'moving':
             target = ('moving', None)
+            if _move_stuck(slug):                 # interrupted (e.g. a time limit): give the trial back
+                from .ops import set_moving
+                set_moving(slug, False)
+                target = ('schema', schema_for(slug))
     except Exception:
         target = None
     if target is None:
         target = _shared_customer(slug)
     _cache[slug] = (target, time.time())
     return target
+
+
+def _move_stuck(slug):
+    try:
+        with db.engine.connect() as conn:
+            age = conn.execute(text("SELECT EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'utc') - moving_since)) "
+                                    "FROM public.tenants WHERE slug = :s"), {'s': slug}).scalar()
+        return age is not None and age > STUCK_MOVE
+    except Exception:
+        return False
 
 
 def _shared_customer(slug):

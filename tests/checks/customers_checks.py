@@ -66,7 +66,7 @@ class FakeVercel:
         return dict(p['env'])
 
 
-for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest'):           # from an earlier interrupted run
+for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest', 'payer', 'closer'):           # from an earlier interrupted run
     providers.CustomerDatabases(ADMIN).drop(leftover)
 
 fake = FakeVercel()
@@ -384,7 +384,7 @@ for slug in ('sharma', 'beta', 'legacy'):
 
 
 # ── Shared hosting: the trial converts in seconds into its own database, served by the shared trials app ──
-os.environ['MOVE_WAIT_SECONDS'] = '0'
+
 with app.app_context():
     ops.create_trial('nest', 'owner', 'nest-pass-123', 7, company='Nest Interiors')
     ops.create_trial('mover', 'admin', 'mover-pass-123', 7)
@@ -467,3 +467,114 @@ with app.app_context():
     keys = [k for k, _ in cust.update_targets()]
     res_u = cust.run_update('customer:nest')
 ok('Update all includes shared-hosting customers', 'customer:nest' in keys and res_u.startswith('up to date'))
+
+# ── Plans bought in the app (Razorpay): pay → plan active → moved to its own database (plan kept) → renew ──
+import hmac as _hmac, hashlib as _hl
+os.environ.update(PLATFORM_RAZORPAY_KEY_ID='rzp_test_platform', PLATFORM_RAZORPAY_KEY_SECRET='platform-secret',
+                  PLATFORM_RAZORPAY_WEBHOOK_SECRET='hook-secret', PLATFORM_LEGAL_NAME='Harshith Pola (QuoteRoom)',
+                  CRON_SECRET='cron-secret')
+from app import subscription as subs
+with app.app_context():
+    ops.create_trial('payer', 'admin', 'payer-pass-123', 7, company='Payer Interiors')
+    trial_end = None
+    with tenant_context('payer'):
+        from app import plan as _pm
+        trial_end = _pm.load_status(on=_pm.today()).ends_on
+code_p = """
+import json, os, re, hmac, hashlib
+os.environ.pop("CONSOLE_MODE", None)
+from app import create_app, subscription as S
+n = {"i": 0}
+def fake_api(method, path, payload=None):
+    n["i"] += 1
+    return {"id": f"order_{os.environ['RUN']}{n['i']}", "amount": payload["amount"]}
+S._api = fake_api
+app = create_app("development"); app.config["WTF_CSRF_ENABLED"] = False
+H = {"base_url": "http://" + os.environ["SLUG"] + ".quote-room.test"}
+c = app.test_client(); c.post("/login", data={"username": "admin", "password": os.environ["PW"]}, **H)
+out = {}
+p = c.get("/plan", **H); out["page"] = p.status_code; out["prices"] = "₹4,999" in p.text and "₹8,999" in p.text
+out["checkout_js"] = "checkout.razorpay.com/v1/checkout.js" in p.text
+out["banner"] = 'href="/plan"' in c.get("/projects", **H).text
+o = c.post("/plan/order", json={"plan": os.environ["PLAN"]}, **H).get_json(); out["order"] = o
+sig = hmac.new(b"platform-secret", f"{o['order_id']}|pay_{o['order_id']}".encode(), hashlib.sha256).hexdigest()
+bad = c.post("/plan/paid", json={"razorpay_order_id": o["order_id"], "razorpay_payment_id": "pay_x", "razorpay_signature": "nope"}, **H)
+out["bad_sig"] = bad.status_code
+r = c.post("/plan/paid", json={"razorpay_order_id": o["order_id"], "razorpay_payment_id": "pay_" + o["order_id"],
+                                "razorpay_signature": sig}, **H).get_json()
+out["paid"] = r
+again = c.post("/plan/paid", json={"razorpay_order_id": o["order_id"], "razorpay_payment_id": "pay_" + o["order_id"],
+                                    "razorpay_signature": sig}, **H).get_json()
+out["again_ok"] = again.get("ok")
+t = c.get(r["redirect"], **H); out["thanks"] = t.status_code; out["moving_note"] = "own private database" in t.text
+pid = int(r["redirect"].rsplit("/", 1)[1])
+rc = c.get(f"/plan/receipt/{pid}", **H); out["receipt"] = rc.status_code == 200 and rc.data[:4] == b"%PDF"
+print("RESULT " + json.dumps(out))
+"""
+def run_app(slug, pw, plan, run):
+    env_p = dict(os.environ, TENANT_MODE='1', FLASK_ENV='development', SLUG=slug, PW=pw, PLAN=plan, RUN=run)
+    env_p.pop('CONSOLE_MODE', None)
+    res = subprocess.run([sys.executable, '-c', code_p], capture_output=True, text=True, env=env_p,
+                         cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    m = re.search(r'RESULT (.*)', res.stdout)
+    return (_json.loads(m.group(1)) if m else {}), res.stderr[-800:]
+o, err = run_app('payer', 'payer-pass-123', '1y', 'A')
+ok(f'in the app: Choose a plan shows both prices with Razorpay Checkout; the banner opens it {o or err}',
+   o.get('page') == 200 and o.get('prices') and o.get('checkout_js') and o.get('banner'))
+ok('…a payment with a wrong signature is refused; the right one activates the plan (once, even if sent twice)',
+   o.get('bad_sig') == 400 and (o.get('paid') or {}).get('ok') and o.get('again_ok'))
+ok('…thank-you page (with the "moving to your own database" note) and a receipt PDF', o.get('thanks') == 200
+   and o.get('moving_note') and o.get('receipt'))
+with app.app_context():
+    with tenant_context('payer'):
+        st = _pm.load_status(on=_pm.today())
+    row = subs.get_by_order(o['order']['order_id'])
+ok('the 12-month plan starts when the trial ends: no trial days lost', st.plan == '1y'
+   and st.ends_on == _pm.add_length(trial_end, '1y') and row['status'] == 'paid' and row['receipt_no'].startswith('QR'))
+
+def hook(event, order_id, pay_id, secret='hook-secret'):
+    body = _json.dumps({'event': event, 'payload': {'order': {'entity': {'id': order_id}},
+                                                    'payment': {'entity': {'id': pay_id, 'order_id': order_id}}}}).encode()
+    sig = _hmac.new(secret.encode(), body, _hl.sha256).hexdigest()
+    return c.post('/billing/razorpay-webhook', data=body, headers={'X-Razorpay-Signature': sig},
+                  content_type='application/json')
+r = hook('order.paid', o['order']['order_id'], 'pay_' + o['order']['order_id'], secret='wrong')
+ok('webhook with a wrong signature is refused', r.status_code == 400)
+r = hook('order.paid', o['order']['order_id'], 'pay_' + o['order']['order_id'])
+with app.app_context():
+    pc = cust.get('payer')
+    with cust.open_customer('payer'):
+        st2 = _pm.load_status(on=_pm.today())
+    with db.engine.connect() as conn:
+        n_paid = conn.execute(text("select count(*) from public.platform_payments where slug='payer' and status='paid'")).scalar()
+ok('webhook after the app recorded it: counted once, and the paid trial is moved to its own database',
+   r.status_code == 200 and r.get_json()['result'] == 'already recorded' and n_paid == 1
+   and pc and pc['status'] == 'active' and pc['hosting'] == 'shared')
+ok('…keeping the plan it bought (not restarted from today)', st2.plan == '1y' and st2.ends_on == st.ends_on)
+
+# A payment whose browser closed: only the webhook records it, adds the plan and moves the trial
+with app.app_context():
+    ops.create_trial('closer', 'admin', 'closer-pass-123', 7, company='Closer Interiors')
+    subs._api = lambda method, path, payload=None: {'id': 'order_CLOSED1', 'amount': payload['amount']}
+    subs.create_order('closer', '6m', 'Closer Interiors', 'admin')
+r = hook('order.paid', 'order_CLOSED1', 'pay_CLOSED1')
+with app.app_context():
+    pc2 = cust.get('closer')
+    rowc = subs.get_by_order('order_CLOSED1')
+ok('browser closed after paying: the webhook records it (receipt number), adds the 6-month plan and moves the trial',
+   r.get_json()['result'].startswith('paid') and rowc['status'] == 'paid' and rowc['source'] == 'webhook'
+   and rowc['plan_end'] is not None and pc2 and pc2['status'] == 'active')
+
+# Renewing later, as a paying customer in the shared app
+o2, err2 = run_app('payer', 'payer-pass-123', '6m', 'B')
+with app.app_context():
+    with cust.open_customer('payer'):
+        st3 = _pm.load_status(on=_pm.today())
+ok(f'a moved customer renews in the app: 6 more months added to the end date {o2.get("paid") or err2}',
+   (o2.get('paid') or {}).get('ok') and st3.ends_on == _pm.add_length(st2.ends_on, '6m') and not o2.get('moving_note'))
+
+t = c.get('/payments').text
+ok('console Payments: every payment with its receipt and totals', 'Payer Interiors' in t and 'Closer Interiors' in t
+   and '₹8,999' in t and '₹4,999' in t and c.get(f'/payments/{row["id"]}/receipt').data[:4] == b'%PDF')
+ok('daily tick needs the cron secret', c.get('/cron/tick').status_code == 404
+   and c.get('/cron/tick', headers={'Authorization': 'Bearer cron-secret'}).status_code == 200)

@@ -195,7 +195,8 @@ def renew_message_url(status, user=None, host_url=''):
 # from the business's own customers.
 ALWAYS_ALLOWED = {'auth.login', 'auth.logout', 'projects.razorpay_webhook', 'static',
                   'main.favicon', 'main.brand_logo', 'main.web_manifest', 'main.app_icon',
-                  'share.view', 'share.pdf', 'share.respond', 'share.invoice_view', 'share.invoice_pdf'}   # the business's customers answering a quotation
+                  'share.view', 'share.pdf', 'share.respond', 'share.invoice_view', 'share.invoice_pdf',
+                  'plan.plan_page', 'plan.order', 'plan.paid', 'plan.thanks', 'plan.receipt'}   # paying for a plan   # the business's customers answering a quotation
 # Pages that only exist to edit — redirect away from them when read-only
 EDIT_PAGES = {'projects.create_project', 'projects.edit_project'}
 
