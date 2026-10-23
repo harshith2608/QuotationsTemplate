@@ -173,7 +173,8 @@ with app.app_context():
        and rrows[0]['description'] == 'Exact price once the design is final')
     ok('rate-only lines aren\'t billed on an invoice', [l_['description'] for l_ in billing.invoice_lines(rsnap)] == ['Fan Fitting'])
 rv = c.get(f'/projects/{rp.id}').text
-ok('quotation page shows "Rate ₹420 / Nos."', 'Rate &#8377;420 / Nos.' in rv)
+ok('quotation page shows the rate-only line: its rate and "rate only"', re.search(r'COB[^<]*</td>\s*<td[^>]*>—</td>\s*<td[^>]*>Nos\.</td>\s*<td[^>]*>420</td>', rv) is not None
+   and 'rate only' in rv)
 
 # ── Sizes: the quantity worked out from length × width (area units) or length (running units) ──
 c.post('/projects/new', data={'customer_name': 'Sizes', 'mobile': '9000000706', 'rooms_data': json.dumps([
@@ -204,7 +205,8 @@ data = json.loads(m.group(1)) if m else []
 ok('edit form gets each line\'s type, unit and description back', any(i.get('type') == 'boq' and i.get('unit') == 'sqft'
    and i.get('description', '').startswith('Living') for r in data for i in r['items']))
 v = c.get(f'/projects/{pid}').text
-ok('quotation page: BOQ badge, unit, description, Other work total', 'ki-badge-boq' in v and '696 Sq.ft' in v
+ok('quotation page: a section of BOQ lines with Qty and Unit, description, Other work total', 'Section Total' in v
+   and re.search(r'>696</td>\s*<td[^>]*>Sq\.ft</td>', v) is not None
    and 'Conduit, polycab wire considered' in v and 'Other work (BOQ lines)' in v)
 
 with app.test_request_context():                  # priced by item, /pdf gives the one quotation PDF: the generator itself

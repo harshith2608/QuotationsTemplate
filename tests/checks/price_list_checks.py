@@ -94,6 +94,9 @@ ok('(the Full Quotation itself, if they switch back: section totals, no areas, r
    'Section Total' in fullq and 'Material & Work Type' not in fullq and 'sqft' not in fullq.replace('Sq.ft', '')
    and re.search(r'COB Light — Nos\. 520 —', fullq) is not None and 'price to follow' in fullq.lower())
 ok('the quotation page shows Price to follow too', 'price to follow' in v)
+ok('quotation page priced by item: Qty / Unit / Rate / Amount per section, section totals, no plywood or areas',
+   'Section Total' in v and '<th>Section</th>' in v and 'Room Total:' not in v and 'id="quotePlywood"' not in v
+   and 'rate only' in v)
 e = c.get(f'/projects/{pid}/edit').text
 ok('editing keeps it as Price to follow', '"tbc": true' in e)
 import urllib.parse

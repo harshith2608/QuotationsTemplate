@@ -211,6 +211,29 @@
         <i class="bi bi-calculator me-2"></i>Cost Summary
       </div>
       <div class="card-body">
+        {% if not item_summary and (fixed_total or boq_total) %}
+        {# Nothing measured (priced by item): a total per section, no areas or plywood #}
+        <table class="table table-sm align-middle mb-3">
+          <thead class="table-light"><tr><th>Section</th><th class="text-end">Amount (&#8377;)</th></tr></thead>
+          <tbody>
+            {% for room in rooms %}
+            {% set rc = namespace(val=0) %}
+            {% for item in room.item_list %}{% set rc.val = rc.val + item.cost(item_rates, project_ply) %}{% endfor %}
+            {% if rc.val %}<tr><td>{{ room.name }}</td><td class="text-end fw-semibold">{{ "{:,.2f}".format(rc.val) }}</td></tr>{% endif %}
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr><td class="fw-semibold text-end text-muted">Subtotal</td>
+                <td class="fw-semibold text-end text-muted text-nowrap">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</td></tr>
+            {% if project.discount_type != 'none' and project.discount_value %}
+            <tr><td class="fw-semibold text-end text-danger">Discount{% if project.discount_type == 'percentage' %} ({{ project.discount_value | int }}%){% endif %}</td>
+                <td class="fw-semibold text-end text-danger text-nowrap">- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</td></tr>
+            {% endif %}
+            <tr class="ki-grand-total-row"><td class="fw-bold text-end fs-6">FINAL TOTAL</td>
+                <td class="fw-bold text-end fs-5 text-success text-nowrap">&#8377;{{ "{:,.2f}".format(project.final_total) }}</td></tr>
+          </tfoot>
+        </table>
+        {% else %}
         {% if plywood_enabled and project_ply %}<div class="small text-muted mb-2" id="quotePlywood"><i class="bi bi-stack me-1"></i>Plywood: <strong>{{ project_ply }}</strong></div>{% endif %}
         {% if item_summary or fixed_total or boq_total %}
         <!-- Mobile: stacked list -->
@@ -332,6 +355,7 @@
           <p class="mt-2">No items found.</p>
         </div>
         {% endif %}
+        {% endif %}
       </div>
     </div>
   </div>
@@ -348,13 +372,47 @@
     </div>
     <div class="card-body p-2 p-md-3">
       {% for room in rooms %}
+      {% set room_cost = namespace(val=0) %}
+      {% for item in room.item_list %}{% set room_cost.val = room_cost.val + item.cost(item_rates, project_ply) %}{% endfor %}
+      {% set priced_only = room.item_list | rejectattr('is_fixed') | list | length == 0 %}
       <div class="ki-room-block mb-3">
         <div class="ki-room-title d-flex justify-content-between align-items-center">
           <span><i class="bi bi-door-open me-2"></i>{{ room.name }}</span>
           <span class="badge bg-white text-primary">
-            Room Total: {{ room.total_area|area }}
+            {% if priced_only %}&#8377;{{ "{:,.2f}".format(room_cost.val) }}{% else %}Room Total: {{ room.total_area|area }}{% endif %}
           </span>
         </div>
+        {% if priced_only %}
+        {# Priced lines only (BOQ lines / fittings): each line as quoted, no sizes or materials #}
+        {% if room.description %}<div class="small text-muted px-1 pt-1" style="white-space:pre-line">{{ room.description }}</div>{% endif %}
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Item</th><th class="text-center">Qty</th><th class="text-center">Unit</th>
+                  <th class="text-end">Rate (&#8377;)</th><th class="text-end">Amount (&#8377;)</th></tr>
+            </thead>
+            <tbody>
+              {% for item in room.item_list %}
+              {% set amount = item.cost(item_rates, project_ply) %}
+              <tr>
+                <td class="fw-medium">{{ item.name }}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}
+                  {% if item.is_boq and item.length %}<div class="small text-muted fw-normal">Size: {{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }} Nos.{% endif %}</div>{% endif %}</td>
+                <td class="text-center text-nowrap">{{ '%g' % item.quantity if item.quantity else '—' }}</td>
+                <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
+                <td class="text-end text-nowrap">{% if item.price_to_follow %}—{% else %}{{ "{:,.0f}".format(item.unit_price or 0) }}{% endif %}</td>
+                <td class="text-end fw-semibold text-success text-nowrap">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ "{:,.2f}".format(amount) }}{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="table-light">
+                <td colspan="4" class="fw-semibold text-muted text-end small">{{ 'Section Total' if room_cost.val else 'Rates for reference, not added to the total' }}</td>
+                <td class="text-end fw-bold text-primary text-nowrap">{{ '&#8377;'|safe ~ "{:,.2f}".format(room_cost.val) if room_cost.val else '—' }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {% else %}
         <div class="table-responsive">
           <table class="table table-sm table-bordered align-middle mb-0">
             <thead class="table-light">
@@ -412,15 +470,12 @@
                 <td class="fw-semibold text-muted text-end small d-md-none">Room Total</td>
                 <td class="text-center fw-semibold">{{ room.total_area|area }}</td>
                 <td></td>
-                {% set room_cost = namespace(val=0) %}
-                {% for item in room.item_list %}
-                  {% set room_cost.val = room_cost.val + item.cost(item_rates, project_ply) %}
-                {% endfor %}
                 <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
