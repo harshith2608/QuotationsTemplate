@@ -160,6 +160,12 @@ All demo names, phone numbers, addresses, GSTIN, UPI and bank details are fictio
 
 ---
 
+## Roadmap
+
+Ideas agreed but on hold (what they are, how they'd work, what they'd cost): [docs/ROADMAP.md](docs/ROADMAP.md).
+
+---
+
 ## Deploying for a New Client
 
 > Running this as a business (onboarding customers, shipping updates, support)? See **[docs/OPERATIONS.md](docs/OPERATIONS.md)**.
