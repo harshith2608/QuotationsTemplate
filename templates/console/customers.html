@@ -47,6 +47,15 @@
     </div>
     <div class="row">
       <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+        <input type="radio" name="collect" value="now" checked> Create now <span class="muted small">(already paid)</span></label>
+      <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
+        <input type="radio" name="collect" value="link" {% if not links %}disabled title="Needs the platform's Razorpay keys"{% endif %}>
+        Send a payment link first <span class="muted small">(made when they pay)</span></label>
+      <div class="grow"><label for="cemail">Email <span class="muted">(for the link and receipt)</span></label>
+        <input id="cemail" type="email" name="email" placeholder="owner@business.com"></div>
+    </div>
+    <div class="row">
+      <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
         <input type="radio" name="hosting" value="shared" {% if shared_ready %}checked{% else %}disabled title="Set up first: OPERATIONS.md 3h, then SHARED_HOSTING=1"{% endif %}>
         Shared app <span class="muted small">({{ 'recommended: ready in seconds' if shared_ready else 'after setup 3h' }})</span></label>
       <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
@@ -54,7 +63,8 @@
         Their own app on Vercel <span class="muted small">(about a minute)</span></label>
     </div>
     <button class="btn btn-primary" type="submit">Create customer</button>
-    <p class="muted small">Only after payment is received. The plan starts today.</p>
+    <p class="muted small">"Create now" only after payment is received (the plan starts today). "Send a payment link first":
+      you get a link to send on WhatsApp or by email; their app is made the moment they pay.</p>
   </form>
 </div>
 

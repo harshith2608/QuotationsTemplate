@@ -635,9 +635,16 @@ def trial_detail(slug):
                                     'ORDER BY at DESC LIMIT 30'), {'s': slug}).mappings().all()
     contact = trial_contact(t)
     drafts, suggested = follow_ups(t)
+    from . import subscription
+    pay_email = ''
+    if t['status'] == 'active':
+        from .models import AppSetting
+        with tenancy.tenant_context(slug, t['schema_name']):
+            pay_email = AppSetting.get('company_email', '') or ''
     return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history,
                            extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested,
-                           boq=boq_state)
+                           boq=boq_state, links=subscription.links_enabled(), pay_email=pay_email,
+                           prices=subscription.prices())
 
 
 @console_bp.route('/trials/<slug>/extend', methods=['POST'])
@@ -908,6 +915,7 @@ def customers_list():
     active_trials = [t for t in ops.list_trials() if t['status'] == 'active']
     return render_template('console/customers.html', rows=rows, missing=c.missing_settings(hosting),
                            missing_own=c.missing_settings('own'), shared_ready=c.shared_ready(),
+                           links=__import__('app.subscription', fromlist=['links_enabled']).links_enabled(),
                            trials=active_trials, base_domain=tenancy.base_domain(), plans=c.PLANS)
 
 
@@ -919,6 +927,22 @@ def customers_create():
     trial = request.form.get('trial', '').strip() if source == 'trial' else None
     slug = trial or request.form.get('slug', '').strip().lower()
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    if request.form.get('collect') == 'link':        # pay first: the app is made when the payment arrives
+        from . import subscription
+        name, plan = request.form.get('name', '').strip(), request.form.get('plan', '')
+        try:
+            if trial:
+                pay = subscription.create_payment_link(trial, plan, name, phone, request.form.get('email', '').strip())
+            else:
+                c.create_pending(slug, name, plan, request.form.get('admin_username', 'admin'), phone,
+                                 hosting=request.form.get('hosting') or ('shared' if c.shared_ready() else 'own'))
+                pay = subscription.create_payment_link(slug, plan, name, phone, request.form.get('email', '').strip(),
+                                                       kind='new')
+        except (c.CustomerError, subscription.PaymentError, tenancy.TenantError) as exc:
+            flash(f'Could not make the payment link: {exc}', 'error')
+            return redirect(url_for('console.customers_list'))
+        audit('payment_link', pay['slug'], f'{plan}, {"new customer" if pay["kind"] == "new" else "trial"}')
+        return redirect(url_for('console.payment_link', payment_id=pay['id']))
     try:
         row = c.start(slug, request.form.get('name', ''), request.form.get('plan', ''), source_trial=trial,
                       admin_username=request.form.get('admin_username', 'admin'), phone=phone,
@@ -970,7 +994,23 @@ def customer_detail(slug):
     with db.engine.connect() as conn:
         history = conn.execute(text("SELECT at, action, detail FROM public.console_audit WHERE target = :s "
                                     "ORDER BY at DESC LIMIT 30"), {'s': slug}).mappings().all()
+    from . import subscription
+    pending_link, pay_email = None, ''
+    if row['status'] == 'awaiting_payment':
+        subscription.ensure_table()
+        with db.engine.connect() as conn:
+            pending_link = conn.execute(text("SELECT id FROM public.platform_payments WHERE slug = :s AND kind = 'new' "
+                                             "ORDER BY created_at DESC LIMIT 1"), {'s': slug}).mappings().first()
+    elif row['status'] == 'active' and live is not None:
+        try:
+            from .models import AppSetting
+            with c.open_customer(slug):
+                pay_email = AppSetting.get('company_email', '') or ''
+        except Exception:
+            pass
     return render_template('console/customer.html', row=row, c=c, steps=c.steps_for(row), step_labels=c.STEP_LABELS,
+                           links=subscription.links_enabled(), pending_link=pending_link, pay_email=pay_email,
+                           prices=subscription.prices(),
                            next_step=c.next_step(row) if row['status'] in ('provisioning', 'failed') else None,
                            username=username, password=password, message=message,
                            wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,
@@ -1374,3 +1414,51 @@ def start_check():
         abort(404)
     slug = _free_address((request.args.get('company') or '').strip())
     return jsonify({'ok': bool(slug), 'slug': slug, 'address': f'{slug}.{tenancy.base_domain()}' if slug else ''})
+
+
+# ── Payment links (the operator sends them on WhatsApp / email) ─────────────────────────────────────────────
+
+@console_bp.route('/payments/link', methods=['POST'])
+@login_required
+def payment_link_create():
+    """A payment link for a trial (to subscribe) or a customer (to renew), from their console page."""
+    from . import subscription
+    slug = request.form.get('slug', '')
+    phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    try:
+        pay = subscription.create_payment_link(slug, request.form.get('plan', ''), request.form.get('name', '').strip(),
+                                               phone, request.form.get('email', '').strip())
+    except subscription.PaymentError as exc:
+        flash(f'Could not make the payment link: {exc}', 'error')
+        return redirect(request.referrer or url_for('console.payments'))
+    audit('payment_link', slug, pay['plan'])
+    return redirect(url_for('console.payment_link', payment_id=pay['id']))
+
+
+@console_bp.route('/payments/<int:payment_id>/link')
+@login_required
+def payment_link(payment_id):
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row or not row.get('link_url'):
+        abort(404)
+    message = subscription.link_message(row)
+    return render_template('console/payment_link.html', row=row, message=message,
+                           wa_url=_wa_link(row.get('phone') or '', message),
+                           mail_ready=__import__('app.mailer', fromlist=['enabled']).enabled())
+
+
+@console_bp.route('/payments/<int:payment_id>/link/email', methods=['POST'])
+@login_required
+def payment_link_email(payment_id):
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row or not row.get('link_url'):
+        abort(404)
+    to = request.form.get('email', '').strip()
+    if subscription.email_link(row, to):
+        audit('payment_link_email', row['slug'], to)
+        flash(f'Payment link emailed to {to}.', 'ok')
+    else:
+        flash('Could not send the email (check the address, and the email settings: PLATFORM_SMTP_*).', 'error')
+    return redirect(url_for('console.payment_link', payment_id=payment_id))

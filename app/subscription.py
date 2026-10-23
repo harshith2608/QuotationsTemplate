@@ -90,6 +90,10 @@ def ensure_table():
         with db.engine.begin() as conn:
             conn.execute(text(DDL))
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS email VARCHAR(120)'))
+            conn.execute(text("ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS kind VARCHAR(10) "
+                              "NOT NULL DEFAULT 'checkout'"))          # checkout (in the app) / link / new (a new customer)
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS link_url TEXT'))
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS phone VARCHAR(20)'))
             conn.execute(text(REMINDERS_DDL))
         _table_ready = True
 
@@ -130,6 +134,55 @@ def create_order(slug, plan, business_name='', paid_by='', email=''):
                      {'s': slug, 'p': plan, 'a': amount, 'o': order['id'], 'n': (business_name or '')[:120],
                       'u': (paid_by or '')[:80], 'e': (email or '')[:120] or None})
     return get_by_order(order['id'])
+
+
+def links_enabled():
+    """The console can make payment links once it has the platform's Razorpay keys."""
+    return bool(_env('PLATFORM_RAZORPAY_KEY_ID') and _env('PLATFORM_RAZORPAY_KEY_SECRET'))
+
+
+def create_payment_link(slug, plan, business_name='', phone='', email='', kind='link', paid_by='console'):
+    """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email). kind 'new': a customer whose app
+    is made once they pay. Returns the payment row (dict, with link_url)."""
+    if plan not in LENGTHS:
+        raise PaymentError('Choose the 6-month or 12-month plan.')
+    if not links_enabled():
+        raise PaymentError('Set PLATFORM_RAZORPAY_KEY_ID and PLATFORM_RAZORPAY_KEY_SECRET on the console first.')
+    ensure_table()
+    amount = prices()[plan] * 100
+    digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    customer = {k: v for k, v in (('name', (business_name or slug)[:60]), ('email', email or ''),
+                                  ('contact', ('+' + digits) if digits else '')) if v}
+    link = _api('POST', '/payment_links', {
+        'amount': amount, 'currency': 'INR', 'accept_partial': False,
+        'description': f'QuoteRoom {plan_mod.PLANS.get(plan, plan)} for {business_name or slug}'[:2048],
+        'customer': customer, 'notify': {'sms': False, 'email': False}, 'reminder_enable': False,
+        'notes': {'slug': slug, 'plan': plan, 'kind': kind},
+        'expire_by': int(datetime.utcnow().timestamp()) + 7 * 86400})
+    with db.engine.begin() as conn:
+        conn.execute(text('INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, business_name, paid_by, '
+                          'email, kind, link_url, phone) VALUES (:s, :p, :a, :o, :n, :u, :e, :k, :l, :ph)'),
+                     {'s': slug, 'p': plan, 'a': amount, 'o': link['id'], 'n': (business_name or '')[:120],
+                      'u': paid_by[:80], 'e': (email or '')[:120] or None, 'k': kind, 'l': link.get('short_url'),
+                      'ph': digits[:20] or None})
+    return get_by_order(link['id'])
+
+
+def link_message(row):
+    """The WhatsApp / email text that goes with a payment link."""
+    plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
+    amount = f'₹{row["amount_paise"] / 100:,.0f}'
+    after = ('Once it\'s paid we set up your app and send you your login.' if row.get('kind') == 'new' else
+             'Once it\'s paid, your plan is active straight away: same address, same login, all your quotations.')
+    return (f'Hi! Here is the payment link for your QuoteRoom {plan_label} ({amount}, your whole team, all features):\n\n'
+            f'{row["link_url"]}\n\nPay by UPI, card or net banking. {after} You\'ll get a receipt by email.\n\n'
+            f'Thank you!')
+
+
+def email_link(row, to):
+    from . import mailer
+    return mailer.send(to, f'Your QuoteRoom payment link ({plan_mod.PLANS.get(row["plan"], row["plan"])})',
+                       'Hello,\n\n' + link_message(row).replace('Hi! ', '') + '\n\nQuoteRoom\n')
 
 
 def verify_checkout(order_id, payment_id, signature):
@@ -219,18 +272,32 @@ def handle_webhook(payload):
     event = payload.get('event', '')
     pay = (payload.get('payload', {}).get('payment') or {}).get('entity') or {}
     order = (payload.get('payload', {}).get('order') or {}).get('entity') or {}
-    order_id = order.get('id') or pay.get('order_id')
-    if event not in ('order.paid', 'payment.captured') or not order_id:
+    plink = (payload.get('payload', {}).get('payment_link') or {}).get('entity') or {}
+    if event == 'payment_link.paid':
+        key = plink.get('id')                              # links are remembered by their own id
+    elif event in ('order.paid', 'payment.captured'):
+        key = order.get('id') or pay.get('order_id')
+    else:
         return 'ignored'
-    row = get_by_order(order_id)
+    row = get_by_order(key) if key else None
+    if row is None and pay.get('order_id') and key != pay.get('order_id'):
+        row = get_by_order(pay['order_id'])
     if row is None:
-        return 'not our order'
-    row, newly = mark_paid(order_id, pay.get('id') or row.get('payment_id') or '', 'webhook')
-    if newly:
+        return 'not ours'
+    row, newly = mark_paid(row['order_id'], pay.get('id') or row.get('payment_id') or '', 'webhook')
+    if not newly:
+        return 'already recorded'
+    if row.get('kind') == 'new':                           # a new customer: make their app now (plan from today)
+        from . import customers
+        c = customers.activate_pending(row['slug'])
+        if c and c.get('ends_on'):
+            with db.engine.begin() as conn:
+                conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
+                             {'a': plan_mod.today(), 'b': c['ends_on'], 'i': row['id']})
+    else:
         apply_plan_for(row['slug'], row)
-        notify_paid(get(row['id']))
-        return f'paid: {row["slug"]} {row["plan"]}'
-    return 'already recorded'
+    notify_paid(get(row['id']))
+    return f'paid: {row["slug"]} {row["plan"]}'
 
 
 def paid_trials():

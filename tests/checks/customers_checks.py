@@ -66,7 +66,7 @@ class FakeVercel:
         return dict(p['env'])
 
 
-for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest', 'payer', 'closer', 'reminded'):           # from an earlier interrupted run
+for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest', 'payer', 'closer', 'reminded', 'linked', 'paidfirst'):           # from an earlier interrupted run
     providers.CustomerDatabases(ADMIN).drop(leftover)
 
 fake = FakeVercel()
@@ -615,5 +615,69 @@ ok('daily reminders: "trial ends tomorrow" once (not again on the next tick), wi
    and 'https://reminded.quote-room.test/plan' in rem[0].get_payload(decode=True).decode()
    and (r1.get('moved') or {}).get('reminders', {}).get('reminded') == 'trial_2'
    and 'reminded' not in (r2.get('moved') or {}).get('reminders', {}))
+# ── Payment links from the console: a trial, and a new customer whose app is made when they pay ──
+_n = {'i': 0}
+def fake_api(method, path, payload=None):
+    _n['i'] += 1
+    if path == '/payment_links':
+        return {'id': f'plink_T{_n["i"]}', 'short_url': f'https://rzp.io/l/T{_n["i"]}', 'amount': payload['amount']}
+    return {'id': f'order_X{_n["i"]}', 'amount': payload['amount']}
+subs._api = fake_api
+with app.app_context():
+    ops.create_trial('linked', 'admin', 'linked-pass-123', 7, company='Linked Interiors', phone='919844444444',
+                     email='owner@linked.example')
+t = c.get('/trials/linked').text
+ok('trial page: a Payment link card with the plan, WhatsApp number and email filled in', 'Make payment link' in t
+   and 'value="919844444444"' in t and 'value="owner@linked.example"' in t)
+r = c.post('/payments/link', data={'slug': 'linked', 'plan': '1y', 'name': 'Linked Interiors', 'phone': '919844444444',
+                                   'email': 'owner@linked.example'}, follow_redirects=True)
+ok('payment link made: Send on WhatsApp (your WhatsApp, message with the link) and Send by email', 'rzp.io/l/T' in r.text
+   and 'https://wa.me/919844444444?text=' in r.text and 'Send by email' in r.text and '₹8,999' in r.text)
+with app.app_context():
+    plink = subs.history(limit=1) and None
+    with db.engine.connect() as conn:
+        lrow = conn.execute(text("select id, order_id from public.platform_payments where slug='linked'")).first()
+before = len(outbox())
+c.post(f'/payments/{lrow[0]}/link/email', data={'email': 'owner@linked.example'})
+sent = [m for m in outbox()[before:] if m['To'] == 'owner@linked.example']
+ok('…emailed from hello@ with the link', len(sent) == 1 and 'rzp.io/l/T' in sent[0].get_content())
+def link_hook(plink_id, pay_id):
+    body = _json.dumps({'event': 'payment_link.paid', 'payload': {'payment_link': {'entity': {'id': plink_id}},
+                        'payment': {'entity': {'id': pay_id, 'order_id': 'order_from_link'}}}}).encode()
+    sig = _hmac.new(b'hook-secret', body, _hl.sha256).hexdigest()
+    return c.post('/billing/razorpay-webhook', data=body, headers={'X-Razorpay-Signature': sig}, content_type='application/json')
+r = link_hook(lrow[1], 'pay_LINK1')
+with app.app_context():
+    lc = cust.get('linked')
+ok('they pay the link: the plan is added and the trial moves to its own database', r.get_json()['result'].startswith('paid')
+   and lc and lc['status'] == 'active' and lc['hosting'] == 'shared')
+
+# A brand-new customer who pays first
+r = c.post('/customers', data={'collect': 'link', 'source': 'new', 'slug': 'paidfirst', 'name': 'Paid First Interiors',
+                               'plan': '6m', 'phone': '919855555555', 'email': 'boss@paidfirst.example',
+                               'admin_username': 'boss'}, follow_redirects=True)
+with app.app_context():
+    pf = cust.get('paidfirst')
+    with db.engine.connect() as conn:
+        prow = conn.execute(text("select id, order_id, kind from public.platform_payments where slug='paidfirst'")).first()
+ok('new customer, "Send a payment link first": registered as awaiting payment, link page shown, nothing made yet',
+   pf['status'] == 'awaiting_payment' and prow[2] == 'new' and 'their app is made when they pay' in r.text
+   and 'awaiting payment' in c.get('/customers').text and 'Waiting for payment' in c.get('/customers/paidfirst').text
+   and not providers.CustomerDatabases(ADMIN).exists('paidfirst')[0])
+before = len(outbox())
+r = link_hook(prow[1], 'pay_NEW1')
+with app.app_context():
+    pf = cust.get('paidfirst')
+    with cust.open_customer('paidfirst'):
+        st_pf = _pm.load_status(on=_pm.today())
+receipt_mails = [m for m in outbox()[before:] if m['To'] == 'boss@paidfirst.example']
+ok('they pay: their app is made (shared, 6 months from today) and the receipt is emailed',
+   pf['status'] == 'active' and st_pf.plan == '6m' and st_pf.ends_on == _pm.add_length(_pm.today(), '6m')
+   and len(receipt_mails) == 1 and 'Payment received' in receipt_mails[0]['Subject'])
+t = c.get('/customers/paidfirst').text
+ok('…the console shows their login once with the WhatsApp welcome to send (no password by email)',
+   'Username:</strong> <span class="secret">boss' in t and 'wa.me/919855555555' in t
+   and all('Password' not in m.get_content() for m in receipt_mails if not m.is_multipart())
+   and 'shown once' not in c.get('/customers/paidfirst').text)
 ok('daily tick needs the cron secret', c.get('/cron/tick').status_code == 404
    and c.get('/cron/tick', headers={'Authorization': 'Bearer cron-secret'}).status_code == 200)

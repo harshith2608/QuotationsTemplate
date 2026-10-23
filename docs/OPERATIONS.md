@@ -398,14 +398,15 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    **trials** project too (the same value): the trials app uses it to open each paying customer's database.
    Then set `SHARED_HOSTING=1` on the console: only then does it offer (and use) the shared app for new customers
    and paid trials. Until then "own app" stays the default, as before.
-3. **Razorpay keys** (Razorpay Dashboard → **Account & Settings → API Keys**). On the **trials** project set
-   `PLATFORM_RAZORPAY_KEY_ID` and `PLATFORM_RAZORPAY_KEY_SECRET`, plus what the receipt shows:
+3. **Razorpay keys** (Razorpay Dashboard → **Account & Settings → API Keys**). On the **trials** project **and the
+   console** set `PLATFORM_RAZORPAY_KEY_ID` and `PLATFORM_RAZORPAY_KEY_SECRET` (the console uses them for payment links),
+   plus on both what the receipt shows:
    `PLATFORM_LEGAL_NAME` (e.g. "QuoteRoom (Harshith Pola)"), `PLATFORM_ADDRESS`, `PLATFORM_EMAIL`, `PLATFORM_PHONE`.
    Prices default to ₹4,999 / ₹8,999 (`PLAN_PRICE_6M`, `PLAN_PRICE_1Y` to change). Without the keys, the plan buttons
    keep opening WhatsApp to you, as before.
 4. **Razorpay webhook** (Razorpay → **Account & Settings → Webhooks → Add new webhook**): URL
    `https://ops.quote-room.co.in/billing/razorpay-webhook`, a secret you generate (`python -c "import secrets;
-   print(secrets.token_hex(24))"`), event **order.paid**. Console project → `PLATFORM_RAZORPAY_WEBHOOK_SECRET` = that secret.
+   print(secrets.token_hex(24))"`), events **order.paid** and **payment_link.paid**. Console project → `PLATFORM_RAZORPAY_WEBHOOK_SECRET` = that secret.
    (`AUTO_MOVE_PAID_TRIALS=0` if you'd rather press **Move now** on Payments yourself.)
 5. **Self-serve trials.** Generate another secret the same way. Set `SIGNUP_SECRET` to it on the **console** and on the
    **website** project (`quotations-template`). On the website also set `AUTO_TRIALS=1` and
@@ -553,6 +554,12 @@ firm's business data. Firms can also save any quotation as a starting quotation 
 
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
+
+**Payment link (section 3h):** on the trial's console page → **Payment link** → plan → **Make payment link** → **Send on
+WhatsApp** (opens your WhatsApp with the message) and/or **Send by email**. When they pay, the same happens as above.
+Renewals: the same card on a paying customer's page. A **new customer without a trial**: Customers → New paying customer
+→ **Send a payment link first**: nothing is made until they pay; then their app is made, the receipt is emailed, and the
+customer page shows their login once with the WhatsApp welcome message to send.
 
 **With the console (section 3g):** after the payment arrives, **Customers → New paying customer → Convert a
 trial** → choose the trial, type the business name (and WhatsApp number), choose the plan → **Create

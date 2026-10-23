@@ -255,6 +255,45 @@ def start(slug, name, plan, source_trial=None, admin_username='admin', phone='',
     return resume(slug)
 
 
+def create_pending(slug, name, plan, admin_username='admin', phone='', hosting='shared'):
+    """A new customer who pays first (payment link): registered as "awaiting_payment"; nothing is made until the
+    payment arrives (activate_pending, from the Razorpay webhook). Returns the row."""
+    if hosting not in HOSTING or (hosting == 'shared' and not shared_ready()):
+        raise CustomerError('Choose where the customer\'s app runs (the shared app needs setup 3h).')
+    if missing_settings(hosting):
+        raise CustomerError('Set these console settings first: ' + ', '.join(missing_settings(hosting)))
+    try:
+        slug = tenancy.validate_slug(slug)
+    except tenancy.TenantError as exc:
+        raise CustomerError(str(exc))
+    if plan not in PLANS:
+        raise CustomerError('Choose the 6-month or 12-month plan.')
+    ensure_registry()
+    existing = get(slug)
+    if existing and existing['status'] != 'deleted':
+        raise CustomerError(f'A customer "{slug}" already exists.')
+    tenancy.ensure_registry()
+    with db.engine.connect() as conn:
+        if conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': slug}).first():
+            raise CustomerError(f'"{slug}" is a trial. Send the payment link from its trial page instead.')
+    with db.engine.begin() as conn:
+        conn.execute(text('DELETE FROM public.customers WHERE slug = :s'), {'s': slug})
+        conn.execute(text('INSERT INTO public.customers (slug, name, status, plan, phone, secrets, hosting) '
+                          "VALUES (:s, :n, 'awaiting_payment', :p, :ph, :sec, :h)"),
+                     {'s': slug, 'n': (name or '').strip()[:120] or slug, 'p': plan, 'ph': (phone or '')[:20], 'h': hosting,
+                      'sec': seal({'admin_username': (admin_username or 'admin').strip()[:80] or 'admin'})})
+    return get(slug)
+
+
+def activate_pending(slug):
+    """Their payment arrived: make the app now. Returns the row (active, or "provisioning" while an own app builds)."""
+    row = get(slug)
+    if not row or row['status'] != 'awaiting_payment':
+        return row
+    _update(slug, status='provisioning')
+    return resume(slug)
+
+
 def next_step(row):
     steps = steps_for(row)
     if row['step'] is None:
@@ -267,7 +306,7 @@ def resume(slug, log=None):
     """Run the remaining steps until done, waiting for the build, or a failure. Returns the registry row."""
     log = log or (lambda line: None)
     row = get(slug)
-    if not row or row['status'] in ('active', 'deleted'):
+    if not row or row['status'] in ('active', 'deleted', 'awaiting_payment'):    # awaiting payment: activate_pending
         return row
     _update(slug, status='provisioning', error=None)
     while True:
@@ -662,6 +701,8 @@ def plan_badge(row, today=None):
         return 'setting up', 'b-reminder'
     if row['status'] == 'deleted':
         return 'deleted', 'b-other'
+    if row['status'] == 'awaiting_payment':
+        return 'awaiting payment', 'b-reminder'
     ends = row['ends_on']
     if not ends:
         return 'active', 'b-active'
