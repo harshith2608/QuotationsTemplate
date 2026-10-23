@@ -269,9 +269,12 @@ def auto_move():
 
 
 def move_all_paid(log=None):
-    """Move every paid trial (console tick, the webhook, Payments → Move now). Returns {slug: result}."""
+    """Move every paid trial (console tick, the webhook, Payments → Move now). Returns {slug: result}. Nothing until
+    shared hosting is set up (customers.shared_ready): the paid trial keeps working as a trial meanwhile."""
     from . import customers
     out = {}
+    if not customers.shared_ready():
+        return out
     for slug in paid_trials():
         try:
             row = move_paid_trial(slug, log=log)

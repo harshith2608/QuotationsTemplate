@@ -900,13 +900,14 @@ def _customers():
 @login_required
 def customers_list():
     c = _customers()
-    rows = c.all_customers() if not c.missing_settings('shared') else []
+    hosting = 'shared' if c.shared_ready() else 'own'
+    rows = c.all_customers() if not c.missing_settings(hosting) else []
     for r in rows:
         r['badge'] = c.plan_badge(r)
         r['url'] = c.app_url(r['slug'])
     active_trials = [t for t in ops.list_trials() if t['status'] == 'active']
-    return render_template('console/customers.html', rows=rows, missing=c.missing_settings('shared'),
-                           missing_own=c.missing_settings('own'),
+    return render_template('console/customers.html', rows=rows, missing=c.missing_settings(hosting),
+                           missing_own=c.missing_settings('own'), shared_ready=c.shared_ready(),
                            trials=active_trials, base_domain=tenancy.base_domain(), plans=c.PLANS)
 
 
@@ -921,7 +922,7 @@ def customers_create():
     try:
         row = c.start(slug, request.form.get('name', ''), request.form.get('plan', ''), source_trial=trial,
                       admin_username=request.form.get('admin_username', 'admin'), phone=phone,
-                      hosting=request.form.get('hosting', 'shared'))
+                      hosting=request.form.get('hosting') or ('shared' if c.shared_ready() else 'own'))
     except (c.CustomerError, ops.OpsError, tenancy.TenantError) as exc:
         flash(f'Could not start: {exc}', 'error')
         return redirect(url_for('console.customers_list'))
@@ -1185,12 +1186,14 @@ def cron_tick():
     if not secret or not hmac.compare_digest(request.headers.get('Authorization', ''), f'Bearer {secret}'):
         abort(404)
     out = subscription.move_all_paid() if subscription.auto_move() else {}
-    try:
-        made = ops.top_up_spares()                  # ready-made trials for self-serve sign-ups
-        if made:
-            out['spares'] = made
-    except Exception as exc:
-        out['spares'] = f'failed: {exc}'
+    from . import signup
+    if signup._env('SIGNUP_SECRET'):                # ready-made trials, only once self-serve trials are set up
+        try:
+            made = ops.top_up_spares()
+            if made:
+                out['spares'] = made
+        except Exception as exc:
+            out['spares'] = f'failed: {exc}'
     try:
         sent = subscription.send_reminders()             # trial / plan ending emails (once each)
         if sent:

@@ -74,6 +74,12 @@ def missing_settings(hosting='own'):
     return [k for k in need if not _env(k)]
 
 
+def shared_ready():
+    """Shared hosting is offered by default only once it's set up (OPERATIONS 3h: the trials app has the vault key):
+    SHARED_HOSTING=1 on the console. Until then "own app" stays the default."""
+    return _env('SHARED_HOSTING') in ('1', 'true', 'yes', 'on')
+
+
 def steps_for(row):
     return SHARED_STEPS if (row or {}).get('hosting') == 'shared' else STEPS
 
@@ -214,6 +220,8 @@ def start(slug, name, plan, source_trial=None, admin_username='admin', phone='',
     paid plan (bought in the app), so it isn't restarted from today."""
     if hosting not in HOSTING:
         raise CustomerError('Choose where the customer\'s app runs.')
+    if hosting == 'shared' and not shared_ready():
+        raise CustomerError('The shared app isn\'t set up yet (OPERATIONS.md 3h, then SHARED_HOSTING=1 on the console).')
     if missing_settings(hosting):
         raise CustomerError('Set these console settings first: ' + ', '.join(missing_settings(hosting)))
     try:

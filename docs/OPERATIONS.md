@@ -396,6 +396,8 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    replaces the separate `customers` project of section 3g; each customer still gets its own database and login).
 2. **Vault key on both apps.** `CONSOLE_VAULT_KEY` (section 3g step 4) must be set on the **console** and on the
    **trials** project too (the same value): the trials app uses it to open each paying customer's database.
+   Then set `SHARED_HOSTING=1` on the console: only then does it offer (and use) the shared app for new customers
+   and paid trials. Until then "own app" stays the default, as before.
 3. **Razorpay keys** (Razorpay Dashboard → **Account & Settings → API Keys**). On the **trials** project set
    `PLATFORM_RAZORPAY_KEY_ID` and `PLATFORM_RAZORPAY_KEY_SECRET`, plus what the receipt shows:
    `PLATFORM_LEGAL_NAME` (e.g. "QuoteRoom (Harshith Pola)"), `PLATFORM_ADDRESS`, `PLATFORM_EMAIL`, `PLATFORM_PHONE`.

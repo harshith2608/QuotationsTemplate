@@ -47,9 +47,10 @@
     </div>
     <div class="row">
       <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
-        <input type="radio" name="hosting" value="shared" checked> Shared app <span class="muted small">(recommended: ready in seconds)</span></label>
+        <input type="radio" name="hosting" value="shared" {% if shared_ready %}checked{% else %}disabled title="Set up first: OPERATIONS.md 3h, then SHARED_HOSTING=1"{% endif %}>
+        Shared app <span class="muted small">({{ 'recommended: ready in seconds' if shared_ready else 'after setup 3h' }})</span></label>
       <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">
-        <input type="radio" name="hosting" value="own" {% if missing_own %}disabled title="Needs {{ missing_own|join(', ') }}"{% endif %}>
+        <input type="radio" name="hosting" value="own" {% if not shared_ready %}checked{% endif %} {% if missing_own %}disabled title="Needs {{ missing_own|join(', ') }}"{% endif %}>
         Their own app on Vercel <span class="muted small">(about a minute)</span></label>
     </div>
     <button class="btn btn-primary" type="submit">Create customer</button>

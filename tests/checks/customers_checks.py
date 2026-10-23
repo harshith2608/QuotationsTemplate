@@ -22,7 +22,7 @@ ADMIN = os.environ['TEST_REAL_PG_ADMIN_URL']
 os.environ.update(CONSOLE_MODE='1', TENANT_BASE_DOMAIN='quote-room.test', CONSOLE_TOTP_SECRET=SECRET,
                   CONSOLE_PASSWORD_HASH=generate_password_hash('console-pass-123', method='pbkdf2:sha256'),
                   CONSOLE_VAULT_KEY=Fernet.generate_key().decode(), CUSTOMERS_ADMIN_DATABASE_URL=ADMIN,
-                  VERCEL_TOKEN='fake-token', SUPPORT_WHATSAPP='919876543210')
+                  VERCEL_TOKEN='fake-token', SUPPORT_WHATSAPP='919876543210', SHARED_HOSTING='1')
 for k in ['TENANT_MODE', 'DEMO_MODE', 'MARKETING_SITE', 'LEADS_DATABASE_URL']: os.environ.pop(k, None)
 
 from app import create_app, db, crypto, providers, ops, customers as cust
@@ -382,6 +382,18 @@ for slug in ('sharma', 'beta', 'legacy'):
     with app.app_context():
         providers.CustomerDatabases(ADMIN).drop(slug)
 
+
+# Before shared hosting is switched on (SHARED_HOSTING), "own app" stays the default and shared is refused
+os.environ.pop('SHARED_HOSTING')
+t_ = c.get('/customers').text
+with app.app_context():
+    try:
+        cust.start('notyet', 'Not Yet', '6m', hosting='shared'); refused = False
+    except cust.CustomerError:
+        refused = True
+ok('before setup: the console keeps "own app" as the default and refuses the shared app',
+   refused and 'value="own" checked' in t_.replace('  ', ' ') or (refused and re.search(r'value="own"\s+checked', t_) is not None))
+os.environ['SHARED_HOSTING'] = '1'
 
 # ── Shared hosting: the trial converts in seconds into its own database, served by the shared trials app ──
 
