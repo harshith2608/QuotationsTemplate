@@ -376,6 +376,50 @@ that with one button, and its **Updates** page updates every database before you
 **Only for real paying customers:** upgrade Vercel to **Pro** first (section 6, step 0). Testing with a
 made-up customer on Hobby is fine; delete it afterwards.
 
+### 3h. Automatic: self-serve trials, payment in the app, moving to their own database (one-time setup)
+
+How it works once set up:
+1. An interior designer or furniture works asks for a trial on the website → **"Set up my app now"** → on the
+   console's public page `/start` they choose their address and password → their app opens straight away (a
+   ready-made trial is renamed for them). "Others" still come to you. You see every new trial on the dashboard,
+   linked to the request, with the WhatsApp follow-ups.
+2. In their app, the admin taps **Choose a plan** (or **Renew**) → pays ₹4,999 / ₹8,999 by Razorpay → the plan is
+   active at once (a trial's paid plan starts when the trial ends) → receipt (not a GST invoice).
+3. Razorpay tells the console (webhook) → the console moves the paid trial into **its own database** (with its own
+   encryption key) in a few seconds. Same address, same login, the same shared app ("shared hosting"). You see it
+   under **Payments** and **Customers**. A daily task (03:00 UTC) catches anything left over.
+
+Setup (do it with Razorpay **test** keys first, then switch to live keys):
+
+1. **Customer databases in the trials Neon project.** Neon → the trials project → **Connect**, connection pooling
+   **OFF**, copy the direct URL (`neondb_owner`). Console project → set `CUSTOMERS_ADMIN_DATABASE_URL` to it (this
+   replaces the separate `customers` project of section 3g; each customer still gets its own database and login).
+2. **Vault key on both apps.** `CONSOLE_VAULT_KEY` (section 3g step 4) must be set on the **console** and on the
+   **trials** project too (the same value): the trials app uses it to open each paying customer's database.
+3. **Razorpay keys** (Razorpay Dashboard → **Account & Settings → API Keys**). On the **trials** project set
+   `PLATFORM_RAZORPAY_KEY_ID` and `PLATFORM_RAZORPAY_KEY_SECRET`, plus what the receipt shows:
+   `PLATFORM_LEGAL_NAME` (e.g. "QuoteRoom (Harshith Pola)"), `PLATFORM_ADDRESS`, `PLATFORM_EMAIL`, `PLATFORM_PHONE`.
+   Prices default to ₹4,999 / ₹8,999 (`PLAN_PRICE_6M`, `PLAN_PRICE_1Y` to change). Without the keys, the plan buttons
+   keep opening WhatsApp to you, as before.
+4. **Razorpay webhook** (Razorpay → **Account & Settings → Webhooks → Add new webhook**): URL
+   `https://ops.quote-room.co.in/billing/razorpay-webhook`, a secret you generate (`python -c "import secrets;
+   print(secrets.token_hex(24))"`), event **order.paid**. Console project → `PLATFORM_RAZORPAY_WEBHOOK_SECRET` = that secret.
+   (`AUTO_MOVE_PAID_TRIALS=0` if you'd rather press **Move now** on Payments yourself.)
+5. **Self-serve trials.** Generate another secret the same way. Set `SIGNUP_SECRET` to it on the **console** and on the
+   **website** project (`quotations-template`). On the website also set `AUTO_TRIALS=1` and
+   `SIGNUP_URL=https://ops.quote-room.co.in`. Optional bot check: Cloudflare → **Turnstile → Add site**
+   (`ops.quote-room.co.in`, Managed) → console `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
+   `SPARE_TRIALS` (default 3) = how many ready-made trials to keep.
+6. **Daily task.** Console project → `CRON_SECRET` = a third generated secret (Vercel sends it to the daily task).
+7. **Time limits.** On the console **and** the trials project: **Settings → Functions → Max Duration → 60**.
+8. Redeploy the console, trials and website projects. Console → dashboard → **Self-serve trials → Make more** once.
+9. **Test end to end (test keys):** request a trial on the website as an interior designer → set up the app →
+   Choose a plan → pay with Razorpay's test card (`4111 1111 1111 1111`, any future date, any CVV) or test UPI
+   (`success@razorpay`) → thank-you page and receipt → within a minute the console's **Payments** shows it and
+   **Customers** shows the business on the shared app. Then switch steps 3–4 to **live** keys (and a live-mode webhook).
+
+Vercel **Pro** is needed before the first real payment (section 6, step 0).
+
 ---
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
@@ -494,6 +538,8 @@ filled in, they type the sizes and remove what that home doesn't need. Keep the 
 firm's business data. Firms can also save any quotation as a starting quotation themselves (Save as template).
 
 ### Trial → paying customer
+**Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
+
 **With the console (section 3g):** after the payment arrives, **Customers → New paying customer → Convert a
 trial** → choose the trial, type the business name (and WhatsApp number), choose the plan → **Create
 customer**. It creates their database and app, copies everything from the trial (logins, settings, logo,

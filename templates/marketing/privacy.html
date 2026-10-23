@@ -70,6 +70,8 @@
     <li>Hosting and database providers, such as Vercel and Neon, which store and serve the app. Data may be stored on servers outside India, for example in Singapore.</li>
     <li>Email delivery providers used by your app's notification settings.</li>
     <li>Payment providers you choose to connect (for example Razorpay). Customer payments go directly to your own account; we don't handle that money.</li>
+    <li>Razorpay, when you pay us for a plan: Razorpay handles the payment details; we receive only the payment's reference, amount and status.</li>
+    <li>Cloudflare (Turnstile), which may check that the person setting up a new app isn't an automated program.</li>
     <li>Advertising providers (Meta and Google), only for website visitors who accept cookies, as described under "Cookies and the Meta Pixel".</li>
   </ul>
   <p>We may also disclose data if required by law or a valid order from an Indian authority.</p>
@@ -78,7 +80,7 @@
   <p>We keep your account and app data while your trial or plan is active. If a trial or plan ends and you don't subscribe or renew, your app becomes read-only and <strong>your data is permanently deleted 30 days after the end date</strong>. You can ask for an export before then. Copies in backups are removed as those backups expire. We keep invoices and payment records for as long as tax law requires.</p>
 
   <h2>How we protect it</h2>
-  <p>Each paying business gets its own app and its own database; during a free trial your data is kept in its own separate space (a database schema) in a database shared with other trials, and is never visible to them. Your customers' details, quotation amounts, rates, payments and payment-gateway secrets are encrypted in the database with a key kept separately from it, so a copy of the database alone can't be read. Passwords are stored as one-way hashes, connections are encrypted (HTTPS), and access to production systems is restricted. No system is perfectly secure; if a breach affects your personal data, we will notify you and the Data Protection Board of India as the law requires.</p>
+  <p>Each paying business gets its own database with its own encryption key; during a free trial your data is kept in its own separate space (a database schema) in a database shared with other trials, and is never visible to them. Your customers' details, quotation amounts, rates, payments and payment-gateway secrets are encrypted in the database with a key kept separately from it, so a copy of the database alone can't be read. Passwords are stored as one-way hashes, connections are encrypted (HTTPS), and access to production systems is restricted. No system is perfectly secure; if a breach affects your personal data, we will notify you and the Data Protection Board of India as the law requires.</p>
 
   <h2>Your rights</h2>
   <p>Under the DPDP Act you can:</p>
