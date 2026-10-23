@@ -120,6 +120,26 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > QuoteRoom gives you all 6 on every quote. Free 7-day trial, link in bio.
 > #interiordesigner #interiordesign #quotation #modularkitchen #interiordesignbusiness
 
+**Still typing every quotation from scratch?** (reel, starting quotations on a laptop) · cover: "Stop typing quotations from scratch"
+> Your 2 BHK quotations look almost the same every time. So why type them from scratch? 🤔
+>
+> With QuoteRoom, start from your usual quotation:
+> ✅ Every room, item and rate is already filled in
+> ✅ Just type the sizes for this home
+> ✅ The total works itself out, section by section
+> ✅ Send a clean PDF, or a link your customer accepts online
+>
+> Quotations in minutes, not hours.
+>
+> Already have quotations in Excel or PDF? Send them to us and we'll set up your items, rates and starting quotations for you. 🙌
+>
+> 👉 Try it free for 7 days: link in bio
+>
+> #interiordesign #interiordesigner #turnkeyinteriors #interiorbusiness #modularkitchen #interiorcontractor #homeinteriors #quotation #smallbusinessindia #quoteroom
+
+First comment: *"Comment 'TEMPLATE' and we'll show you how it works with your own quotations."* Post the 9:16 file as the
+Reel (and Stories); the 4:5 file for a feed video or an ad.
+
 **Suggested posting order (from 16 Oct):** 16 Oct before/after (11 AM, scheduled) · 17 Oct customer-receives carousel (11 AM, scheduled)
 + tape-to-invoice reel (7 PM) · 18 Oct one-price (11 AM, scheduled) · 19 Oct Excel reel · 21 Oct payments reel ·
 22 Oct checklist post · 23 Oct profit reel.
@@ -395,6 +415,40 @@ Console → Tutorials → Add a tutorial: title `13 · On your home screen`, len
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
 
 (The browser menus are plain drawn mock-ups, since a web page can't capture the browser's own menus; the icon and name are the app's real ones.)
+**Part 14** — *Starting quotations: every quotation already filled in | QuoteRoom tutorial 14* (laptop, 1 min 10 s)
+> Stop typing the same rooms, items and rates for every quotation. In QuoteRoom, start from your usual quotation ("2 BHK turnkey", "1 BHK basic"…) and every section, item, description and rate is already filled in. Type the sizes for this home, remove what it doesn't need, and your quotation is ready to send.
+>
+> In this video:
+> • Pick a starting quotation on New Quotation
+> • Type quantities or sizes: every amount works itself out
+> • Remove a line, or add one from your own list
+> • Save: lines left empty are removed (the app asks first)
+> • A total for every section, and a clean PDF for your customer
+> • Make your own: Save as template, Duplicate, rename or delete
+>
+> New to QuoteRoom? Share your old quotations with us and we'll set up your items, rates and starting quotations for you.
+>
+> 0:00 Start every quotation filled in
+> 0:13 Type the quantities and sizes
+> 0:27 Remove a line or add one
+> 0:41 Save and the PDF
+> 0:52 Make your own: Save as template, Duplicate
+>
+> QuoteRoom is a quotation app for interior designers, turnkey contractors and modular furniture firms: quotations in your own units and rates, branded PDFs, online approval, payments and GST invoices.
+>
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Extra tags: `quotation template, BOQ, turnkey interiors`.
+
+The reel as a YouTube Short (`reel-templates-9x16.mp4`): title *Still typing every quotation from scratch? #Shorts*
+> Your 2 BHK quotations look almost the same every time, so why type them from scratch? With QuoteRoom, start from your usual quotation: every room, item and rate is already filled in. Just type the sizes and the total works itself out, then send a clean PDF or a link your customer accepts online.
+>
+> Send us your old quotations and we'll set them up for you.
+>
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+>
+> #interiordesign #interiordesigner #turnkeyinteriors #modularkitchen #interiorbusiness #quoteroom #Shorts
+
 ## 8. Instagram captions for every tutorial (standalone)
 
 Each works on its own (no "part N", no "previous video"). Paste the caption, set the cover text, post as a Reel.
