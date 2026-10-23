@@ -232,19 +232,35 @@ STARTER = [
 ]
 
 
-def starter_lines():
-    """[(category, name, unit, rate, description)] from STARTER (its ('#', category) rows start a group)."""
+def _metric_rate(rate, per_unit):
+    """A per-sqft / per-rft rate as per sq m / per rmt, rounded the way a rate card is (₹1,291.7 → ₹1,290)."""
+    v = rate / per_unit
+    return round(v, -1) if v >= 100 else round(v)
+
+
+def starter_lines(metric=None):
+    """[(category, name, unit, rate, description)] from STARTER (its ('#', category) rows start a group).
+    metric (default: the business's area unit is sq m, Settings → Units): per sqft / per rft lines as per sq m /
+    per rmt, with their rates converted."""
+    if metric is None:
+        from . import units
+        metric = units.area_unit() == 'sqm'
     out, cat = [], 'Other'
     for row in STARTER:
         if row[0] == '#':
             cat = row[1]
             continue
-        out.append((cat,) + tuple(row))
+        name, unit, rate, description = row
+        if metric and unit == 'sqft':
+            unit, rate = 'sq m', _metric_rate(rate, AREA_UNITS['sq m'])
+        elif metric and unit == 'rft':
+            unit, rate = 'rmt', _metric_rate(rate, LENGTH_UNITS['rmt'])
+        out.append((cat, name, unit, rate, description))
     return out
 
 
 def add_starter_lines():
-    """Give a business with no saved BOQ lines the starter set. Returns how many were added."""
+    """Give a business with no saved BOQ lines the starter set (in its own units). Returns how many were added."""
     from .models import BoqItem
     if BoqItem.query.first() is not None:
         return 0

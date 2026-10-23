@@ -232,7 +232,8 @@ def apply(parsed, remove_starter=True, replace_settings=False):
     removed = 0
     if remove_starter and ready:
         starter = {(name.lower(), unit, float(rate), description or '', category)
-                   for category, name, unit, rate, description in boq.starter_lines()}
+                   for metric in (False, True)                     # added in sqft or in sq m (Settings → Units)
+                   for category, name, unit, rate, description in boq.starter_lines(metric)}
         mine = {l['name'].lower() for l in parsed['lines']}
         for row in list(have_lines.values()):
             key = (row.name.lower(), row.unit, float(row.rate or 0), row.description or '', row.category)

@@ -151,3 +151,15 @@ ok('its starting quotation: measured items with their material waiting for a siz
    items['Base Unit']['type'] == 'measured' and items['Base Unit']['pending'] and items['Base Unit']['wood_type'] == 'Laminates'
    and items['Shutter Glass']['work_type'] == '' and items['Magic Corner']['type'] == 'fixed'
    and items['Magic Corner']['unit_price'] == 18000 and items['Magic Corner']['pending'])
+
+# ── Starter lines in the business's own units ──
+with app.app_context():
+    AppSetting.set('area_unit', 'sqm'); db.session.commit()
+    from app import units
+    units.clear_cache()
+    m = {n: (u, r) for _, n, u, r, _ in boq.starter_lines()}
+    i = {n: (u, r) for _, n, u, r, _ in boq.starter_lines(metric=False)}
+    ok('a business in sq m gets its starter lines per sq m / per rmt (₹120/sqft → ₹1,290/sq m), others unchanged',
+       i['False Ceiling'] == ('sqft', 120) and m['False Ceiling'] == ('sq m', 1290) and m['Paint Work'] == ('sq m', 480)
+       and m['Fan Fitting'] == i['Fan Fitting'] and any(u == 'rmt' for u, _ in m.values()))
+    AppSetting.set('area_unit', 'sqft'); db.session.commit(); units.clear_cache()
