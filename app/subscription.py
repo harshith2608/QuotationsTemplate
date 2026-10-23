@@ -73,11 +73,24 @@ def enabled():
 _table_ready = False
 
 
+REMINDERS_DDL = """
+CREATE TABLE IF NOT EXISTS public.plan_reminders (
+    slug     VARCHAR(40) NOT NULL,
+    kind     VARCHAR(20) NOT NULL,
+    ends_on  DATE        NOT NULL,
+    sent_at  TIMESTAMP   NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+    PRIMARY KEY (slug, kind, ends_on)
+)
+"""
+
+
 def ensure_table():
     global _table_ready
     if not _table_ready:
         with db.engine.begin() as conn:
             conn.execute(text(DDL))
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS email VARCHAR(120)'))
+            conn.execute(text(REMINDERS_DDL))
         _table_ready = True
 
 
@@ -102,7 +115,7 @@ def _api(method, path, payload=None):
 
 # ── Buying ───────────────────────────────────────────────────────────────────
 
-def create_order(slug, plan, business_name='', paid_by=''):
+def create_order(slug, plan, business_name='', paid_by='', email=''):
     """A Razorpay order for `plan` ('6m' / '1y'), remembered as "created". Returns the order row (dict)."""
     if plan not in LENGTHS:
         raise PaymentError('Choose the 6-month or 12-month plan.')
@@ -112,10 +125,10 @@ def create_order(slug, plan, business_name='', paid_by=''):
                                      'receipt': f'{slug}-{plan}-{int(datetime.utcnow().timestamp())}'[:40],
                                      'notes': {'slug': slug, 'plan': plan}})
     with db.engine.begin() as conn:
-        conn.execute(text('INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, business_name, paid_by) '
-                          'VALUES (:s, :p, :a, :o, :n, :u)'),
+        conn.execute(text('INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, business_name, paid_by, '
+                          'email) VALUES (:s, :p, :a, :o, :n, :u, :e)'),
                      {'s': slug, 'p': plan, 'a': amount, 'o': order['id'], 'n': (business_name or '')[:120],
-                      'u': (paid_by or '')[:80]})
+                      'u': (paid_by or '')[:80], 'e': (email or '')[:120] or None})
     return get_by_order(order['id'])
 
 
@@ -215,6 +228,7 @@ def handle_webhook(payload):
     row, newly = mark_paid(order_id, pay.get('id') or row.get('payment_id') or '', 'webhook')
     if newly:
         apply_plan_for(row['slug'], row)
+        notify_paid(get(row['id']))
         return f'paid: {row["slug"]} {row["plan"]}'
     return 'already recorded'
 
@@ -263,6 +277,119 @@ def move_all_paid(log=None):
             row = move_paid_trial(slug, log=log)
             out[slug] = row['status'] if row else 'not started'
         except Exception as exc:                        # keep going; the console shows what's left
+            out[slug] = f'failed: {exc}'
+    return out
+
+
+# ── Emails: paid, reminders ──────────────────────────────────────────────────
+
+def _app_link(slug, path=''):
+    return f'https://{slug}.{tenancy.base_domain()}{path}'
+
+
+def notify_paid(row):
+    """"You're on your paid plan" with the receipt (to the business's email), and a note to the operator."""
+    from . import mailer
+    if not row or not mailer.enabled():
+        return
+    fmt = lambda d: d.strftime('%d %b %Y') if d else '—'
+    plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
+    amount = f'₹{row["amount_paise"] / 100:,.0f}'
+    name = row.get('business_name') or row['slug']
+    if row.get('email'):
+        mailer.send(row['email'], f'Payment received: QuoteRoom {plan_label}', f"""Hello,
+
+Thank you! We've received {amount} for your QuoteRoom {plan_label}.
+
+Business: {name}
+Your app: {_app_link(row['slug'])}
+Plan: {fmt(row.get('plan_start'))} to {fmt(row.get('plan_end'))}
+Receipt: {row.get('receipt_no')} (attached)
+
+Everything you've set up and every quotation stays exactly as it is. Same address, same login.
+
+Questions? Just reply to this email.
+
+QuoteRoom
+""", attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
+    mailer.send(mailer.operator(), f'Payment: {amount} from {name}',
+                f'{name} ({row["slug"]}) paid {amount} for the {plan_label}.\n'
+                f'Receipt {row.get("receipt_no")} · payment {row.get("payment_id")} · via {row.get("source")}\n'
+                f'Plan until {fmt(row.get("plan_end"))}.\n')
+
+
+REMINDERS = {   # kind → (subject, first line)
+    'trial_2':   ('Your QuoteRoom free trial ends {when}',
+                  'Your free trial ends {when} ({end}). Choose a plan to keep everything you have set up and keep quoting.'),
+    'trial_end': ('Your QuoteRoom free trial has ended',
+                  'Your free trial ended on {end}, so your app is now read-only. Choose a plan to carry on: everything is '
+                  'still there until {delete}.'),
+    'paid_15':   ('Your QuoteRoom plan ends on {end}',
+                  'Your {plan} ends on {end}. Renew now and the new period starts when this one ends, so no days are lost.'),
+    'paid_3':    ('Your QuoteRoom plan ends {when}',
+                  'Your {plan} ends {when} ({end}). Renew to keep creating quotations without a break.'),
+    'paid_end':  ('Your QuoteRoom plan has ended',
+                  'Your {plan} ended on {end}. You can keep working until {grace}; after that your app becomes '
+                  'read-only. Renew to carry on.'),
+}
+
+
+def due_reminder(status):
+    """Which reminder (if any) this plan is due for today."""
+    if not status.has_limit or status.days_left is None:
+        return None
+    d = status.days_left
+    if status.is_trial:
+        return 'trial_2' if 0 <= d <= 2 else 'trial_end' if -3 <= d < 0 else None
+    return 'paid_3' if 0 <= d <= 3 else 'paid_15' if 3 < d <= 15 else 'paid_end' if -7 <= d < 0 else None
+
+
+def send_reminders():
+    """Daily (console tick): one email per business per reminder and plan end date. Returns {slug: kind}."""
+    from . import customers, mailer
+    from .models import AppSetting
+    if not mailer.enabled():
+        return {}
+    ensure_table()
+    targets = [(r['slug'], (lambda r=r: tenancy.tenant_context(r['slug'], r['schema_name'])))
+               for r in tenancy.registry_rows() if r['status'] == 'active']
+    if customers._env('CONSOLE_VAULT_KEY'):
+        targets += [(c['slug'], (lambda c=c: customers.open_customer(c['slug'])))
+                    for c in customers.all_customers() if c['status'] == 'active']
+    out = {}
+    for slug, opener in targets:
+        try:
+            with opener():
+                st = plan_mod.load_status(on=plan_mod.today())
+                kind = due_reminder(st)
+                email = AppSetting.get('company_email', '') if kind else ''
+            if not kind or not email:
+                continue
+            with db.engine.begin() as conn:
+                fresh = conn.execute(text('INSERT INTO public.plan_reminders (slug, kind, ends_on) VALUES (:s, :k, :e) '
+                                          'ON CONFLICT DO NOTHING RETURNING slug'),
+                                     {'s': slug, 'k': kind, 'e': st.ends_on}).first()
+            if not fresh:
+                continue                                   # already sent for this end date
+            fmt = lambda d: d.strftime('%d %b %Y') if d else ''
+            when = 'today' if st.days_left == 0 else 'tomorrow' if st.days_left == 1 else f'in {st.days_left} days'
+            words = dict(when=when, end=fmt(st.ends_on), plan=st.label, grace=fmt(st.grace_until),
+                         delete=fmt(st.delete_on))
+            subject, first = REMINDERS[kind]
+            p = prices()
+            mailer.send(email, subject.format(**words), f"""Hello,
+
+{first.format(**words)}
+
+Choose a plan in your app: {_app_link(slug, '/plan')}
+6 months ₹{p['6m']:,} · 12 months ₹{p['1y']:,} (your whole team, all features)
+
+Questions? Just reply to this email.
+
+QuoteRoom
+""")
+            out[slug] = kind
+        except Exception as exc:                           # one business's problem mustn't stop the others
             out[slug] = f'failed: {exc}'
     return out
 

@@ -66,7 +66,7 @@ class FakeVercel:
         return dict(p['env'])
 
 
-for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest', 'payer', 'closer'):           # from an earlier interrupted run
+for leftover in ('sharma', 'acme', 'beta', 'legacy', 'nest', 'payer', 'closer', 'reminded'):           # from an earlier interrupted run
     providers.CustomerDatabases(ADMIN).drop(leftover)
 
 fake = FakeVercel()
@@ -474,8 +474,14 @@ os.environ.update(PLATFORM_RAZORPAY_KEY_ID='rzp_test_platform', PLATFORM_RAZORPA
                   PLATFORM_RAZORPAY_WEBHOOK_SECRET='hook-secret', PLATFORM_LEGAL_NAME='Harshith Pola (QuoteRoom)',
                   CRON_SECRET='cron-secret')
 from app import subscription as subs
+import glob as _glob, tempfile as _tf, email as _em
+OUTBOX = _tf.mkdtemp()
+os.environ.update(MAIL_OUTBOX_DIR=OUTBOX, OPERATOR_EMAIL='hello@quote-room.test')
+def outbox():
+    import email.policy as _pol
+    return [_em.message_from_bytes(open(f, 'rb').read(), policy=_pol.default) for f in sorted(_glob.glob(OUTBOX + '/*.eml'))]
 with app.app_context():
-    ops.create_trial('payer', 'admin', 'payer-pass-123', 7, company='Payer Interiors')
+    ops.create_trial('payer', 'admin', 'payer-pass-123', 7, company='Payer Interiors', email='owner@payer.example')
     trial_end = None
     with tenant_context('payer'):
         from app import plan as _pm
@@ -529,6 +535,15 @@ with app.app_context():
     with tenant_context('payer'):
         st = _pm.load_status(on=_pm.today())
     row = subs.get_by_order(o['order']['order_id'])
+mails = outbox()
+paid_mail = next((m for m in mails if m['To'] == 'owner@payer.example'), None)
+with app.app_context():
+    paid_receipt = subs.get_by_order(o['order']['order_id'])['receipt_no']
+ok('payment emails: "Payment received" to the business with the receipt PDF attached, and a note to the operator',
+   paid_mail is not None and 'Payment received' in paid_mail['Subject']
+   and any(p.get_filename() == f'QuoteRoom-receipt-{paid_receipt}.pdf'
+           for p in paid_mail.iter_attachments())
+   and any(m['To'] == 'hello@quote-room.test' and m['Subject'].startswith('Payment: ₹8,999 from Payer Interiors') for m in mails))
 ok('the 12-month plan starts when the trial ends: no trial days lost', st.plan == '1y'
    and st.ends_on == _pm.add_length(trial_end, '1y') and row['status'] == 'paid' and row['receipt_no'].startswith('QR'))
 
@@ -576,5 +591,17 @@ ok(f'a moved customer renews in the app: 6 more months added to the end date {o2
 t = c.get('/payments').text
 ok('console Payments: every payment with its receipt and totals', 'Payer Interiors' in t and 'Closer Interiors' in t
    and '₹8,999' in t and '₹4,999' in t and c.get(f'/payments/{row["id"]}/receipt').data[:4] == b'%PDF')
+# Reminders: a trial ending tomorrow gets one email (not one per tick)
+with app.app_context():
+    ops.create_trial('reminded', 'admin', 'reminded-pass-123', 1, company='Reminded Interiors', email='r@reminded.example')
+before = len(outbox())
+r1 = c.get('/cron/tick', headers={'Authorization': 'Bearer cron-secret'}).get_json()
+r2 = c.get('/cron/tick', headers={'Authorization': 'Bearer cron-secret'}).get_json()
+rem = [m for m in outbox()[before:] if m['To'] == 'r@reminded.example']
+ok('daily reminders: "trial ends tomorrow" once (not again on the next tick), with the link to choose a plan',
+   len(rem) == 1 and rem[0]['Subject'] == 'Your QuoteRoom free trial ends tomorrow'
+   and 'https://reminded.quote-room.test/plan' in rem[0].get_payload(decode=True).decode()
+   and (r1.get('moved') or {}).get('reminders', {}).get('reminded') == 'trial_2'
+   and 'reminded' not in (r2.get('moved') or {}).get('reminders', {}))
 ok('daily tick needs the cron secret', c.get('/cron/tick').status_code == 404
    and c.get('/cron/tick', headers={'Authorization': 'Bearer cron-secret'}).status_code == 200)

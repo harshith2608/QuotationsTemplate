@@ -1191,6 +1191,12 @@ def cron_tick():
             out['spares'] = made
     except Exception as exc:
         out['spares'] = f'failed: {exc}'
+    try:
+        sent = subscription.send_reminders()             # trial / plan ending emails (once each)
+        if sent:
+            out['reminders'] = sent
+    except Exception as exc:
+        out['reminders'] = f'failed: {exc}'
     c = _customers()
     for row in c.all_customers():
         if row['status'] == 'provisioning' and row.get('hosting') == 'shared':

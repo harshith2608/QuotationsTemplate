@@ -308,12 +308,16 @@ def trial_request():
         db.session.commit()
 
     # Interior designers and furniture works can set up their app straight away (app/signup.py)
-    from . import signup
+    from . import mailer, signup
     setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
+    emailed = None
+    if setup and mailer.enabled():               # the link goes to their email: proves the address is theirs
+        if signup.email_setup_link(data['email'], data['name'], data['company_name'], setup):
+            emailed, setup = mailer.mask(data['email']), None
     if wants_json:
-        return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup})
+        return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup, 'emailed_to': emailed})
     return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, name=data['name'],
-                           setup_url=setup, **ctx)
+                           setup_url=setup, emailed_to=emailed, **ctx)
 
 
 def _leads_password():

@@ -145,5 +145,21 @@ r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type=
 ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
 t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
 ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
+
+# With email set up, the link goes to their email instead (proves the address is theirs)
+import glob, tempfile, email as _email
+box = tempfile.mkdtemp()
+os.environ['MAIL_OUTBOX_DIR'] = box
+r = c5.post('/trial-request', data=dict(good, phone='9811100047', email='kiran@kiraninteriors.example'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.4'}); d = r.get_json()
+mails = [_email.message_from_bytes(open(f, 'rb').read()) for f in sorted(glob.glob(box + '/*.eml'))]
+ok('email set up: the set-up link is emailed, not shown (the page says where it went)', d['ok'] and d['setup_url'] is None
+   and d['emailed_to'] == 'ki***@kiraninteriors.example' and len(mails) == 1
+   and mails[0]['To'] == 'kiran@kiraninteriors.example' and mails[0]['Subject'] == 'Set up your QuoteRoom app'
+   and 'https://ops.quote-room.test/start?t=' in mails[0].get_payload(decode=True).decode())
+t = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
+            environ_base={'REMOTE_ADDR': '10.9.0.5'}).text
+ok('…and the page without JavaScript says "Check your email"', 'Check your email' in t and 'x***@kiraninteriors.example' in t)
+os.environ.pop('MAIL_OUTBOX_DIR', None)
 for k in ('AUTO_TRIALS', 'SIGNUP_URL', 'SIGNUP_SECRET'):
     os.environ.pop(k, None)

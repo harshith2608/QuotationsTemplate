@@ -35,7 +35,8 @@ def order():
     plan = (request.get_json(silent=True) or {}).get('plan') or request.form.get('plan')
     brand = get_brand()
     try:
-        row = subscription.create_order(tenancy.current_slug(), plan, brand['name'], current_user.username)
+        row = subscription.create_order(tenancy.current_slug(), plan, brand['name'], current_user.username,
+                                        brand.get('email') or '')
     except subscription.PaymentError as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
     return jsonify({'ok': True, 'order_id': row['order_id'], 'amount': row['amount_paise'], 'currency': 'INR',
@@ -62,6 +63,7 @@ def paid():
     row, newly = subscription.mark_paid(order_id, payment_id, 'app')
     if newly:
         subscription.apply_plan(row)
+        subscription.notify_paid(subscription.get(row['id']))
     return jsonify({'ok': True, 'redirect': url_for('plan.thanks', payment_id=row['id'])})
 
 

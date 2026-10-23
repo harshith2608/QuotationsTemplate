@@ -497,7 +497,11 @@ footer nav { display: flex; gap: 1.2rem; }
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
-        if (data.setup_url) {               // interior designers / furniture works: set up the app straight away
+        if (data.emailed_to) {              // interior designers / furniture works: the set-up link is in their email
+          done.querySelector('[data-emailed-to]').textContent = data.emailed_to;
+          done.querySelector('[data-emailed]').hidden = false;
+          done.querySelector('[data-wait]').hidden = true;
+        } else if (data.setup_url) {        // (email not set up: set up the app straight away)
           done.querySelector('[data-setup-link]').href = data.setup_url;
           done.querySelector('[data-setup]').hidden = false;
           done.querySelector('[data-wait]').hidden = true;

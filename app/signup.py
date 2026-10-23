@@ -75,3 +75,22 @@ def turnstile_ok(response, ip=''):
             return bool(json.loads(r.read()).get('success'))
     except Exception:
         return False
+
+
+def email_setup_link(email, name, company, url):
+    """Email the set-up link (the website sends it instead of showing it, once email is set up). True if sent."""
+    from . import mailer
+    first = (name or '').split(' ')[0] or 'there'
+    return mailer.send(email, 'Set up your QuoteRoom app', f"""Hi {first},
+
+Thanks for asking for a QuoteRoom free trial{f' for {company}' if company else ''}.
+
+Set up your app here (choose a password; it takes a minute):
+{url}
+
+The link works for {TOKEN_HOURS // 24} days. Your free 7-day trial starts when you set it up.
+
+Any questions? Just reply to this email or message us on WhatsApp.
+
+QuoteRoom
+""")
