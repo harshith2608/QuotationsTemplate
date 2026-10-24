@@ -86,7 +86,8 @@ def boq_rows(snapshot):
                 lump = unit == boq.LUMP_SUM
                 size = boq.size_text(it)
                 desc = '\n'.join(x for x in (desc, f'Size: {size}' if size else '') if x)
-                lines.append({'no': n, 'title': it['name'], 'description': desc, 'qty': it['quantity'],
+                from .finishes import label
+                lines.append({'no': n, 'title': label(it['name'], it.get('finish')), 'description': desc, 'qty': it['quantity'],
                               'unit': boq.unit_text(unit), 'rate': None if lump or not it['unit_price'] else it['unit_price'],
                               'amount': it['amount'], 'tbc': bool(it.get('tbc'))})
         out.append({'letter': letter, 'name': room['name'], 'description': room.get('description') or '', 'lines': lines})
@@ -133,12 +134,16 @@ def auto_description(items):
 
 def room_rows(snapshot):
     """[{'no', 'title', 'description', 'items': [{'name', 'length', 'width', 'count'}], 'amount', 'hardware'}] plus
-    totals. Room rows hold measured items; a room's fittings follow as their own Hardware row. Every amount comes
+    totals. Room rows hold measured items; a room's fittings follow as their own Hardware row, and each lump sum as its
+    own row. Every amount comes
     from the snapshot's own item amounts, so rows add up to the quotation subtotal."""
+    from .boq import LUMP_SUM
     rows, n = [], 0
     for room in snapshot.get('rooms', []):
-        measured = [it for it in room['items'] if it['type'] != 'fixed']      # BOQ lines go with the room's items
+        is_lump = lambda it: it['type'] == 'boq' and it.get('unit') == LUMP_SUM and it.get('quantity')
+        measured = [it for it in room['items'] if it['type'] != 'fixed' and not is_lump(it)]   # BOQ lines go with them
         fittings = [it for it in room['items'] if it['type'] == 'fixed']
+        lumps = [it for it in room['items'] if is_lump(it)]
         if measured:
             n += 1
             rows.append({'no': n, 'title': room['name'], 'hardware': False,
@@ -151,6 +156,12 @@ def room_rows(snapshot):
                          'description': '', 'items': [{'name': it['name'], 'length': None, 'width': None,
                                                        'count': it['quantity']} for it in fittings],
                          'amount': round(sum(it['amount'] for it in fittings), 2)})
+        for it in lumps:                        # a lump sum (pooja civil works ₹30,000): its own row and amount
+            n += 1
+            rows.append({'no': n, 'title': f"{room['name']} – {it['name']}" if measured or fittings or len(lumps) > 1
+                         else room['name'], 'hardware': False, 'description': it.get('description') or '',
+                         'items': [{'name': it['name'], 'length': None, 'width': None, 'count': '1 LS'}],
+                         'amount': round(it['amount'], 2)})
     return rows
 
 

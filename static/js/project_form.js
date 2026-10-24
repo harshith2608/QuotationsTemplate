@@ -27,9 +27,11 @@ const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
 // also carry a description
 const BOQ = !!CATALOG.boq;
+// Priced by material: one-off work as a lump sum (a BOQ line with unit "lump sum": Pooja civil works ₹30,000…)
+const LUMP = !!CATALOG.lumpSum;
 // The description sits on its own full-width row under the item's row (the name column is too narrow for it)
 function addDescRow(tr, ik, value, handler, before, after) {
-  if (!BOQ) return;
+  if (!BOQ && !tr.classList.contains('item-row-boq')) return;      // priced by material: only lump sums have one
   const d = document.createElement('tr');
   d.className = 'ki-desc-row';
   d.id = 'item_descrow_' + ik;
@@ -45,6 +47,24 @@ const BOQ_SAVED = CATALOG.boqSaved || [];
 function _findBoq(name) {
   const n = (name || '').trim().toLowerCase();
   return n ? BOQ_SAVED.find(b => b.name.toLowerCase() === n) : null;
+}
+// Finishes (Admin → Rates → Finishes): a line that comes in them gets a Finish choice; another finish's rate is the
+// base finish's rate + its % extra (Laminate ₹1,800 → Acrylic +25% ₹2,250)
+const FINISHES = (CATALOG.boqFinishes && CATALOG.boqFinishes.options && CATALOG.boqFinishes.options.length > 1)
+  ? CATALOG.boqFinishes : null;
+function _finishExtra(name) {
+  const f = FINISHES && FINISHES.options.find(o => o.name.toLowerCase() === (name || '').toLowerCase());
+  return f ? (f.extra || 0) : 0;
+}
+function finishOptions(selected) {
+  const list = FINISHES ? FINISHES.options.map(o => o.name) : [];
+  if (selected && !list.some(n => n.toLowerCase() === selected.toLowerCase())) list.push(selected);   // renamed since
+  const sel = (selected || (FINISHES ? FINISHES.base : '')).toLowerCase();
+  return list.map(n => {
+    const ex = _finishExtra(n);
+    const tag = ex ? ` (${ex > 0 ? '+' : ''}${ex}%)` : '';
+    return `<option value="${escHtml(n)}" ${n.toLowerCase() === sel ? 'selected' : ''}>${escHtml(n + tag)}</option>`;
+  }).join('');
 }
 let modalBoqTouched = false;      // the user typed a description/unit/rate: picking a saved line doesn't overwrite them
 const BOQ_UNITS = (CATALOG.boqUnits && CATALOG.boqUnits.length) ? CATALOG.boqUnits
@@ -432,10 +452,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalNameInput = document.getElementById('modal_item_name');
   if (modalNameInput) {
     initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name)
-                                          : modalItemType === 'boq' ? BOQ_SAVED.map(b => b.name) : masterItems);
+                                          : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : masterItems);
     modalNameInput.addEventListener('input', () => {
       if (modalItemType === 'fixed') _applyPriceListPrice();
-      if (modalItemType === 'boq') _applySavedBoq();
+      if (modalItemType === 'boq' || modalItemType === 'lump') _applySavedBoq();
     });
     ['modal_item_desc', 'modal_boq_unit', 'modal_boq_rate'].forEach(id =>
       document.getElementById(id)?.addEventListener('input', () => { modalBoqTouched = true; _syncBoqDefault(); }));
@@ -463,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
         if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.tbc ? '' : id.unit_price, id.description,
-                                               false, id.length, id.width, id.count, !!id.pending, !!id.tbc); return; }
+                                               false, id.length, id.width, id.count, !!id.pending, !!id.tbc, id.finish || ''); return; }
         if (id.type === 'fixed') {
           const fk = _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description);
           if (id.pending) markPending(rk, fk, true);
@@ -691,13 +711,30 @@ function modalCalcArea() {
 // ─── Fixed-price items (fittings & accessories) ──────────────────────────────
 function setModalItemType(type) {
   modalItemType = type;
+  const lump = type === 'lump';
   document.getElementById('modal_fixed_fields')?.classList.toggle('d-none', type !== 'fixed');
-  document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq');
+  document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq' && !lump);
   document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type !== 'measured');
+  // A lump sum is a BOQ line with unit "lump sum": just a description and one amount
+  document.getElementById('modal_desc_wrap')?.classList.toggle('d-none', !BOQ && !lump);
+  ['modal_boq_qty_col', 'modal_boq_unit_col', 'modal_boq_size_slot', 'modal_boq_hint'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('d-none', lump));
+  document.getElementById('modal_lump_hint')?.classList.toggle('d-none', !lump);
+  document.getElementById('modal_boq_rate_col')?.classList.toggle('col-5', !lump);
+  document.getElementById('modal_boq_rate_col')?.classList.toggle('col-12', lump);
+  const rateLabel = document.getElementById('modal_boq_rate_label'); if (rateLabel) rateLabel.textContent = lump ? 'Amount' : 'Rate';
+  if (lump) {
+    const u = document.getElementById('modal_boq_unit');
+    if (u) { u.innerHTML = unitOptions('lump sum'); syncLumpSum(u, document.getElementById('modal_boq_qty')); }
+  }
   const nameEl = document.getElementById('modal_item_name');
-  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling' : 'e.g. Wardrobe';
+  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling'
+                                 : lump ? 'e.g. Pooja Civil Works' : 'e.g. Wardrobe';
+  const descIn = document.getElementById('modal_item_desc');
+  if (descIn) descIn.placeholder = lump ? 'e.g. Extension of wall with block work, plastering and painting'
+                                        : 'e.g. Making safety door with block board, both side laminate finish, including safety grill';
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
-  if (type === 'boq') _applySavedBoq();
+  if (type === 'boq' || lump) _applySavedBoq();
   syncModalPly();
 }
 
@@ -838,7 +875,7 @@ function addBoqLine(rk) {
   const nm = document.getElementById('item_name_' + ik);
   if (nm) { nm.scrollIntoView({ block: 'center' }); setTimeout(() => nm.focus(), 50); }
 }
-function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending, tbc) {
+function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending, tbc, finish) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -846,7 +883,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   const r = rate !== undefined && rate !== null ? rate : '';
   rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
                           unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault,
-                          pending: !!pending, tbc: !!tbc };
+                          pending: !!pending, tbc: !!tbc, finish: finish || '' };
   const tbody = document.getElementById('items_tbody_' + rk);
   if (!tbody) return;
   const tr = document.createElement('tr');
@@ -864,7 +901,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
              title="Quantity (leave empty for a rate-only line)">
     </td>
     <td data-label="Unit">
-      <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit"
+      <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit" ${BOQ ? '' : 'disabled'}
               onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
     </td>
     <td data-label="Rate">
@@ -874,7 +911,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
                value="${r}" oninput="onBoqField('${rk}','${ik}')" title="Rate">
       </div>
     </td>
-    <td class="text-center"><span class="badge ki-badge-boq">BOQ</span></td>
+    <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
     <td class="text-center" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
@@ -883,8 +920,13 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
     </td>`;
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
+  const finishPick = (FINISHES || finish) ? `<div class="ki-finish align-items-center gap-1 mb-1 d-none" id="item_finishwrap_${ik}">
+        <span class="small text-muted">Finish</span>
+        <select class="form-select form-select-sm w-auto" id="item_finish_${ik}" data-prev="${escHtml(finish || (FINISHES ? FINISHES.base : ''))}"
+                onchange="onBoqFinish('${rk}','${ik}')" title="Another finish changes the rate by its % extra">${finishOptions(finish)}</select>
+      </div>` : '';
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
-             sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
+             finishPick + sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
              `<label class="form-check form-check-inline small text-muted mb-0 ki-tbc" for="item_tbc_${ik}"
                      title="The price isn't fixed yet: printed as &quot;Price to follow&quot; and not added to the total">
                <input class="form-check-input" type="checkbox" id="item_tbc_${ik}" ${tbc ? 'checked' : ''}
@@ -907,6 +949,8 @@ function onBoqField(rk, ik) {
     const unitEl = document.getElementById('item_unit_' + ik);
     if (unitEl) { unitEl.innerHTML = unitOptions(saved.unit || 'nos'); syncLumpSum(unitEl, document.getElementById('item_qty_' + ik)); }
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
+    const finEl = document.getElementById('item_finish_' + ik);          // a newly picked line starts in the base finish
+    if (finEl && FINISHES) { finEl.innerHTML = finishOptions(''); finEl.dataset.prev = FINISHES.base; }
     // next: the length for a line measured by size, else the quantity (a lump sum: nothing more to type)
     const next = sizeMode(saved.unit) ? document.getElementById(`boq_${ik}_lft`)
                : saved.unit !== 'lump sum' ? document.getElementById('item_qty_' + ik) : null;
@@ -918,6 +962,16 @@ function onBoqField(rk, ik) {
     priceEl.placeholder = tbc ? 'to follow' : '';
   }
   const keepDefault = rooms[rk].items[ik].save_default;
+  const finWrap = document.getElementById('item_finishwrap_' + ik), finEl = document.getElementById('item_finish_' + ik);
+  let finish = '';
+  if (finWrap && finEl) {
+    const base = FINISHES ? FINISHES.base.toLowerCase() : '';
+    const chosen = finEl.value.toLowerCase() !== base ? finEl.value : '';
+    const show = !!((saved && saved.finish && FINISHES) || chosen);
+    finWrap.classList.toggle('d-none', !show);
+    finWrap.classList.toggle('d-flex', show);
+    finish = show ? chosen : '';
+  }
   let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
@@ -927,7 +981,7 @@ function onBoqField(rk, ik) {
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
                           unit_price, description: descOf(ik), save_default: keepDefault,
                           length: size.length, width: size.width, count: size.count,
-                          pending: pending && !(quantity > 0), tbc };
+                          pending: pending && !(quantity > 0), tbc, finish };
   const rowEl = document.getElementById('item_row_' + ik);
   rowEl?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
   document.getElementById('item_descrow_' + ik)?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
@@ -938,6 +992,20 @@ function onBoqField(rk, ik) {
                               : unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 })
                               : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
   recalcAll();
+}
+
+// Another finish picked: the rate moves from the old finish's % to the new one's (a rate typed by hand moves too)
+function onBoqFinish(rk, ik) {
+  const finEl = document.getElementById('item_finish_' + ik), priceEl = document.getElementById('item_price_' + ik);
+  if (!finEl) return;
+  const prev = finEl.dataset.prev || (FINISHES ? FINISHES.base : '');
+  const rate = parseFloat(priceEl?.value);
+  if (priceEl && rate > 0) {
+    const base = rate / (1 + _finishExtra(prev) / 100);
+    priceEl.value = Math.round(base * (1 + _finishExtra(finEl.value) / 100) * 100) / 100;
+  }
+  finEl.dataset.prev = finEl.value;
+  onBoqField(rk, ik);
 }
 
 function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
@@ -1021,6 +1089,7 @@ function _itemPayload(item) {
     return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
              ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}),
                                          ...(item.tbc ? { tbc: true } : {}),
+                                         ...(item.finish ? { finish: item.finish } : {}),
                                          ...(item.length ? { length: item.length, width: item.width || 0, count: item.count || 1 } : {}) } : {}),
              ...(item.description ? { description: item.description } : {}) };
   }
@@ -1044,7 +1113,7 @@ function saveItemFromModal() {
   if (nameEl) nameEl.classList.remove('is-invalid');
 
   const desc = document.getElementById('modal_item_desc')?.value.trim() || '';
-  if (modalItemType === 'boq') {
+  if (modalItemType === 'boq' || modalItemType === 'lump') {
     const qtyEl = document.getElementById('modal_boq_qty'), rateEl = document.getElementById('modal_boq_rate');
     const qty = qtyEl?.value === '' ? 0 : parseFloat(qtyEl?.value);      // empty: a rate-only line
     const rate = rateEl?.value === '' ? 0 : parseFloat(rateEl?.value);

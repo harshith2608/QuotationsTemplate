@@ -347,6 +347,9 @@
           {% if boq_form.enabled %}
           <input type="radio" class="btn-check" name="modal_item_type" id="modal_type_boq" value="boq" onchange="setModalItemType('boq')">
           <label class="btn btn-outline-primary" for="modal_type_boq"><i class="bi bi-list-ol me-1"></i>BOQ line</label>
+          {% elif boq_form.lump_sum %}
+          <input type="radio" class="btn-check" name="modal_item_type" id="modal_type_lump" value="lump" onchange="setModalItemType('lump')">
+          <label class="btn btn-outline-primary" for="modal_type_lump"><i class="bi bi-cash-stack me-1"></i>Lump sum</label>
           {% endif %}
         </div>
         <div class="mb-3">
@@ -357,8 +360,8 @@
           </div>
           <div class="invalid-feedback">Item name is required.</div>
         </div>
-        {% if boq_form.enabled %}
-        <div class="mb-3">
+        {% if boq_form.enabled or boq_form.lump_sum %}
+        <div class="mb-3" id="modal_desc_wrap">
           <label class="form-label fw-medium small mb-1" for="modal_item_desc">Description <span class="text-muted fw-normal">(optional, printed under the item)</span></label>
           <textarea class="form-control form-control-sm" id="modal_item_desc" rows="3" maxlength="2000"
                     placeholder="e.g. Making safety door with block board, both side laminate finish, including safety grill"></textarea>
@@ -366,19 +369,19 @@
         <!-- BOQ line: its own quantity, unit and rate -->
         <div id="modal_boq_fields" class="d-none">
           <div class="row g-2 mb-2">
-            <div class="col-4">
+            <div class="col-4" id="modal_boq_qty_col">
               <label class="form-label fw-medium small mb-1" for="modal_boq_qty">Quantity</label>
               <input type="number" class="form-control text-center" id="modal_boq_qty" value="1" min="0" step="any" inputmode="decimal" oninput="modalCalcBoq()">
             </div>
-            <div class="col-3">
+            <div class="col-3" id="modal_boq_unit_col">
               <label class="form-label fw-medium small mb-1" for="modal_boq_unit">Unit</label>
               <select class="form-select px-2" id="modal_boq_unit"
                       onchange="syncLumpSum(this, document.getElementById('modal_boq_qty')); modalCalcBoq()">
                 {% for u in boq_form.units %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
               </select>
             </div>
-            <div class="col-5">
-              <label class="form-label fw-medium small mb-1" for="modal_boq_rate">Rate</label>
+            <div class="col-5" id="modal_boq_rate_col">
+              <label class="form-label fw-medium small mb-1" for="modal_boq_rate" id="modal_boq_rate_label">Rate</label>
               <div class="input-group">
                 <span class="input-group-text">&#8377;</span>
                 <input type="number" class="form-control text-end" id="modal_boq_rate" placeholder="0" min="0" step="any" inputmode="decimal" oninput="modalCalcBoq()">
@@ -386,6 +389,8 @@
             </div>
           </div>
           <div id="modal_boq_size_slot"></div>{# the Size strip (project_form.js sizeStrip): area and running units #}
+          <div class="small text-muted mb-2 d-none" id="modal_lump_hint">One amount for the whole work (printed as LS). Pick one of
+            your lump sums to fill in its description and amount, or type a new one: it's saved for next time.</div>
           <div class="small text-muted mb-2" id="modal_boq_hint">Amount = quantity × rate. Lump sum: unit "lump sum", quantity 1, the amount as the rate.
             No quantity: a rate-only line (a rate card, not added to the total). New lines are saved for next time.</div>
           <div class="form-check mb-3 d-none" id="modal_boq_default_wrap">
@@ -514,9 +519,11 @@
     defaultWork: {{ default_combo.split('|', 1)[1]|tojson }},
     fixedLabel:  {{ catalog.FIXED_ITEMS_LABEL|tojson }},
     boqLabel:    {{ catalog.BOQ_ITEMS_LABEL|tojson }},
+    lumpSum:     {{ (boq_form.lump_sum and not boq_form.enabled)|tojson }},   // priced by material: a Lump sum tab
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
+    boqFinishes: {{ (boq_form.finishes or none)|tojson }},      // {options: [{name, extra}], base}: Laminate / Acrylic +25%…
     boqUnits:    {{ boq_form.units|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
     descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}

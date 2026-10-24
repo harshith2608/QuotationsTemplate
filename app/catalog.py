@@ -69,4 +69,4 @@ DEFAULT_PRICE_LIST = [
     ('Hob & Chimney Installation',  1500.0, 'job'),
 ]
 FIXED_ITEMS_LABEL = 'Fittings & Accessories'
-BOQ_ITEMS_LABEL = 'Other work (BOQ lines)'
+BOQ_ITEMS_LABEL = 'Other work'      # BOQ lines and lump sums, in a cost summary

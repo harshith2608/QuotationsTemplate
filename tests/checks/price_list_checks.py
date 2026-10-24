@@ -108,6 +108,71 @@ with app.app_context():
     tok = share._active_share(Project.query.get(pid)).token
 ok('customer link shows price to follow', 'price to follow' in c.get(f'/q/{tok}').text)
 
+# ── Finishes: the same item in another finish costs a % more (Laminate base, Acrylic +25%) ──
+FIN = {'finishes': [{'name': 'Laminate'}, {'name': 'Acrylic', 'extra': 25}, {'name': 'Veneer', 'extra': 40}],
+       'lines': [{'name': 'Wardrobe', 'unit': 'sqft', 'rate': 1800, 'finish': True},
+                 {'name': 'Site Cleaning', 'unit': 'LS', 'rate': 9000}]}
+ok('a price list with finishes is checked: one finish alone, or lines with "finish" but no finishes',
+   'at least one other' in bad({'finishes': [{'name': 'Laminate'}], 'lines': [{'name': 'A'}]})
+   and 'no "finishes"' in bad({'lines': [{'name': 'A', 'finish': True}]}))
+with app.app_context():
+    from app import finishes
+    res = price_list.apply(price_list.parse(json.dumps(FIN).encode()))
+    saved = {b['name']: b for b in boq.saved_lines()}
+    ok('loaded: the finishes (base first) and which lines come in them', res['finishes'] == 3
+       and [o['name'] for o in finishes.options()] == ['Laminate', 'Acrylic', 'Veneer'] and finishes.extra('acrylic') == 25
+       and saved['Wardrobe'].get('finish') and not saved['Site Cleaning'].get('finish')
+       and '3 finishes' in price_list.summary_text(res))
+f = c.get('/projects/new?blank=1').text
+ok('the form gets the finishes', '"Acrylic"' in f and 'boqFinishes' in f
+   and 'onBoqFinish' in c.get('/static/js/project_form.js').text)
+c.post('/projects/new', data={'customer_name': 'Acrylic Home', 'mobile': '9000000902', 'discount_type': 'none',
+                              'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Bedroom', 'items': [
+    {'name': 'Wardrobe', 'type': 'boq', 'quantity': 0, 'unit': 'sqft', 'unit_price': 2250, 'length': 7, 'width': 8,
+     'count': 1, 'finish': 'Acrylic', 'save_default': True},
+    {'name': 'Wardrobe', 'type': 'boq', 'quantity': 10, 'unit': 'sqft', 'unit_price': 1800, 'finish': 'Laminate'}]}])})
+with app.app_context():
+    fp = Project.query.order_by(Project.id.desc()).first()
+    fid = fp.id
+    its = sorted(Item.query.join(Item.room).filter(Room.project_id == fid).all(), key=lambda i: i.id)
+    snap = billing.quotation_snapshot(fp)
+    ok('saved: the acrylic line keeps its finish and rate, the laminate (base) line has none; total right',
+       its[0].finish == 'Acrylic' and its[0].unit_price == 2250 and its[1].finish == ''
+       and its[0].display_name == 'Wardrobe (Acrylic finish)' and its[1].display_name == 'Wardrobe'
+       and abs(fp.grand_total - (56 * 2250 + 10 * 1800)) < 0.01)
+    ok('"Save as my default" on an acrylic line saves the laminate rate (2,250 ÷ 1.25 = 1,800)',
+       BoqItem.query.filter_by(name='Wardrobe').first().rate == 1800)
+    ok('the snapshot and invoice say the finish', any(i.get('finish') == 'Acrylic' for r in snap['rooms'] for i in r['items'])
+       and [l['description'] for l in billing.invoice_lines(snap, '9403')] == ['Wardrobe (Acrylic finish)', 'Wardrobe'])
+    from app import layout as _lay
+    ok('the BOQ rows say it', [l['title'] for s_ in _lay.boq_rows(snap) for l in s_['lines']] == ['Wardrobe (Acrylic finish)', 'Wardrobe'])
+pdf = pdftext(f'/projects/{fid}/pdf/customer')
+ok('the PDF prints "Wardrobe (Acrylic finish)" at 2,250', 'Wardrobe (Acrylic finish)' in pdf and '2,250' in pdf)
+ok('the quotation page and WhatsApp text too', 'Wardrobe (Acrylic finish)' in c.get(f'/projects/{fid}').text
+   and 'Wardrobe (Acrylic finish)' in urllib.parse.unquote(c.get(f'/projects/{fid}/whatsapp').headers.get('Location', '')))
+e = c.get(f'/projects/{fid}/edit').text
+ok('editing brings the finish back', '"finish": "Acrylic"' in e)
+r = c.get('/admin/rates').text
+ok('Admin → Rates: a Finishes card (base rate, % extra) and a Finishes tick per item', 'id="finishes"' in r
+   and 'Base rate' in r and 'name="bq_finish"' in r and 'value="25"' in r)
+c.post('/admin/rates', data={'finish_submit': '1', 'fin_name': ['Laminate', 'Acrylic', 'Veneer', 'Membrane', ''],
+                             'fin_extra': ['0', '30', '40', '25', ''], 'fin_delete': ['2']})
+with app.app_context():
+    ok('…they can change the %, add one and remove one', [(o['name'], o['extra']) for o in finishes.options()]
+       == [('Laminate', 0), ('Acrylic', 30), ('Membrane', 25)] and finishes.line_ids())
+with app.app_context():
+    wid = str(BoqItem.query.filter_by(name='Wardrobe').first().id)
+    rows = [(str(b.id), b.name, b.description or '', b.unit, str(b.rate), b.category or '') for b in BoqItem.query.all()]
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_finish_on': '1', 'bq_id': [x[0] for x in rows], 'bq_name': [x[1] for x in rows],
+                             'bq_desc': [x[2] for x in rows], 'bq_unit': [x[3] for x in rows], 'bq_rate': [x[4] for x in rows],
+                             'bq_cat': [x[5] for x in rows], 'bq_finish': []})
+with app.app_context():
+    ok('…and untick an item (no Finish choice for it any more)', not finishes.line_ids()
+       and not any(b.get('finish') for b in boq.saved_lines()))
+    finishes.save([], []); db.session.commit()
+    ok('no finishes: nothing changes (no choice offered)', finishes.for_form() is None
+       and not any(b.get('finish') for b in boq.saved_lines()))
+
 # ── Pricing: by item / by material (Settings → Pricing, a setup guide step) ──
 from app import setup_guide
 s = c.get('/admin/settings?tab=pricing').text
@@ -151,6 +216,50 @@ ok('its starting quotation: measured items with their material waiting for a siz
    items['Base Unit']['type'] == 'measured' and items['Base Unit']['pending'] and items['Base Unit']['wood_type'] == 'Laminates'
    and items['Shutter Glass']['work_type'] == '' and items['Magic Corner']['type'] == 'fixed'
    and items['Magic Corner']['unit_price'] == 18000 and items['Magic Corner']['pending'])
+
+# ── Priced by material: one-off work as a lump sum (Add item → Lump sum) ──
+f = c.get('/projects/new?blank=1').text
+saved = json.loads(re.search(r'boqSaved:\s*(\[.*?\]),\n', f, re.S).group(1))
+ok('by material: the Add item window has a Lump sum tab, offering only the saved lump sums',
+   'id="modal_type_lump"' in f and 'lumpSum:     true' in f and 'id="modal_type_boq"' not in f
+   and 'Site Cleaning' in [b['name'] for b in saved] and all(b['unit'] == 'lump sum' for b in saved))
+c.post('/projects/new', data={'customer_name': 'Lump Home', 'mobile': '9000000903', 'discount_type': 'none',
+                              'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Pooja Room', 'items': [
+    {'name': 'Base Unit', 'length': 10, 'width': 2, 'wood_type': 'Laminates', 'work_type': 'Box Work'},
+    {'name': 'Pooja Civil Works', 'type': 'boq', 'quantity': 1, 'unit': 'lump sum', 'unit_price': 30000,
+     'description': 'Wall extension, plastering and painting'},
+    {'name': 'Stray Line', 'type': 'boq', 'quantity': 2, 'unit': 'sqft', 'unit_price': 100}]}])})
+with app.app_context():
+    lp = Project.query.order_by(Project.id.desc()).first()
+    lid = lp.id
+    its = {i.name: i for i in Item.query.join(Item.room).filter(Room.project_id == lid).all()}
+    ok('saved: the lump sum stays a lump sum (other BOQ lines become fixed-price items), total right',
+       its['Pooja Civil Works'].is_boq and its['Pooja Civil Works'].unit == 'lump sum'
+       and its['Stray Line'].is_fitting and abs(lp.grand_total - (20 * 900 + 30000 + 200)) < 0.01)
+    ok('…and remembered for next time, with its description', BoqItem.query.filter_by(name='Pooja Civil Works').first().rate == 30000)
+    snap = billing.quotation_snapshot(lp)
+    ok('…on the invoice', 'Pooja Civil Works' in [l['description'] for l in billing.invoice_lines(snap, '9403')])
+e = c.get(f'/projects/{lid}/edit').text
+ok('editing it: still the by-material form (Lump sum tab, not BOQ lines)', 'lumpSum:     true' in e and 'id="modal_type_boq"' not in e)
+v = c.get(f'/projects/{lid}').text
+ok('the quotation page shows it as a Lump sum', '>Lump sum<' in v and 'Pooja Civil Works' in v)
+for u in (f'/projects/{lid}/pdf', f'/projects/{lid}/pdf/customer'):
+    t_ = pdftext(u)
+    ok(f'{u.rsplit("/", 1)[-1]} PDF prints the lump sum and its amount', 'Pooja Civil Works' in t_ and '30,000' in t_)
+r = c.get('/admin/rates').text
+ok('Admin → Rates (by material): a Lump sums list', 'id="lump-sums"' in r and 'Pooja Civil Works' in r and 'Stray Line' not in r)
+with app.app_context():
+    rows = [(str(b.id), b.name, b.description or '', b.category or '') for b in BoqItem.query.filter_by(unit='lump sum').all()]
+    wardrobe = BoqItem.query.filter_by(name='Wardrobe').first().rate
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_id': [x[0] for x in rows] + [''], 'bq_name': [x[1] for x in rows] + ['Debris Removal'],
+                             'bq_desc': [x[2] for x in rows] + [''], 'bq_unit': ['lump sum'] * (len(rows) + 1),
+                             'bq_rate': ['32000' if x[1] == 'Pooja Civil Works' else '9000' for x in rows] + ['50000'],
+                             'bq_cat': [x[3] for x in rows] + ['']})
+with app.app_context():
+    ok('…they can change an amount and add one (other saved lines untouched)',
+       BoqItem.query.filter_by(name='Pooja Civil Works').first().rate == 32000
+       and BoqItem.query.filter_by(name='Debris Removal').first().unit == 'lump sum'
+       and BoqItem.query.filter_by(name='Wardrobe').first().rate == wardrobe)
 
 # ── Starter lines in the business's own units ──
 with app.app_context():

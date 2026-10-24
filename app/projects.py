@@ -122,12 +122,19 @@ def _form_catalog(project, rooms=None):
     from . import layout
     cat['room_descriptions'] = layout.description_options()
     from . import boq
-    has_boq = project is not None and any(i.is_boq for r in (rooms if rooms is not None else project.rooms_with_items())
-                                          for i in r.item_list)
+    ready = boq.ready()
+    has_boq = ready and project is not None and any(
+        i.is_boq and i.unit != boq.LUMP_SUM                  # a lump sum is fine priced by material too
+        for r in (rooms if rooms is not None else project.rooms_with_items()) for i in r.item_list)
     # BOQ lines on for the business, or already on this quotation (kept and editable if turned off later)
-    on = boq.ready() and (boq.enabled() or has_boq)
-    cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(), 'saved': boq.saved_lines() if on else [],
-                       'by_item': boq.enabled()}         # priced by item (Settings → Pricing): BOQ lines only
+    on = ready and (boq.enabled() or has_boq)
+    lump = ready and not on                                  # priced by material: one-off work as a lump sum
+    cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(),
+                       'saved': boq.saved_lines(lump_only=not on) if on or lump else [],
+                       'by_item': boq.enabled(), 'lump_sum': lump}   # by_item: priced by item, BOQ lines only
+    if on:
+        from . import finishes
+        cat['boq_form']['finishes'] = finishes.for_form()     # Laminate / Acrylic +25%… (None: no finishes)
     return cat
 
 
@@ -163,7 +170,7 @@ def _save_project_data(project, rooms_data, remember=True):
     project_ply = plywood.project_plywood(project)
     valid_combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     fallback_combo = M.default_combo()
-    from . import boq
+    from . import boq, finishes
     boq_ready = boq.ready()
     boq_on = boq_ready and boq.enabled()
     boq_used = []                        # BOQ lines on this quotation, to remember (boq.remember)
@@ -190,8 +197,8 @@ def _save_project_data(project, rooms_data, remember=True):
                 continue
             description = boq.clean_description(id_.get('description')) if boq_ready else None
             kind = id_.get('type')
-            if kind == 'boq' and not boq_on:
-                kind = 'fixed'                 # BOQ lines turned off: keep the line, priced the same way
+            if kind == 'boq' and not boq_on and not (boq_ready and boq.clean_unit(id_.get('unit')) == boq.LUMP_SUM):
+                kind = 'fixed'                 # BOQ lines turned off: keep the line, priced the same way (a lump sum stays)
             if kind in ('fixed', 'boq'):
                 # Fittings & accessories, or a BOQ line: quantity × unit price, no dimensions
                 try:
@@ -204,9 +211,10 @@ def _save_project_data(project, rooms_data, remember=True):
                 to_follow = kind == 'boq' and bool(id_.get('tbc'))     # "Price to follow": no rate yet
                 if to_follow:
                     unit_price = 0.0
+                finish = finishes.clean(id_.get('finish')) if kind == 'boq' else ''   # Acrylic…: kept in wood_type
                 item = Item(room_id=room.id, name=item_name[:100], item_type=kind,
                             quantity=quantity, unit_price=None if to_follow else unit_price,
-                            length=0, width=0, area=0, wood_type='', work_type='')
+                            length=0, width=0, area=0, wood_type=finish, work_type='')
                 if boq_ready and kind == 'boq':
                     item.unit = boq.clean_unit(id_.get('unit'))
                     # A size: the quantity is worked out from it (length × width × No's, or length × No's)
@@ -220,7 +228,9 @@ def _save_project_data(project, rooms_data, remember=True):
                     if mode and l_ > 0 and (mode == 'length' or w_ > 0):
                         item.length, item.width = l_, (w_ if mode == 'area' else 0)
                         item.quantity = quantity = boq.quantity_from_size(item.unit, l_, w_, n_)
-                    boq_used.append((item_name[:100], description, item.unit, unit_price, bool(id_.get('save_default')) and not to_follow,
+                    boq_used.append((item_name[:100], description, item.unit,
+                                     finishes.base_rate(unit_price, finish) if finish else unit_price,
+                                     bool(id_.get('save_default')) and not to_follow,
                                      room_name))
                 if description:
                     item.description = description
@@ -784,6 +794,7 @@ def _build_rooms_json(project, rooms=None):
                     'quantity': item.quantity,
                     'unit_price': item.unit_price,
                     **({'tbc': True} if item.price_to_follow else {}),
+                    **({'finish': item.finish} if item.finish else {}),
                     'plywood': plywood.item_plywood(item),
                     'count': item.boq_count if item.is_boq else item.count,
                     **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),
@@ -1067,13 +1078,13 @@ def whatsapp_share(project_id):
         lines.append(f"\n🏠 *{room.name}*")
         for item in room.item_list:
             if item.price_to_follow:
-                lines.append(f"  • {item.name}: price to follow")
+                lines.append(f"  • {item.display_name}: price to follow")
             elif item.is_boq:
                 _size = (_ft_in(item.length) + (f" × {_ft_in(item.width)}" if item.width else '') + ' = ') if item.length else ''
-                lines.append(f"  • {item.name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
+                lines.append(f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
                              if item.unit_price and item.quantity else
-                             f"  • {item.name}: rate Rs.{item.unit_price:,.0f} per {item.unit_text}" if item.unit_price
-                             else f"  • {item.name}")
+                             f"  • {item.display_name}: rate Rs.{item.unit_price:,.0f} per {item.unit_text}" if item.unit_price
+                             else f"  • {item.display_name}")
             elif item.is_fixed:
                 lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{item.unit_price:,.0f}")
             else:

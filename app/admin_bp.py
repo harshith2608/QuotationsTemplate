@@ -324,7 +324,20 @@ def _save_boq_lines():
                 errors.append(f'"{name}" is already in your BOQ lines.')
                 continue
             db.session.add(BoqItem(**values))
+    if not errors and 'bq_finish_on' in request.form:      # the Finish column is shown: which lines come in finishes
+        from . import finishes
+        ticked = {int(i) for i in request.form.getlist('bq_finish') if i.isdigit() and i not in delete_ids}
+        errors += finishes.save([(o['name'], o['extra']) for o in finishes.all_options()], ticked)
     return errors
+
+
+def _save_finishes():
+    """Finishes from Admin → Rates (the base first). Returns error messages."""
+    from . import finishes
+    names, extras = request.form.getlist('fin_name'), request.form.getlist('fin_extra')
+    drop = set(request.form.getlist('fin_delete'))
+    opts = [(n, e) for i, (n, e) in enumerate(zip(names, extras)) if str(i) not in drop]
+    return finishes.save(opts, finishes.line_ids())
 
 
 @admin_bp.route('/rates', methods=['GET', 'POST'])
@@ -342,7 +355,8 @@ def rates():
                                    work_types=WORK_TYPES)
 
     from . import boq
-    if request.method == 'POST' and 'boq_submit' in request.form and boq.enabled():
+    if request.method == 'POST' and 'boq_submit' in request.form and (boq.enabled() or boq.ready()):
+        lump = not boq.enabled()                 # priced by material: the lump sums list (BOQ lines, unit "lump sum")
         errors = _save_boq_lines()
         if errors:
             db.session.rollback()
@@ -350,8 +364,19 @@ def rates():
                 flash(err, 'danger')
         else:
             db.session.commit()
-            flash('BOQ lines updated. New quotations use these as defaults.', 'success')
-        return redirect(url_for('admin.rates') + '#boq-lines')
+            flash('Lump sums updated. New quotations use these amounts.' if lump else
+                  'BOQ lines updated. New quotations use these as defaults.', 'success')
+        return redirect(url_for('admin.rates') + ('#lump-sums' if lump else '#boq-lines'))
+
+    if request.method == 'POST' and 'finish_submit' in request.form and boq.enabled():
+        errors = _save_finishes()
+        if errors:
+            for err in errors:
+                flash(err, 'danger')
+        else:
+            db.session.commit()
+            flash('Finishes saved. Tick the items that come in them under "Your items & rates".', 'success')
+        return redirect(url_for('admin.rates') + '#finishes')
 
     if request.method == 'POST' and 'price_list_submit' in request.form:
         errors = _save_price_list()
@@ -442,7 +467,22 @@ def rates():
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                            work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,
                            ply_details=ply_ready and plywood.details_ready(),
-                           boq_lines=_boq_lines() if boq.enabled() else None, boq_units=boq.UNITS)
+                           boq_lines=_boq_lines() if boq.enabled() else None, boq_units=boq.UNITS,
+                           lump_lines=_lump_lines() if boq.ready() and not boq.enabled() else None,
+                           **(_finish_context() if boq.enabled() else {}))
+
+
+def _lump_lines():
+    """Priced by material: the saved lump sums (Pooja civil works, debris removal…), BOQ lines with unit "lump sum"."""
+    from . import boq
+    from .models import BoqItem
+    return BoqItem.query.filter(BoqItem.unit == boq.LUMP_SUM).order_by(BoqItem.category, BoqItem.name).all()
+
+
+def _finish_context():
+    from . import finishes
+    return {'finish_options': finishes.all_options(), 'finish_on': bool(finishes.options()),
+            'finish_ids': finishes.line_ids()}
 
 
 def _boq_lines():

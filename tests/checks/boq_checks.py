@@ -22,16 +22,18 @@ with app.app_context():
 
 # ── Off by default ──
 t = c.get('/projects/new').text
-ok('off by default: no BOQ line option or descriptions on the form', 'modal_type_boq' not in t and 'modal_item_desc' not in t
-   and '"boq": false' not in t)
+ok('off by default: no BOQ line option on the form (a Lump sum tab instead)', 'modal_type_boq' not in t
+   and 'modal_type_lump' in t and '"boq": false' not in t)
 c.post('/projects/new', data={'customer_name': 'BOQ Off', 'mobile': '9000000701', 'rooms_data': json.dumps([
-    {'name': 'Site', 'items': [{'name': 'Demolition', 'type': 'boq', 'quantity': 1, 'unit': 'lump sum', 'unit_price': 25000,
-                                'description': 'Debris removal'}]}])})
+    {'name': 'Site', 'items': [{'name': 'Demolition', 'type': 'boq', 'quantity': 2, 'unit': 'nos', 'unit_price': 12500,
+                                'description': 'Debris removal'},
+                               {'name': 'Site Cleaning', 'type': 'boq', 'quantity': 1, 'unit': 'lump sum', 'unit_price': 9000}]}])})
 with app.app_context():
     off_pid = Project.query.order_by(Project.id.desc()).first().id      # names are encrypted: newest quotation
-    it = Item.query.join(Item.room).filter(Room.project_id == off_pid).first()
-    ok('off: a BOQ line sent anyway is kept as a fixed-price line (same amount)', it.item_type == 'fixed'
-       and it.quantity * it.unit_price == 25000)
+    its = {i.name: i for i in Item.query.join(Item.room).filter(Room.project_id == off_pid).all()}
+    it = its['Demolition']
+    ok('off: a BOQ line sent anyway is kept as a fixed-price line (same amount); a lump sum stays a lump sum',
+       it.item_type == 'fixed' and it.quantity * it.unit_price == 25000 and its['Site Cleaning'].is_boq)
 s = c.get('/admin/settings?tab=documents').text
 ok('off: no BOQ layout in Settings → Quotation PDFs', 'il_boq' not in s)
 
@@ -45,7 +47,8 @@ with app.app_context():
     ok('no woodwork in the starter lines (wardrobes, kitchen units… are measured items, priced by material)',
        not BoqItem.query.filter(BoqItem.name.in_(['Wardrobe', 'TV Unit', 'Kitchen Below Platform', 'Bed with Storage'])).count()
        and BoqItem.query.filter_by(name='False Ceiling').first() is not None)
-    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Fan Fitting…)', n == len(boq.starter_lines())
+    ok('turning BOQ lines on gives the starter lines (False Ceiling, Electric Wiring, Fan Fitting…), even after a lump sum was saved',
+   n == len(boq.starter_lines()) + 1
        and fc0 and fc0.unit == 'sqft' and fc0.rate == 120 and BoqItem.query.filter_by(name='Electric Wiring').first().unit == 'point')
     ok('turning BOQ lines on also picks the BOQ layout for the customer PDF', layout.initial_layout() == layout.LAYOUT_BOQ)
     boq.set_enabled(False); boq.set_enabled(True); db.session.commit()
@@ -207,7 +210,7 @@ ok('edit form gets each line\'s type, unit and description back', any(i.get('typ
 v = c.get(f'/projects/{pid}').text
 ok('quotation page: a section of BOQ lines with Qty and Unit, description, Other work total', 'Section Total' in v
    and re.search(r'>696</td>\s*<td[^>]*>Sq\.ft</td>', v) is not None
-   and 'Conduit, polycab wire considered' in v and 'Other work (BOQ lines)' in v)
+   and 'Conduit, polycab wire considered' in v and 'Other work' in v)
 
 with app.test_request_context():                  # priced by item, /pdf gives the one quotation PDF: the generator itself
     from app.pdf_utils import generate_pdf
@@ -215,7 +218,7 @@ with app.test_request_context():                  # priced by item, /pdf gives t
 ok('Full Quotation: a section of BOQ lines prints Qty, Unit, Rate and Amount (no sizes or materials), with descriptions; '
    'Other work in the summary of a quotation that also has measured items',
    re.search(r'696 Sq\.ft 120 ', full) is not None and 'Section Total' in full and 'Conduit, polycab wire considered' in full
-   and 'Other work (BOQ lines)' in full and 'Openable, laminate finish' in full)
+   and 'Other work' in full and 'Openable, laminate finish' in full)
 
 # ── BOQ layout ──
 s = c.get('/admin/settings?tab=documents').text

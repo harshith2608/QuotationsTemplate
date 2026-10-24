@@ -257,6 +257,17 @@ class Item(db.Model):
         return max(int(round((self.quantity or 0) / one)), 1) if one else 1
 
     @property
+    def finish(self):
+        """A BOQ line's finish when not the base one ('Acrylic'), else '' (app/finishes.py; kept in wood_type)."""
+        return (self.wood_type or '') if self.is_boq else ''
+
+    @property
+    def display_name(self):
+        """The name as printed: 'Wardrobe (Acrylic finish)' for a BOQ line in another finish."""
+        from .finishes import label
+        return label(self.name, self.finish)
+
+    @property
     def note(self):
         """The item's description, or '' (never reads the column before the database update)."""
         from . import boq

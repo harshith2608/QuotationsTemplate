@@ -415,7 +415,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     section_totals = []                       # (room, amount): the summary of a quotation priced by item
 
     def _name_cell(item, extra=''):
-        text = escape(item.name + (f' × {item.count}' if not item.is_fixed and item.count > 1 else ''))
+        text = escape(item.display_name + (f' × {item.count}' if not item.is_fixed and item.count > 1 else ''))
         notes = '\n'.join(x for x in (item.note, extra) if x)
         if notes:
             text += f'<br/><font size="7" color="#546e7a">{escape(notes).replace(chr(10), "<br/>")}</font>'

@@ -380,7 +380,7 @@ made-up customer on Hobby is fine; delete it afterwards.
 
 How it works once set up:
 1. An interior designer or furniture works asks for a trial on the website → **"Set up my app now"** → on the
-   console's public page `/start` they choose their address and password → their app opens straight away (a
+   console's public page `/start` they confirm their firm name (the address comes from it) and choose a password → their app opens straight away (a
    ready-made trial is renamed for them). "Others" still come to you. You see every new trial on the dashboard,
    linked to the request, with the WhatsApp follow-ups.
 2. In their app, the admin taps **Choose a plan** (or **Renew**) → pays ₹4,999 / ₹8,999 by Razorpay → the plan is
@@ -542,8 +542,13 @@ Every business makes one choice, **how they price** (Settings → Pricing, also 
 page → Features):
 - **By material**: a rate per sqft for each material and work type, sizes on each item, fittings from a price list
   (modular / carpentry firms).
+  One-off work (accent wall, pooja civil works, debris removal) is a **Lump sum**: Add item → Lump sum, one amount
+  with a description, saved for next time and listed in Admin → Rates → Lump sums.
 - **By item**: each item with its own rate, description and unit (wardrobe per sqft, side table per piece, 3D design
   lump sum), printed as a BOQ (turnkey firms). They only see items and rates, not materials or plywood.
+  **Finishes** (optional, Admin → Rates → Finishes): when the same item costs more in another finish (laminate base,
+  acrylic / veneer / membrane +25%). The ticked items get a Finish choice on the quotation; the rate changes by itself
+  and prints as "Wardrobe (Acrylic finish)". The firm can change the % or add finishes there any time.
 
 When a firm shares its old quotations, have them written into a `.json` price list (format at the top of
 `app/price_list.py`): how they price, their items and rates (or materials, rates and fittings), one or more starting

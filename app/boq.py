@@ -163,12 +163,16 @@ def qty_text(quantity):
 
 # ── Saved BOQ lines (Admin → Rates → BOQ lines) ──────────────────────────────
 
-def saved_lines():
-    """[{name, description, unit, rate}] for the quotation form, by name."""
+def saved_lines(lump_only=False):
+    """[{name, description, unit, rate, category, finish?}] for the quotation form, by name (finish: it comes in the
+    business's finishes, app/finishes.py). lump_only: just the lump sums (priced by material)."""
+    from .finishes import line_ids, options
     from .models import BoqItem
+    q = BoqItem.query.filter(BoqItem.unit == LUMP_SUM) if lump_only else BoqItem.query
+    in_finishes = line_ids() if not lump_only and options() else set()     # lines that come in Laminate / Acrylic…
     return [{'name': b.name, 'description': b.description or '', 'unit': b.unit or 'nos', 'rate': b.rate or 0,
-             'category': b.category or 'Other'}
-            for b in BoqItem.query.order_by(BoqItem.id).all()]             # groups in the order they were added
+             'category': b.category or 'Other', **({'finish': True} if b.id in in_finishes else {})}
+            for b in q.order_by(BoqItem.id).all()]             # groups in the order they were added
 
 
 def remember(lines):
@@ -261,10 +265,12 @@ def starter_lines(metric=None):
 
 def add_starter_lines():
     """Give a business with no saved BOQ lines the starter set (in its own units). Returns how many were added."""
+    from sqlalchemy import func
     from .models import BoqItem
-    if BoqItem.query.first() is not None:
-        return 0
-    lines = starter_lines()
+    if BoqItem.query.filter(BoqItem.unit != LUMP_SUM).first() is not None:
+        return 0                                  # (lump sums saved while priced by material don't count)
+    have = {n for (n,) in db.session.query(func.lower(BoqItem.name)).all()}
+    lines = [l for l in starter_lines() if l[1].lower() not in have]
     for category, name, unit, rate, description in lines:
         db.session.add(BoqItem(name=name, unit=unit, rate=rate, description=description, category=category))
     return len(lines)
