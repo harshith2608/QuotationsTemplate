@@ -23,5 +23,19 @@
   <p class="muted small" style="margin:0">WhatsApp opens your own WhatsApp with the message ready: check it and press send.
     When they pay, Razorpay tells the console: {{ 'their app is made' if row.kind == 'new' else 'the plan is added' }} and they get a receipt by email.</p>
 </div>
+<h2>Proforma invoice</h2>
+<div class="card stack">
+  <p class="muted small" style="margin:0">For a customer who asks for an invoice before paying: the plan, the amount and
+    this payment link, as a PDF to send them. It says clearly that it is not a GST invoice (no GST charged, no GST credit).
+    Their receipt is emailed automatically once they pay.</p>
+  <form method="post" action="{{ url_for('console.payment_proforma', payment_id=row.id) }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="bill_to">Their business name</label>
+    <input type="text" id="bill_to" name="bill_to" value="{{ row.business_name or '' }}" maxlength="120">
+    <label for="address">Their address <span class="muted small">(optional)</span></label>
+    <textarea id="address" name="address" rows="3" maxlength="400"></textarea>
+    <div><button class="btn btn-primary" type="submit">Download proforma invoice (PDF)</button></div>
+  </form>
+</div>
 <p><a href="{{ url_for('console.customer_detail', slug=row.slug) if row.kind == 'new' else url_for('console.payments') }}">← Back</a></p>
 {% endblock %}

@@ -1478,6 +1478,23 @@ def payment_link(payment_id):
                            mail_ready=__import__('app.mailer', fromlist=['enabled']).enabled())
 
 
+@console_bp.route('/payments/<int:payment_id>/proforma', methods=['POST'])
+@login_required
+def payment_proforma(payment_id):
+    """A proforma invoice (PDF) for a payment link: for a customer who asks for an invoice before paying."""
+    from flask import send_file
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row:
+        abort(404)
+    bill_to = request.form.get('bill_to', '').strip()[:120]
+    address = request.form.get('address', '').strip()[:400]
+    buf = subscription.proforma_pdf(row, bill_to, address)
+    audit('payment_proforma', row['slug'], subscription.proforma_no(row))
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'QuoteRoom-proforma-{subscription.proforma_no(row)}.pdf')
+
+
 @console_bp.route('/payments/<int:payment_id>/link/email', methods=['POST'])
 @login_required
 def payment_link_email(payment_id):

@@ -641,6 +641,14 @@ before = len(outbox())
 c.post(f'/payments/{lrow[0]}/link/email', data={'email': 'owner@linked.example'})
 sent = [m for m in outbox()[before:] if m['To'] == 'owner@linked.example']
 ok('…emailed from hello@ with the link', len(sent) == 1 and 'rzp.io/l/T' in sent[0].get_content())
+ok('the link page offers a proforma invoice', 'Download proforma invoice (PDF)' in c.get(f'/payments/{lrow[0]}/link').text)
+pf = c.post(f'/payments/{lrow[0]}/proforma', data={'bill_to': 'Linked Interiors Pvt', 'address': 'Shop 4, Pune'})
+import io as _io, re as _re
+from pypdf import PdfReader as _PR
+pft = _re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in _PR(_io.BytesIO(pf.data)).pages)) if pf.status_code == 200 else ''
+ok('proforma invoice PDF: their name, the plan and amount, the payment link, and "not a GST invoice" in plain words',
+   pf.mimetype == 'application/pdf' and 'Linked Interiors Pvt' in pft and 'Shop 4, Pune' in pft and '8,999.00' in pft
+   and 'rzp.io/l/T' in pft and 'Not a GST invoice' in pft and 'no GST is charged' in pft and 'PF' in pft)
 def link_hook(plink_id, pay_id):
     body = _json.dumps({'event': 'payment_link.paid', 'payload': {'payment_link': {'entity': {'id': plink_id}},
                         'payment': {'entity': {'id': pay_id, 'order_id': 'order_from_link'}}}}).encode()

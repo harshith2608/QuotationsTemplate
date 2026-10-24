@@ -518,3 +518,82 @@ def receipt_pdf(row):
     doc.build(el)
     buf.seek(0)
     return buf
+
+
+def proforma_no(row):
+    """'PF2610-0007': the proforma for payment link 7 (made in Oct 2026)."""
+    made = row.get('created_at') or datetime.utcnow()
+    return f"PF{made:%y%m}-{row['id']:04d}"
+
+
+def proforma_pdf(row, bill_to='', address=''):
+    """A proforma invoice for a payment link, before they pay: what the plan costs and how to pay. Not a tax invoice
+    (the platform isn't registered under GST yet); the payment receipt follows by email once they pay."""
+    from datetime import timedelta
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from xml.sax.saxutils import escape
+    who = issuer()
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm,
+                            title=f'Proforma invoice {proforma_no(row)}')
+    st = getSampleStyleSheet()
+    small = ParagraphStyle('s', parent=st['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#455a64'))
+    body = ParagraphStyle('b', parent=st['Normal'], fontSize=10, leading=14)
+    dark = colors.HexColor('#163a30')
+    made = row.get('created_at') or datetime.utcnow()
+    fmt = lambda d: d.strftime('%d %b %Y')
+    rupees = lambda p: f'Rs. {p / 100:,.2f}'
+    plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
+    contact = ' · '.join(x for x in (who['address'], who['email'], who['phone']) if x)
+    title = ParagraphStyle('t', parent=st['Normal'], fontSize=18, leading=24, textColor=dark)
+    el = [Paragraph(f'<b>{escape(who["name"])}</b>', title),
+          Paragraph(escape(contact), small) if contact else Spacer(1, 1), Spacer(1, 18),
+          Paragraph('<b>Proforma invoice</b>', ParagraphStyle('h', parent=st['Normal'], fontSize=14, leading=18)),
+          Paragraph('Not a GST invoice', ParagraphStyle('h2', parent=small, textColor=colors.HexColor('#b42318'))),
+          Spacer(1, 10)]
+    to = escape(bill_to or row.get('business_name') or row['slug'])
+    if address:
+        to += '<br/>' + escape(address).replace('\n', '<br/>')
+    info = [['Proforma no.', proforma_no(row), 'Date', fmt(made)],
+            [Paragraph('<b>To</b>', ParagraphStyle('k', parent=body, fontSize=9, textColor=dark)),
+             Paragraph(to, ParagraphStyle('v', parent=body, fontSize=9, leading=12)), 'Valid until', fmt(made + timedelta(days=7))],
+            ['App', f'{row["slug"]}.{tenancy.base_domain()}', '', '']]
+    t = Table(info, colWidths=[3 * cm, 7 * cm, 2.5 * cm, 4.5 * cm])
+    t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('TEXTCOLOR', (0, 0), (0, -1), dark),
+                           ('TEXTCOLOR', (2, 0), (2, -1), dark), ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                           ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                           ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    el += [t, Spacer(1, 16)]
+    months = '6 months' if row['plan'] == '6m' else '12 months'
+    lines = [['Description', 'Amount'],
+             [Paragraph(f'<b>QuoteRoom {escape(plan_label)}</b><br/><font size="8" color="#455a64">'
+                        f'Quotation app for your whole team, all features, for {months}. '
+                        'If you are on a free trial, the plan starts when the trial ends.</font>', body),
+              rupees(row['amount_paise'])],
+             ['GST', 'Not charged'],
+             ['Total to pay', rupees(row['amount_paise'])]]
+    lt = Table(lines, colWidths=[13 * cm, 4 * cm])
+    lt.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), dark), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 10),
+                            ('ALIGN', (1, 0), (1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('LINEBELOW', (0, 1), (-1, 2), 0.5, colors.lightgrey),
+                            ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'), ('PADDING', (0, 0), (-1, -1), 7)]))
+    el += [lt, Spacer(1, 16)]
+    if row.get('link_url') and row.get('status') != 'paid':
+        el += [Paragraph('<b>How to pay</b>', body),
+               Paragraph(f'Online (UPI, card or net banking): <link href="{escape(row["link_url"])}" color="#1f4d3f">'
+                         f'{escape(row["link_url"])}</link>', body), Spacer(1, 12)]
+    el += [Paragraph('<b>Please note</b>', body),
+           Paragraph('This is a proforma invoice: it shows what you will pay, before you pay. It is <b>not a GST '
+                     f'(tax) invoice</b>. {escape(who["name"])} is not registered under GST, so no GST is charged and '
+                     'there is no GST credit to claim on this payment.', small),
+           Spacer(1, 4),
+           Paragraph('Once you pay, you get a payment receipt by email.', small),
+           Spacer(1, 10), Paragraph('Thank you for choosing QuoteRoom.', small)]
+    doc.build(el)
+    buf.seek(0)
+    return buf
