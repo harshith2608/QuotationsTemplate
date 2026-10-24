@@ -6,7 +6,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 
 ---
 
-## 1. Status at a glance (as of 15–16 Oct 2026)
+## 1. Status at a glance (as of 23 Oct 2026)
 
 | Piece | Format | Status | Files (in `ad-videos/`, git-ignored) | Generator |
 |---|---|---|---|---|
@@ -14,13 +14,13 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "Same job. Same price. Very different impression." | Single image 4:5 | **Scheduled** (one per day from 16 Oct, 11 AM IST) | `post-before-after.png` | `tools/ad_video/profile_posts.py` |
 | "What your customer receives" | Carousel, 6 slides 4:5 | **Scheduled** | `carousel-customer-sees-1…6.png` | `tools/ad_video/profile_posts.py` |
 | "One price. Your whole team." | Single image 4:5 | **Scheduled** | `post-one-price.png` | `tools/ad_video/profile_posts.py` |
-| "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Ready to post** | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
-| "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Ready to post** | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
+| "From tape measure to GST invoice" | Reel 28 s, 9:16 + 4:5, music | **Posted** (by 23 Oct) | `reel-tape-to-invoice-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_tape_to_invoice.py` (opener: `tape_opener.py`) |
+| "Excel vs QuoteRoom" (same quote, two ways) | Reel 21 s, 9:16 + 4:5, music | **Posted** (by 23 Oct) | `reel-excel-vs-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_excel_vs.py` |
 | "Excel vs QuoteRoom" carousel (10-slide framework: hook, example, diagrams, comparisons, CTA) | Carousel, 10 slides 4:5 | **Ready to post** | `carousel-excel-vs-1…10.png` | `tools/ad_video/carousel_excel_vs.py` |
-| "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Ready to post** | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
-| "Do you know your profit?" | Reel 22 s, 9:16, music | **Ready to post** | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
-| "Still typing every quotation from scratch?" (starting quotations, shown on a laptop) | Reel 22 s, 9:16 + 4:5, music | **Ready to post** (23 Oct) | `reel-templates-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_templates.py` (screens from the tutorial 14 recording) |
-| "Does your quotation have all 6?" | Single image 4:5 | **Ready to post** | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
+| "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Posted** (by 23 Oct) | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
+| "Do you know your profit?" | Reel 22 s, 9:16, music | **Posted** (by 23 Oct) | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
+| "Still typing every quotation from scratch?" (starting quotations, shown on a laptop) | Reel 22 s, 9:16 + 4:5, music | **Posted** (23 Oct) | `reel-templates-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_templates.py` (screens from the tutorial 14 recording) |
+| "Does your quotation have all 6?" | Single image 4:5 | **Posted** (by 23 Oct) | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
 
@@ -119,6 +119,26 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > Save this and check your next quotation 🔖 Logo, room-by-room sizes, your rates, payment details, a GST invoice and a link to accept online.
 > QuoteRoom gives you all 6 on every quote. Free 7-day trial, link in bio.
 > #interiordesigner #interiordesign #quotation #modularkitchen #interiordesignbusiness
+
+**Still typing every quotation from scratch?** (reel, starting quotations on a laptop) · cover: "Stop typing quotations from scratch"
+> Your 2 BHK quotations look almost the same every time. So why type them from scratch? 🤔
+>
+> With QuoteRoom, start from your usual quotation:
+> ✅ Every room, item and rate is already filled in
+> ✅ Just type the sizes for this home
+> ✅ The total works itself out, section by section
+> ✅ Send a clean PDF, or a link your customer accepts online
+>
+> Quotations in minutes, not hours.
+>
+> Already have quotations in Excel or PDF? Send them to us and we'll set up your items, rates and starting quotations for you. 🙌
+>
+> 👉 Try it free for 7 days: link in bio
+>
+> #interiordesign #interiordesigner #turnkeyinteriors #interiorbusiness #modularkitchen #interiorcontractor #homeinteriors #quotation #smallbusinessindia #quoteroom
+
+First comment: *"Comment 'TEMPLATE' and we'll show you how it works with your own quotations."* Post the 9:16 file as the
+Reel (and Stories); the 4:5 file for a feed video or an ad.
 
 **Suggested posting order (from 16 Oct):** 16 Oct before/after (11 AM, scheduled) · 17 Oct customer-receives carousel (11 AM, scheduled)
 + tape-to-invoice reel (7 PM) · 18 Oct one-price (11 AM, scheduled) · 19 Oct Excel reel · 21 Oct payments reel ·
@@ -395,6 +415,40 @@ Console → Tutorials → Add a tutorial: title `13 · On your home screen`, len
 > #interiordesign #interiordesigner #interiorbusiness #modularkitchen #quoteroom
 
 (The browser menus are plain drawn mock-ups, since a web page can't capture the browser's own menus; the icon and name are the app's real ones.)
+**Part 14** — *Starting quotations: every quotation already filled in | QuoteRoom tutorial 14* (laptop, 1 min 10 s)
+> Stop typing the same rooms, items and rates for every quotation. In QuoteRoom, start from your usual quotation ("2 BHK turnkey", "1 BHK basic"…) and every section, item, description and rate is already filled in. Type the sizes for this home, remove what it doesn't need, and your quotation is ready to send.
+>
+> In this video:
+> • Pick a starting quotation on New Quotation
+> • Type quantities or sizes: every amount works itself out
+> • Remove a line, or add one from your own list
+> • Save: lines left empty are removed (the app asks first)
+> • A total for every section, and a clean PDF for your customer
+> • Make your own: Save as template, Duplicate, rename or delete
+>
+> New to QuoteRoom? Share your old quotations with us and we'll set up your items, rates and starting quotations for you.
+>
+> 0:00 Start every quotation filled in
+> 0:13 Type the quantities and sizes
+> 0:27 Remove a line or add one
+> 0:41 Save and the PDF
+> 0:52 Make your own: Save as template, Duplicate
+>
+> QuoteRoom is a quotation app for interior designers, turnkey contractors and modular furniture firms: quotations in your own units and rates, branded PDFs, online approval, payments and GST invoices.
+>
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+
+Extra tags: `quotation template, BOQ, turnkey interiors`.
+
+The reel as a YouTube Short (`reel-templates-9x16.mp4`): title *Still typing every quotation from scratch? #Shorts*
+> Your 2 BHK quotations look almost the same every time, so why type them from scratch? With QuoteRoom, start from your usual quotation: every room, item and rate is already filled in. Just type the sizes and the total works itself out, then send a clean PDF or a link your customer accepts online.
+>
+> Send us your old quotations and we'll set them up for you.
+>
+> 👉 Free 7-day trial: https://www.quote-room.co.in
+>
+> #interiordesign #interiordesigner #turnkeyinteriors #modularkitchen #interiorbusiness #quoteroom #Shorts
+
 ## 8. Instagram captions for every tutorial (standalone)
 
 Each works on its own (no "part N", no "previous video"). Paste the caption, set the cover text, post as a Reel.

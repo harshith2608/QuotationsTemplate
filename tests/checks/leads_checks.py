@@ -24,6 +24,7 @@ ok('/free-trial page renders the form (no-JS / ad link)', 'data-trial-form' in t
 r = c.post('/trial-request', data=good, headers=J); d = r.get_json()
 ok('valid request → ok, no WhatsApp follow-up link', r.status_code == 200 and d['ok'] and d['name'] == 'Ravi Kumar'
    and 'whatsapp_url' not in d)
+ok('self-serve off (default): no "set up now" link', d.get('setup_url') is None)
 with app.app_context():
     l = Lead.query.one()
     ok('stored: name tidied, phone normalised, source kept', l.name == 'Ravi Kumar' and l.phone == '919876543210'
@@ -34,14 +35,19 @@ with app.app_context():
 
 bad = c.post('/trial-request', data={'name': 'R', 'phone': '12345', 'business_type': 'other'}, headers=J)
 e = bad.get_json()['errors']
-ok('validation errors per field', bad.status_code == 400 and set(e) == {'name', 'company_name', 'city', 'phone', 'business_other'})
-e = c.post('/trial-request', data={'name': 'Ab', 'company_name': 'Ab Co', 'city': 'Pune', 'phone': '9876543211', 'business_type': 'carpenter'}, headers=J).get_json()['errors']
+ok('validation errors per field (WhatsApp number and email are required)', bad.status_code == 400
+   and set(e) == {'name', 'company_name', 'city', 'phone', 'email', 'business_other'}
+   and e['email'] == 'Please enter your email address.' and 'WhatsApp' in e['phone'])
+e = c.post('/trial-request', data={'name': 'Ab', 'company_name': 'Ab Co', 'city': 'Pune', 'phone': '9876543211', 'email': 'ab@abco.example',
+                                   'business_type': 'carpenter'}, headers=J).get_json()['errors']
 ok('unknown business type rejected', set(e) == {'business_type'})
 e = c.post('/trial-request', data=dict(good, phone='9876543212', email='not-an-email'), headers=J).get_json()['errors']
 ok('a mistyped email is caught', set(e) == {'email'})
 r = c.post('/trial-request', data={'name': 'Meena', 'company_name': 'Meena Kitchens', 'city': 'Chennai', 'phone': '09123456789', 'business_type': 'other',
-                                   'business_other': 'Modular kitchens'}, headers=J)
-ok('"Others" with text accepted (0-prefixed number ok, email optional)', r.get_json()['ok'])
+                                   'business_other': 'Modular kitchens', 'email': 'meena@kitchens.example'}, headers=J)
+ok('"Others" with text accepted (0-prefixed number ok)', r.get_json()['ok'])
+e = c.post('/trial-request', data=dict(good, phone='9876543213', email=''), headers=J).get_json()['errors']
+ok('no email → asked for it', set(e) == {'email'})
 for num, valid in [('98765 43210', True), ('919876543210', True), ('5876543210', False), ('98765432', False), ('+1 415 555 0100', False)]:
     from app.marketing import normalise_phone
     ok(f'phone {num!r} → {"valid" if valid else "invalid"}', bool(normalise_phone(num)) == valid)
@@ -122,3 +128,38 @@ ok('before the update: request accepted and stored (without the company, city an
 r = c4.get('/leads', headers=auth('leads-pass-123'))
 ok('before the update: /leads and CSV still work', r.status_code == 200 and 'Ravi Kumar' in r.text
    and c4.get('/leads.csv', headers=auth('leads-pass-123')).status_code == 200)
+
+
+# Self-serve trials on: interior designers and furniture works get a signed "set up my app now" link (no personal data)
+os.environ.update(AUTO_TRIALS='1', SIGNUP_URL='https://ops.quote-room.test', SIGNUP_SECRET='signup-secret')
+from app import signup as _su
+c5 = create_app('development').test_client()
+r = c5.post('/trial-request', data=dict(good, phone='9811100044', company_name='Kiran Interiors'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.1'}); d = r.get_json()
+ok('self-serve on: an interior designer gets "set up my app now" (a signed link with only the request id)',
+   d['ok'] and d['setup_url'] and d['setup_url'].startswith('https://ops.quote-room.test/start?t=')
+   and '9811100044' not in d['setup_url'] and 'Kiran' not in d['setup_url']
+   and _su.read_token(d['setup_url'].split('t=', 1)[1].replace('%2E', '.')) is not None)
+r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type='other', business_other='Tiles'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.2'})
+ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
+t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
+ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
+
+# With email set up, the link goes to their email instead (proves the address is theirs)
+import glob, tempfile, email as _email
+box = tempfile.mkdtemp()
+os.environ['MAIL_OUTBOX_DIR'] = box
+r = c5.post('/trial-request', data=dict(good, phone='9811100047', email='kiran@kiraninteriors.example'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.4'}); d = r.get_json()
+mails = [_email.message_from_bytes(open(f, 'rb').read()) for f in sorted(glob.glob(box + '/*.eml'))]
+ok('email set up: the set-up link is emailed, not shown (the page says where it went)', d['ok'] and d['setup_url'] is None
+   and d['emailed_to'] == 'ki***@kiraninteriors.example' and len(mails) == 1
+   and mails[0]['To'] == 'kiran@kiraninteriors.example' and mails[0]['Subject'] == 'Set up your QuoteRoom app'
+   and 'https://ops.quote-room.test/start?t=' in mails[0].get_payload(decode=True).decode())
+t = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
+            environ_base={'REMOTE_ADDR': '10.9.0.5'}).text
+ok('…and the page without JavaScript says "Check your email"', 'Check your email' in t and 'x***@kiraninteriors.example' in t)
+os.environ.pop('MAIL_OUTBOX_DIR', None)
+for k in ('AUTO_TRIALS', 'SIGNUP_URL', 'SIGNUP_SECRET'):
+    os.environ.pop(k, None)

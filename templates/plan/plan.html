@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mt-3 mb-3">
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-stars me-2 text-primary"></i>{{ 'Choose a plan' if status.is_trial else 'Your plan' }}</h4>
+  <p class="text-muted small mb-0">
+    {% if status.has_limit %}{{ status.label }} · {{ 'ends' if status.days_left is not none and status.days_left >= 0 else 'ended' }}
+    {{ status.ends_on.strftime('%d %b %Y') }}{% endif %}
+    {% if status.is_trial %} · Everything you've set up and every quotation stays as it is.{% endif %}
+  </p>
+</div>
+
+<div class="row g-3 mb-4" id="planOptions">
+  {% for key, head, note in [('6m', '6 months', 'Pay for 6 months'), ('1y', '12 months', 'Save ₹' ~ '{:,}'.format(prices['6m'] * 2 - prices['1y']) ~ ' a year')] %}
+  <div class="col-12 col-md-6">
+    <div class="card shadow-sm border-0 h-100 {{ 'border border-2 border-primary' if key == '1y' }}">
+      <div class="card-body d-flex flex-column">
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="fw-bold fs-5">{{ head }}</span>
+          {% if key == '1y' %}<span class="badge bg-primary">Best value</span>{% endif %}
+        </div>
+        <div class="display-6 fw-bold my-2">₹{{ '{:,}'.format(prices[key]) }}</div>
+        <div class="small text-muted mb-3">{{ note }} · your whole team · all features · no GST</div>
+        <ul class="small mb-3 ps-3">
+          <li>Unlimited quotations, staff logins and customers</li>
+          <li>Your logo and colours on every PDF</li>
+          <li>{{ 'Starts when your trial ends: no days lost' if status.is_trial and status.days_left is not none and status.days_left >= 0
+                 else 'Added to your current plan: no days lost' if status.has_limit and status.state in ('active', 'reminder', 'grace')
+                 else 'Starts today' }}</li>
+        </ul>
+        <button type="button" class="btn {{ 'btn-primary' if key == '1y' else 'btn-outline-primary' }} mt-auto fw-semibold"
+                onclick="buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>Pay ₹{{ '{:,}'.format(prices[key]) }}</button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div id="payAlert" class="alert d-none"></div>
+<p class="small text-muted"><i class="bi bi-shield-check me-1"></i>Secure payment by Razorpay: UPI, cards, net banking or wallets.
+  You get a receipt straight away.</p>
+
+{% if payments %}
+<h6 class="fw-bold mt-4">Payments</h6>
+<div class="table-responsive">
+<table class="table table-sm align-middle">
+  <thead class="table-light"><tr><th>Date</th><th>Plan</th><th class="text-end">Amount</th><th>Receipt</th></tr></thead>
+  <tbody>
+  {% for p in payments %}
+    <tr><td>{{ p.paid_at.strftime('%d %b %Y') }}</td><td>{{ '6 months' if p.plan == '6m' else '12 months' }}</td>
+        <td class="text-end">₹{{ '{:,.0f}'.format(p.amount_paise / 100) }}</td>
+        <td><a href="{{ url_for('plan.receipt', payment_id=p.id) }}" target="_blank" rel="noopener">{{ p.receipt_no }}</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+const CSRF = '{{ csrf_token() }}';
+function showPayAlert(kind, text) {
+  const a = document.getElementById('payAlert');
+  a.className = 'alert alert-' + kind; a.textContent = text;
+}
+async function buyPlan(plan, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch('{{ url_for("plan.order") }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                                                           body: JSON.stringify({ plan }) });
+    const o = await r.json();
+    if (!o.ok) { showPayAlert('danger', o.error || 'Could not start the payment.'); btn.disabled = false; return; }
+    const rzp = new Razorpay({
+      key: o.key_id, amount: o.amount, currency: o.currency, order_id: o.order_id, name: 'QuoteRoom',
+      description: o.description, prefill: o.prefill, theme: { color: '#1f4d3f' },
+      modal: { ondismiss: () => { btn.disabled = false; } },
+      handler: async (resp) => {
+        showPayAlert('info', 'Payment received. Activating your plan…');
+        const v = await fetch('{{ url_for("plan.paid") }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                                                             body: JSON.stringify(resp) });
+        const d = await v.json();
+        if (d.ok) location.href = d.redirect;
+        else showPayAlert('warning', d.error);
+      }
+    });
+    rzp.on('payment.failed', (e) => { showPayAlert('danger', (e.error && e.error.description) || 'The payment failed. Please try again.'); btn.disabled = false; });
+    rzp.open();
+  } catch (e) {
+    showPayAlert('danger', 'Could not reach the server. Check your connection and try again.'); btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

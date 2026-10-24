@@ -1,0 +1,27 @@
+{% extends "console/_layout.html" %}
+{% block title %}Payment link{% endblock %}
+{% block content %}
+<h1>Payment link</h1>
+<p class="muted small">{{ row.business_name or row.slug }} · {{ '6 months' if row.plan == '6m' else '12 months' }} ·
+  ₹{{ '{:,.0f}'.format(row.amount_paise / 100) }} · {{ 'paid ✓' if row.status == 'paid' else 'waiting for payment (valid 7 days)' }}
+  {% if row.kind == 'new' %}· their app is made when they pay{% endif %}</p>
+
+<div class="card stack">
+  <div class="row"><input type="text" id="plink" value="{{ row.link_url }}" readonly class="grow mono">
+    <button type="button" class="btn btn-sm" onclick="copyText(document.getElementById('plink').value, this)">Copy</button></div>
+  <label for="msg">Message</label>
+  <textarea id="msg" rows="7" readonly>{{ message }}</textarea>
+  <div class="row">
+    {% if wa_url %}<a class="btn btn-wa" href="{{ wa_url }}" target="_blank" rel="noopener">Send on WhatsApp</a>
+    {% else %}<span class="muted small">No WhatsApp number: copy the message instead.</span>{% endif %}
+  </div>
+  <form method="post" action="{{ url_for('console.payment_link_email', payment_id=row.id) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="email" name="email" value="{{ row.email or '' }}" placeholder="their email" class="grow" required>
+    <button class="btn" type="submit" {% if not mail_ready %}disabled title="Set up email first (PLATFORM_SMTP_*)"{% endif %}>Send by email</button>
+  </form>
+  <p class="muted small" style="margin:0">WhatsApp opens your own WhatsApp with the message ready: check it and press send.
+    When they pay, Razorpay tells the console: {{ 'their app is made' if row.kind == 'new' else 'the plan is added' }} and they get a receipt by email.</p>
+</div>
+<p><a href="{{ url_for('console.customer_detail', slug=row.slug) if row.kind == 'new' else url_for('console.payments') }}">← Back</a></p>
+{% endblock %}

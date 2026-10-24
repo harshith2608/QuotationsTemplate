@@ -4,8 +4,8 @@
 {% set is_admin = current_user.is_authenticated and current_user.is_admin %}
 {% macro renew_button(label) -%}
   {% if is_admin and renew_url %}
-  <a href="{{ renew_url }}" target="_blank" rel="noopener" class="btn btn-sm {{ 'btn-light' if plan.state == 'read_only' else 'btn-outline-dark' }} fw-semibold ms-md-2 mt-2 mt-md-0 flex-shrink-0">
-    <i class="bi bi-whatsapp me-1"></i>{{ label }}
+  <a href="{{ renew_url }}" {% if not renew_in_app %}target="_blank" rel="noopener"{% endif %} class="btn btn-sm {{ 'btn-light' if plan.state == 'read_only' else 'btn-outline-dark' }} fw-semibold ms-md-2 mt-2 mt-md-0 flex-shrink-0">
+    <i class="bi bi-{{ 'credit-card' if renew_in_app else 'whatsapp' }} me-1"></i>{{ label }}
   </a>
   {% elif is_admin %}
   <span class="small ms-md-2 fw-semibold">Contact support to {{ 'subscribe' if plan.is_trial else 'renew' }}.</span>

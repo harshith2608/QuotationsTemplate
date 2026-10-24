@@ -1,0 +1,44 @@
+{% extends "console/_layout.html" %}
+{% block title %}Payments{% endblock %}
+{% block content %}
+<h1>Payments</h1>
+<p class="muted small">Plans bought inside the app (Razorpay). A trial that pays keeps working at once; it is then moved to its
+  own database {{ 'automatically' if auto else 'from here (automatic moving is off)' }}.</p>
+{% if not keys_set %}<div class="card small" style="border-color:var(--warn)">The Razorpay webhook isn't set up on the console
+  (PLATFORM_RAZORPAY_WEBHOOK_SECRET): payments still record when the customer's browser returns, but a closed browser is only
+  picked up by the webhook. See OPERATIONS.md.</div>{% endif %}
+
+<div class="row" style="gap:12px">
+  <div class="card"><div class="muted small">This month</div><div style="font-size:1.5rem;font-weight:700">₹{{ '{:,.0f}'.format(this_month) }}</div></div>
+  <div class="card"><div class="muted small">All payments</div><div style="font-size:1.5rem;font-weight:700">₹{{ '{:,.0f}'.format(total) }}</div></div>
+  <div class="card"><div class="muted small">Payments</div><div style="font-size:1.5rem;font-weight:700">{{ rows|length }}</div></div>
+</div>
+
+{% if pending %}
+<h2>Paid, still on the trial</h2>
+<div class="card stack">
+  <p class="small muted" style="margin:0">They have their paid plan already; moving gives them their own database (seconds, same address and login).</p>
+  {% for slug in pending %}
+  <form method="post" action="{{ url_for('console.payments_move', slug=slug) }}" class="row" data-confirm="Move {{ slug }} to its own database now?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <span class="mono">{{ slug }}.{{ base_domain }}</span>
+    <button class="btn btn-sm btn-primary" type="submit">Move now</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>All payments</h2>
+{% if not rows %}<p class="muted">No payments yet.</p>{% else %}
+<table>
+  <tr><th>Paid</th><th>Business</th><th>Plan</th><th>Amount</th><th>Until</th><th>Receipt</th><th>Via</th></tr>
+  {% for r in rows %}
+  <tr><td class="small">{{ r.paid_at|ist }}</td><td>{{ r.business_name or r.slug }} <span class="muted small">{{ r.slug }}</span></td>
+      <td>{{ '6 months' if r.plan == '6m' else '12 months' }}</td><td>₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}</td>
+      <td class="small">{{ r.plan_end.strftime('%d %b %Y') if r.plan_end else '—' }}</td>
+      <td><a href="{{ url_for('console.payment_receipt', payment_id=r.id) }}" target="_blank" rel="noopener">{{ r.receipt_no }}</a></td>
+      <td class="small muted">{{ r.source }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

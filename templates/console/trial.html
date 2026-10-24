@@ -99,6 +99,27 @@
   </form>
 </div>
 
+<h2 id="payment-link">Payment link</h2>
+<div class="card stack">
+  {% if links and t.status == 'active' %}
+  <p class="muted small" style="margin:0">They pay by UPI, card or net banking; the plan starts when the trial ends (no days lost) and the trial moves to its own database.</p>
+  <form method="post" action="{{ url_for('console.payment_link_create') }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="slug" value="{{ t.slug }}">
+    <input type="hidden" name="name" value="{{ contact.company or t.slug }}">
+    <div class="row">
+      <div><label for="plplan">Plan</label>
+        <select id="plplan" name="plan"><option value="1y">12 months · ₹{{ '{:,}'.format(prices['1y']) }}</option>
+          <option value="6m">6 months · ₹{{ '{:,}'.format(prices['6m']) }}</option></select></div>
+      <div class="grow"><label for="plphone">WhatsApp number</label><input id="plphone" type="tel" name="phone" value="{{ contact.phone }}"></div>
+      <div class="grow"><label for="plemail">Email</label><input id="plemail" type="email" name="email" value="{{ pay_email }}"></div>
+    </div>
+    <div><button class="btn btn-primary" type="submit">Make payment link</button></div>
+  </form>
+  {% else %}<p class="muted small" style="margin:0">Payment links need the platform's Razorpay keys on the console
+    (PLATFORM_RAZORPAY_KEY_ID / _SECRET, OPERATIONS.md 3h).</p>{% endif %}
+</div>
+
 <h2 id="features">Features</h2>
 <div class="card stack">
   {% if boq %}

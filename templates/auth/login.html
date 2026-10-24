@@ -29,7 +29,7 @@
             <input type="text" id="username" name="username"
                    class="form-control form-control-lg {% if form.username.errors %}is-invalid{% endif %}"
                    placeholder="Enter username"
-                   value="{{ form.username.data or '' }}"
+                   value="{{ form.username.data or request.args.get('u', '')[:80] }}"
                    autofocus autocomplete="username" required>
             {% for err in form.username.errors %}
               <div class="invalid-feedback">{{ err }}</div>

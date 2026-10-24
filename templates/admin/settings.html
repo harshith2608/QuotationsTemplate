@@ -80,7 +80,7 @@
 <div class="d-flex flex-wrap align-items-center gap-2 small mb-3 text-muted">
   <span class="badge {{ 'bg-info text-dark' if plan.is_trial else 'bg-success' }}">{{ plan.label }}</span>
   <span>{{ plan.started_on.strftime('%d %b %Y') if plan.started_on else '' }} – {{ plan.ends_on.strftime('%d %b %Y') }}</span>
-  {% if renew_url %}<a href="{{ renew_url }}" target="_blank" rel="noopener" class="ms-1">{{ 'Choose a plan' if plan.is_trial else 'Renew' }}</a>{% endif %}
+  {% if renew_url %}<a href="{{ renew_url }}" {% if not renew_in_app %}target="_blank" rel="noopener"{% endif %} class="ms-1">{{ 'Choose a plan' if plan.is_trial else 'Renew' }}</a>{% endif %}
 </div>
 {% endif %}
 

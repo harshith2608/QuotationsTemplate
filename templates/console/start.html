@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Set up your QuoteRoom app</title>
+<style>
+  :root { --pine:#1f4d3f; --pine-dark:#0e221c; --tape:#f2b705; --ink:#16231f; --muted:#56655f; --line:#d8ddd7; --bad:#b42318; --good:#1e7a4c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink);
+         background: linear-gradient(160deg, var(--pine) 0%, var(--pine-dark) 70%); min-height: 100vh; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 28px 16px 48px; }
+  .brand { color: #fff; font-weight: 800; font-size: 1.25rem; margin-bottom: 18px; display:flex; align-items:center; gap:8px; }
+  .brand b { color: var(--tape); }
+  .card { background: #fff; border-radius: 16px; padding: 24px 20px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  h1 { font-size: 1.4rem; margin: 0 0 6px; }
+  p.lead { color: var(--muted); margin: 0 0 18px; }
+  label { display:block; font-weight: 600; font-size: .92rem; margin: 14px 0 6px; }
+  input[type=text], input[type=password] { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 1rem; }
+  input:focus { outline: 2px solid var(--pine); border-color: var(--pine); }
+  .addr { display:flex; align-items:center; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .addr input { border:0; border-radius:0; min-width: 0; }
+  .addr span { padding: 0 12px; color: var(--muted); background: #f5f6f2; align-self: stretch; display:flex; align-items:center; white-space: nowrap; font-size:.9rem; }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .err { font-size: .85rem; color: var(--bad); margin-top: 6px; }
+  .ok { font-size: .85rem; color: var(--good); margin-top: 6px; }
+  .check { display:flex; gap:8px; align-items:flex-start; font-weight: 400; font-size:.9rem; }
+  .check input { margin-top: 3px; }
+  button, .btn { display:block; width:100%; margin-top: 20px; padding: 14px; border:0; border-radius: 12px; background: var(--pine); color:#fff;
+           font-size: 1.05rem; font-weight: 700; cursor:pointer; text-align:center; text-decoration:none; }
+  button[disabled] { opacity: .7; cursor: wait; }
+  .formerr { background:#fdecea; color: var(--bad); border-radius: 10px; padding: 10px 12px; font-size:.9rem; margin-bottom: 8px; }
+  .tick { font-size: 2.6rem; color: var(--good); }
+  .addrbox { margin-top: 10px; padding: 10px 12px; background: #f1f6f3; border-radius: 10px; font-size: .9rem; color: var(--muted);
+             overflow-wrap: anywhere; }
+  .addrbox strong { color: var(--pine); }
+  a { color: var(--pine); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span>✓</span><span>Quote<b>Room</b></span></div>
+  <div class="card">
+  {% if problem %}
+    <h1>Link not valid</h1>
+    <p class="lead">{{ problem }}</p>
+    <a class="btn" href="{{ site }}">Go to the website</a>
+  {% elif ready %}
+    <div class="tick">✓</div>
+    <h1>{{ 'Your app is ready!' if new else 'Your app is already set up' }}</h1>
+    <p class="lead">Your free 7-day trial is at <strong>{{ ready }}.{{ base }}</strong>.
+      {% if new %}Sign in with the username and password you just chose. Bookmark it, or add it to your phone's home screen.{% endif %}</p>
+    <a class="btn" href="https://{{ ready }}.{{ base }}/login{% if username %}?u={{ username|urlencode }}{% endif %}">Open my app</a>
+    <p class="hint" style="text-align:center;margin-top:14px">Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a>
+      or reply to us on WhatsApp.</p>
+  {% else %}
+    <h1>Set up your app</h1>
+    <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>
+    {% if errors.form %}<div class="formerr">{{ errors.form }}</div>{% endif %}
+    <form method="post" action="{{ url_for('console.start_trial') }}" id="startForm" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="t" value="{{ token }}">
+      <label for="company">Company name</label>
+      <input type="text" id="company" name="company" value="{{ form.company }}" maxlength="80" required>
+      <div class="hint">On your quotations. You can correct it once later.</div>
+      {% if errors.company %}<div class="err">{{ errors.company }}</div>{% endif %}
+      <div class="addrbox">Your app's address: <strong id="address">{{ (address ~ '.' ~ base) if address else '…' }}</strong></div>
+
+      <label for="username">Your username</label>
+      <input type="text" id="username" name="username" value="{{ form.username }}" maxlength="40" autocapitalize="off" autocomplete="username" required>
+      {% if errors.username %}<div class="err">{{ errors.username }}</div>{% endif %}
+
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" minlength="8" autocomplete="new-password" required>
+      {% if errors.password %}<div class="err">{{ errors.password }}</div>{% else %}<div class="hint">At least 8 characters.</div>{% endif %}
+      <label for="password2">Password again</label>
+      <input type="password" id="password2" name="password2" minlength="8" autocomplete="new-password" required>
+      {% if errors.password2 %}<div class="err">{{ errors.password2 }}</div>{% endif %}
+
+      <label class="check"><input type="checkbox" name="terms" value="1" required>
+        <span>I agree to the <a href="{{ site }}/terms" target="_blank" rel="noopener">terms</a> and the
+        <a href="{{ site }}/privacy" target="_blank" rel="noopener">privacy policy</a>.</span></label>
+      {% if errors.terms %}<div class="err">{{ errors.terms }}</div>{% endif %}
+
+      {% if turnstile %}<div class="cf-turnstile" data-sitekey="{{ turnstile }}" style="margin-top:14px"></div>{% endif %}
+      <button type="submit" id="go">Create my app</button>
+      <p class="hint" style="text-align:center">Free for 7 days. No payment details needed.</p>
+    </form>
+  {% endif %}
+  </div>
+</div>
+{% if not problem and not ready %}
+{% if turnstile %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}
+<script>
+  // The web address comes from the company name (shown as they type; a number is added if it's taken)
+  const company = document.getElementById('company'), address = document.getElementById('address');
+  let timer;
+  company.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      if (company.value.trim().length < 2) return;
+      try {
+        const r = await fetch('{{ url_for("console.start_check") }}?t={{ token|urlencode }}&company=' + encodeURIComponent(company.value));
+        const d = await r.json();
+        if (d.ok) address.textContent = d.address;
+      } catch (e) {}
+    }, 350);
+  });
+  document.getElementById('startForm').addEventListener('submit', () => {
+    const b = document.getElementById('go'); b.disabled = true; b.textContent = 'Setting up your app…';
+  });
+</script>
+{% endif %}
+</body>
+</html>

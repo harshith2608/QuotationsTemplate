@@ -43,6 +43,12 @@ MAX_FAILURES, LOCK_MINUTES = 5, 15
 EXTEND_CHOICES = ['3d', '7d', '14d', '30d']
 
 CONSOLE_DDL = [
+    """CREATE TABLE IF NOT EXISTS public.signups (
+        lead_id    INTEGER PRIMARY KEY,
+        slug       VARCHAR(40) NOT NULL,
+        ip_hash    VARCHAR(64),
+        created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+    )""",
     """CREATE TABLE IF NOT EXISTS public.console_audit (
         id      SERIAL PRIMARY KEY,
         at      TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
@@ -561,8 +567,23 @@ def dashboard():
         demo_stats = load_demo_stats()
     except Exception as exc:                 # the demo database being unreachable shouldn't break the dashboard
         demo_stats = {'error': str(exc)}
+    from . import signup
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain())
+                           extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
+                           spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+
+
+@console_bp.route('/spares', methods=['POST'])
+@login_required
+def top_up_spares():
+    try:
+        made = ops.top_up_spares()
+    except ops.OpsError as exc:
+        flash(f'Could not make ready-made trials: {exc}', 'error')
+    else:
+        audit('spares_top_up', None, f'{made} made')
+        flash(f'{made} ready-made trial(s) made; {ops.spare_count()} ready.' if made else 'Already enough ready-made trials.', 'ok')
+    return redirect(url_for('console.dashboard'))
 
 
 @console_bp.route('/trials', methods=['POST'])
@@ -614,9 +635,16 @@ def trial_detail(slug):
                                     'ORDER BY at DESC LIMIT 30'), {'s': slug}).mappings().all()
     contact = trial_contact(t)
     drafts, suggested = follow_ups(t)
+    from . import subscription
+    pay_email = ''
+    if t['status'] == 'active':
+        from .models import AppSetting
+        with tenancy.tenant_context(slug, t['schema_name']):
+            pay_email = AppSetting.get('company_email', '') or ''
     return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history,
                            extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested,
-                           boq=boq_state)
+                           boq=boq_state, links=subscription.links_enabled(), pay_email=pay_email,
+                           prices=subscription.prices())
 
 
 @console_bp.route('/trials/<slug>/extend', methods=['POST'])
@@ -879,12 +907,15 @@ def _customers():
 @login_required
 def customers_list():
     c = _customers()
-    rows = c.all_customers() if not c.missing_settings() else []
+    hosting = 'shared' if c.shared_ready() else 'own'
+    rows = c.all_customers() if not c.missing_settings(hosting) else []
     for r in rows:
         r['badge'] = c.plan_badge(r)
         r['url'] = c.app_url(r['slug'])
     active_trials = [t for t in ops.list_trials() if t['status'] == 'active']
-    return render_template('console/customers.html', rows=rows, missing=c.missing_settings(),
+    return render_template('console/customers.html', rows=rows, missing=c.missing_settings(hosting),
+                           missing_own=c.missing_settings('own'), shared_ready=c.shared_ready(),
+                           links=__import__('app.subscription', fromlist=['links_enabled']).links_enabled(),
                            trials=active_trials, base_domain=tenancy.base_domain(), plans=c.PLANS)
 
 
@@ -896,13 +927,31 @@ def customers_create():
     trial = request.form.get('trial', '').strip() if source == 'trial' else None
     slug = trial or request.form.get('slug', '').strip().lower()
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    if request.form.get('collect') == 'link':        # pay first: the app is made when the payment arrives
+        from . import subscription
+        name, plan = request.form.get('name', '').strip(), request.form.get('plan', '')
+        try:
+            if trial:
+                pay = subscription.create_payment_link(trial, plan, name, phone, request.form.get('email', '').strip())
+            else:
+                c.create_pending(slug, name, plan, request.form.get('admin_username', 'admin'), phone,
+                                 hosting=request.form.get('hosting') or ('shared' if c.shared_ready() else 'own'))
+                pay = subscription.create_payment_link(slug, plan, name, phone, request.form.get('email', '').strip(),
+                                                       kind='new')
+        except (c.CustomerError, subscription.PaymentError, tenancy.TenantError) as exc:
+            flash(f'Could not make the payment link: {exc}', 'error')
+            return redirect(url_for('console.customers_list'))
+        audit('payment_link', pay['slug'], f'{plan}, {"new customer" if pay["kind"] == "new" else "trial"}')
+        return redirect(url_for('console.payment_link', payment_id=pay['id']))
     try:
         row = c.start(slug, request.form.get('name', ''), request.form.get('plan', ''), source_trial=trial,
-                      admin_username=request.form.get('admin_username', 'admin'), phone=phone)
+                      admin_username=request.form.get('admin_username', 'admin'), phone=phone,
+                      hosting=request.form.get('hosting') or ('shared' if c.shared_ready() else 'own'))
     except (c.CustomerError, ops.OpsError, tenancy.TenantError) as exc:
         flash(f'Could not start: {exc}', 'error')
         return redirect(url_for('console.customers_list'))
-    audit('customer_create', row['slug'], f'plan {row["plan"]}' + (f', from trial {trial}' if trial else ', new'))
+    audit('customer_create', row['slug'], f'plan {row["plan"]}, {row.get("hosting") or "own"} app'
+          + (f', from trial {trial}' if trial else ', new'))
     return redirect(url_for('console.customer_detail', slug=row['slug']))
 
 
@@ -945,7 +994,23 @@ def customer_detail(slug):
     with db.engine.connect() as conn:
         history = conn.execute(text("SELECT at, action, detail FROM public.console_audit WHERE target = :s "
                                     "ORDER BY at DESC LIMIT 30"), {'s': slug}).mappings().all()
-    return render_template('console/customer.html', row=row, c=c, steps=c.STEPS, step_labels=c.STEP_LABELS,
+    from . import subscription
+    pending_link, pay_email = None, ''
+    if row['status'] == 'awaiting_payment':
+        subscription.ensure_table()
+        with db.engine.connect() as conn:
+            pending_link = conn.execute(text("SELECT id FROM public.platform_payments WHERE slug = :s AND kind = 'new' "
+                                             "ORDER BY created_at DESC LIMIT 1"), {'s': slug}).mappings().first()
+    elif row['status'] == 'active' and live is not None:
+        try:
+            from .models import AppSetting
+            with c.open_customer(slug):
+                pay_email = AppSetting.get('company_email', '') or ''
+        except Exception:
+            pass
+    return render_template('console/customer.html', row=row, c=c, steps=c.steps_for(row), step_labels=c.STEP_LABELS,
+                           links=subscription.links_enabled(), pending_link=pending_link, pay_email=pay_email,
+                           prices=subscription.prices(),
                            next_step=c.next_step(row) if row['status'] in ('provisioning', 'failed') else None,
                            username=username, password=password, message=message,
                            wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,
@@ -1124,3 +1189,276 @@ def updates():
                 results.append((labels[key], False, str(exc)[:400]))
         audit('db_update', wanted, '; '.join(f'{l}: {"ok" if ok else "FAILED"}' for l, ok, _ in results))
     return render_template('console/updates.html', targets=targets, results=results, head=c.head_revision())
+
+
+# ── Plans bought in the app (Razorpay, the platform's account): payments, moving paid trials ──────────────
+
+@console_bp.route('/billing/razorpay-webhook', methods=['POST'])
+def platform_webhook():
+    """Razorpay → here on order.paid: record a payment whose browser closed before returning (once), add the plan,
+    then move a paid trial to its own database. Signed with PLATFORM_RAZORPAY_WEBHOOK_SECRET; no sign-in."""
+    import json
+    from flask import jsonify
+    from . import subscription
+    body = request.get_data()
+    if not subscription.verify_webhook(body, request.headers.get('X-Razorpay-Signature', '')):
+        current_app.logger.warning('Platform webhook rejected: bad or missing signature')
+        return jsonify({'error': 'invalid signature'}), 400
+    try:
+        result = subscription.handle_webhook(json.loads(body))
+    except Exception:
+        current_app.logger.exception('Platform webhook failed')
+        return jsonify({'error': 'not recorded'}), 500              # Razorpay retries later
+    moved = {}
+    if result in ('already recorded',) or result.startswith('paid'):     # a retry carries on an unfinished move
+        moved = subscription.move_all_paid() if subscription.auto_move() else {}
+    audit('platform_payment', None, f'{result}' + (f'; moved {moved}' if moved else ''))
+    return jsonify({'ok': True, 'result': result})
+
+
+@console_bp.route('/cron/tick')
+def cron_tick():
+    """Daily safety net (Vercel Cron, Authorization: Bearer CRON_SECRET): move paid trials not moved yet and carry
+    on any customer setup that stopped half-way."""
+    from flask import jsonify
+    from . import subscription
+    secret = (os.environ.get('CRON_SECRET') or '').strip()
+    if not secret or not hmac.compare_digest(request.headers.get('Authorization', ''), f'Bearer {secret}'):
+        abort(404)
+    out = subscription.move_all_paid() if subscription.auto_move() else {}
+    from . import signup
+    if signup._env('SIGNUP_SECRET'):                # ready-made trials, only once self-serve trials are set up
+        try:
+            made = ops.top_up_spares()
+            if made:
+                out['spares'] = made
+        except Exception as exc:
+            out['spares'] = f'failed: {exc}'
+    try:
+        sent = subscription.send_reminders()             # trial / plan ending emails (once each)
+        if sent:
+            out['reminders'] = sent
+    except Exception as exc:
+        out['reminders'] = f'failed: {exc}'
+    c = _customers()
+    for row in c.all_customers():
+        if row['status'] == 'provisioning' and row.get('hosting') == 'shared':
+            out[row['slug']] = (c.resume(row['slug']) or {}).get('status')
+    if out:
+        audit('cron_tick', None, str(out)[:500])
+    return jsonify({'ok': True, 'moved': out})
+
+
+@console_bp.route('/payments')
+@login_required
+def payments():
+    from . import subscription
+    rows = subscription.history(limit=300)
+    total = sum(r['amount_paise'] for r in rows) / 100
+    month = plan_mod.today().strftime('%Y-%m')
+    this_month = sum(r['amount_paise'] for r in rows if r['paid_at'] and r['paid_at'].strftime('%Y-%m') == month) / 100
+    return render_template('console/payments.html', rows=rows, total=total, this_month=this_month,
+                           pending=subscription.paid_trials(), keys_set=bool(os.environ.get('PLATFORM_RAZORPAY_WEBHOOK_SECRET')),
+                           auto=subscription.auto_move(), base_domain=tenancy.base_domain())
+
+
+@console_bp.route('/payments/move/<slug>', methods=['POST'])
+@login_required
+def payments_move(slug):
+    from . import subscription
+    try:
+        row = subscription.move_paid_trial(slug)
+    except Exception as exc:
+        flash(f'Could not move "{slug}": {exc}', 'error')
+        return redirect(url_for('console.payments'))
+    audit('payment_move', slug, (row or {}).get('status', ''))
+    flash(f'"{slug}" moved to its own database.' if (row or {}).get('status') == 'active'
+          else f'"{slug}": {(row or {}).get("error") or "not finished"}', 'ok' if (row or {}).get('status') == 'active' else 'error')
+    return redirect(url_for('console.customer_detail', slug=slug) if (row or {}).get('status') else url_for('console.payments'))
+
+
+@console_bp.route('/payments/<int:payment_id>/receipt')
+@login_required
+def payment_receipt(payment_id):
+    from flask import send_file
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row or row['status'] != 'paid':
+        abort(404)
+    return send_file(subscription.receipt_pdf(row), mimetype='application/pdf',
+                     download_name=f'QuoteRoom-receipt-{row["receipt_no"]}.pdf')
+
+
+# ── Self-serve trials: the public /start page (app/signup.py) ────────────────────────────────────────────────
+
+def load_lead(lead_id):
+    """One trial request from the website's database (decrypted), or None."""
+    from sqlalchemy import inspect, select
+    from . import crypto
+    from .models import Lead
+    engine = _leads_engine_or_none()
+    if engine is None:
+        return None
+    t = Lead.__table__
+    with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
+        present = {c['name'] for c in inspect(conn).get_columns('leads')}
+        row = conn.execute(select(*[c for c in t.c if c.name in present]).where(t.c.id == lead_id)).mappings().first()
+    if not row:
+        return None
+    lead = dict(row)
+    for later in ('company_name', 'city', 'email'):
+        lead.setdefault(later, None)
+    return lead
+
+
+def address_problem(slug):
+    """Why this web address can't be used, or ''."""
+    try:
+        slug = tenancy.validate_slug(slug)
+    except tenancy.TenantError as exc:
+        return str(exc)
+    if slug.startswith(ops.SPARE_PREFIX):
+        return 'Choose another address.'
+    tenancy.ensure_registry()
+    with db.engine.connect() as conn:
+        taken = conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': slug}).first()
+        if not taken and conn.execute(text("SELECT to_regclass('public.customers')")).scalar():
+            taken = conn.execute(text("SELECT 1 FROM public.customers WHERE slug = :s AND status <> 'deleted'"),
+                                 {'s': slug}).first()
+    return f'{slug}.{tenancy.base_domain()} is taken. Try another.' if taken else ''
+
+
+def _free_address(text_):
+    base = suggest_slug(text_)
+    for n in range(0, 50):
+        slug = base if n == 0 else f'{base[:26]}-{n + 1}'
+        if not address_problem(slug):
+            return slug
+    return ''
+
+
+def _signup(lead_id):
+    with db.engine.connect() as conn:
+        return conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': lead_id}).scalar()
+
+
+@console_bp.route('/start', methods=['GET', 'POST'])
+def start_trial():
+    """Public: the business that asked for a trial on the website sets up its own app (signed, single-use link)."""
+    from . import signup
+    token = request.values.get('t', '')
+    lead_id = signup.read_token(token)
+    lead = load_lead(lead_id) if lead_id else None
+    if not lead or lead.get('business_type') not in signup.ELIGIBLE:
+        return render_template('console/start.html', problem='This link has expired or isn\'t valid. Request a free '
+                               'trial again on the website, or message us on WhatsApp.', site=_site_url()), 404
+    done = _signup(lead_id)
+    if done:
+        return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url())
+    form = {'company': lead.get('company_name') or '', 'username': 'admin'}
+    errors = {}
+    if request.method == 'POST':
+        form = {k: (request.form.get(k) or '').strip() for k in ('company', 'username')}
+        password = request.form.get('password') or ''
+        ip_hash = hashlib.sha256(_client_ip().encode()).hexdigest()
+        with db.engine.connect() as conn:
+            recent = conn.execute(text("SELECT COUNT(*) FROM public.signups WHERE ip_hash = :h AND created_at > "
+                                       "(now() AT TIME ZONE 'utc') - INTERVAL '1 hour'"), {'h': ip_hash}).scalar()
+        if recent >= signup.MAX_PER_IP_PER_HOUR:
+            errors['form'] = 'Too many new apps from here in the last hour. Please try again later.'
+        if len(form['company']) < 2:
+            errors['company'] = 'Enter your company name.'
+        if not re.fullmatch(r'[A-Za-z0-9._-]{3,40}', form['username']):
+            errors['username'] = 'Use 3–40 letters, numbers, dots, dashes or underscores.'
+        if len(password) < 8:
+            errors['password'] = 'Use at least 8 characters.'
+        elif password != request.form.get('password2'):
+            errors['password2'] = 'The passwords don\'t match.'
+        if not request.form.get('terms'):
+            errors['terms'] = 'Please accept the terms to continue.'
+        if not errors and not signup.turnstile_ok(request.form.get('cf-turnstile-response'), _client_ip()):
+            errors['form'] = 'Please complete the check that you\'re not a robot.'
+        t = None
+        for _ in range(3) if not errors else ():   # the address comes from the firm's name (a number added if taken)
+            slug = _free_address(form['company'])
+            if not slug:
+                errors['company'] = 'Could not make a web address from this name. Add a word or two.'
+                break
+            try:
+                t = ops.claim_trial(slug, form['username'], password, 7, company=form['company'],
+                                    phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'))
+                break
+            except ops.OpsError as exc:
+                if 'is taken' not in str(exc):           # taken by someone else a moment ago: try the next one
+                    errors['form'] = str(exc)
+                    break
+        if t is not None:
+            with db.engine.begin() as conn:
+                conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h)'),
+                             {'i': lead_id, 's': t['slug'], 'h': ip_hash})
+            _link_lead(lead_id, 'trial', t['slug'])
+            audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}')
+            return render_template('console/start.html', ready=t['slug'], base=tenancy.base_domain(),
+                                   username=form['username'], site=_site_url(), new=True)
+    return render_template('console/start.html', form=form, errors=errors, token=token, lead=lead,
+                           address=_free_address(form['company'] or lead['name']), base=tenancy.base_domain(),
+                           site=_site_url(), turnstile=signup.turnstile_site_key())
+
+
+@console_bp.route('/start/check')
+def start_check():
+    """Public: the web address this firm name gets (for the /start page as they type the name)."""
+    from flask import jsonify
+    from . import signup
+    if not signup.read_token(request.args.get('t', '')):
+        abort(404)
+    slug = _free_address((request.args.get('company') or '').strip())
+    return jsonify({'ok': bool(slug), 'slug': slug, 'address': f'{slug}.{tenancy.base_domain()}' if slug else ''})
+
+
+# ── Payment links (the operator sends them on WhatsApp / email) ─────────────────────────────────────────────
+
+@console_bp.route('/payments/link', methods=['POST'])
+@login_required
+def payment_link_create():
+    """A payment link for a trial (to subscribe) or a customer (to renew), from their console page."""
+    from . import subscription
+    slug = request.form.get('slug', '')
+    phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    try:
+        pay = subscription.create_payment_link(slug, request.form.get('plan', ''), request.form.get('name', '').strip(),
+                                               phone, request.form.get('email', '').strip())
+    except subscription.PaymentError as exc:
+        flash(f'Could not make the payment link: {exc}', 'error')
+        return redirect(request.referrer or url_for('console.payments'))
+    audit('payment_link', slug, pay['plan'])
+    return redirect(url_for('console.payment_link', payment_id=pay['id']))
+
+
+@console_bp.route('/payments/<int:payment_id>/link')
+@login_required
+def payment_link(payment_id):
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row or not row.get('link_url'):
+        abort(404)
+    message = subscription.link_message(row)
+    return render_template('console/payment_link.html', row=row, message=message,
+                           wa_url=_wa_link(row.get('phone') or '', message),
+                           mail_ready=__import__('app.mailer', fromlist=['enabled']).enabled())
+
+
+@console_bp.route('/payments/<int:payment_id>/link/email', methods=['POST'])
+@login_required
+def payment_link_email(payment_id):
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row or not row.get('link_url'):
+        abort(404)
+    to = request.form.get('email', '').strip()
+    if subscription.email_link(row, to):
+        audit('payment_link_email', row['slug'], to)
+        flash(f'Payment link emailed to {to}.', 'ok')
+    else:
+        flash('Could not send the email (check the address, and the email settings: PLATFORM_SMTP_*).', 'error')
+    return redirect(url_for('console.payment_link', payment_id=payment_id))
