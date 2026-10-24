@@ -66,6 +66,70 @@ function finishOptions(selected) {
     return `<option value="${escHtml(n)}" ${n.toLowerCase() === sel ? 'selected' : ''}>${escHtml(n + tag)}</option>`;
   }).join('');
 }
+// Photos on lines (turned on per business from the console): a small "Photo" button under the item's name; the photo
+// is made smaller in the browser (phone photos are several MB), uploaded at once, and the line keeps its id
+const PHOTOS = !!CATALOG.itemImages;
+const itemPhotos = {};                       // ik → image id
+function photoUrl(id) { return (CATALOG.imageUrl || '/item-images/0').replace(/0$/, String(id)); }
+function addPhotoControl(rk, ik) {
+  if (!PHOTOS && !itemPhotos[ik]) return;
+  const td = document.querySelector(`#item_row_${ik} > td`);
+  if (!td || document.getElementById('item_photo_' + ik)) return;
+  const d = document.createElement('div');
+  d.className = 'ki-photo';
+  d.id = 'item_photo_' + ik;
+  td.appendChild(d);
+  renderPhoto(rk, ik);
+}
+function setPhoto(rk, ik, id) {
+  if (!id) return;
+  itemPhotos[ik] = id;
+  addPhotoControl(rk, ik);
+  renderPhoto(rk, ik);
+}
+function renderPhoto(rk, ik) {
+  const d = document.getElementById('item_photo_' + ik);
+  if (!d) return;
+  const id = itemPhotos[ik];
+  d.innerHTML = id
+    ? `<a href="${photoUrl(id)}" target="_blank" rel="noopener" title="Open the photo"><img src="${photoUrl(id)}" alt="Photo of the item"></a>
+       <button type="button" class="btn btn-link btn-sm p-0 text-danger small" onclick="removePhoto('${rk}','${ik}')">Remove photo</button>`
+    : (PHOTOS ? `<label class="btn btn-link btn-sm p-0 small ki-photo-add" title="Add a reference photo for this item (optional)">
+         <i class="bi bi-camera"></i> Photo<input type="file" accept="image/*" class="d-none" onchange="uploadPhoto('${rk}','${ik}', this)"></label>` : '');
+}
+function removePhoto(rk, ik) { delete itemPhotos[ik]; renderPhoto(rk, ik); }
+// Phone photos: made at most 1600 px and JPEG before upload (the server makes its own smaller copy)
+async function _shrinkPhoto(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.88));
+    return blob || file;
+  } catch (e) { return file; }                // the browser can't read it: the server says why
+}
+async function uploadPhoto(rk, ik, input) {
+  const file = input.files && input.files[0];
+  const d = document.getElementById('item_photo_' + ik);
+  if (!file || !d) return;
+  d.innerHTML = '<span class="small text-muted">Adding photo…</span>';
+  const fd = new FormData();
+  fd.append('photo', await _shrinkPhoto(file), 'photo.jpg');
+  let msg = "Couldn't add the photo. Please try again.";
+  try {
+    const csrf = (document.querySelector('input[name="csrf_token"]') || {}).value || '';
+    const r = await fetch(CATALOG.imageUpload, { method: 'POST', headers: { 'X-CSRFToken': csrf }, body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.id) { setPhoto(rk, ik, j.id); return; }
+    if (j.error) msg = j.error;
+  } catch (e) {}
+  renderPhoto(rk, ik);
+  alert(msg);
+}
 let modalBoqTouched = false;      // the user typed a description/unit/rate: picking a saved line doesn't overwrite them
 const BOQ_UNITS = (CATALOG.boqUnits && CATALOG.boqUnits.length) ? CATALOG.boqUnits
   : ['sqft', 'rft', 'nos', 'point', 'sq m', 'rmt', 'set', 'lump sum'];
@@ -246,9 +310,9 @@ async function _doSaveDraft() {
     const roomName  = nameInput ? nameInput.value.trim() : (room.name || '');
     if (!roomName) return;
     const itemsPayload = [];
-    Object.values(room.items).forEach(item => {
+    Object.entries(room.items).forEach(([ik, item]) => {
       const p = _itemPayload(item);
-      if (p) itemsPayload.push(p);
+      if (p) { if (itemPhotos[ik]) p.image_id = itemPhotos[ik]; itemsPayload.push(p); }
     });
     const desc = roomDescriptionValues(rk).join('\n');
     roomsPayload.push({ name: roomName, items: itemsPayload, description: desc });
@@ -482,6 +546,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const rk = addRoom(rd.name);
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
+        _loadItem(rk, id);
+        if (id.image_id) setPhoto(rk, 'item_' + itemCounter, id.image_id);     // the row just added
+      });
+    });
+  }
+  function _loadItem(rk, id) {
         if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.tbc ? '' : id.unit_price, id.description,
                                                false, id.length, id.width, id.count, !!id.pending, !!id.tbc, id.finish || ''); return; }
         if (id.type === 'fixed') {
@@ -497,8 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
         addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '', id.count || 1, id.description || '');
-      });
-    });
   }
 
   updateNoRoomsHint();
@@ -936,6 +1004,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
+  addPhotoControl(rk, ik);
   return ik;
 }
 
@@ -1058,6 +1127,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && priceList.length) initAutocomplete(nameInput, () => priceList.map(p => p.name));
   onFixedField(rk, ik);
+  addPhotoControl(rk, ik);
   return ik;
 }
 
@@ -1260,6 +1330,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   const itemNameInput = document.getElementById('item_name_' + ik);
   if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
   if (area > 0) recalcAll();
+  addPhotoControl(rk, ik);
   return ik;
 }
 
@@ -1513,9 +1584,10 @@ function _validateForm() {
     if (!roomName) return;
 
     const itemsPayload = [];
-    Object.values(room.items).forEach(item => {
+    Object.entries(room.items).forEach(([ik, item]) => {
       const p = _itemPayload(item);
       if (!p) return;
+      if (itemPhotos[ik]) p.image_id = itemPhotos[ik];
       itemsPayload.push(p);
       hasItem = true;
     });

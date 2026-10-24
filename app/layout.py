@@ -79,6 +79,7 @@ def boq_rows(snapshot):
                     size += f" × {it['count']} No's"
                 detail = f"{it['material']} · {size}"
                 lines.append({'no': n, 'title': it['name'], 'description': '\n'.join(x for x in (desc, detail) if x),
+                              'image_id': it.get('image_id'),
                               'qty': units.area_value(it['area']), 'unit': units.area_label(),
                               'rate': units.rate_value(it['rate']), 'amount': it['amount']})
             else:
@@ -88,6 +89,7 @@ def boq_rows(snapshot):
                 desc = '\n'.join(x for x in (desc, f'Size: {size}' if size else '') if x)
                 from .finishes import label
                 lines.append({'no': n, 'title': label(it['name'], it.get('finish')), 'description': desc, 'qty': it['quantity'],
+                              'image_id': it.get('image_id'),
                               'unit': boq.unit_text(unit), 'rate': None if lump or not it['unit_price'] else it['unit_price'],
                               'amount': it['amount'], 'tbc': bool(it.get('tbc'))})
         out.append({'letter': letter, 'name': room['name'], 'description': room.get('description') or '', 'lines': lines})
@@ -154,13 +156,15 @@ def room_rows(snapshot):
             n += 1
             rows.append({'no': n, 'title': f"{room['name']} – Hardware" if measured else room['name'], 'hardware': True,
                          'description': '', 'items': [{'name': it['name'], 'length': None, 'width': None,
-                                                       'count': it['quantity']} for it in fittings],
+                                                       'count': it['quantity'], 'image_id': it.get('image_id')}
+                                                      for it in fittings],
                          'amount': round(sum(it['amount'] for it in fittings), 2)})
         for it in lumps:                        # a lump sum (pooja civil works ₹30,000): its own row and amount
             n += 1
             rows.append({'no': n, 'title': f"{room['name']} – {it['name']}" if measured or fittings or len(lumps) > 1
                          else room['name'], 'hardware': False, 'description': it.get('description') or '',
-                         'items': [{'name': it['name'], 'length': None, 'width': None, 'count': '1 LS'}],
+                         'items': [{'name': it['name'], 'length': None, 'width': None, 'count': '1 LS',
+                                    'image_id': it.get('image_id')}],
                          'amount': round(it['amount'], 2)})
     return rows
 
@@ -169,8 +173,10 @@ def _room_item(it):
     if it['type'] == 'boq':                    # no sizes: its quantity and unit, e.g. "696 Sq.ft"
         from . import boq
         return {'name': it['name'], 'length': it.get('length') or None, 'width': it.get('width') or None,
-                'count': f"{boq.qty_text(it['quantity'])} {boq.unit_text(it.get('unit'))}".strip()}
-    return {'name': it['name'], 'length': it['length'], 'width': it['width'], 'count': it.get('count', 1)}
+                'count': f"{boq.qty_text(it['quantity'])} {boq.unit_text(it.get('unit'))}".strip(),
+                'image_id': it.get('image_id')}
+    return {'name': it['name'], 'length': it['length'], 'width': it['width'], 'count': it.get('count', 1),
+            'image_id': it.get('image_id')}
 
 
 def count_text(count):

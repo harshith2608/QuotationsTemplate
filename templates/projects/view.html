@@ -395,7 +395,7 @@
               {% for item in room.item_list %}
               {% set amount = item.cost(item_rates, project_ply) %}
               <tr>
-                <td class="fw-medium">{{ item.display_name }}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}
+                <td class="fw-medium">{{ item.display_name }}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}{% if item.photo_id %}<a href="{{ url_for('projects.item_image', image_id=item.photo_id) }}" target="_blank" rel="noopener"><img class="ki-line-photo" src="{{ url_for('projects.item_image', image_id=item.photo_id) }}" alt="Photo of {{ item.name }}" loading="lazy"></a>{% endif %}
                   {% if item.is_boq and item.length %}<div class="small text-muted fw-normal">Size: {{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }} Nos.{% endif %}</div>{% endif %}</td>
                 <td class="text-center text-nowrap">{{ '%g' % item.quantity if item.quantity else '—' }}</td>
                 <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
@@ -430,7 +430,7 @@
               {% set item_subtotal = item.cost(item_rates, project_ply) %}
               {% if item.is_fixed %}
               <tr>
-                <td class="fw-medium">{{ item.display_name }}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}</td>
+                <td class="fw-medium">{{ item.display_name }}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}{% if item.photo_id %}<a href="{{ url_for('projects.item_image', image_id=item.photo_id) }}" target="_blank" rel="noopener"><img class="ki-line-photo" src="{{ url_for('projects.item_image', image_id=item.photo_id) }}" alt="Photo of {{ item.name }}" loading="lazy"></a>{% endif %}</td>
                 <td class="text-center text-muted d-none d-md-table-cell">—</td>
                 <td class="text-center text-muted d-none d-md-table-cell">—</td>
                 <td class="text-center text-muted">—</td>
@@ -445,7 +445,7 @@
               </tr>
               {% else %}
               <tr>
-                <td class="fw-medium">{{ item.name }}{% if item.count > 1 %} <span class="badge bg-light text-dark border">× {{ item.count }}</span>{% endif %}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}</td>
+                <td class="fw-medium">{{ item.name }}{% if item.count > 1 %} <span class="badge bg-light text-dark border">× {{ item.count }}</span>{% endif %}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}{% if item.photo_id %}<a href="{{ url_for('projects.item_image', image_id=item.photo_id) }}" target="_blank" rel="noopener"><img class="ki-line-photo" src="{{ url_for('projects.item_image', image_id=item.photo_id) }}" alt="Photo of {{ item.name }}" loading="lazy"></a>{% endif %}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.length | ft_in }}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.width | ft_in }}</td>
                 <td class="text-center fw-semibold">{{ "{:,.2f}".format(units.area_value(item.area)) }}</td>

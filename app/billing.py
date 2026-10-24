@@ -56,6 +56,8 @@ def quotation_snapshot(project, rooms=None):
     from . import layout
     from . import boq
     boq_ready = boq.ready()
+    from . import item_images
+    img_ready = item_images.ready()
     rates = _item_rates()
     rooms = rooms if rooms is not None else project.rooms_with_items()
     project_ply = plywood.project_plywood(project)
@@ -77,6 +79,8 @@ def quotation_snapshot(project, rooms=None):
                         row.update(length=i.length, width=i.width or 0, count=i.boq_count)
                 if boq_ready and i.description:
                     row['description'] = i.description     # only when set: older snapshots stay comparable
+                if img_ready and i.image_id:
+                    row['image_id'] = i.image_id           # a photo on the line: only when set
                 items.append(row)
             else:
                 key = plywood.item_key(i, project_ply)
@@ -90,6 +94,8 @@ def quotation_snapshot(project, rooms=None):
                 own = plywood.item_plywood(i)
                 if own:
                     row['plywood'] = own               # only when set: older snapshots stay comparable
+                if img_ready and i.image_id:
+                    row['image_id'] = i.image_id
                 if boq_ready and i.description:
                     row['description'] = i.description
                 items.append(row)
@@ -199,7 +205,8 @@ def restore_preview(project, snap):
                               'description': it.get('description', ''), 'length': it.get('length', 0),
                               'width': it.get('width', 0), 'count': it.get('count', 1),
                               **({'tbc': True} if it.get('tbc') else {}),
-                              **({'finish': it['finish']} if it.get('finish') else {})})
+                              **({'finish': it['finish']} if it.get('finish') else {}),
+                              **({'image_id': it['image_id']} if it.get('image_id') else {})})
                 subtotal += it['quantity'] * it['unit_price']
                 continue
             if f"{it['wood_type']}|{it['work_type']}" not in valid:
@@ -212,7 +219,8 @@ def restore_preview(project, snap):
                 changes[it['material']] = (it['material'], it['rate'], rate)
             items.append({'name': it['name'], 'type': 'measured', 'length': it['length'], 'width': it['width'],
                           'wood_type': it['wood_type'], 'work_type': it['work_type'], 'plywood': it.get('plywood'),
-                          'count': it.get('count', 1), 'description': it.get('description', '')})
+                          'count': it.get('count', 1), 'description': it.get('description', ''),
+                          **({'image_id': it['image_id']} if it.get('image_id') else {})})
             subtotal += round(it['length'] * it['width'] * it.get('count', 1), 4) * rate
         rooms.append({'name': room['name'], 'items': items, 'description': room.get('description')})
     subtotal = round(subtotal, 2)

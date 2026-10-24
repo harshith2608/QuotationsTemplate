@@ -550,12 +550,20 @@ page → Features):
   acrylic / veneer / membrane +25%). The ticked items get a Finish choice on the quotation; the rate changes by itself
   and prints as "Wardrobe (Acrylic finish)". The firm can change the % or add finishes there any time.
 
+**Photos on items** (console → their page → Features → **Turn photos on**; off by default): a small "Photo" button
+under every item on the quotation form, for a reference image (a sofa, a chair, a wardrobe design). It prints in a
+Photo column of the PDF and shows on the quotation page and the customer's link. Needs "Update all" once after the
+update that added it.
+
 When a firm shares its old quotations, have them written into a `.json` price list (format at the top of
 `app/price_list.py`): how they price, their items and rates (or materials, rates and fittings), one or more starting
 quotations (e.g. "2 BHK turnkey") and their notes and payment terms. Upload it with **Load price list** on that firm's
 page: it goes into that business only. New Quotation then offers their starting quotations first: every room and item
 filled in, they type the sizes and remove what that home doesn't need. Keep the file out of the repository: it is the
 firm's business data. Firms can also save any quotation as a starting quotation themselves (Save as template).
+The same file (or one with only `"quotations"`) can also bring in quotations they already sent, as real quotations
+with every line, unit and rate (the total is checked against their sheet). Loading it again doesn't add them twice. Their
+sheets often have no customer mobile number: they add it when they next edit the quotation.
 
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.

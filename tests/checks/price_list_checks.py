@@ -173,6 +173,31 @@ with app.app_context():
     ok('no finishes: nothing changes (no choice offered)', finishes.for_form() is None
        and not any(b.get('finish') for b in boq.saved_lines()))
 
+# ── Quotations from the firm's own sheets, loaded as real quotations ──
+QF = {'quotations': [{'customer_name': 'Sheet Home (2 BHK)', 'address': 'Sheet Towers', 'total': 47000,
+                      'rooms': [{'name': 'Other Services', 'items': [
+                          {'name': '3D Design', 'unit': 'lump sum', 'quantity': 1, 'rate': 25000},
+                          {'name': 'Vanity Storage', 'description': 'BWP ply\n6 Sq.ft × 2 Nos', 'unit': 'Sq.ft', 'quantity': 12, 'rate': 1500},
+                          {'name': 'Electric Wiring', 'unit': 'point', 'quantity': 4, 'rate': 1000}]}]}]}
+ok('a quotation whose lines don\'t add up to its total is refused',
+   'adds up to' in bad(dict(QF, quotations=[dict(QF['quotations'][0], total=50000)])))
+with app.app_context():
+    before_lines = BoqItem.query.count()
+    mode_before = boq.pricing_mode()
+    res = price_list.apply(price_list.parse(json.dumps(QF).encode()))
+    q = next(p for p in Project.query.all() if p.customer_name == 'Sheet Home (2 BHK)')
+    qits = {i.name: i for i in Item.query.join(Item.room).filter(Room.project_id == q.id).all()}
+    from app.models import QuoteRevision
+    ok('loaded as a real quotation (lines, units, total, its first revision), how they price unchanged, saved lines untouched',
+       res['quotations'] == ['Sheet Home (2 BHK)'] and abs(q.grand_total - 47000) < 0.01 and q.address == 'Sheet Towers'
+       and qits['Vanity Storage'].unit == 'sqft' and qits['Vanity Storage'].quantity == 12 and qits['3D Design'].unit == 'lump sum'
+       and q.status == 'complete' and boq.pricing_mode() == mode_before and BoqItem.query.count() == before_lines
+       and QuoteRevision.query.filter_by(project_id=q.id).count() == 1 and 'quotation added' in price_list.summary_text(res))
+    again = price_list.apply(price_list.parse(json.dumps(QF).encode()))
+    ok('loading the file again adds it only once', again['quotations'] == []
+       and sum(1 for p in Project.query.all() if p.customer_name == 'Sheet Home (2 BHK)') == 1)
+ok('it opens like any quotation', c.get(f'/projects/{q.id}').status_code == 200 and 'Vanity Storage' in c.get(f'/projects/{q.id}').text)
+
 # ── Pricing: by item / by material (Settings → Pricing, a setup guide step) ──
 from app import setup_guide
 s = c.get('/admin/settings?tab=pricing').text

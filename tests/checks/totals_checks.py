@@ -36,7 +36,7 @@ with app.app_context():
 # Settings are read once per request (branding.prefetch_common), materials/plywood "in use" in one query each, and
 # Reports loads every quotation's rooms and items (with their plywood) in a fixed number of queries.
 for url, budget in [(f'/projects/{priya.id}', 21), ('/projects', 12), ('/admin/dashboard', 10),
-                    (f'/projects/{priya.id}/edit', 15), ('/projects/new', 12), ('/admin/reports', 14),
+                    (f'/projects/{priya.id}/edit', 15), ('/projects/new', 13), ('/admin/reports', 14),
                     ('/admin/rates', 13), ('/admin/settings', 8), ('/admin/costs', 11)]:
     c.get(url)                         # warm: one-time checks (does a new column exist yet?) aren't per-page cost
     stmts.clear(); r = c.get(url)
