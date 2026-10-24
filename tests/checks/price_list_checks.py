@@ -217,6 +217,50 @@ ok('its starting quotation: measured items with their material waiting for a siz
    and items['Shutter Glass']['work_type'] == '' and items['Magic Corner']['type'] == 'fixed'
    and items['Magic Corner']['unit_price'] == 18000 and items['Magic Corner']['pending'])
 
+# ── Priced by material: one-off work as a lump sum (Add item → Lump sum) ──
+f = c.get('/projects/new?blank=1').text
+saved = json.loads(re.search(r'boqSaved:\s*(\[.*?\]),\n', f, re.S).group(1))
+ok('by material: the Add item window has a Lump sum tab, offering only the saved lump sums',
+   'id="modal_type_lump"' in f and 'lumpSum:     true' in f and 'id="modal_type_boq"' not in f
+   and 'Site Cleaning' in [b['name'] for b in saved] and all(b['unit'] == 'lump sum' for b in saved))
+c.post('/projects/new', data={'customer_name': 'Lump Home', 'mobile': '9000000903', 'discount_type': 'none',
+                              'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Pooja Room', 'items': [
+    {'name': 'Base Unit', 'length': 10, 'width': 2, 'wood_type': 'Laminates', 'work_type': 'Box Work'},
+    {'name': 'Pooja Civil Works', 'type': 'boq', 'quantity': 1, 'unit': 'lump sum', 'unit_price': 30000,
+     'description': 'Wall extension, plastering and painting'},
+    {'name': 'Stray Line', 'type': 'boq', 'quantity': 2, 'unit': 'sqft', 'unit_price': 100}]}])})
+with app.app_context():
+    lp = Project.query.order_by(Project.id.desc()).first()
+    lid = lp.id
+    its = {i.name: i for i in Item.query.join(Item.room).filter(Room.project_id == lid).all()}
+    ok('saved: the lump sum stays a lump sum (other BOQ lines become fixed-price items), total right',
+       its['Pooja Civil Works'].is_boq and its['Pooja Civil Works'].unit == 'lump sum'
+       and its['Stray Line'].is_fitting and abs(lp.grand_total - (20 * 900 + 30000 + 200)) < 0.01)
+    ok('…and remembered for next time, with its description', BoqItem.query.filter_by(name='Pooja Civil Works').first().rate == 30000)
+    snap = billing.quotation_snapshot(lp)
+    ok('…on the invoice', 'Pooja Civil Works' in [l['description'] for l in billing.invoice_lines(snap, '9403')])
+e = c.get(f'/projects/{lid}/edit').text
+ok('editing it: still the by-material form (Lump sum tab, not BOQ lines)', 'lumpSum:     true' in e and 'id="modal_type_boq"' not in e)
+v = c.get(f'/projects/{lid}').text
+ok('the quotation page shows it as a Lump sum', '>Lump sum<' in v and 'Pooja Civil Works' in v)
+for u in (f'/projects/{lid}/pdf', f'/projects/{lid}/pdf/customer'):
+    t_ = pdftext(u)
+    ok(f'{u.rsplit("/", 1)[-1]} PDF prints the lump sum and its amount', 'Pooja Civil Works' in t_ and '30,000' in t_)
+r = c.get('/admin/rates').text
+ok('Admin → Rates (by material): a Lump sums list', 'id="lump-sums"' in r and 'Pooja Civil Works' in r and 'Stray Line' not in r)
+with app.app_context():
+    rows = [(str(b.id), b.name, b.description or '', b.category or '') for b in BoqItem.query.filter_by(unit='lump sum').all()]
+    wardrobe = BoqItem.query.filter_by(name='Wardrobe').first().rate
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_id': [x[0] for x in rows] + [''], 'bq_name': [x[1] for x in rows] + ['Debris Removal'],
+                             'bq_desc': [x[2] for x in rows] + [''], 'bq_unit': ['lump sum'] * (len(rows) + 1),
+                             'bq_rate': ['32000' if x[1] == 'Pooja Civil Works' else '9000' for x in rows] + ['50000'],
+                             'bq_cat': [x[3] for x in rows] + ['']})
+with app.app_context():
+    ok('…they can change an amount and add one (other saved lines untouched)',
+       BoqItem.query.filter_by(name='Pooja Civil Works').first().rate == 32000
+       and BoqItem.query.filter_by(name='Debris Removal').first().unit == 'lump sum'
+       and BoqItem.query.filter_by(name='Wardrobe').first().rate == wardrobe)
+
 # ── Starter lines in the business's own units ──
 with app.app_context():
     AppSetting.set('area_unit', 'sqm'); db.session.commit()

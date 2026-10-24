@@ -122,12 +122,16 @@ def _form_catalog(project, rooms=None):
     from . import layout
     cat['room_descriptions'] = layout.description_options()
     from . import boq
-    has_boq = project is not None and any(i.is_boq for r in (rooms if rooms is not None else project.rooms_with_items())
-                                          for i in r.item_list)
+    ready = boq.ready()
+    has_boq = ready and project is not None and any(
+        i.is_boq and i.unit != boq.LUMP_SUM                  # a lump sum is fine priced by material too
+        for r in (rooms if rooms is not None else project.rooms_with_items()) for i in r.item_list)
     # BOQ lines on for the business, or already on this quotation (kept and editable if turned off later)
-    on = boq.ready() and (boq.enabled() or has_boq)
-    cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(), 'saved': boq.saved_lines() if on else [],
-                       'by_item': boq.enabled()}         # priced by item (Settings → Pricing): BOQ lines only
+    on = ready and (boq.enabled() or has_boq)
+    lump = ready and not on                                  # priced by material: one-off work as a lump sum
+    cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(),
+                       'saved': boq.saved_lines(lump_only=not on) if on or lump else [],
+                       'by_item': boq.enabled(), 'lump_sum': lump}   # by_item: priced by item, BOQ lines only
     if on:
         from . import finishes
         cat['boq_form']['finishes'] = finishes.for_form()     # Laminate / Acrylic +25%… (None: no finishes)
@@ -193,8 +197,8 @@ def _save_project_data(project, rooms_data, remember=True):
                 continue
             description = boq.clean_description(id_.get('description')) if boq_ready else None
             kind = id_.get('type')
-            if kind == 'boq' and not boq_on:
-                kind = 'fixed'                 # BOQ lines turned off: keep the line, priced the same way
+            if kind == 'boq' and not boq_on and not (boq_ready and boq.clean_unit(id_.get('unit')) == boq.LUMP_SUM):
+                kind = 'fixed'                 # BOQ lines turned off: keep the line, priced the same way (a lump sum stays)
             if kind in ('fixed', 'boq'):
                 # Fittings & accessories, or a BOQ line: quantity × unit price, no dimensions
                 try:

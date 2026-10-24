@@ -302,6 +302,78 @@
     </div>
   </div>
 
+  {% if lump_lines is defined and lump_lines is not none %}
+  <div class="col-12" id="lump-sums">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header"><i class="bi bi-cash-stack me-2"></i>Lump sums</div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          One-off work quoted as one amount: accent wall, pooja civil works, electrical changes, debris removal and
+          cleaning… On a quotation, <strong>Add item → Lump sum</strong>: pick one and its description and amount fill in
+          (change them there for that quotation only). A new one typed on a quotation is saved here for next time.
+        </p>
+        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="table-responsive">
+            <table class="table table-bordered align-middle mb-3">
+              <thead class="ki-table-head">
+                <tr>
+                  <th class="ps-3" style="min-width:260px; width:66%">Work &amp; description</th>
+                  <th style="min-width:140px; width:22%">Amount</th>
+                  <th class="text-center" style="width:80px">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in lump_lines %}
+                <tr>
+                  <td>
+                    <input type="hidden" name="bq_id" value="{{ b.id }}">
+                    <input type="hidden" name="bq_unit" value="lump sum">
+                    <input type="hidden" name="bq_cat" value="{{ b.category or '' }}">
+                    <input type="text" name="bq_name" class="form-control form-control-sm fw-semibold mb-1" value="{{ b.name }}" maxlength="100" aria-label="Lump sum name">
+                    <textarea name="bq_desc" class="form-control form-control-sm" rows="{{ [((b.description or '').count('\n') + 1), 6]|min }}" maxlength="2000" placeholder="Description (optional)" aria-label="Description">{{ b.description or '' }}</textarea>
+                  </td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" value="{{ ('%.2f' % b.rate).rstrip('0').rstrip('.') }}" aria-label="Amount">
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox" name="bq_delete" value="{{ b.id }}" aria-label="Remove {{ b.name }}">
+                  </td>
+                </tr>
+                {% endfor %}
+                {% for _ in range(2) %}
+                <tr class="table-light">
+                  <td>
+                    <input type="hidden" name="bq_id" value="">
+                    <input type="hidden" name="bq_unit" value="lump sum">
+                    <input type="hidden" name="bq_cat" value="">
+                    <input type="text" name="bq_name" class="form-control form-control-sm mb-1" placeholder="Add a lump sum, e.g. Debris Removal…" maxlength="100" aria-label="New lump sum name">
+                    <textarea name="bq_desc" class="form-control form-control-sm" rows="1" maxlength="2000" placeholder="Description (optional)" aria-label="New lump sum description"></textarea>
+                  </td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" placeholder="0" aria-label="New lump sum amount">
+                    </div>
+                  </td>
+                  <td></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" name="boq_submit" value="1" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Save Lump Sums
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {% if finish_options is defined %}
   <div class="col-12 col-lg-8 {{ 'order-first' if by_item }}" id="finishes">
     <div class="card shadow-sm border-0">

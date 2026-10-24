@@ -355,7 +355,8 @@ def rates():
                                    work_types=WORK_TYPES)
 
     from . import boq
-    if request.method == 'POST' and 'boq_submit' in request.form and boq.enabled():
+    if request.method == 'POST' and 'boq_submit' in request.form and (boq.enabled() or boq.ready()):
+        lump = not boq.enabled()                 # priced by material: the lump sums list (BOQ lines, unit "lump sum")
         errors = _save_boq_lines()
         if errors:
             db.session.rollback()
@@ -363,8 +364,9 @@ def rates():
                 flash(err, 'danger')
         else:
             db.session.commit()
-            flash('BOQ lines updated. New quotations use these as defaults.', 'success')
-        return redirect(url_for('admin.rates') + '#boq-lines')
+            flash('Lump sums updated. New quotations use these amounts.' if lump else
+                  'BOQ lines updated. New quotations use these as defaults.', 'success')
+        return redirect(url_for('admin.rates') + ('#lump-sums' if lump else '#boq-lines'))
 
     if request.method == 'POST' and 'finish_submit' in request.form and boq.enabled():
         errors = _save_finishes()
@@ -466,7 +468,15 @@ def rates():
                            work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,
                            ply_details=ply_ready and plywood.details_ready(),
                            boq_lines=_boq_lines() if boq.enabled() else None, boq_units=boq.UNITS,
+                           lump_lines=_lump_lines() if boq.ready() and not boq.enabled() else None,
                            **(_finish_context() if boq.enabled() else {}))
+
+
+def _lump_lines():
+    """Priced by material: the saved lump sums (Pooja civil works, debris removal…), BOQ lines with unit "lump sum"."""
+    from . import boq
+    from .models import BoqItem
+    return BoqItem.query.filter(BoqItem.unit == boq.LUMP_SUM).order_by(BoqItem.category, BoqItem.name).all()
 
 
 def _finish_context():

@@ -542,6 +542,8 @@ Every business makes one choice, **how they price** (Settings → Pricing, also 
 page → Features):
 - **By material**: a rate per sqft for each material and work type, sizes on each item, fittings from a price list
   (modular / carpentry firms).
+  One-off work (accent wall, pooja civil works, debris removal) is a **Lump sum**: Add item → Lump sum, one amount
+  with a description, saved for next time and listed in Admin → Rates → Lump sums.
 - **By item**: each item with its own rate, description and unit (wardrobe per sqft, side table per piece, 3D design
   lump sum), printed as a BOQ (turnkey firms). They only see items and rates, not materials or plywood.
   **Finishes** (optional, Admin → Rates → Finishes): when the same item costs more in another finish (laminate base,

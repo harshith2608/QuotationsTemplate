@@ -27,9 +27,11 @@ const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
 // also carry a description
 const BOQ = !!CATALOG.boq;
+// Priced by material: one-off work as a lump sum (a BOQ line with unit "lump sum": Pooja civil works ₹30,000…)
+const LUMP = !!CATALOG.lumpSum;
 // The description sits on its own full-width row under the item's row (the name column is too narrow for it)
 function addDescRow(tr, ik, value, handler, before, after) {
-  if (!BOQ) return;
+  if (!BOQ && !tr.classList.contains('item-row-boq')) return;      // priced by material: only lump sums have one
   const d = document.createElement('tr');
   d.className = 'ki-desc-row';
   d.id = 'item_descrow_' + ik;
@@ -450,10 +452,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalNameInput = document.getElementById('modal_item_name');
   if (modalNameInput) {
     initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name)
-                                          : modalItemType === 'boq' ? BOQ_SAVED.map(b => b.name) : masterItems);
+                                          : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : masterItems);
     modalNameInput.addEventListener('input', () => {
       if (modalItemType === 'fixed') _applyPriceListPrice();
-      if (modalItemType === 'boq') _applySavedBoq();
+      if (modalItemType === 'boq' || modalItemType === 'lump') _applySavedBoq();
     });
     ['modal_item_desc', 'modal_boq_unit', 'modal_boq_rate'].forEach(id =>
       document.getElementById(id)?.addEventListener('input', () => { modalBoqTouched = true; _syncBoqDefault(); }));
@@ -709,13 +711,30 @@ function modalCalcArea() {
 // ─── Fixed-price items (fittings & accessories) ──────────────────────────────
 function setModalItemType(type) {
   modalItemType = type;
+  const lump = type === 'lump';
   document.getElementById('modal_fixed_fields')?.classList.toggle('d-none', type !== 'fixed');
-  document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq');
+  document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq' && !lump);
   document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type !== 'measured');
+  // A lump sum is a BOQ line with unit "lump sum": just a description and one amount
+  document.getElementById('modal_desc_wrap')?.classList.toggle('d-none', !BOQ && !lump);
+  ['modal_boq_qty_col', 'modal_boq_unit_col', 'modal_boq_size_slot', 'modal_boq_hint'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('d-none', lump));
+  document.getElementById('modal_lump_hint')?.classList.toggle('d-none', !lump);
+  document.getElementById('modal_boq_rate_col')?.classList.toggle('col-5', !lump);
+  document.getElementById('modal_boq_rate_col')?.classList.toggle('col-12', lump);
+  const rateLabel = document.getElementById('modal_boq_rate_label'); if (rateLabel) rateLabel.textContent = lump ? 'Amount' : 'Rate';
+  if (lump) {
+    const u = document.getElementById('modal_boq_unit');
+    if (u) { u.innerHTML = unitOptions('lump sum'); syncLumpSum(u, document.getElementById('modal_boq_qty')); }
+  }
   const nameEl = document.getElementById('modal_item_name');
-  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling' : 'e.g. Wardrobe';
+  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling'
+                                 : lump ? 'e.g. Pooja Civil Works' : 'e.g. Wardrobe';
+  const descIn = document.getElementById('modal_item_desc');
+  if (descIn) descIn.placeholder = lump ? 'e.g. Extension of wall with block work, plastering and painting'
+                                        : 'e.g. Making safety door with block board, both side laminate finish, including safety grill';
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
-  if (type === 'boq') _applySavedBoq();
+  if (type === 'boq' || lump) _applySavedBoq();
   syncModalPly();
 }
 
@@ -882,7 +901,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
              title="Quantity (leave empty for a rate-only line)">
     </td>
     <td data-label="Unit">
-      <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit"
+      <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit" ${BOQ ? '' : 'disabled'}
               onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
     </td>
     <td data-label="Rate">
@@ -892,7 +911,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
                value="${r}" oninput="onBoqField('${rk}','${ik}')" title="Rate">
       </div>
     </td>
-    <td class="text-center"><span class="badge ki-badge-boq">BOQ</span></td>
+    <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
     <td class="text-center" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
@@ -1094,7 +1113,7 @@ function saveItemFromModal() {
   if (nameEl) nameEl.classList.remove('is-invalid');
 
   const desc = document.getElementById('modal_item_desc')?.value.trim() || '';
-  if (modalItemType === 'boq') {
+  if (modalItemType === 'boq' || modalItemType === 'lump') {
     const qtyEl = document.getElementById('modal_boq_qty'), rateEl = document.getElementById('modal_boq_rate');
     const qty = qtyEl?.value === '' ? 0 : parseFloat(qtyEl?.value);      // empty: a rate-only line
     const rate = rateEl?.value === '' ? 0 : parseFloat(rateEl?.value);
