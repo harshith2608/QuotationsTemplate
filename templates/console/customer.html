@@ -126,6 +126,17 @@
     <button class="btn" type="submit" {% if not boq.ready and not boq.on %}disabled{% endif %}>
       {{ 'Switch to pricing by material' if boq.on else 'Switch to pricing by item (BOQ lines)' }}</button>
   </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Photos on items</strong> · <span class="badge {{ 'b-active' if boq.photos.on else 'b-other' }}">{{ 'on' if boq.photos.on else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">A reference photo on any line of a quotation (a sofa, a chair, a wardrobe design),
+    optional: a small "Photo" button under each item's name. Printed in a Photo column of the quotation PDF and shown on
+    the quotation page and the customer's link. Turning it off hides the button; photos already on quotations stay.</p>
+  {% if not boq.photos.ready %}<p class="small" style="margin:0;color:var(--bad)">Needs the latest database update first (Updates → Update all).</p>{% endif %}
+  <form method="post" action="{{ url_for('console.customer_photos', slug=row.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.photos.on else '1' }}">
+    <button class="btn" type="submit" {% if not boq.photos.ready and not boq.photos.on %}disabled{% endif %}>
+      {{ 'Turn photos off' if boq.photos.on else 'Turn photos on' }}</button>
+  </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Load price list</strong></div>
   <p class="muted small" style="margin:0">This firm's own lines (title, description, unit, rate), a ready-made starting
     quotation and their notes and payment terms, from the .json file prepared from their old quotations. Goes into this

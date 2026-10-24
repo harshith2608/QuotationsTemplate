@@ -174,6 +174,24 @@ def pdf(token):
     return _private(send_file(buf, mimetype='application/pdf', download_name=name, as_attachment=False))
 
 
+@share_bp.route('/q/<token>/photo/<int:image_id>')
+def photo(token, image_id):
+    """A line's photo on the customer's link: only photos on this quotation."""
+    share, project = _share_or_404(token)
+    from . import item_images
+    from .models import Item, ItemImage, Room
+    from sqlalchemy.orm import undefer
+    if not item_images.ready() or not db.session.query(Item.id).join(Room, Item.room_id == Room.id).filter(
+            Room.project_id == project.id, Item.image_id == image_id).first():
+        abort(404)
+    row = ItemImage.query.options(undefer(ItemImage.data)).filter_by(id=image_id).first_or_404()
+    resp = make_response(row.data)
+    resp.headers['Content-Type'] = row.mime or 'image/jpeg'
+    resp.headers['Cache-Control'] = 'private, max-age=86400'
+    resp.headers['X-Robots-Tag'] = 'noindex, nofollow'
+    return resp
+
+
 @share_bp.route('/q/<token>/respond', methods=['POST'])
 def respond(token):
     share, project = _share_or_404(token)

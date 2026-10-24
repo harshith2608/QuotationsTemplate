@@ -78,7 +78,7 @@
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{% if it.length %}{{ it.length|ft_in }}{% if it.width %} × {{ it.width|ft_in }}{% endif %}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {% endif %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.tbc %}, price to follow{% elif it.unit_price %} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
+            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{% if it.length %}{{ it.length|ft_in }}{% if it.width %} × {{ it.width|ft_in }}{% endif %}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {% endif %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.tbc %}, price to follow{% elif it.unit_price %} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
             <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
           </tr>
         {% endfor %}
@@ -97,7 +97,7 @@
         <div class="fw-semibold small" style="color:var(--p)">{{ r.no }}. {{ r.title }}</div>
         {% if r.description %}{% for d in r.description.split('\n') %}<div class="small q-muted">{{ d }}</div>{% endfor %}{% endif %}
         <ul class="small mb-1 ps-3">
-          {% for it in r['items'] %}<li>{{ it.name }}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count is string %} · {{ it.count }}{% elif it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
+          {% for it in r['items'] %}<li>{{ it.name }}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count is string %} · {{ it.count }}{% elif it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
         </ul>
       </div>
       <div class="fw-semibold small text-nowrap">&#8377;{{ "{:,.2f}".format(r.amount) }}</div>
@@ -115,7 +115,7 @@
       {% for ln in sec.lines %}
         <tr>
           <td class="text-muted" style="width:2em">{{ ln.no }}</td>
-          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}
+          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
             {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>
             {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ "{:,.0f}".format(ln.rate) }} per {{ ln.unit }}</div>{% endif %}</td>
           <td class="text-end text-nowrap">{% if ln.tbc %}price to follow{% elif ln.amount %}&#8377;{{ "{:,.2f}".format(ln.amount) }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>

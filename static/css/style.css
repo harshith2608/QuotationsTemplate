@@ -619,3 +619,11 @@ body > main { flex: 1 0 auto; }
 .ki-pricing-option { cursor: pointer; }
 .ki-pricing-option:has(input:checked) { border-color: var(--bs-primary) !important; background: var(--bs-primary-bg-subtle); }
 .ki-pricing-option:has(input:disabled) { opacity: .6; cursor: not-allowed; }
+
+/* Photos on quotation lines (item_images) */
+.ki-photo { margin-top: 4px; }
+.ki-photo img { display: block; max-width: 72px; max-height: 72px; border-radius: 6px; border: 1px solid #dee2e6;
+                object-fit: cover; margin-bottom: 2px; }
+.ki-photo-add { text-decoration: none; }
+.ki-line-photo { display: block; max-width: 84px; max-height: 84px; border-radius: 6px; border: 1px solid #dee2e6;
+                 object-fit: cover; margin-top: 4px; }

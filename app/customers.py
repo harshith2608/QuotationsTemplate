@@ -521,9 +521,20 @@ def locked_fields(slug):
 
 
 def boq_status(slug):
-    from . import boq
+    """How they price ({'ready', 'on'}) and whether photos on lines are on ('photos': {'ready', 'on'})."""
+    from . import boq, item_images
     with open_customer(slug):
-        return boq.console_status()
+        return dict(boq.console_status(), photos=item_images.console_status())
+
+
+def set_photos(slug, on):
+    """Photos on quotation lines on or off, for a customer."""
+    from . import item_images
+    with open_customer(slug):
+        if on and not item_images.console_status()['ready']:
+            raise CustomerError('This customer needs the latest database update first (Updates → Update all).')
+        item_images.set_enabled(on)
+        db.session.commit()
 
 
 def set_boq(slug, on):

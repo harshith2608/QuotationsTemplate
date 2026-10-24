@@ -523,7 +523,10 @@
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
-    boqFinishes: {{ (boq_form.finishes or none)|tojson }},      // {options: [{name, extra}], base}: Laminate / Acrylic +25%…
+    boqFinishes: {{ (boq_form.finishes or none)|tojson }},
+    itemImages:  {{ (item_images or false)|tojson }},          // photos on lines (console: per business)
+    imageUpload: {{ url_for('projects.upload_item_image')|tojson }},
+    imageUrl:    {{ url_for('projects.item_image', image_id=0)|tojson }},      // {options: [{name, extra}], base}: Laminate / Acrylic +25%…
     boqUnits:    {{ boq_form.units|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
     descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}

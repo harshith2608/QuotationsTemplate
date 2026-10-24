@@ -186,6 +186,8 @@ def _room_rows_elements(project, page_width, palette, styles):
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
     snap = billing.quotation_snapshot(project)
     rows = layout.room_rows(snap)
+    from . import item_images
+    photos = item_images.data_for(it.get('image_id') for r in rows for it in r['items'])
     small = ParagraphStyle('RR', parent=styles['Normal'], fontSize=8, leading=10)
     bold = ParagraphStyle('RRB', parent=small, fontName='Helvetica-Bold')
     muted = ParagraphStyle('RRM', parent=small, textColor=colors.HexColor('#455a64'))
@@ -205,7 +207,9 @@ def _room_rows_elements(project, page_width, palette, styles):
             data.append([str(r['no']) if i == 0 else '',
                          Paragraph(escape(r['title']), bold) if i == 0 else '',
                          Paragraph(escape(r['description']).replace('\n', '<br/>'), muted) if i == 0 and r['description'] else '',
-                         Paragraph(escape(it['name']), small), size(it['length']), size(it['width']),
+                         ([Paragraph(escape(it['name']), small), item_images.pdf_image(photos[it['image_id']], 2.0, 2.0)]
+                          if photos.get(it.get('image_id')) else Paragraph(escape(it['name']), small)),
+                         size(it['length']), size(it['width']),
                          layout.count_text(it['count']), _money(r['amount']) if i == 0 else ''])
         n = len(data)
         t = Table(data, colWidths=cw)
@@ -256,20 +260,29 @@ def _boq_elements(project, page_width, palette, styles):
     snap = billing.quotation_snapshot(project)
     small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
     title = ParagraphStyle('BQT', parent=small, fontName='Helvetica-Bold')
-    cw = [page_width * f for f in (0.07, 0.49, 0.09, 0.09, 0.11, 0.15)]
+    sections = layout.boq_rows(snap)
+    from . import item_images
+    photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
     grid = colors.HexColor('#bdbdbd')
-    data = [['Sr. No.', 'Description', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
+    if photos:                                 # a Photo column only when some line has a photo
+        cw = [page_width * f for f in (0.06, 0.38, 0.15, 0.08, 0.08, 0.10, 0.15)]
+        data = [['Sr. No.', 'Description', 'Photo', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
+    else:
+        cw = [page_width * f for f in (0.07, 0.49, 0.09, 0.09, 0.11, 0.15)]
+        data = [['Sr. No.', 'Description', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
+    pc = 1 if photos else 0                    # columns after Description shift by one with a Photo column
     cmds = [('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (4, -1), 'CENTER'), ('ALIGN', (5, 0), (5, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (4 + pc, -1), 'CENTER'),
+            ('ALIGN', (5 + pc, 0), (5 + pc, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
-    for sec in layout.boq_rows(snap):
+    for sec in sections:
         k = len(data)
         head = escape(sec['name'])
         if sec['description']:
             head += f'<br/><font size="7" color="#455a64">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
-        data.append([sec['letter'], Paragraph(head, title), '', '', '', ''])
+        data.append([sec['letter'], Paragraph(head, title)] + [''] * (4 + pc))
         cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-1, k)),
                  ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
         if sec['lines']:
@@ -279,9 +292,10 @@ def _boq_elements(project, page_width, palette, styles):
             if ln['description']:
                 text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
             amount = 'Price to follow' if ln.get('tbc') else _money(ln['amount']) if ln['amount'] else '—'
-            data.append([str(ln['no']), Paragraph(text, small),
-                         f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit'],
-                         _money(ln['rate'], ',.0f') if ln['rate'] else '', amount])
+            data.append([str(ln['no']), Paragraph(text, small)]
+                        + ([item_images.pdf_image(photos.get(ln.get('image_id')), 2.6, 2.6) or ''] if photos else [])
+                        + [f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit'],
+                           _money(ln['rate'], ',.0f') if ln['rate'] else '', amount])
     table = Table(data, colWidths=cw, repeatRows=1)
     table.setStyle(TableStyle(cmds))
     return [table] + _totals_elements(snap, page_width, palette)
@@ -414,12 +428,16 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     rooms = project.rooms_with_items()
     section_totals = []                       # (room, amount): the summary of a quotation priced by item
 
+    from . import item_images
+    photos = item_images.data_for(i.photo_id for r in rooms for i in r.item_list)
+
     def _name_cell(item, extra=''):
         text = escape(item.display_name + (f' × {item.count}' if not item.is_fixed and item.count > 1 else ''))
         notes = '\n'.join(x for x in (item.note, extra) if x)
         if notes:
             text += f'<br/><font size="7" color="#546e7a">{escape(notes).replace(chr(10), "<br/>")}</font>'
-        return Paragraph(text, material_style_left)
+        pic = item_images.pdf_image(photos.get(item.photo_id), 2.4, 2.4) if photos.get(item.photo_id) else None
+        return [Paragraph(text, material_style_left), pic] if pic else Paragraph(text, material_style_left)
 
     def _size_note(item):
         if not (item.is_boq and item.length):

@@ -117,6 +117,10 @@ class Project(db.Model):
             if boq.ready():
                 from sqlalchemy.orm import undefer
                 q = q.options(undefer(Item.description), undefer(Item.unit))
+            from . import item_images
+            if item_images.ready():
+                from sqlalchemy.orm import undefer
+                q = q.options(undefer(Item.image_id))         # with the items, not one query per item
             for item in q:
                 items_by_room[item.room_id].append(item)
         for room in rooms:
@@ -227,6 +231,8 @@ class Item(db.Model):
     # BOQ lines (and any item): a description and a unit; deferred like plywood, so items save before the update
     description = db.deferred(db.Column(db.Text, nullable=True, server_default=db.FetchedValue()))
     unit = db.deferred(db.Column(db.String(20), nullable=True, server_default=db.FetchedValue()))
+    # A photo on the line (app/item_images.py, turned on per business); deferred like plywood: safe before the update
+    image_id = db.deferred(db.Column(db.Integer, nullable=True, server_default=db.FetchedValue()))
 
     @property
     def is_fixed(self):
@@ -255,6 +261,12 @@ class Item(db.Model):
         unit = self.unit if boq.ready() else ''
         one = boq.quantity_from_size(unit, self.length, self.width or 0, 1)
         return max(int(round((self.quantity or 0) / one)), 1) if one else 1
+
+    @property
+    def photo_id(self):
+        """The line's photo id, or None (never reads the column before the database update)."""
+        from . import item_images
+        return self.image_id if item_images.ready() else None
 
     @property
     def finish(self):
@@ -520,6 +532,18 @@ class PriceListItem(db.Model):
 
     def __repr__(self):
         return f'<PriceListItem {self.name}: {self.price}>'
+
+
+class ItemImage(db.Model):
+    """A photo on a quotation line (app/item_images.py): a resized JPEG, stored once and never changed (lines, starting
+    quotations and revisions point to it by id)."""
+    __tablename__ = 'item_images'
+    id         = db.Column(db.Integer, primary_key=True)
+    data       = db.deferred(db.Column(db.LargeBinary, nullable=False))      # loaded only to send or print it
+    mime       = db.Column(db.String(20), nullable=False, default='image/jpeg')
+    width      = db.Column(db.Integer, nullable=True)
+    height     = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
 
 
 class BoqItem(db.Model):

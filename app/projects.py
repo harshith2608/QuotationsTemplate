@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import (Blueprint, render_template, redirect, url_for, flash,
-                   request, abort, send_file, current_app)
+                   request, abort, send_file, current_app, make_response)
 from flask_login import login_required, current_user
 from . import db
 from .models import (Project, Room, Item, MasterRoom, MasterItem, ItemRate,
@@ -132,6 +132,10 @@ def _form_catalog(project, rooms=None):
     cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(),
                        'saved': boq.saved_lines(lump_only=not on) if on or lump else [],
                        'by_item': boq.enabled(), 'lump_sum': lump}   # by_item: priced by item, BOQ lines only
+    from . import item_images
+    has_img = item_images.ready() and project is not None and any(
+        i.image_id for r in (rooms if rooms is not None else project.rooms_with_items()) for i in r.item_list)
+    cat['item_images'] = item_images.enabled() or has_img           # photos on lines (console: per business)
     if on:
         from . import finishes
         cat['boq_form']['finishes'] = finishes.for_form()     # Laminate / Acrylic +25%… (None: no finishes)
@@ -152,6 +156,13 @@ def _set_project_plywood(project, form):
     project.plywood_thickness = ''
 
 
+def _int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _save_project_data(project, rooms_data, remember=True):
     """Delete existing rooms/items and save new ones. Returns grand_total. remember: learn its BOQ lines (not for
     auto-saved drafts, where a name may be half-typed)."""
@@ -170,10 +181,13 @@ def _save_project_data(project, rooms_data, remember=True):
     project_ply = plywood.project_plywood(project)
     valid_combos = {(w, k) for w, k, _ in M.combos(include_hidden=True)}
     fallback_combo = M.default_combo()
-    from . import boq, finishes
+    from . import boq, finishes, item_images
     boq_ready = boq.ready()
     boq_on = boq_ready and boq.enabled()
-    boq_used = []                        # BOQ lines on this quotation, to remember (boq.remember)
+    boq_used = []
+    # Photos on lines (kept even if the feature is turned off later: they're part of what was quoted)
+    img_ok = item_images.valid_ids(i.get('image_id') for rd in rooms_data for i in rd.get('items', [])
+                                   if i.get('image_id')) if item_images.ready() else set()                        # BOQ lines on this quotation, to remember (boq.remember)
 
     for rd in rooms_data:
         room_name = rd.get('name', '').strip()
@@ -234,6 +248,8 @@ def _save_project_data(project, rooms_data, remember=True):
                                      room_name))
                 if description:
                     item.description = description
+                if img_ok and _int(id_.get('image_id')) in img_ok:
+                    item.image_id = _int(id_.get('image_id'))
                 db.session.add(item)
                 grand_total += quantity * unit_price
                 continue
@@ -266,6 +282,8 @@ def _save_project_data(project, rooms_data, remember=True):
             )
             if description:
                 item.description = description
+            if img_ok and _int(id_.get('image_id')) in img_ok:
+                item.image_id = _int(id_.get('image_id'))
             item_ply = None
             if ply_ready:                      # only once the database has the column
                 item_ply = plywood.clean_choice(id_.get('plywood'))
@@ -775,9 +793,10 @@ def edit_project(project_id):
 
 
 def _build_rooms_json(project, rooms=None):
-    from . import boq, plywood
+    from . import boq, plywood, item_images
     from . import layout
     boq_ready = boq.ready()
+    img_ready = item_images.ready()
     rooms_data = []
     for room in (rooms if rooms is not None else project.rooms_with_items()):
         room_dict = {
@@ -795,6 +814,7 @@ def _build_rooms_json(project, rooms=None):
                     'unit_price': item.unit_price,
                     **({'tbc': True} if item.price_to_follow else {}),
                     **({'finish': item.finish} if item.finish else {}),
+                    **({'image_id': item.image_id} if img_ready and item.image_id else {}),
                     'plywood': plywood.item_plywood(item),
                     'count': item.boq_count if item.is_boq else item.count,
                     **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),
@@ -990,6 +1010,40 @@ def create_razorpay_link(project, amount, remaining):
         db.session.add(PaymentLink(project_id=project.id, razorpay_link_id=link_id, amount=amount))
         db.session.commit()
     return data.get('short_url')
+
+
+@projects_bp.route('/item-images', methods=['POST'])
+@login_required
+def upload_item_image():
+    """A photo for a quotation line (the form uploads it on choosing; the line keeps the returned id)."""
+    from flask import jsonify
+    from . import item_images
+    if not item_images.enabled():
+        return jsonify({'error': 'Photos on items are not turned on.'}), 403
+    f = request.files.get('photo')
+    try:
+        row = item_images.save_upload(f.read() if f else b'')
+    except item_images.ImageError as exc:
+        db.session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    db.session.commit()
+    return jsonify({'id': row.id, 'url': url_for('projects.item_image', image_id=row.id)})
+
+
+@projects_bp.route('/item-images/<int:image_id>')
+@login_required
+def item_image(image_id):
+    """A line's photo (never changes: cached for a year)."""
+    from . import item_images
+    from .models import ItemImage
+    from sqlalchemy.orm import undefer
+    if not item_images.ready():
+        abort(404)
+    row = ItemImage.query.options(undefer(ItemImage.data)).filter_by(id=image_id).first_or_404()
+    resp = make_response(row.data)
+    resp.headers['Content-Type'] = row.mime or 'image/jpeg'
+    resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    return resp
 
 
 @projects_bp.route('/projects/<int:project_id>/pdf')

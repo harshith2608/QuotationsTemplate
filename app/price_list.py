@@ -22,6 +22,12 @@ rates are for it); lines that come in them say "finish": true (app/finishes.py):
     {"finishes": [{"name": "Laminate"}, {"name": "Acrylic", "extra": 25}, {"name": "Veneer", "extra": 25}],
      "lines": [{"name": "Wardrobe", "unit": "sqft", "rate": 1800, "finish": true}, ...]}
 
+Quotations (optional): real quotations from the firm's own sheets, added as quotations (by their first admin);
+"total" (optional) is checked against the lines. Loading the file again skips ones already there:
+    {"quotations": [{"customer_name": "Apex Green (2 BHK)", "address": "Apex Green", "total": 1448260,
+                     "rooms": [{"name": "Kitchen", "items": [{"name": "Tall Unit", "description": "...",
+                                                                "unit": "sqft", "quantity": 18, "rate": 2200}]}]}]}
+
 A firm that prices by material ("pricing": "material"):
     {"pricing": "material",
      "materials": [{"name": "Laminates", "rates": {"Box Work": 850, "Frame Work": 650}}, {"name": "Glass", "rate": 400}],
@@ -149,17 +155,54 @@ def parse(raw):
             desc = [_text(d, 300) for d in ([desc] if isinstance(desc, str) else desc) if _text(d, 300)]
             rooms.append({'name': _text(r['name'], 100), 'items': items, 'description': desc})
         templates.append({'name': _text(t['name'], 60), 'rooms': rooms})
+    quotations = []
+    for n, q in enumerate(data.get('quotations') or [], 1):
+        if not isinstance(q, dict) or not _text(q.get('customer_name'), 120):
+            raise PriceListError(f'Quotation {n} needs a customer name.')
+        qrooms = []
+        for r in q.get('rooms') or []:
+            if not isinstance(r, dict) or not _text(r.get('name'), 100):
+                raise PriceListError(f'Quotation {n}: each section needs a name.')
+            items = []
+            for it in r.get('items') or []:
+                name = _text(it.get('name') if isinstance(it, dict) else '', 100)
+                if not name:
+                    raise PriceListError(f'Quotation {n} → {r["name"]}: a line has no name.')
+                try:
+                    qty, rate = float(it.get('quantity') or 0), float(it.get('rate') or 0)
+                except (TypeError, ValueError):
+                    raise PriceListError(f'Quotation {n} → "{name}": quantity and rate should be numbers.')
+                if qty < 0 or rate < 0:
+                    raise PriceListError(f'Quotation {n} → "{name}": quantity and rate can\'t be negative.')
+                items.append({'name': name, 'type': 'boq', 'quantity': round(qty, 4), 'unit': boq.clean_unit(it.get('unit')),
+                              'unit_price': round(rate, 2), 'description': boq.clean_description(it.get('description')) or ''})
+            desc = r.get('description') or []
+            desc = [_text(d, 300) for d in ([desc] if isinstance(desc, str) else desc) if _text(d, 300)]
+            qrooms.append({'name': _text(r['name'], 100), 'items': items, 'description': '\n'.join(desc)})
+        try:
+            discount = round(float(q.get('discount') or 0), 2)
+        except (TypeError, ValueError):
+            raise PriceListError(f'Quotation {n}: the discount should be a number.')
+        expect = q.get('total')
+        quotations.append({'customer_name': _text(q['customer_name'], 120), 'mobile': _text(q.get('mobile'), 20),
+                           'email': _text(q.get('email'), 120), 'address': _text(q.get('address'), 300),
+                           'discount': discount, 'rooms': qrooms, 'total': float(expect) if expect else None})
+        got = round(sum(i['quantity'] * i['unit_price'] for r in qrooms for i in r['items']), 2)
+        if expect is not None and abs(got - float(expect)) > 0.5:
+            raise PriceListError(f'Quotation {n} ("{q["customer_name"]}") adds up to {got:,.2f}, not {float(expect):,.2f}.')
     if any(l['finish'] for l in lines) and not finishes:
         raise PriceListError('Some lines say "finish": true, but the file has no "finishes".')
-    if not lines and not templates and not materials and not fittings:
+    if not lines and not templates and not materials and not fittings and not quotations:
         raise PriceListError('The file has no lines.')
+    if not data.get('pricing') and not lines and not materials and not fittings:
+        pricing = None                         # only quotations / templates: how they price stays as it is
 
     settings = {}
     for key, value in (data.get('settings') or {}).items():
         if key in SETTINGS and isinstance(value, str):
             settings[key] = value.strip()[:5000]
     return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'finishes': finishes,
-            'templates': templates,
+            'templates': templates, 'quotations': quotations,
             'settings': settings, '_by_name': by_name}
 
 
@@ -214,7 +257,9 @@ def apply(parsed, remove_starter=True, replace_settings=False):
     ready = boq._columns_ready(tenancy.current_schema())
     if parsed['pricing'] == 'item' and not ready:
         raise PriceListError('This business needs the latest database update first (Updates → Update all).')
-    if (AppSetting.get(boq.KEY, '') == '1') != (parsed['pricing'] == 'item'):
+    if parsed['pricing'] is None:
+        pass
+    elif (AppSetting.get(boq.KEY, '') == '1') != (parsed['pricing'] == 'item'):
         boq.set_pricing(boq.ITEM if parsed['pricing'] == 'item' else boq.MATERIAL)
         db.session.flush()
     else:
@@ -306,14 +351,47 @@ def apply(parsed, remove_starter=True, replace_settings=False):
         if replace_settings or AppSetting.get(key) is None:
             AppSetting.set(key, value)
             settings.append(key)
+    made_quotes = _add_quotations(parsed.get('quotations') or [])
     db.session.commit()
     return {'added': added, 'updated': updated, 'removed': removed, 'templates': made, 'materials': mats,
             'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'], 'finishes': len(parsed.get('finishes') or []),
-            'missing': sorted(set(missing)), 'settings': settings}
+            'missing': sorted(set(missing)), 'settings': settings, 'quotations': made_quotes}
+
+
+def _add_quotations(quotations):
+    """Real quotations from the firm's own sheets (e.g. ones already sent to customers), made by their first admin.
+    One already loaded (same customer name and address) is skipped, so loading the file again adds nothing twice.
+    Their lines aren't added to the saved lines. Returns the names of the quotations made."""
+    if not quotations:
+        return []
+    from . import billing
+    from .models import Project, User
+    from .projects import _save_project_data
+    admin = User.query.filter_by(role='admin').order_by(User.id).first()
+    if admin is None:
+        raise PriceListError('This business has no admin yet, so its quotations can\'t be added.')
+    have = {((p.customer_name or '').strip().lower(), (p.address or '').strip().lower())
+            for p in Project.query.filter(Project.status != 'draft').all()}
+    made = []
+    for q in quotations:
+        if (q['customer_name'].lower(), q['address'].lower()) in have:
+            continue
+        project = Project(customer_name=q['customer_name'], mobile=q['mobile'] or '', email=q['email'] or None,
+                          address=q['address'] or None, created_by=admin.id, grand_total=0.0,
+                          discount_type='fixed' if q['discount'] else 'none', discount_value=q['discount'],
+                          plywood_thickness='')
+        db.session.add(project)
+        db.session.flush()
+        project.grand_total = _save_project_data(project, q['rooms'], remember=False)
+        project.status = 'complete'
+        db.session.flush()
+        billing.record_revision(project, admin)
+        made.append(q['customer_name'])
+    return made
 
 
 def summary_text(result):
-    parts = ['priced by item' if result['pricing'] == 'item' else 'priced by material']
+    parts = [] if result['pricing'] is None else ['priced by item' if result['pricing'] == 'item' else 'priced by material']
     if result['added'] or result['updated']:
         parts += [f"{result['added']} lines added", f"{result['updated']} updated"]
     if result['materials']:
@@ -322,6 +400,9 @@ def summary_text(result):
         parts.append(f"{result['fittings']} fittings")
     if result.get('finishes'):
         parts.append(f"{result['finishes']} finishes")
+    if result.get('quotations'):
+        parts.append('quotation' + ('s' if len(result['quotations']) > 1 else '') + ' added: '
+                     + ', '.join(f'"{n}"' for n in result['quotations']))
     if result['removed']:
         parts.append(f"{result['removed']} unchanged starter lines removed")
     if result['templates']:
