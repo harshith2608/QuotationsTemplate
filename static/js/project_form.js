@@ -46,6 +46,24 @@ function _findBoq(name) {
   const n = (name || '').trim().toLowerCase();
   return n ? BOQ_SAVED.find(b => b.name.toLowerCase() === n) : null;
 }
+// Finishes (Admin → Rates → Finishes): a line that comes in them gets a Finish choice; another finish's rate is the
+// base finish's rate + its % extra (Laminate ₹1,800 → Acrylic +25% ₹2,250)
+const FINISHES = (CATALOG.boqFinishes && CATALOG.boqFinishes.options && CATALOG.boqFinishes.options.length > 1)
+  ? CATALOG.boqFinishes : null;
+function _finishExtra(name) {
+  const f = FINISHES && FINISHES.options.find(o => o.name.toLowerCase() === (name || '').toLowerCase());
+  return f ? (f.extra || 0) : 0;
+}
+function finishOptions(selected) {
+  const list = FINISHES ? FINISHES.options.map(o => o.name) : [];
+  if (selected && !list.some(n => n.toLowerCase() === selected.toLowerCase())) list.push(selected);   // renamed since
+  const sel = (selected || (FINISHES ? FINISHES.base : '')).toLowerCase();
+  return list.map(n => {
+    const ex = _finishExtra(n);
+    const tag = ex ? ` (${ex > 0 ? '+' : ''}${ex}%)` : '';
+    return `<option value="${escHtml(n)}" ${n.toLowerCase() === sel ? 'selected' : ''}>${escHtml(n + tag)}</option>`;
+  }).join('');
+}
 let modalBoqTouched = false;      // the user typed a description/unit/rate: picking a saved line doesn't overwrite them
 const BOQ_UNITS = (CATALOG.boqUnits && CATALOG.boqUnits.length) ? CATALOG.boqUnits
   : ['sqft', 'rft', 'nos', 'point', 'sq m', 'rmt', 'set', 'lump sum'];
@@ -463,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
         if (id.type === 'boq') { _insertBoqRow(rk, id.name, id.quantity, id.unit, id.tbc ? '' : id.unit_price, id.description,
-                                               false, id.length, id.width, id.count, !!id.pending, !!id.tbc); return; }
+                                               false, id.length, id.width, id.count, !!id.pending, !!id.tbc, id.finish || ''); return; }
         if (id.type === 'fixed') {
           const fk = _insertFixedRow(rk, id.name, id.quantity, id.unit_price, id.description);
           if (id.pending) markPending(rk, fk, true);
@@ -838,7 +856,7 @@ function addBoqLine(rk) {
   const nm = document.getElementById('item_name_' + ik);
   if (nm) { nm.scrollIntoView({ block: 'center' }); setTimeout(() => nm.focus(), 50); }
 }
-function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending, tbc) {
+function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length, width, count, pending, tbc, finish) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
@@ -846,7 +864,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   const r = rate !== undefined && rate !== null ? rate : '';
   rooms[rk].items[ik] = { type: 'boq', name: name || '', quantity: parseFloat(qty) || 0, unit: unit || 'nos',
                           unit_price: parseFloat(r) || 0, description: desc || '', save_default: !!saveDefault,
-                          pending: !!pending, tbc: !!tbc };
+                          pending: !!pending, tbc: !!tbc, finish: finish || '' };
   const tbody = document.getElementById('items_tbody_' + rk);
   if (!tbody) return;
   const tr = document.createElement('tr');
@@ -883,8 +901,13 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
     </td>`;
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
+  const finishPick = (FINISHES || finish) ? `<div class="ki-finish align-items-center gap-1 mb-1 d-none" id="item_finishwrap_${ik}">
+        <span class="small text-muted">Finish</span>
+        <select class="form-select form-select-sm w-auto" id="item_finish_${ik}" data-prev="${escHtml(finish || (FINISHES ? FINISHES.base : ''))}"
+                onchange="onBoqFinish('${rk}','${ik}')" title="Another finish changes the rate by its % extra">${finishOptions(finish)}</select>
+      </div>` : '';
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
-             sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
+             finishPick + sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
              `<label class="form-check form-check-inline small text-muted mb-0 ki-tbc" for="item_tbc_${ik}"
                      title="The price isn't fixed yet: printed as &quot;Price to follow&quot; and not added to the total">
                <input class="form-check-input" type="checkbox" id="item_tbc_${ik}" ${tbc ? 'checked' : ''}
@@ -907,6 +930,8 @@ function onBoqField(rk, ik) {
     const unitEl = document.getElementById('item_unit_' + ik);
     if (unitEl) { unitEl.innerHTML = unitOptions(saved.unit || 'nos'); syncLumpSum(unitEl, document.getElementById('item_qty_' + ik)); }
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
+    const finEl = document.getElementById('item_finish_' + ik);          // a newly picked line starts in the base finish
+    if (finEl && FINISHES) { finEl.innerHTML = finishOptions(''); finEl.dataset.prev = FINISHES.base; }
     // next: the length for a line measured by size, else the quantity (a lump sum: nothing more to type)
     const next = sizeMode(saved.unit) ? document.getElementById(`boq_${ik}_lft`)
                : saved.unit !== 'lump sum' ? document.getElementById('item_qty_' + ik) : null;
@@ -918,6 +943,16 @@ function onBoqField(rk, ik) {
     priceEl.placeholder = tbc ? 'to follow' : '';
   }
   const keepDefault = rooms[rk].items[ik].save_default;
+  const finWrap = document.getElementById('item_finishwrap_' + ik), finEl = document.getElementById('item_finish_' + ik);
+  let finish = '';
+  if (finWrap && finEl) {
+    const base = FINISHES ? FINISHES.base.toLowerCase() : '';
+    const chosen = finEl.value.toLowerCase() !== base ? finEl.value : '';
+    const show = !!((saved && saved.finish && FINISHES) || chosen);
+    finWrap.classList.toggle('d-none', !show);
+    finWrap.classList.toggle('d-flex', show);
+    finish = show ? chosen : '';
+  }
   let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
@@ -927,7 +962,7 @@ function onBoqField(rk, ik) {
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',
                           unit_price, description: descOf(ik), save_default: keepDefault,
                           length: size.length, width: size.width, count: size.count,
-                          pending: pending && !(quantity > 0), tbc };
+                          pending: pending && !(quantity > 0), tbc, finish };
   const rowEl = document.getElementById('item_row_' + ik);
   rowEl?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
   document.getElementById('item_descrow_' + ik)?.classList.toggle('ki-needs-qty', rooms[rk].items[ik].pending);
@@ -938,6 +973,20 @@ function onBoqField(rk, ik) {
                               : unit_price && quantity ? '₹' + (quantity * unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 })
                               : (unit_price ? '<span class="small text-muted text-nowrap">rate only</span>' : '—');
   recalcAll();
+}
+
+// Another finish picked: the rate moves from the old finish's % to the new one's (a rate typed by hand moves too)
+function onBoqFinish(rk, ik) {
+  const finEl = document.getElementById('item_finish_' + ik), priceEl = document.getElementById('item_price_' + ik);
+  if (!finEl) return;
+  const prev = finEl.dataset.prev || (FINISHES ? FINISHES.base : '');
+  const rate = parseFloat(priceEl?.value);
+  if (priceEl && rate > 0) {
+    const base = rate / (1 + _finishExtra(prev) / 100);
+    priceEl.value = Math.round(base * (1 + _finishExtra(finEl.value) / 100) * 100) / 100;
+  }
+  finEl.dataset.prev = finEl.value;
+  onBoqField(rk, ik);
 }
 
 function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
@@ -1021,6 +1070,7 @@ function _itemPayload(item) {
     return { type: item.type, name: item.name, quantity: item.quantity, unit_price: item.unit_price,
              ...(item.type === 'boq' ? { unit: item.unit || 'nos', ...(item.save_default ? { save_default: true } : {}),
                                          ...(item.tbc ? { tbc: true } : {}),
+                                         ...(item.finish ? { finish: item.finish } : {}),
                                          ...(item.length ? { length: item.length, width: item.width || 0, count: item.count || 1 } : {}) } : {}),
              ...(item.description ? { description: item.description } : {}) };
   }

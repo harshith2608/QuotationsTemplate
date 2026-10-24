@@ -17,6 +17,11 @@ highlights them until one is typed (a lump sum starts at 1). "rate_only": printe
 A section's "description" lines are its notes (printed under the section heading); they're also added to the
 business's list of room descriptions (Settings → Quotation PDFs), so they can be ticked on other quotations.
 
+Finishes (optional, by item): the same item in another finish costs a % more. The first is the base (the lines'
+rates are for it); lines that come in them say "finish": true (app/finishes.py):
+    {"finishes": [{"name": "Laminate"}, {"name": "Acrylic", "extra": 25}, {"name": "Veneer", "extra": 25}],
+     "lines": [{"name": "Wardrobe", "unit": "sqft", "rate": 1800, "finish": true}, ...]}
+
 A firm that prices by material ("pricing": "material"):
     {"pricing": "material",
      "materials": [{"name": "Laminates", "rates": {"Box Work": 850, "Frame Work": 650}}, {"name": "Glass", "rate": 400}],
@@ -78,7 +83,20 @@ def parse(raw):
             raise PriceListError(f'"{name}": the rate can\'t be negative.')
         lines.append({'name': name, 'description': boq.clean_description(row.get('description')),
                       'unit': boq.clean_unit(row.get('unit')), 'rate': round(rate, 2),
-                      'group': _text(row.get('group'), 60) or None})
+                      'group': _text(row.get('group'), 60) or None, 'finish': bool(row.get('finish'))})
+
+    finishes = []
+    for n, f in enumerate(data.get('finishes') or []):
+        name = _text(f.get('name') if isinstance(f, dict) else '', 40)
+        if not name:
+            raise PriceListError('Each finish needs a name (the first one is the base, e.g. Laminate).')
+        try:
+            extra = 0.0 if n == 0 else round(float(f.get('extra') or 0), 2)
+        except (TypeError, ValueError):
+            raise PriceListError(f'"{name}": the % extra should be a number.')
+        finishes.append({'name': name, 'extra': extra})
+    if len(finishes) == 1:
+        raise PriceListError('Finishes: list the base finish and at least one other (e.g. Laminate, Acrylic +25%).')
 
     from .catalog import WORK_TYPES
     materials = []
@@ -131,6 +149,8 @@ def parse(raw):
             desc = [_text(d, 300) for d in ([desc] if isinstance(desc, str) else desc) if _text(d, 300)]
             rooms.append({'name': _text(r['name'], 100), 'items': items, 'description': desc})
         templates.append({'name': _text(t['name'], 60), 'rooms': rooms})
+    if any(l['finish'] for l in lines) and not finishes:
+        raise PriceListError('Some lines say "finish": true, but the file has no "finishes".')
     if not lines and not templates and not materials and not fittings:
         raise PriceListError('The file has no lines.')
 
@@ -138,7 +158,8 @@ def parse(raw):
     for key, value in (data.get('settings') or {}).items():
         if key in SETTINGS and isinstance(value, str):
             settings[key] = value.strip()[:5000]
-    return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'templates': templates,
+    return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'finishes': finishes,
+            'templates': templates,
             'settings': settings, '_by_name': by_name}
 
 
@@ -255,6 +276,11 @@ def apply(parsed, remove_starter=True, replace_settings=False):
                                                                            l['rate'], l['group'])
             updated += 1
     db.session.flush()
+    if parsed.get('finishes') and ready:                   # Laminate (base), Acrylic +25%… and the lines in them
+        from . import finishes
+        errors = finishes.set_from_price_list(parsed['finishes'], [l['name'] for l in parsed['lines'] if l['finish']])
+        if errors:
+            raise PriceListError(' '.join(errors))
 
     saved = {k: {'name': r.name, 'description': r.description, 'unit': r.unit or 'nos', 'rate': float(r.rate or 0)}
              for k, r in have_lines.items()}
@@ -282,7 +308,7 @@ def apply(parsed, remove_starter=True, replace_settings=False):
             settings.append(key)
     db.session.commit()
     return {'added': added, 'updated': updated, 'removed': removed, 'templates': made, 'materials': mats,
-            'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'],
+            'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'], 'finishes': len(parsed.get('finishes') or []),
             'missing': sorted(set(missing)), 'settings': settings}
 
 
@@ -294,6 +320,8 @@ def summary_text(result):
         parts.append(f"{result['materials']} materials with their rates")
     if result['fittings']:
         parts.append(f"{result['fittings']} fittings")
+    if result.get('finishes'):
+        parts.append(f"{result['finishes']} finishes")
     if result['removed']:
         parts.append(f"{result['removed']} unchanged starter lines removed")
     if result['templates']:

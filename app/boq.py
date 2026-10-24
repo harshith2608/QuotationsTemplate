@@ -164,10 +164,13 @@ def qty_text(quantity):
 # ── Saved BOQ lines (Admin → Rates → BOQ lines) ──────────────────────────────
 
 def saved_lines():
-    """[{name, description, unit, rate}] for the quotation form, by name."""
+    """[{name, description, unit, rate, category, finish?}] for the quotation form, by name (finish: it comes in the
+    business's finishes, app/finishes.py)."""
+    from .finishes import line_ids, options
     from .models import BoqItem
+    in_finishes = line_ids() if options() else set()       # lines that come in Laminate / Acrylic…
     return [{'name': b.name, 'description': b.description or '', 'unit': b.unit or 'nos', 'rate': b.rate or 0,
-             'category': b.category or 'Other'}
+             'category': b.category or 'Other', **({'finish': True} if b.id in in_finishes else {})}
             for b in BoqItem.query.order_by(BoqItem.id).all()]             # groups in the order they were added
 
 

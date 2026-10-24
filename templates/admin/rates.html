@@ -302,6 +302,57 @@
     </div>
   </div>
 
+  {% if finish_options is defined %}
+  <div class="col-12 col-lg-8 {{ 'order-first' if by_item }}" id="finishes">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header"><i class="bi bi-palette me-2"></i>Finishes</div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          When the same item costs more in another finish. The first finish is your base: your items' rates below are
+          for it. Every other finish adds its % to that rate (e.g. Laminate, then Acrylic +25%). Tick
+          <strong>Finishes</strong> on the items that come in them; on a quotation those items get a Finish choice and
+          the rate changes by itself. The base finish isn't printed; another one is ("Wardrobe (Acrylic finish)").
+        </p>
+        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <table class="table table-bordered align-middle mb-3">
+            <thead class="ki-table-head">
+              <tr><th class="ps-3">Finish</th><th style="width:160px">% extra on the base rate</th>
+                  <th class="text-center" style="width:80px">Remove</th></tr>
+            </thead>
+            <tbody>
+              {% for f in finish_options %}
+              <tr>
+                <td><input type="text" name="fin_name" class="form-control form-control-sm" value="{{ f.name }}" maxlength="40" aria-label="Finish name"></td>
+                <td>{% if loop.first %}<input type="hidden" name="fin_extra" value="0"><span class="small text-muted">Base rate</span>
+                    {% else %}<div class="input-group input-group-sm">
+                      <input type="number" name="fin_extra" class="form-control text-end" step="0.01" min="-90" max="500" value="{{ ('%.2f' % f.extra).rstrip('0').rstrip('.') }}" aria-label="% extra for {{ f.name }}">
+                      <span class="input-group-text">%</span></div>{% endif %}</td>
+                <td class="text-center">{% if not loop.first %}<input class="form-check-input" type="checkbox" name="fin_delete" value="{{ loop.index0 }}" aria-label="Remove {{ f.name }}">{% endif %}</td>
+              </tr>
+              {% endfor %}
+              {% for _ in range(2 if finish_options else 3) %}
+              <tr class="table-light">
+                <td><input type="text" name="fin_name" class="form-control form-control-sm" maxlength="40"
+                           placeholder="{{ ('e.g. Laminate (your base)' if loop.first else 'e.g. Acrylic') if not finish_options else 'Add a finish, e.g. PU' }}" aria-label="New finish name"></td>
+                <td>{% if not finish_options and loop.first %}<input type="hidden" name="fin_extra" value="0"><span class="small text-muted">Base rate</span>
+                    {% else %}<div class="input-group input-group-sm">
+                      <input type="number" name="fin_extra" class="form-control text-end" step="0.01" min="-90" max="500" placeholder="e.g. 25" aria-label="New finish % extra">
+                      <span class="input-group-text">%</span></div>{% endif %}</td>
+                <td></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="submit" name="finish_submit" value="1" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Save Finishes
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {% if boq_lines is defined and boq_lines is not none %}
   <div class="col-12 {{ 'order-first' if by_item }}" id="boq-lines">
     <div class="card shadow-sm border-0">
@@ -326,6 +377,7 @@
                   <th style="min-width:130px; width:18%">Group</th>
                   <th style="min-width:100px; width:12%">Unit</th>
                   <th style="min-width:130px; width:14%">Rate</th>
+                  {% if finish_on %}<th class="text-center" style="width:80px" title="Comes in your finishes: a Finish choice on the quotation">Finishes</th>{% endif %}
                   <th class="text-center" style="width:80px">Remove</th>
                 </tr>
               </thead>
@@ -345,6 +397,9 @@
                       <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" value="{{ ('%.2f' % b.rate).rstrip('0').rstrip('.') }}" aria-label="Rate">
                     </div>
                   </td>
+                  {% if finish_on %}<td class="text-center">
+                    <input class="form-check-input" type="checkbox" name="bq_finish" value="{{ b.id }}" {{ 'checked' if b.id in finish_ids }} aria-label="{{ b.name }} comes in your finishes">
+                  </td>{% endif %}
                   <td class="text-center">
                     <input class="form-check-input" type="checkbox" name="bq_delete" value="{{ b.id }}" aria-label="Remove {{ b.name }}">
                   </td>
@@ -365,12 +420,14 @@
                       <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" placeholder="0" aria-label="New line rate">
                     </div>
                   </td>
+                  {% if finish_on %}<td></td>{% endif %}
                   <td></td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
+          {% if finish_on %}<input type="hidden" name="bq_finish_on" value="1">{% endif %}
           <button type="submit" name="boq_submit" value="1" class="btn btn-primary ki-btn-primary">
             <i class="bi bi-check-circle me-2"></i>Save BOQ Lines
           </button>
@@ -379,6 +436,7 @@
     </div>
   </div>
   {% endif %}
+
 
   {% if hide %}
   <div class="col-12 small text-muted">

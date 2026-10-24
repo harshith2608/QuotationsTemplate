@@ -544,6 +544,9 @@ page → Features):
   (modular / carpentry firms).
 - **By item**: each item with its own rate, description and unit (wardrobe per sqft, side table per piece, 3D design
   lump sum), printed as a BOQ (turnkey firms). They only see items and rates, not materials or plywood.
+  **Finishes** (optional, Admin → Rates → Finishes): when the same item costs more in another finish (laminate base,
+  acrylic / veneer / membrane +25%). The ticked items get a Finish choice on the quotation; the rate changes by itself
+  and prints as "Wardrobe (Acrylic finish)". The firm can change the % or add finishes there any time.
 
 When a firm shares its old quotations, have them written into a `.json` price list (format at the top of
 `app/price_list.py`): how they price, their items and rates (or materials, rates and fittings), one or more starting

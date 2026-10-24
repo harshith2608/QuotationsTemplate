@@ -86,7 +86,8 @@ def boq_rows(snapshot):
                 lump = unit == boq.LUMP_SUM
                 size = boq.size_text(it)
                 desc = '\n'.join(x for x in (desc, f'Size: {size}' if size else '') if x)
-                lines.append({'no': n, 'title': it['name'], 'description': desc, 'qty': it['quantity'],
+                from .finishes import label
+                lines.append({'no': n, 'title': label(it['name'], it.get('finish')), 'description': desc, 'qty': it['quantity'],
                               'unit': boq.unit_text(unit), 'rate': None if lump or not it['unit_price'] else it['unit_price'],
                               'amount': it['amount'], 'tbc': bool(it.get('tbc'))})
         out.append({'letter': letter, 'name': room['name'], 'description': room.get('description') or '', 'lines': lines})
