@@ -380,7 +380,7 @@ made-up customer on Hobby is fine; delete it afterwards.
 
 How it works once set up:
 1. An interior designer or furniture works asks for a trial on the website → **"Set up my app now"** → on the
-   console's public page `/start` they choose their address and password → their app opens straight away (a
+   console's public page `/start` they confirm their firm name (the address comes from it) and choose a password → their app opens straight away (a
    ready-made trial is renamed for them). "Others" still come to you. You see every new trial on the dashboard,
    linked to the request, with the WhatsApp follow-ups.
 2. In their app, the admin taps **Choose a plan** (or **Renew**) → pays ₹4,999 / ₹8,999 by Razorpay → the plan is
