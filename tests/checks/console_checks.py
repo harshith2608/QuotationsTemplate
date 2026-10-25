@@ -194,7 +194,8 @@ with app.app_context():
     _t = lambda days, **u: {'url': 'https://x.test', 'usage': u, 'status_obj': _NS(
         has_limit=True, days_left=days, ends_on=_date(2026, 10, 27), delete_on=_date(2026, 11, 26))}
     ok('suggested draft follows the trial: not signed in / no quotation / ending / ended',
-       _con.follow_ups(_t(6))[1] == 'signin' and _con.follow_ups(_t(5, last_login_at=1, used=True))[1] == 'rates'
+       _con.follow_ups(_t(6))[1] == 'signin' and _con.follow_ups(_t(5, last_login_at=1, used=True))[1] == 'details'
+       and _con.follow_ups(_t(5, last_login_at=1, used=True, company_set=True))[1] == 'firstquote'
        and _con.follow_ups(_t(2, quotations=3))[1] == 'ending' and _con.follow_ups(_t(-1))[1] == 'ended')
     _d = dict((k, b) for k, _, b in _con.follow_ups(_t(-1))[0])
     ok('drafts keep {name} for the page, fill in dates and prices', _d['ended'].startswith('Hi {name},')
@@ -440,8 +441,70 @@ with app.app_context():
     t2 = _ops.claim_trial('fresh-made', 'boss', 'boss-pass-123', 7, company='Fresh')
 ok('with no ready-made trial, one is made on the spot', t2['slug'] == 'fresh-made' and t2['username'] == 'boss')
 
+# ── Follow-ups: each trial's stage, who's due today, the queue, the log, snooze / not interested, stage emails ──
+from datetime import timedelta as _td
+from app import followups as _fu, plan as _plm
+from app.models import AppSetting as _AS2
+with app.app_context():
+    for sl in ('fu-new', 'fu-set', 'fu-end'):
+        _ops.create_trial(sl, 'admin', 'fu-pass-1234', 7, company=sl.upper(), phone='919800000' + str(len(sl)), email=f'{sl}@x.example')
+    with tenancy.tenant_context('fu-set'):
+        _AS2.set('company_name', 'Set Interiors'); _AS2.set('last_login_at', datetime.utcnow().isoformat()); db.session.commit()
+    with tenancy.tenant_context('fu-end'):
+        _plm.save_plan('trial', _plm.today() - _td(days=6), _plm.today() + _td(days=1)); db.session.commit()
+    with db.engine.begin() as conn:                        # started two days ago (for the stage emails)
+        conn.execute(text("UPDATE public.tenants SET created_at = (now() AT TIME ZONE 'utc') - interval '2 days' "
+                          "WHERE slug IN ('fu-new', 'fu-set', 'fu-end')"))
+    from app.console import _followup_trials
+    with app.test_request_context():
+        _tr, _ct = _followup_trials()
+    b = _fu.board(_tr, _ct)
+    stages = {r['slug']: r['stage'] for r in b['rows']}
+ok('each trial gets its stage: never signed in / set up, no quotation / ending soon',
+   stages.get('fu-new') == 'signin' and stages.get('fu-set') == 'firstquote' and stages.get('fu-end') == 'ending'
+   and b['counts']['signin'] >= 1)
+ok('…all three due today, the one ending soon first', [r['slug'] for r in b['due']][:1] == ['fu-end']
+   and {'fu-new', 'fu-set', 'fu-end'} <= {r['slug'] for r in b['due']})
+page = signed.get('/follow-ups').text
+ok('Follow-ups page: counts by stage and the due list', 'Not signed in' in page and 'Ending soon' in page
+   and 'Start: one after another' in page and 'Follow-ups' in signed.get('/').text)
+q = signed.get('/follow-ups/queue').text
+ok('the queue shows the most urgent one with its message', 'fu-end' in q and 'trial ends on' in q and 'Open in WhatsApp' in q)
+r = signed.post('/follow-ups/fu-end/whatsapp', data={'phone': '919800000006', 'message': 'Hi there', 'stage': 'ending'})
+ok('Open in WhatsApp: logged, then WhatsApp opens with the message', r.status_code == 302
+   and r.headers['Location'].startswith('https://wa.me/919800000006?text=Hi'))
+ok('…and the next one comes up (it isn\'t due again today)', 'fu-end' not in signed.get('/follow-ups/queue').text.split('<h1>')[1][:80])
+signed.post('/follow-ups/fu-new/mark', data={'snooze': '3'})
+signed.post('/follow-ups/fu-set/mark', data={'mark': 'lost'})
+signed.post('/follow-ups/fu-set/mark', data={'note': 'wants a call Monday'})
+with app.app_context(), app.test_request_context():
+    _tr, _ct = _followup_trials()
+    b = _fu.board(_tr, _ct)
+    due = {r['slug'] for r in b['due']}
+    mk = _fu.marks()
+ok('snoozed and not-interested trials drop off the list (with the note kept)', not ({'fu-new', 'fu-set', 'fu-end'} & due)
+   and mk['fu-set']['mark'] == 'lost' and mk['fu-set']['note'] == 'wants a call Monday')
+tp = signed.get('/trials/fu-end').text
+ok('the trial page shows its stage and what was sent', 'Follow-up' in tp and 'Ending soon' in tp and 'Hi there' in tp)
+# Stage emails (daily task), once each
+import glob as _glob, email as _em
+_box = tempfile.mkdtemp(); os.environ['MAIL_OUTBOX_DIR'] = _box
+with app.app_context(), app.test_request_context():
+    _tr, _ = _followup_trials()
+    sent1 = _fu.send_stage_emails(_tr)
+    sent2 = _fu.send_stage_emails(_tr)
+mails = [_em.message_from_bytes(open(f, 'rb').read()) for f in sorted(_glob.glob(_box + '/*.eml'))]
+ok('stage emails: "not signed in" and "no quotation" once each (not to a trial ending soon), not twice',
+   sent1.get('fu-new') == 'signin' and sent1.get('fu-set') == 'firstquote' and 'fu-end' not in sent1 and not sent2
+   and {m['To'] for m in mails} == {'fu-new@x.example', 'fu-set@x.example'})
+os.environ.pop('MAIL_OUTBOX_DIR', None)
+with app.app_context():
+    for sl in ('fu-new', 'fu-set', 'fu-end'):
+        _ops.delete_trial(sl)
+
 # Clean up the public console tables so other suites start from a clean trials database
 with app.app_context(), db.engine.begin() as conn:
-    for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups'):
+    for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups', 'console_followups',
+                  'console_trial_marks', 'plan_reminders', 'platform_payments'):
         conn.execute(text(f'DROP TABLE IF EXISTS public.{tname}'))
     conn.execute(text('DELETE FROM public.tenants'))

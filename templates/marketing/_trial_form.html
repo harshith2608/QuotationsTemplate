@@ -60,8 +60,8 @@
   <input type="hidden" name="page" value="{{ form.get('page', '') }}">
   <p class="form-error" data-error-for="form" role="alert" {% if not errors.form %}hidden{% endif %}>{{ errors.form }}</p>
   <button class="btn btn-primary trial-submit" type="submit">Request my free trial</button>
-  <p class="fine">No payment needed. We'll only use these details to set up and talk to you about your trial.
-    <a href="{{ privacy_url }}">Privacy policy</a></p>
+  <p class="fine">No payment needed. We'll use these details to set up your trial and to message you about it on
+    WhatsApp and email. <a href="{{ privacy_url }}">Privacy policy</a></p>
 </form>
 {%- endmacro %}
 
