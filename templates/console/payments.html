@@ -28,16 +28,54 @@
 </div>
 {% endif %}
 
+<h2 id="record">Record a payment</h2>
+<div class="card stack">
+  <p class="muted small" style="margin:0">Paid outside Razorpay (UPI to you, bank transfer, cash): recorded here with a
+    receipt number like any other payment, and the plan added to their app the same way (from when their trial or plan
+    ends, so no days are lost).</p>
+  {% if businesses %}
+  <form method="post" action="{{ url_for('console.payments_manual') }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row">
+      <div class="grow"><label for="m_slug">Business</label>
+        <select id="m_slug" name="slug" required>{% for slug, kind in businesses %}<option value="{{ slug }}">{{ slug }}.{{ base_domain }} ({{ kind }})</option>{% endfor %}</select></div>
+      <div><label for="m_plan">Plan</label>
+        <select id="m_plan" name="plan" onchange="document.getElementById('m_amount').value = this.selectedOptions[0].dataset.price">
+          <option value="6m" data-price="{{ prices['6m'] }}">6 months</option>
+          <option value="1y" data-price="{{ prices['1y'] }}" selected>12 months</option></select></div>
+      <div><label for="m_amount">Amount (₹)</label>
+        <input type="number" id="m_amount" name="amount" value="{{ prices['1y'] }}" min="1" step="0.01" required style="width:120px"></div>
+    </div>
+    <div class="row">
+      <div><label for="m_method">Paid by</label>
+        <select id="m_method" name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+      <div><label for="m_date">Paid on</label><input type="date" id="m_date" name="paid_on" value="{{ today }}" max="{{ today }}"></div>
+      <div class="grow"><label for="m_ref">Reference <span class="muted small">(UPI / bank reference, optional)</span></label>
+        <input type="text" id="m_ref" name="reference" maxlength="40"></div>
+    </div>
+    <label class="small"><input type="checkbox" name="add_plan" value="1" checked> Add the plan to their app now
+      <span class="muted">(untick if you already extended it by hand)</span></label>
+    <label class="small"><input type="checkbox" name="notify" value="1" {{ 'checked' if mail_ready else 'disabled' }}> Email them the
+      receipt{% if not mail_ready %} <span class="muted">(set up email first)</span>{% endif %}</label>
+    <div><button class="btn btn-primary" type="submit">Record payment</button></div>
+  </form>
+  {% else %}<p class="muted small" style="margin:0">No active trial or customer yet.</p>{% endif %}
+</div>
+
 <h2>All payments</h2>
 {% if not rows %}<p class="muted">No payments yet.</p>{% else %}
 <table>
-  <tr><th>Paid</th><th>Business</th><th>Plan</th><th>Amount</th><th>Until</th><th>Receipt</th><th>Via</th></tr>
+  <tr><th>Paid</th><th>Business</th><th>Plan</th><th>Amount</th><th>Until</th><th>Receipt</th><th>Via</th><th></th></tr>
   {% for r in rows %}
   <tr><td class="small">{{ r.paid_at|ist }}</td><td>{{ r.business_name or r.slug }} <span class="muted small">{{ r.slug }}</span></td>
       <td>{{ '6 months' if r.plan == '6m' else '12 months' }}</td><td>₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}</td>
       <td class="small">{{ r.plan_end.strftime('%d %b %Y') if r.plan_end else '—' }}</td>
       <td><a href="{{ url_for('console.payment_receipt', payment_id=r.id) }}" target="_blank" rel="noopener">{{ r.receipt_no }}</a></td>
-      <td class="small muted">{{ r.source }}</td></tr>
+      <td class="small muted">{{ r.paid_by if r.source == 'manual' else r.source }}{% if r.source == 'manual' and r.payment_id %} · {{ r.payment_id }}{% endif %}</td>
+      <td><form method="post" action="{{ url_for('console.payments_delete', payment_id=r.id) }}"
+                data-confirm="Remove this payment record ({{ r.receipt_no }}, ₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}, {{ r.slug }})? Their plan won't change.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm" type="submit" title="Remove (e.g. a test payment)">Remove</button></form></td></tr>
   {% endfor %}
 </table>
 {% endif %}

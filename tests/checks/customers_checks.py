@@ -687,5 +687,39 @@ ok('…the console shows their login once with the WhatsApp welcome to send (no 
    'Username:</strong> <span class="secret">boss' in t and 'wa.me/919855555555' in t
    and all('Password' not in m.get_content() for m in receipt_mails if not m.is_multipart())
    and 'shown once' not in c.get('/customers/paidfirst').text)
+# A payment received outside Razorpay, recorded by hand; and removing a payment record (a test payment)
+p_page = c.get('/payments').text
+ok('Payments: a "Record a payment" form listing trials and customers', 'Record payment' in p_page
+   and 'value="paidfirst"' in p_page and 'value="linked"' in p_page)
+end_before = st_pf.ends_on
+before = len(outbox())
+r = c.post('/payments/manual', data={'slug': 'paidfirst', 'plan': '6m', 'amount': '4999', 'method': 'UPI',
+                                     'reference': 'UPI-123456', 'paid_on': _pm.today().isoformat(), 'add_plan': '1',
+                                     'notify': '1'}, follow_redirects=True)
+with app.app_context():
+    with db.engine.connect() as conn:
+        mrow = conn.execute(text("select id, receipt_no, source, paid_by, payment_id, amount_paise, plan_end from "
+                                 "public.platform_payments where slug='paidfirst' and source='manual'")).first()
+    with cust.open_customer('paidfirst'):
+        st_m = _pm.load_status(on=_pm.today())
+ok('recorded: a receipt number, UPI and its reference, the plan extended from where it ended (no days lost)',
+   mrow is not None and mrow[1].startswith('QR') and mrow[3] == 'UPI' and mrow[4] == 'UPI-123456' and mrow[5] == 499900
+   and st_m.ends_on == _pm.add_length(end_before, '6m') and 'Payment recorded' in r.text and 'UPI · UPI-123456' in r.text)
+mails = [m for m in outbox()[before:] if m['To'] == 'boss@paidfirst.example']
+ok('…the receipt emailed to them', len(mails) == 1 and 'Payment received' in mails[0]['Subject'])
+import io as _io2, re as _re2
+from pypdf import PdfReader as _PR2
+rt = _re2.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in _PR2(_io2.BytesIO(c.get(f'/payments/{mrow[0]}/receipt').data)).pages))
+ok('…its receipt says how it was paid (not Razorpay)', 'Paid by UPI' in rt and 'Razorpay' not in rt)
+bad = c.post('/payments/manual', data={'slug': 'nobody', 'plan': '6m', 'amount': '4999', 'method': 'UPI'}, follow_redirects=True)
+ok('a business that doesn\'t exist is refused', 'No trial or customer' in bad.text)
+r = c.post(f'/payments/{mrow[0]}/delete', follow_redirects=True)
+with app.app_context():
+    with db.engine.connect() as conn:
+        gone = conn.execute(text('select 1 from public.platform_payments where id = :i'), {'i': mrow[0]}).first() is None
+    with cust.open_customer('paidfirst'):
+        st_d = _pm.load_status(on=_pm.today())
+ok('Remove: the payment record is gone, their plan is unchanged', gone and st_d.ends_on == st_m.ends_on
+   and 'Removed payment' in r.text and mrow[1] not in c.get('/payments').text)
 ok('daily tick needs the cron secret', c.get('/cron/tick').status_code == 404
    and c.get('/cron/tick', headers={'Authorization': 'Bearer cron-secret'}).status_code == 200)
