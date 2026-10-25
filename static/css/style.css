@@ -627,3 +627,11 @@ body > main { flex: 1 0 auto; }
 .ki-photo-add { text-decoration: none; }
 .ki-line-photo { display: block; max-width: 84px; max-height: 84px; border-radius: 6px; border: 1px solid #dee2e6;
                  object-fit: cover; margin-top: 4px; }
+
+/* "My photos": pick a photo added before */
+.ki-photo-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.ki-photo-pick { border: 1px solid #dee2e6; border-radius: 8px; background: #fff; padding: 4px; text-align: left; cursor: pointer; }
+.ki-photo-pick:hover, .ki-photo-pick:focus { border-color: var(--bs-primary, #0d6efd); outline: none; }
+.ki-photo-pick img { display: block; width: 100%; height: 100px; object-fit: cover; border-radius: 6px; }
+.ki-photo-pick span { display: block; font-size: .75rem; color: #495057; margin-top: 4px; white-space: nowrap; overflow: hidden;
+                      text-overflow: ellipsis; }

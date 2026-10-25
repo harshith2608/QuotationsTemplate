@@ -94,8 +94,58 @@ function renderPhoto(rk, ik) {
   d.innerHTML = id
     ? `<a href="${photoUrl(id)}" target="_blank" rel="noopener" title="Open the photo"><img src="${photoUrl(id)}" alt="Photo of the item"></a>
        <button type="button" class="btn btn-link btn-sm p-0 text-danger small" onclick="removePhoto('${rk}','${ik}')">Remove photo</button>`
-    : (PHOTOS ? `<label class="btn btn-link btn-sm p-0 small ki-photo-add" title="Add a reference photo for this item (optional)">
-         <i class="bi bi-camera"></i> Photo<input type="file" accept="image/*" class="d-none" onchange="uploadPhoto('${rk}','${ik}', this)"></label>` : '');
+    : (PHOTOS ? `<label class="btn btn-link btn-sm p-0 small ki-photo-add me-2 text-nowrap" title="Upload a new photo for this item (optional)">
+           <i class="bi bi-camera"></i> New photo<input type="file" accept="image/*" class="d-none" onchange="uploadPhoto('${rk}','${ik}', this)"></label>
+         <button type="button" class="btn btn-link btn-sm p-0 small ki-photo-add text-nowrap" onclick="openPhotoLibrary('${rk}','${ik}')"
+                 title="Use a photo you've added before"><i class="bi bi-images"></i> My photos</button>` : '');
+}
+// "My photos": pick a photo added before (any quotation of this business), searched by the item it was used on
+let _photoLib = null, _photoFor = null;
+async function openPhotoLibrary(rk, ik) {
+  _photoFor = [rk, ik];
+  let modal = document.getElementById('photoLibModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.className = 'modal fade'; modal.id = 'photoLibModal'; modal.tabIndex = -1;
+    modal.innerHTML = `<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">
+        <div class="modal-header ki-card-header py-2"><h6 class="modal-title fw-bold mb-0"><i class="bi bi-images me-2"></i>My photos</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body">
+          <input type="search" class="form-control form-control-sm mb-3" id="photoLibSearch" placeholder="Search by item, e.g. Wardrobe"
+                 oninput="renderPhotoLibrary()" autocomplete="off">
+          <div class="ki-photo-lib" id="photoLibGrid"><div class="small text-muted">Loading your photos…</div></div>
+        </div></div></div>`;
+    document.body.appendChild(modal);
+  }
+  const search = document.getElementById('photoLibSearch');
+  const nameNow = document.getElementById('item_name_' + ik)?.value.trim() || '';
+  if (search) search.value = '';
+  bootstrap.Modal.getOrCreateInstance(modal).show();
+  if (_photoLib === null) {
+    try { _photoLib = (await (await fetch(CATALOG.imageLibrary, { headers: { 'Accept': 'application/json' } })).json()).photos || []; }
+    catch (e) { _photoLib = []; }
+  }
+  // Photos already used on an item with this name come first
+  const n = nameNow.toLowerCase();
+  if (n) _photoLib.sort((a, b) => (b.names.some(x => x.toLowerCase() === n) ? 1 : 0) - (a.names.some(x => x.toLowerCase() === n) ? 1 : 0));
+  renderPhotoLibrary();
+}
+function renderPhotoLibrary() {
+  const grid = document.getElementById('photoLibGrid');
+  if (!grid) return;
+  const q = (document.getElementById('photoLibSearch')?.value || '').trim().toLowerCase();
+  const list = (_photoLib || []).filter(p => !q || p.names.some(x => x.toLowerCase().includes(q)));
+  if (!(_photoLib || []).length) { grid.innerHTML = '<div class="small text-muted">No photos yet. Use <strong>New</strong> to add the first one.</div>'; return; }
+  if (!list.length) { grid.innerHTML = '<div class="small text-muted">No photo used on an item like that yet.</div>'; return; }
+  grid.innerHTML = list.map(p => `<button type="button" class="ki-photo-pick" onclick="pickLibraryPhoto(${p.id})"
+        title="${escHtml(p.names.join(', ') || 'Not on a quotation yet')}">
+      <img src="${p.url}" alt="" loading="lazy"><span>${escHtml(p.names[0] || 'Not used yet')}</span></button>`).join('');
+}
+function pickLibraryPhoto(id) {
+  if (!_photoFor) return;
+  const [rk, ik] = _photoFor;
+  setPhoto(rk, ik, id);
+  bootstrap.Modal.getInstance(document.getElementById('photoLibModal'))?.hide();
 }
 function removePhoto(rk, ik) { delete itemPhotos[ik]; renderPhoto(rk, ik); }
 // Phone photos: made at most 1600 px and JPEG before upload (the server makes its own smaller copy)
@@ -124,7 +174,11 @@ async function uploadPhoto(rk, ik, input) {
     const csrf = (document.querySelector('input[name="csrf_token"]') || {}).value || '';
     const r = await fetch(CATALOG.imageUpload, { method: 'POST', headers: { 'X-CSRFToken': csrf }, body: fd });
     const j = await r.json().catch(() => ({}));
-    if (r.ok && j.id) { setPhoto(rk, ik, j.id); return; }
+    if (r.ok && j.id) {
+      setPhoto(rk, ik, j.id);
+      if (_photoLib) _photoLib.unshift({ id: j.id, url: j.url, names: [document.getElementById('item_name_' + ik)?.value.trim() || ''].filter(Boolean) });
+      return;
+    }
     if (j.error) msg = j.error;
   } catch (e) {}
   renderPhoto(rk, ik);

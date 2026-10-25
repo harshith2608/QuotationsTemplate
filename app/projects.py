@@ -1034,6 +1034,18 @@ def upload_item_image():
     return jsonify({'id': row.id, 'url': url_for('projects.item_image', image_id=row.id)})
 
 
+@projects_bp.route('/item-images/library')
+@login_required
+def item_image_library():
+    """The business's photos to pick from (newest first), each with the item names it's been used on."""
+    from flask import jsonify
+    from . import item_images
+    if not item_images.ready():
+        return jsonify({'photos': []})
+    return jsonify({'photos': [dict(p, url=url_for('projects.item_image', image_id=p['id']))
+                               for p in item_images.library()]})
+
+
 @projects_bp.route('/item-images/<int:image_id>')
 @login_required
 def item_image(image_id):

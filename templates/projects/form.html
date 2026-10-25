@@ -533,7 +533,8 @@
     itemImages:  {{ (item_images or false)|tojson }},
     gstRate:     {{ (quote_gst_rate or 0)|tojson }},                 // GST % added on quotations (console: per business)          // photos on lines (console: per business)
     imageUpload: {{ url_for('projects.upload_item_image')|tojson }},
-    imageUrl:    {{ url_for('projects.item_image', image_id=0)|tojson }},      // {options: [{name, extra}], base}: Laminate / Acrylic +25%…
+    imageUrl:    {{ url_for('projects.item_image', image_id=0)|tojson }},
+    imageLibrary: {{ url_for('projects.item_image_library')|tojson }},      // {options: [{name, extra}], base}: Laminate / Acrylic +25%…
     boqUnits:    {{ boq_form.units|tojson }},                // saved BOQ lines: [{name, description, unit, rate}]
     roomDescriptions: {{ room_descriptions|tojson }},   // Settings → Quotation PDFs → Room descriptions
     descriptionsUrl: {{ (url_for('admin.settings', tab='documents') ~ '#room-descriptions' if current_user.is_admin else '')|tojson }}
