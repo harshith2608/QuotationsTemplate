@@ -426,9 +426,20 @@ def admin_usernames(slug):
 
 def boq_status(slug):
     """How they price ({'ready', 'on'}) and whether photos on lines are on ('photos': {'ready', 'on'})."""
-    from . import boq, item_images
+    from . import boq, item_images, quote_gst
     with tenancy.tenant_context(slug, schema_of(slug)):
-        return dict(boq.console_status(), photos=item_images.console_status())
+        return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status())
+
+
+def set_quote_gst(slug, on, rate):
+    """GST on quotations on or off (and its rate), for a trial."""
+    from . import quote_gst
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        try:
+            quote_gst.set_gst(on, rate)
+        except ValueError as exc:
+            raise OpsError(str(exc))
+        db.session.commit()
 
 
 def set_photos(slug, on):

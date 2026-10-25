@@ -177,6 +177,17 @@ class Project(db.Model):
     def final_total(self):
         return round(max((self.grand_total or 0) - self.discount_amount, 0), 2)
 
+    @property
+    def gst_amount(self):
+        """GST added on the quotation (app/quote_gst.py; 0 when the business doesn't show GST on quotations)."""
+        from . import quote_gst
+        return quote_gst.amount(self.final_total)
+
+    @property
+    def total_payable(self):
+        """What the customer pays for the quotation: the final total, plus GST when shown on quotations."""
+        return round(self.final_total + self.gst_amount, 2)
+
     def __repr__(self):
         return f'<Project {self.id}: {self.customer_name}>'
 

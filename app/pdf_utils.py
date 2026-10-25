@@ -242,7 +242,12 @@ def _totals_elements(snap, page_width, palette):
         label = f"Discount ({disc['value']:g}%)" if disc.get('type') == 'percentage' else 'Discount'
         tot.append([label, f'- Rs. {_money(disc["amount"])}'])
         cmds += [('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#b91c1c')), ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold')]
-    tot.append(['TOTAL', f'Rs. {_money(snap["total"])}'])
+    if snap.get('gst'):                        # GST on quotations: Total, GST, then the grand total with GST
+        tot.append(['Total', f'Rs. {_money(snap["total"])}'])
+        tot.append([f"GST @ {snap['gst_rate']:g}%", f'Rs. {_money(snap["gst"])}'])
+        tot.append(['GRAND TOTAL (incl. GST)', f'Rs. {_money(snap["payable"])}'])
+    else:
+        tot.append(['TOTAL', f'Rs. {_money(snap["total"])}'])
     k = len(tot) - 1
     cmds += [('BACKGROUND', (0, k), (-1, k), TOTAL_ROW_BG), ('TEXTCOLOR', (0, k), (-1, k), TABLE_HEADER_FG),
              ('FONTNAME', (0, k), (-1, k), 'Helvetica-Bold'), ('FONTSIZE', (0, k), (-1, k), 12)]
@@ -633,8 +638,16 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('PADDING', (0, 0), (-1, 0), 7),
         ]
 
+    if project.gst_amount:                     # GST on quotations
+        from . import quote_gst
+        total_rows.append(['', '', 'Total', f'Rs. {_money(final_total)}'])
+        total_rows.append(['', '', f'GST @ {quote_gst.rate():g}%', f'Rs. {_money(project.gst_amount)}'])
+        total_style_cmds += [('ALIGN', (2, len(total_rows) - 2), (-1, len(total_rows) - 1), 'RIGHT'),
+                             ('FONTSIZE', (0, len(total_rows) - 2), (-1, len(total_rows) - 1), 10)]
     fi = len(total_rows)
-    total_rows.append(['', '' if by_sections else units.area(combo_area_total), 'FINAL TOTAL', f'Rs. {_money(final_total)}'])
+    total_rows.append(['', '' if by_sections else units.area(combo_area_total),
+                       'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL',
+                       f'Rs. {_money(project.total_payable)}'])
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
         ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
@@ -675,7 +688,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         pay_rows = []
 
         # Payment status row
-        balance = max(project.final_total - total_paid, 0)
+        balance = max(project.total_payable - total_paid, 0)
         if total_paid > 0:
             pay_rows.append(['Amount Paid', f'Rs. {_money(total_paid)}',
                              'Balance Due', f'Rs. {_money(balance)}'])
@@ -910,8 +923,15 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                 ('PADDING', (0, 0), (-1, 0), 8),
             ]
 
+        if project.gst_amount:                 # GST on quotations
+            from . import quote_gst
+            total_rows.append(['Total', f'Rs. {_money(final_total)}'])
+            total_rows.append([f'GST @ {quote_gst.rate():g}%', f'Rs. {_money(project.gst_amount)}'])
+            total_style_cmds += [('ALIGN', (1, len(total_rows) - 2), (-1, len(total_rows) - 1), 'RIGHT'),
+                                 ('FONTSIZE', (0, len(total_rows) - 2), (-1, len(total_rows) - 1), 10)]
         fi = len(total_rows)
-        total_rows.append([f'FINAL TOTAL  ({units.area(total_area_all)})', f'Rs. {_money(final_total)}'])
+        total_rows.append([f'GRAND TOTAL incl. GST  ({units.area(total_area_all)})' if project.gst_amount
+                           else f'FINAL TOTAL  ({units.area(total_area_all)})', f'Rs. {_money(project.total_payable)}'])
         ft_cw = cost_cw
         total_style_cmds += [
             ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
@@ -945,7 +965,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph("Payment Details", section_style))
         elements.append(Spacer(1, 6))
         pay_rows = []
-        balance = max(project.final_total - total_paid, 0)
+        balance = max(project.total_payable - total_paid, 0)
         if total_paid > 0:
             pay_rows.append(['Amount Paid', f'Rs. {_money(total_paid)}', 'Balance Due', f'Rs. {_money(balance)}'])
         if ps.get('upi_id'):

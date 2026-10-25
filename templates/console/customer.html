@@ -137,6 +137,17 @@
     <button class="btn" type="submit" {% if not boq.photos.ready and not boq.photos.on %}disabled{% endif %}>
       {{ 'Turn photos off' if boq.photos.on else 'Turn photos on' }}</button>
   </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>GST on quotations</strong> · <span class="badge {{ 'b-active' if boq.gst.on else 'b-other' }}">{{ ('on, ' ~ ('%g' % boq.gst.rate) ~ '%') if boq.gst.on else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">Quotations show their total, then GST at this rate, then the grand total with
+    GST: on the quotation page, the PDF, the customer's link and WhatsApp. What the customer owes (balance, reminders)
+    includes GST, and a new invoice adds GST on the quoted prices at this rate. Prices on the quotation stay without GST.</p>
+  <form method="post" action="{{ url_for('console.customer_gst', slug=row.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="small" style="margin:0">Rate
+      <select name="rate">{% for r in [5, 12, 18, 28] %}<option value="{{ r }}" {{ 'selected' if r == boq.gst.rate }}>{{ r }}%</option>{% endfor %}</select></label>
+    <button class="btn" type="submit" name="on" value="1">{{ 'Change rate' if boq.gst.on else 'Turn GST on' }}</button>
+    {% if boq.gst.on %}<button class="btn" type="submit" name="on" value="0">Turn GST off</button>{% endif %}
+  </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Load price list</strong></div>
   <p class="muted small" style="margin:0">This firm's own lines (title, description, unit, rate), a ready-made starting
     quotation and their notes and payment terms, from the .json file prepared from their old quotations. Goes into this

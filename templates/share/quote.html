@@ -52,8 +52,8 @@
     </div>
     <hr>
     <div class="d-flex justify-content-between align-items-end">
-      <div class="q-muted">Total</div>
-      <div class="q-total">&#8377;{{ "{:,.2f}".format(snap.total) }}</div>
+      <div class="q-muted">Total{% if snap.gst %} (incl. GST){% endif %}</div>
+      <div class="q-total">&#8377;{{ "{:,.2f}".format(snap.payable or snap.total) }}</div>
     </div>
     {% set l = status.latest %}
     {% if l and status.latest_is_current and l.kind == 'accepted' %}
@@ -150,7 +150,13 @@
         {% if not (room_rows or boq_sections) %}<tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>{% endif %}
         <tr class="text-danger"><td>Discount{% if snap.discount.type == 'percentage' %} ({{ '%g'|format(snap.discount.value) }}%){% endif %}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(snap.discount.amount) }}</td></tr>
       {% endif %}
+      {% if snap.gst %}
+      <tr><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>
+      <tr><td>GST @ {{ '%g' % snap.gst_rate }}%</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.gst) }}</td></tr>
+      <tr class="fw-bold"><td>Grand total (incl. GST)</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.payable) }}</td></tr>
+      {% else %}
       <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>
+      {% endif %}
       {% if paid %}<tr class="text-success"><td>Paid</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(paid) }}</td></tr>{% endif %}
       </tbody>
     </table>
@@ -172,7 +178,7 @@
       <input id="accName" name="name" class="form-control mb-2" maxlength="80" required value="{{ snap.customer.name }}" autocomplete="name">
       <div class="form-check mb-2">
         <input class="form-check-input" type="checkbox" name="agree" value="1" id="accAgree" required>
-        <label class="form-check-label small" for="accAgree">I accept this quotation for &#8377;{{ "{:,.2f}".format(snap.total) }} from {{ brand.name }}.</label>
+        <label class="form-check-label small" for="accAgree">I accept this quotation for &#8377;{{ "{:,.2f}".format(snap.payable or snap.total) }}{% if snap.gst %} (incl. GST){% endif %} from {{ brand.name }}.</label>
       </div>
       <button class="btn btn-brand w-100" type="submit"><i class="bi bi-check2-circle me-1"></i>Accept quotation</button>
     </form>

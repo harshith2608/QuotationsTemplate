@@ -212,13 +212,13 @@ def respond(token):
         abort(400)
     rev = billing.latest_revision_number(project)
     db.session.add(QuoteResponse(share_id=share.id, project_id=project.id, kind=kind, name=name or None,
-                                 note=note or None, total=project.final_total, revision=rev))
+                                 note=note or None, total=project.total_payable, revision=rev))
     who = name or project.customer_name
     if kind == 'accepted':
         if project.stage == 'pending':
             project.set_stage('confirmed', None, note=f'Accepted online by {who}')
         title = f'Quotation #{project.id} accepted'
-        message = f'{who} accepted the quotation for ₹{project.final_total:,.2f} online' + (f' (revision {rev})' if rev else '') + '.'
+        message = f'{who} accepted the quotation for ₹{project.total_payable:,.2f} online' + (f' (revision {rev})' if rev else '') + '.'
     else:
         title = f'Changes requested on quotation #{project.id}'
         message = f'{who} asked for changes: {note}'
