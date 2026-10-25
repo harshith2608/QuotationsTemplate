@@ -264,6 +264,79 @@ def apply_plan_for(slug, row):
     raise PaymentError(f'No trial or customer "{slug}" to add the plan to.')
 
 
+# ── Payments recorded by hand (paid outside Razorpay: UPI to you, bank transfer, cash) ──
+
+MANUAL_METHODS = ['UPI', 'Bank transfer', 'Cash', 'Cheque', 'Other']
+
+
+def _business_details(slug):
+    """(company name, company email) from the business's own settings, or ('', '')."""
+    from . import customers
+    from .models import AppSetting
+    target = tenancy.lookup(slug)
+    try:
+        if target and target[0] == 'schema':
+            with tenancy.tenant_context(slug, target[1]):
+                got = AppSetting.get_many(['company_name', 'company_email'])
+        elif (customers.get(slug) or {}).get('status') == 'active':
+            with customers.open_customer(slug):
+                got = AppSetting.get_many(['company_name', 'company_email'])
+        else:
+            return '', ''
+    except Exception:
+        return '', ''
+    return got.get('company_name') or '', got.get('company_email') or ''
+
+
+def record_manual(slug, plan, amount, method, reference='', paid_on=None, add_plan=True):
+    """A payment received outside Razorpay, recorded from the console: counted under Payments with a receipt
+    number like any other, and (add_plan) the plan added to their app the same way. Returns the payment row."""
+    from datetime import time
+    from . import customers
+    if plan not in LENGTHS:
+        raise PaymentError('Choose the 6-month or 12-month plan.')
+    try:
+        paise = int(round(float(amount) * 100))
+    except (TypeError, ValueError):
+        raise PaymentError('The amount should be a number.')
+    if paise <= 0:
+        raise PaymentError('The amount should be more than 0.')
+    target = tenancy.lookup(slug)
+    if not (target and target[0] == 'schema') and (customers.get(slug) or {}).get('status') != 'active':
+        raise PaymentError(f'No trial or customer "{slug}".')
+    method = method if method in MANUAL_METHODS else 'Other'
+    when = datetime.combine(paid_on or plan_mod.today(), time(6, 30))          # 12:00 IST that day
+    name, email = _business_details(slug)
+    ensure_table()
+    if not email:                                   # the email from their earlier payment or payment link
+        with db.engine.connect() as conn:
+            email = conn.execute(text("SELECT email FROM public.platform_payments WHERE slug = :s AND email IS NOT NULL "
+                                      "ORDER BY id DESC LIMIT 1"), {'s': slug}).scalar() or ''
+    with db.engine.begin() as conn:
+        row = conn.execute(text(
+            "INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, payment_id, status, business_name, "
+            "paid_by, source, paid_at, email, kind) VALUES (:s, :p, :a, :o, :ref, 'paid', :n, :m, 'manual', :t, :e, "
+            "'manual') RETURNING id"),
+            {'s': slug, 'p': plan, 'a': paise, 'o': 'manual_' + base64.b32encode(os.urandom(10)).decode().lower(),
+             'ref': (reference or '').strip()[:40] or None, 'n': (name or slug)[:120], 'm': method, 't': when,
+             'e': (email or '')[:120] or None}).first()
+        conn.execute(text('UPDATE public.platform_payments SET receipt_no = :r WHERE id = :i'),
+                     {'r': f'QR{when:%y%m}-{row[0]:04d}', 'i': row[0]})
+    pay = get(row[0])
+    if add_plan:
+        apply_plan_for(slug, pay)
+    return get(row[0])
+
+
+def delete_payment(payment_row_id):
+    """Remove a payment record (a test payment, one recorded by mistake). Their plan isn't changed. Returns the row."""
+    row = get(payment_row_id)
+    if row:
+        with db.engine.begin() as conn:
+            conn.execute(text('DELETE FROM public.platform_payments WHERE id = :i'), {'i': payment_row_id})
+    return row
+
+
 # ── Webhook (console) and moving paid trials ─────────────────────────────────
 
 def handle_webhook(payload):
@@ -512,9 +585,89 @@ def receipt_pdf(row):
                             ('ALIGN', (2, 0), (2, -1), 'RIGHT'), ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.grey),
                             ('FONTNAME', (1, 2), (-1, 2), 'Helvetica-Bold'), ('PADDING', (0, 0), (-1, -1), 7)]))
     el += [lt, Spacer(1, 18),
-           Paragraph('Paid online through Razorpay. This is a payment receipt, not a tax invoice: '
+           Paragraph((f'Paid by {escape(row.get("paid_by") or "transfer")}. ' if row.get('source') == 'manual'
+                      else 'Paid online through Razorpay. ') + 'This is a payment receipt, not a tax invoice: '
                      f'{escape(who["name"])} is not registered under GST, so no GST is charged.', small),
            Spacer(1, 6), Paragraph('Thank you for choosing QuoteRoom.', small)]
+    doc.build(el)
+    buf.seek(0)
+    return buf
+
+
+def proforma_no(row):
+    """'PF2610-0007': the proforma for payment link 7 (made in Oct 2026)."""
+    made = row.get('created_at') or datetime.utcnow()
+    return f"PF{made:%y%m}-{row['id']:04d}"
+
+
+def proforma_pdf(row, bill_to='', address=''):
+    """A proforma invoice for a payment link, before they pay: what the plan costs and how to pay. Not a tax invoice
+    (the platform isn't registered under GST yet); the payment receipt follows by email once they pay."""
+    from datetime import timedelta
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from xml.sax.saxutils import escape
+    who = issuer()
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm,
+                            title=f'Proforma invoice {proforma_no(row)}')
+    st = getSampleStyleSheet()
+    small = ParagraphStyle('s', parent=st['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#455a64'))
+    body = ParagraphStyle('b', parent=st['Normal'], fontSize=10, leading=14)
+    dark = colors.HexColor('#163a30')
+    made = row.get('created_at') or datetime.utcnow()
+    fmt = lambda d: d.strftime('%d %b %Y')
+    rupees = lambda p: f'Rs. {p / 100:,.2f}'
+    plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
+    contact = ' · '.join(x for x in (who['address'], who['email'], who['phone']) if x)
+    title = ParagraphStyle('t', parent=st['Normal'], fontSize=18, leading=24, textColor=dark)
+    el = [Paragraph(f'<b>{escape(who["name"])}</b>', title),
+          Paragraph(escape(contact), small) if contact else Spacer(1, 1), Spacer(1, 18),
+          Paragraph('<b>Proforma invoice</b>', ParagraphStyle('h', parent=st['Normal'], fontSize=14, leading=18)),
+          Paragraph('Not a GST invoice', ParagraphStyle('h2', parent=small, textColor=colors.HexColor('#b42318'))),
+          Spacer(1, 10)]
+    to = escape(bill_to or row.get('business_name') or row['slug'])
+    if address:
+        to += '<br/>' + escape(address).replace('\n', '<br/>')
+    info = [['Proforma no.', proforma_no(row), 'Date', fmt(made)],
+            [Paragraph('<b>To</b>', ParagraphStyle('k', parent=body, fontSize=9, textColor=dark)),
+             Paragraph(to, ParagraphStyle('v', parent=body, fontSize=9, leading=12)), 'Valid until', fmt(made + timedelta(days=7))],
+            ['App', f'{row["slug"]}.{tenancy.base_domain()}', '', '']]
+    t = Table(info, colWidths=[3 * cm, 7 * cm, 2.5 * cm, 4.5 * cm])
+    t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('TEXTCOLOR', (0, 0), (0, -1), dark),
+                           ('TEXTCOLOR', (2, 0), (2, -1), dark), ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                           ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                           ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    el += [t, Spacer(1, 16)]
+    months = '6 months' if row['plan'] == '6m' else '12 months'
+    lines = [['Description', 'Amount'],
+             [Paragraph(f'<b>QuoteRoom {escape(plan_label)}</b><br/><font size="8" color="#455a64">'
+                        f'Quotation app for your whole team, all features, for {months}. '
+                        'If you are on a free trial, the plan starts when the trial ends.</font>', body),
+              rupees(row['amount_paise'])],
+             ['GST', 'Not charged'],
+             ['Total to pay', rupees(row['amount_paise'])]]
+    lt = Table(lines, colWidths=[13 * cm, 4 * cm])
+    lt.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), dark), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 10),
+                            ('ALIGN', (1, 0), (1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('LINEBELOW', (0, 1), (-1, 2), 0.5, colors.lightgrey),
+                            ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'), ('PADDING', (0, 0), (-1, -1), 7)]))
+    el += [lt, Spacer(1, 16)]
+    if row.get('link_url') and row.get('status') != 'paid':
+        el += [Paragraph('<b>How to pay</b>', body),
+               Paragraph(f'Online (UPI, card or net banking): <link href="{escape(row["link_url"])}" color="#1f4d3f">'
+                         f'{escape(row["link_url"])}</link>', body), Spacer(1, 12)]
+    el += [Paragraph('<b>Please note</b>', body),
+           Paragraph('This is a proforma invoice: it shows what you will pay, before you pay. It is <b>not a GST '
+                     f'(tax) invoice</b>. {escape(who["name"])} is not registered under GST, so no GST is charged and '
+                     'there is no GST credit to claim on this payment.', small),
+           Spacer(1, 4),
+           Paragraph('Once you pay, you get a payment receipt by email.', small),
+           Spacer(1, 10), Paragraph('Thank you for choosing QuoteRoom.', small)]
     doc.build(el)
     buf.seek(0)
     return buf

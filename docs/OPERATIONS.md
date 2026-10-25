@@ -570,6 +570,16 @@ sheets often have no customer mobile number: they add it when they next edit the
 
 **Payment link (section 3h):** on the trial's console page → **Payment link** → plan → **Make payment link** → **Send on
 WhatsApp** (opens your WhatsApp with the message) and/or **Send by email**. When they pay, the same happens as above.
+If they ask for an invoice before paying: on the payment link's page → **Proforma invoice** → their business name (and
+address) → **Download proforma invoice (PDF)**, and send it with the link. It shows the plan, the amount and the link,
+and says in plain words that it is not a GST invoice (you're not registered under GST: no GST charged, no GST credit).
+Their payment receipt is emailed automatically once they pay.
+
+**Paid you directly** (UPI to you, bank transfer, cash): console → **Payments → Record a payment** → business, plan,
+amount, how they paid, date and reference → **Record payment**. It gets a receipt number like any other payment, adds the
+plan to their app (from when their trial or plan ends) and, ticked, emails them the receipt; a paid trial is then moved
+to its own database as usual. **Remove** on a row deletes a payment record (e.g. a test payment); it doesn't change their
+plan.
 Renewals: the same card on a paying customer's page. A **new customer without a trial**: Customers → New paying customer
 → **Send a payment link first**: nothing is made until they pay; then their app is made, the receipt is emailed, and the
 customer page shows their login once with the WhatsApp welcome message to send.

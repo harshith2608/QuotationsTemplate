@@ -1287,9 +1287,59 @@ def payments():
     total = sum(r['amount_paise'] for r in rows) / 100
     month = plan_mod.today().strftime('%Y-%m')
     this_month = sum(r['amount_paise'] for r in rows if r['paid_at'] and r['paid_at'].strftime('%Y-%m') == month) / 100
+    businesses = [(t['slug'], 'trial') for t in ops.list_trials() if t['status'] == 'active']
+    businesses += [(c['slug'], 'customer') for c in _customers().all_customers() if c['status'] == 'active']
     return render_template('console/payments.html', rows=rows, total=total, this_month=this_month,
                            pending=subscription.paid_trials(), keys_set=bool(os.environ.get('PLATFORM_RAZORPAY_WEBHOOK_SECRET')),
-                           auto=subscription.auto_move(), base_domain=tenancy.base_domain())
+                           auto=subscription.auto_move(), base_domain=tenancy.base_domain(),
+                           businesses=sorted(businesses), methods=subscription.MANUAL_METHODS, prices=subscription.prices(),
+                           today=plan_mod.today().isoformat(), mail_ready=__import__('app.mailer', fromlist=['enabled']).enabled())
+
+
+@console_bp.route('/payments/manual', methods=['POST'])
+@login_required
+def payments_manual():
+    """Record a payment received outside Razorpay (UPI to you, bank transfer, cash)."""
+    from datetime import date
+    from . import subscription
+    f = request.form
+    try:
+        paid_on = date.fromisoformat(f.get('paid_on', '')) if f.get('paid_on') else None
+    except ValueError:
+        paid_on = None
+    try:
+        row = subscription.record_manual(f.get('slug', ''), f.get('plan', ''), f.get('amount', ''), f.get('method', ''),
+                                         f.get('reference', ''), paid_on, add_plan=f.get('add_plan') == '1')
+    except subscription.PaymentError as exc:
+        flash(f'Could not record the payment: {exc}', 'error')
+        return redirect(url_for('console.payments') + '#record')
+    audit('payment_manual', row['slug'], f"{row['receipt_no']} ₹{row['amount_paise'] / 100:,.0f} {row['paid_by']}")
+    if f.get('notify') == '1':
+        subscription.notify_paid(row)
+    moved = ''
+    if f.get('add_plan') == '1' and subscription.auto_move():
+        try:
+            out = subscription.move_all_paid()
+            moved = ' Moved to its own database.' if out.get(row['slug']) == 'active' else ''
+        except Exception:
+            pass
+    flash(f"Payment recorded: {row['receipt_no']}, ₹{row['amount_paise'] / 100:,.0f} from {row['business_name'] or row['slug']}"
+          + (f", plan until {row['plan_end']:%d %b %Y}." if row.get('plan_end') else '.') + moved, 'ok')
+    return redirect(url_for('console.payments'))
+
+
+@console_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
+@login_required
+def payments_delete(payment_id):
+    """Remove a payment record (a test payment). Their plan isn't changed."""
+    from . import subscription
+    row = subscription.delete_payment(payment_id)
+    if not row:
+        abort(404)
+    audit('payment_delete', row['slug'], f"{row.get('receipt_no') or row['order_id']} ₹{row['amount_paise'] / 100:,.0f}")
+    flash(f"Removed payment {row.get('receipt_no') or ''} (₹{row['amount_paise'] / 100:,.0f}, {row['slug']}). "
+          "Their plan wasn't changed.", 'ok')
+    return redirect(url_for('console.payments'))
 
 
 @console_bp.route('/payments/move/<slug>', methods=['POST'])
@@ -1476,6 +1526,23 @@ def payment_link(payment_id):
     return render_template('console/payment_link.html', row=row, message=message,
                            wa_url=_wa_link(row.get('phone') or '', message),
                            mail_ready=__import__('app.mailer', fromlist=['enabled']).enabled())
+
+
+@console_bp.route('/payments/<int:payment_id>/proforma', methods=['POST'])
+@login_required
+def payment_proforma(payment_id):
+    """A proforma invoice (PDF) for a payment link: for a customer who asks for an invoice before paying."""
+    from flask import send_file
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row:
+        abort(404)
+    bill_to = request.form.get('bill_to', '').strip()[:120]
+    address = request.form.get('address', '').strip()[:400]
+    buf = subscription.proforma_pdf(row, bill_to, address)
+    audit('payment_proforma', row['slug'], subscription.proforma_no(row))
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'QuoteRoom-proforma-{subscription.proforma_no(row)}.pdf')
 
 
 @console_bp.route('/payments/<int:payment_id>/link/email', methods=['POST'])
