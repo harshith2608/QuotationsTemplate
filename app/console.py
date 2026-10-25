@@ -1418,8 +1418,12 @@ def _free_address(text_):
 
 
 def _signup(lead_id):
+    """The app already made for this request: set up by them (/start) or by you from the console (Create trial on the
+    request), so the emailed link opens it instead of making a second one."""
     with db.engine.connect() as conn:
-        return conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': lead_id}).scalar()
+        return (conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': lead_id}).scalar()
+                or conn.execute(text("SELECT slug FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial' "
+                                     "AND slug IS NOT NULL"), {'i': lead_id}).scalar())
 
 
 @console_bp.route('/start', methods=['GET', 'POST'])
