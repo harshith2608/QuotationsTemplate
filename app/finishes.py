@@ -115,10 +115,11 @@ def for_form():
 
 
 def set_from_price_list(opts, line_names):
-    """From a price list file: the finishes and the saved lines (by name) that come in them."""
+    """From a price list file: the finishes, and the saved lines (by name) that come in them, added to the ones
+    already ticked (a file with only a few new lines doesn't untick the others)."""
     from sqlalchemy import func
     from . import db
     from .models import BoqItem
     keys = [n.lower() for n in line_names]
     ids = [b.id for b in db.session.query(BoqItem).filter(func.lower(BoqItem.name).in_(keys)).all()] if keys else []
-    return save([(o['name'], o.get('extra', 0)) for o in opts], ids)
+    return save([(o['name'], o.get('extra', 0)) for o in opts], set(ids) | line_ids())

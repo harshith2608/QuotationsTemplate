@@ -555,6 +555,10 @@ under every item on the quotation form, for a reference image (a sofa, a chair, 
 Photo column of the PDF and shows on the quotation page and the customer's link. Needs "Update all" once after the
 update that added it.
 
+**GST on quotations** (console → their page → Features → choose the rate → **Turn GST on**; off by default): their
+quotations show Total, GST @ rate and the grand total with GST (page, PDFs, customer's link, WhatsApp). What the
+customer owes includes GST, and a new invoice adds GST on the quoted prices at that rate. Prices stay without GST.
+
 When a firm shares its old quotations, have them written into a `.json` price list (format at the top of
 `app/price_list.py`): how they price, their items and rates (or materials, rates and fittings), one or more starting
 quotations (e.g. "2 BHK turnkey") and their notes and payment terms. Upload it with **Load price list** on that firm's

@@ -229,8 +229,14 @@
             <tr><td class="fw-semibold text-end text-danger">Discount{% if project.discount_type == 'percentage' %} ({{ project.discount_value | int }}%){% endif %}</td>
                 <td class="fw-semibold text-end text-danger text-nowrap">- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</td></tr>
             {% endif %}
-            <tr class="ki-grand-total-row"><td class="fw-bold text-end fs-6">FINAL TOTAL</td>
-                <td class="fw-bold text-end fs-5 text-success text-nowrap">&#8377;{{ "{:,.2f}".format(project.final_total) }}</td></tr>
+            {% if project.gst_amount %}
+            <tr><td class="fw-semibold text-end">Total</td>
+                <td class="fw-semibold text-end text-nowrap">&#8377;{{ "{:,.2f}".format(project.final_total) }}</td></tr>
+            <tr><td class="fw-semibold text-end text-muted">GST @ {{ '%g' % quote_gst_rate }}%</td>
+                <td class="fw-semibold text-end text-muted text-nowrap">&#8377;{{ "{:,.2f}".format(project.gst_amount) }}</td></tr>
+            {% endif %}
+            <tr class="ki-grand-total-row"><td class="fw-bold text-end fs-6">{{ 'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL' }}</td>
+                <td class="fw-bold text-end fs-5 text-success text-nowrap">&#8377;{{ "{:,.2f}".format(project.total_payable) }}</td></tr>
           </tfoot>
         </table>
         {% else %}
@@ -268,9 +274,15 @@
             <span>- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</span>
           </div>
           {% endif %}
+          {% if project.gst_amount %}
+          <div class="d-flex justify-content-between py-1 small fw-semibold"><span>Total</span>
+            <span>&#8377;{{ "{:,.2f}".format(project.final_total) }}</span></div>
+          <div class="d-flex justify-content-between py-1 small text-muted fw-semibold"><span>GST @ {{ '%g' % quote_gst_rate }}%</span>
+            <span>&#8377;{{ "{:,.2f}".format(project.gst_amount) }}</span></div>
+          {% endif %}
           <div class="d-flex justify-content-between align-items-center py-2 ki-grand-total-row mt-1 px-2 rounded">
-            <span class="fw-bold fs-6">FINAL TOTAL</span>
-            <span class="fw-bold fs-5 text-success">&#8377;{{ "{:,.2f}".format(project.final_total) }}</span>
+            <span class="fw-bold fs-6">{{ 'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL' }}</span>
+            <span class="fw-bold fs-5 text-success">&#8377;{{ "{:,.2f}".format(project.total_payable) }}</span>
           </div>
         </div>
         <!-- Desktop: table -->
@@ -328,10 +340,16 @@
               <td class="fw-semibold text-end text-danger">- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</td>
             </tr>
             {% endif %}
+            {% if project.gst_amount %}
+            <tr><td colspan="3" class="fw-semibold text-end">Total</td>
+                <td class="fw-semibold text-end">&#8377;{{ "{:,.2f}".format(project.final_total) }}</td></tr>
+            <tr><td colspan="3" class="fw-semibold text-end text-muted">GST @ {{ '%g' % quote_gst_rate }}%</td>
+                <td class="fw-semibold text-end text-muted">&#8377;{{ "{:,.2f}".format(project.gst_amount) }}</td></tr>
+            {% endif %}
             <tr class="ki-grand-total-row">
-              <td colspan="3" class="fw-bold text-end fs-6">FINAL TOTAL</td>
+              <td colspan="3" class="fw-bold text-end fs-6">{{ 'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL' }}</td>
               <td class="fw-bold text-end fs-5 text-success">
-                &#8377;{{ "{:,.2f}".format(project.final_total) }}
+                &#8377;{{ "{:,.2f}".format(project.total_payable) }}
               </td>
             </tr>
           </tfoot>

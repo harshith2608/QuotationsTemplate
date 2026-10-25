@@ -730,6 +730,21 @@ def trial_photos(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/gst', methods=['POST'])
+@login_required
+def trial_gst(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        ops.set_quote_gst(slug, on, request.form.get('rate', '18'))
+    except ops.OpsError as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('trial_gst', slug, f"on {request.form.get('rate')}%" if on else 'off')
+        flash(f'GST on quotations is now {"on at " + request.form.get("rate", "18") + "%" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/trials/<slug>/price-list', methods=['POST'])
 @login_required
 def trial_price_list(slug):
@@ -1118,6 +1133,21 @@ def customer_photos(slug):
     else:
         audit('customer_photos', slug, 'on' if on else 'off')
         flash(f'Photos on items are now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/gst', methods=['POST'])
+@login_required
+def customer_gst(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_quote_gst(slug, on, request.form.get('rate', '18'))
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_gst', slug, f"on {request.form.get('rate')}%" if on else 'off')
+        flash(f'GST on quotations is now {"on at " + request.form.get("rate", "18") + "%" if on else "off"} for "{slug}".', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 

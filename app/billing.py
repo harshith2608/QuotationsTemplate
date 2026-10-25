@@ -49,7 +49,8 @@ def _item_rates():
 
 def quotation_snapshot(project, rooms=None):
     """Everything the customer is quoted, as plain data: customer, rooms and items with rates and amounts,
-    the material summary and the totals. Uses the current rates (as the quotation pages do)."""
+    the material summary and the totals (and GST, when shown on quotations). Uses the current rates."""
+    from . import quote_gst as _qg
     from . import materials as M
     from .catalog import BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
     from . import plywood
@@ -126,6 +127,7 @@ def quotation_snapshot(project, rooms=None):
         'discount': {'type': project.discount_type or 'none', 'value': project.discount_value or 0,
                      'amount': project.discount_amount},
         'total': project.final_total,
+        **({'gst_rate': _qg.rate(), 'gst': project.gst_amount, 'payable': project.total_payable} if _qg.enabled() else {}),
         'plywood': project.plywood_thickness or '',
         **({'plywood_choice': project.plywood} if plywood.context()['ready'] and project.plywood else {}),
     }
@@ -361,7 +363,17 @@ def invoice_settings(values=None):
         'notes': (s['invoice_notes'] or '').strip(),
         'with_gst': s['invoice_with_gst'] != 'no',          # the usual choice; each invoice can still pick
         'layout': s['invoice_layout'] if s['invoice_layout'] in ('rooms', 'summary') else 'rooms',
+        **_quote_gst_invoice(),
     }
+
+
+def _quote_gst_invoice():
+    """GST shown on quotations: an invoice adds GST on the quoted prices at that rate (never a second time)."""
+    from . import quote_gst
+    if not quote_gst.enabled():
+        return {}
+    r = quote_gst.rate()
+    return {'prices': PRICES_EXCLUSIVE, 'with_gst': True, **({'gst_rate': r} if r in GST_RATES else {})}
 
 
 def clean_prefix(raw):
@@ -644,7 +656,7 @@ def quotation_email_text(project, link=''):
 def amount_due_total(project, invoice=None):
     """What the customer owes in total: the invoice total once invoiced (it may include GST), else the quotation."""
     inv = invoice if invoice is not None else active_invoice(project)
-    return round(inv.total, 2) if inv else project.final_total
+    return round(inv.total, 2) if inv else project.total_payable
 
 
 def paid_total(project):
@@ -686,7 +698,7 @@ def balances_due(user):
         inv = invoiced.get(p.id)
         if p.stage not in DUE_STAGES and not inv:
             continue
-        total = round(inv.total, 2) if inv else p.final_total
+        total = round(inv.total, 2) if inv else p.total_payable
         bal = round(max(total - paid.get(p.id, 0), 0), 2)
         if bal <= 0:
             continue

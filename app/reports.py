@@ -156,7 +156,7 @@ def build(today=None):
     for p in projects:
         inv = active.get(p.id)
         if p.stage in billing.DUE_STAGES or inv:
-            outstanding += round(max((round(inv.total, 2) if inv else p.final_total) - paid.get(p.id, 0), 0), 2)
+            outstanding += round(max((round(inv.total, 2) if inv else p.total_payable) - paid.get(p.id, 0), 0), 2)
     max_month = max([m['won_value'] for m in month_rows] + [m['collected'] for m in month_rows] + [1])
     return {
         'today': today, 'current_fy': current_fy, 'current': cur, 'months': month_rows, 'max_month': max_month,

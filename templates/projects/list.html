@@ -108,7 +108,7 @@
             {% if project.status == 'draft' %}
             <span class="text-muted">—</span>
             {% else %}
-            <span class="text-success">&#8377;{{ "{:,.2f}".format(project.final_total) }}</span>
+            <span class="text-success">&#8377;{{ "{:,.2f}".format(project.total_payable) }}</span>
             {% endif %}
           </td>
           <td class="text-center text-muted small">
@@ -180,7 +180,7 @@
             {% if project.status == 'draft' %}
             <span class="text-muted">—</span>
             {% else %}
-            <span class="text-success">&#8377;{{ "{:,.0f}".format(project.final_total) }}</span>
+            <span class="text-success">&#8377;{{ "{:,.0f}".format(project.total_payable) }}</span>
             {% endif %}
           </div>
           <small class="text-muted">{{ project.created_at|ist_time('%d %b %Y') }}</small>

@@ -1484,7 +1484,14 @@ function _updateFinalTotal(grandTotal) {
   if (rowEl) rowEl.style.display = (dtype !== 'none' && dval > 0) ? 'flex' : 'none';
   if (discEl) discEl.textContent = '- ₹' + discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const finalFmt = '₹' + finalTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // GST on quotations (turned on per business): Total, GST, then the grand total with GST
+  const gstRate = CATALOG.gstRate || 0;
+  const gst = Math.round(finalTotal * gstRate) / 100;
+  const money = v => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const preEl = document.getElementById('pre-gst-display'), gstEl = document.getElementById('gst-display');
+  if (preEl) preEl.textContent = money(finalTotal);
+  if (gstEl) gstEl.textContent = money(gst);
+  const finalFmt = money(finalTotal + gst);
   if (finalEl) finalEl.textContent = finalFmt;
   if (mobEl)   mobEl.textContent   = finalFmt;
 

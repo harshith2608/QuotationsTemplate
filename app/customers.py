@@ -522,9 +522,20 @@ def locked_fields(slug):
 
 def boq_status(slug):
     """How they price ({'ready', 'on'}) and whether photos on lines are on ('photos': {'ready', 'on'})."""
-    from . import boq, item_images
+    from . import boq, item_images, quote_gst
     with open_customer(slug):
-        return dict(boq.console_status(), photos=item_images.console_status())
+        return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status())
+
+
+def set_quote_gst(slug, on, rate):
+    """GST on quotations on or off (and its rate), for a customer."""
+    from . import quote_gst
+    with open_customer(slug):
+        try:
+            quote_gst.set_gst(on, rate)
+        except ValueError as exc:
+            raise CustomerError(str(exc))
+        db.session.commit()
 
 
 def set_photos(slug, on):

@@ -132,10 +132,13 @@ def _form_catalog(project, rooms=None):
     cat['boq_form'] = {'enabled': on, 'units': boq.units_for_business(),
                        'saved': boq.saved_lines(lump_only=not on) if on or lump else [],
                        'by_item': boq.enabled(), 'lump_sum': lump}   # by_item: priced by item, BOQ lines only
-    from . import item_images
+    from . import item_images, quote_gst
+    feats = AppSetting.get_many([item_images.KEY, quote_gst.KEY, quote_gst.RATE_KEY])    # one query for both
+    quote_gst.prime(feats)
     has_img = item_images.ready() and project is not None and any(
         i.image_id for r in (rooms if rooms is not None else project.rooms_with_items()) for i in r.item_list)
-    cat['item_images'] = item_images.enabled() or has_img           # photos on lines (console: per business)
+    cat['item_images'] = (feats[item_images.KEY] == '1' and item_images.ready()) or has_img   # photos (console)
+    cat['quote_gst_rate'] = quote_gst.rate()                          # GST shown on quotations (console: per business)
     if on:
         from . import finishes
         cat['boq_form']['finishes'] = finishes.for_form()     # Laminate / Acrylic +25%… (None: no finishes)
@@ -599,7 +602,7 @@ def view_project(project_id):
     total_paid = sum(p.amount for p in payments)
     all_invoices = billing.invoices(project)
     invoice    = next((i for i in all_invoices if i.status == 'issued'), None)
-    amount_due = billing.amount_due_total(project, invoice) if invoice else project.final_total
+    amount_due = billing.amount_due_total(project, invoice) if invoice else project.total_payable
     balance    = max(amount_due - total_paid, 0)
     settings   = AppSetting.get_many(['upi_id', 'bank_name', 'account_name',
                                       'account_number', 'ifsc_code', 'razorpay_key_id', 'smtp_host', 'smtp_user',
@@ -646,6 +649,7 @@ def view_project(project_id):
                            stage_history=project.stage_changes.all(),
                            fixed_total=fixed_total,
                            boq_total=project.boq_items_total(rooms),
+                           quote_gst_rate=__import__('app.quote_gst', fromlist=['rate']).rate(),
                            can_change_stage=_can_change_stage(project),
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            title=f'Quotation – {project.customer_name}')
@@ -1164,7 +1168,13 @@ def whatsapp_share(project_id):
     if project.discount_amount > 0:
         lines.append(f"Subtotal: Rs.{project.grand_total:,.2f}")
         lines.append(f"Discount: - Rs.{project.discount_amount:,.2f}")
-    lines.append(f"💰 *Grand Total: Rs.{project.final_total:,.2f}*")
+    if project.gst_amount:
+        from . import quote_gst
+        lines.append(f"Total: Rs.{project.final_total:,.2f}")
+        lines.append(f"GST @ {quote_gst.rate():g}%: Rs.{project.gst_amount:,.2f}")
+        lines.append(f"💰 *Grand Total (incl. GST): Rs.{project.total_payable:,.2f}*")
+    else:
+        lines.append(f"💰 *Grand Total: Rs.{project.final_total:,.2f}*")
 
     if total_paid > 0:
         lines.append(f"✅ Amount Paid: Rs.{total_paid:,.2f}")
