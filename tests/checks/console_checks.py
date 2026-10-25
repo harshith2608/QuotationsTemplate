@@ -411,6 +411,23 @@ with signed.session_transaction() as sess:
     sess['console_at'], sess['console_tag'] = time.time(), tag
 ok('…linked to the request in the console (audited), and the link only works once', tuple(linked) == ('trial', 'shah-studio')
    and 'already set up' in anon.get('/start?t=' + tok).text and 'trial self start' in signed.get('/activity').text)
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    manual_id = conn.execute(Lead.__table__.insert().values(name='Ravi Rao', phone='919811100024', business_type='interiors',
+                             company_name='Rao Interiors', city='Pune', email='ravi@rao.example',
+                             created_at=datetime.utcnow())).inserted_primary_key[0]
+with app.app_context():
+    _ops.create_trial('rao-made', 'admin', 'rao-pass-1234', 7)
+    from app.console import _link_lead
+    _link_lead(manual_id, 'trial', 'rao-made')            # what Create trial on the request does
+    spares_mid = _ops.spare_count()
+r = anon.get('/start?t=' + _su.make_token(manual_id))
+with app.app_context():
+    spares_mid2 = _ops.spare_count()
+ok('a request you already made a trial for by hand: the emailed link opens that app (no second app)',
+   'already set up' in r.text and 'rao-made.quote-room.test' in r.text and 'name="password"' not in r.text
+   and spares_mid2 == spares_mid)
+with app.app_context():
+    _ops.delete_trial('rao-made')
 _dash = signed.get('/').text
 ok('the dashboard shows self-serve and the ready-made trials', 'Self-serve trials' in _dash and 'shah-studio' in _dash
    and 'ready-made trial' in _dash)
