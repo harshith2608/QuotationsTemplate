@@ -220,6 +220,14 @@ with app.app_context():
     again = price_list.apply(price_list.parse(json.dumps(QF).encode()))
     ok('loading the file again adds it only once', again['quotations'] == []
        and sum(1 for p in Project.query.all() if p.customer_name == 'Sheet Home (2 BHK)') == 1)
+ok('"options" are checked', 'GST rate' in bad({'options': {'gst': 7}}) and 'true or false' in bad({'options': {'show_rate': 'no'}}))
+with app.app_context():
+    from app import quote_gst as _qg2, layout as _lay2
+    r_opt = price_list.apply(price_list.parse(json.dumps({'options': {'show_rate': False, 'gst': 18}}).encode()))
+    ok('a file can hide the Rate column and turn GST on (and say so)', not _lay2.show_rate() and _qg2.rate() == 18
+       and 'Rate column hidden' in price_list.summary_text(r_opt) and 'GST on quotations 18%' in price_list.summary_text(r_opt))
+    price_list.apply(price_list.parse(json.dumps({'options': {'show_rate': True, 'gst': False}}).encode()))
+    ok('…and back again', _lay2.show_rate() and _qg2.rate() == 0)
 ok('it opens like any quotation', c.get(f'/projects/{q.id}').status_code == 200 and 'Vanity Storage' in c.get(f'/projects/{q.id}').text)
 
 # ── Pricing: by item / by material (Settings → Pricing, a setup guide step) ──
