@@ -287,9 +287,11 @@ def _boq_elements(project, page_width, palette, styles):
         head = escape(sec['name'])
         if sec['description']:
             head += f'<br/><font size="7" color="#455a64">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
-        data.append([sec['letter'], Paragraph(head, title)] + [''] * (4 + pc))
-        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-1, k)),
-                 ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
+        # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
+        data.append([sec['letter'], Paragraph(head, title)] + [''] * (3 + pc) + [_money(sec['total']) if sec['total'] else ''])
+        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-2, k)),
+                 ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('FONTNAME', (-1, k), (-1, k), 'Helvetica-Bold'),
+                 ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
         if sec['lines']:
             cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
         for ln in sec['lines']:

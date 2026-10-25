@@ -76,6 +76,9 @@ with app.app_context():
     ok('a "Price to follow" line has no rate and isn\'t added: total = 7 × 8 × 1,950 only', tbc.price_to_follow
        and tbc.unit_price is None and abs(p.grand_total - 56 * 1950) < 0.01 and abs(snap['subtotal'] - 56 * 1950) < 0.01)
     ok('…kept in the snapshot', any(i.get('tbc') for r in snap['rooms'] for i in r['items']))
+    from app import layout as _lay0
+    ok('BOQ sections carry their total (without "Price to follow" or rate-only lines)',
+       [sec['total'] for sec in _lay0.boq_rows(snap)] == [56 * 1950])
     lines = billing.invoice_lines(snap, '9403')
     ok('…and never billed on an invoice', [l['description'] for l in lines] == ['Wardrobe'])
 pdf = pdftext(f'/projects/{pid}/pdf/customer')

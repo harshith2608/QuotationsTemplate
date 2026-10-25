@@ -92,7 +92,9 @@ def boq_rows(snapshot):
                               'image_id': it.get('image_id'),
                               'unit': boq.unit_text(unit), 'rate': None if lump or not it['unit_price'] else it['unit_price'],
                               'amount': it['amount'], 'tbc': bool(it.get('tbc'))})
-        out.append({'letter': letter, 'name': room['name'], 'description': room.get('description') or '', 'lines': lines})
+        total = round(sum(l['amount'] or 0 for l in lines if not l.get('tbc')), 2)   # rate-only lines are 0
+        out.append({'letter': letter, 'name': room['name'], 'description': room.get('description') or '', 'lines': lines,
+                    'total': total})
     return out
 
 

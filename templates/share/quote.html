@@ -108,7 +108,8 @@
   <div class="q-card">
     <div class="fw-semibold mb-2">Bill of quantities</div>
     {% for sec in boq_sections %}
-    <div class="fw-semibold small mt-3 mb-1" style="color:var(--p)">{{ sec.letter }}. {{ sec.name }}</div>
+    <div class="fw-semibold small mt-3 mb-1 d-flex justify-content-between" style="color:var(--p)"><span>{{ sec.letter }}. {{ sec.name }}</span>
+      {% if sec.total %}<span class="text-nowrap">&#8377;{{ "{:,.2f}".format(sec.total) }}</span>{% endif %}</div>
     {% if sec.description %}<div class="small q-muted" style="white-space:pre-line">{{ sec.description }}</div>{% endif %}
     <div class="table-responsive"><table class="table table-sm small mb-0">
       <tbody>
