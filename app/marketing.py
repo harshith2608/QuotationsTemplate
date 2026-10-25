@@ -68,7 +68,7 @@ def _context():
         contact_email=_env('MARKETING_CONTACT_EMAIL'),
         business_address=_env('MARKETING_ADDRESS'),
         jurisdiction=_env('MARKETING_JURISDICTION'),
-        legal_updated=_env('MARKETING_LEGAL_UPDATED', '11 October 2026'),
+        legal_updated=_env('MARKETING_LEGAL_UPDATED', '26 October 2026'),
         wa_number=wa_number,
         wa_display=_display_number(wa_number),
         meta_pixel_id=re.sub(r'\D', '', _env('META_PIXEL_ID')),

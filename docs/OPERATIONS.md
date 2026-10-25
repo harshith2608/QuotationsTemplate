@@ -569,6 +569,15 @@ The same file (or one with only `"quotations"`) can also bring in quotations the
 with every line, unit and rate (the total is checked against their sheet). Loading it again doesn't add them twice. Their
 sheets often have no customer mobile number: they add it when they next edit the quotation.
 
+### Following up trials (console → Follow-ups)
+Every running trial has a stage, worked out from its own data: **not signed in → no company details → no quotation yet →
+quoting → ending soon → ended**. Follow-ups shows how many are at each stage and who's **due today** (not messaged about
+that stage for a couple of days; a quoting one only once it has gone quiet; not snoozed or marked not interested). Press
+**Start: one after another**: each trial comes up with the right message (editable) → **Open in WhatsApp** (your own
+WhatsApp; it's logged) → **Next**. Snooze, 🔥 hot, not interested and a note are on the same screen and on the trial's page
+(which also logs its "Open in WhatsApp" and has **Log a call**). The daily task also emails the early stages once each
+(not signed in after a day, no company details after a day, no quotation after two days), from hello@.
+
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
 

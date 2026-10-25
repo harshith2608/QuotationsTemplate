@@ -451,6 +451,14 @@ FOLLOW_UPS = [
      "Hi {name}, this is {sender} from {product}. Just checking you got the login I sent. If you have any trouble "
      "signing in, tell me and I'll sort it out right away.\n\nOpen: {url}\n\nIt takes about 10 minutes to set up your "
      "rates and make your first quotation."),
+    ('details', 'Company details and logo',
+     "Hi {name}, good to see you've signed in to {product} 👍 Next: add your company name, address and logo in "
+     "Settings, so every quotation goes out in your brand. It takes 2 minutes: {url}/admin/settings\n\nOr send me your "
+     "logo here and I'll add it for you."),
+    ('firstquote', 'Their first quotation',
+     "Hi {name}, your {product} is set up 👍 Try your first quotation now: New Quotation, pick a starting quotation, "
+     "type the sizes and send the PDF on WhatsApp.\n\nIf you send me one of your old quotations, I'll set up your items "
+     "and rates for you, so it's ready in your own format."),
     ('rates', 'Help with rates (offer a call)',
      "Hi {name}, good to see you've started on {product} 👍 The next step is your rates for each material and work "
      "type. Once they're in, every quotation works itself out. If it's easier, I can set up your rates with you on a "
@@ -484,6 +492,63 @@ def contact_name(slug):
         return trial_contact({'slug': slug, 'status': ''})['name'] or ''
     except Exception:
         return ''
+
+
+def trial_contacts(trials):
+    """{slug: {'name', 'phone', 'company'}} for many trials, in one query to the trial requests (and each trial's own
+    phone and company name where the request didn't have them)."""
+    from . import crypto
+    from .models import Lead
+    out = {t['slug']: {'name': '', 'phone': (t.get('usage') or {}).get('phone') or '', 'company': ''} for t in trials}
+    with db.engine.connect() as conn:
+        links = {r[0]: r[1] for r in conn.execute(text(
+            "SELECT DISTINCT ON (slug) slug, lead_id FROM public.console_lead_links WHERE status = 'trial' "
+            "ORDER BY slug, lead_id DESC")) if r[0] in out}
+    engine = _leads_engine_or_none() if links else None
+    if engine is not None:
+        try:
+            from sqlalchemy import inspect, select
+            lt = Lead.__table__
+            with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
+                present = {c['name'] for c in inspect(conn).get_columns('leads')}
+                cols = [lt.c.id, lt.c.name, lt.c.phone] + ([lt.c.company_name] if 'company_name' in present else [])
+                by_id = {r['id']: r for r in conn.execute(select(*cols).where(lt.c.id.in_(list(links.values())))).mappings()}
+            for slug, lead_id in links.items():
+                r = by_id.get(lead_id)
+                if r:
+                    out[slug].update(name=r['name'] or '', phone=r['phone'] or out[slug]['phone'],
+                                     company=r.get('company_name') or '')
+        except Exception:                       # the leads database being unreachable mustn't break the page
+            pass
+    return out
+
+
+def _followup_trials():
+    """Running trials with their usage, phone and company (one pass over the trials) and their contacts."""
+    from .models import AppSetting
+    trials = [t for t in ops.list_trials() if t['status'] == 'active']
+    for t in trials:
+        try:
+            with tenancy.tenant_context(t['slug'], t['schema_name']):
+                s = AppSetting.get_many(['company_mobile', 'company_name'])
+            t.setdefault('usage', {})
+            if t['usage'] is not None:
+                t['usage']['phone'] = ''.join(ch for ch in s['company_mobile'] if ch.isdigit())
+            t['company_name'] = s['company_name'] or ''
+        except Exception:
+            t['company_name'] = ''
+    contacts = trial_contacts(trials)
+    for t in trials:
+        t['contact'] = contacts.get(t['slug'], {})
+    return trials, contacts
+
+
+def _followup_message(row, key=None):
+    """The follow-up draft for a trial on the board (its stage's, or `key`), with their first name filled in."""
+    drafts, _ = follow_ups(row)
+    key = key or row['draft_key']
+    body = next((b for k, _, b in drafts if k == key), drafts[0][2])
+    return body.replace('{name}', _first_name(row['contact'].get('name')) or 'there')
 
 
 def trial_contact(t):
@@ -528,18 +593,15 @@ def follow_ups(t):
                   delete_on=fmt(st.delete_on) if st and st.has_limit else '')
     drafts = [(k, label, body.replace('{name}', '\0').format(**values).replace('\0', '{name}'))
               for k, label, body in FOLLOW_UPS]
-    if st and st.has_limit and st.days_left < 0:
-        pick = 'ended'
-    elif st and st.has_limit and st.days_left <= 2:
-        pick = 'ending'
-    elif not u.get('last_login_at') and not u.get('used'):
-        pick = 'signin'
-    elif not u.get('quotations'):
-        pick = 'rates'
-    elif u.get('last_seen_at') and (datetime.utcnow() - u['last_seen_at'].replace(tzinfo=None)).days >= 3:
-        pick = 'checkin'
+    from . import followups                      # the same stages as Follow-ups
+    stage = followups.stage_of(dict(t, status='active')) if t.get('status', 'active') == 'active' else None
+    if stage == 'quoting':
+        quiet = u.get('last_seen_at') and (datetime.utcnow() - u['last_seen_at'].replace(tzinfo=None)).days >= 3
+        pick = 'checkin' if quiet else 'quote'
+    elif stage:
+        pick = followups.STAGES[stage][2]
     else:
-        pick = 'quote'
+        pick = 'signin'
     return drafts, pick
 
 
@@ -649,10 +711,91 @@ def trial_detail(slug):
         from .models import AppSetting
         with tenancy.tenant_context(slug, t['schema_name']):
             pay_email = AppSetting.get('company_email', '') or ''
-    return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history,
+    fu = None
+    if t['status'] == 'active':
+        from . import activity, followups
+        try:
+            with tenancy.tenant_context(slug, t['schema_name']):
+                t2 = dict(t, status_obj=plan_mod.load_status(on=plan_mod.today()), usage=activity.usage())
+            st_key = followups.stage_of(t2)
+            fu = {'stage': st_key, 'label': followups.STAGES[st_key][0] if st_key else '',
+                  'next': followups.STAGES[st_key][1] if st_key else '', 'history': followups.history(slug),
+                  'mark': followups.marks().get(slug, {})}
+        except Exception:
+            fu = None
+    return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history, fu=fu,
                            extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested,
                            boq=boq_state, links=subscription.links_enabled(), pay_email=pay_email,
                            prices=subscription.prices())
+
+
+@console_bp.route('/follow-ups')
+@login_required
+def followups_page():
+    from . import followups
+    trials, contacts = _followup_trials()
+    b = followups.board(trials, contacts)
+    stage = request.args.get('stage', '')
+    rows = [r for r in b['rows'] if r['stage'] == stage] if stage in followups.STAGES else b['rows']
+    for r in b['due'][:200]:
+        r['message'] = _followup_message(r)
+        phone = re.sub(r'\D', '', r['contact'].get('phone') or '')
+        r['phone'] = phone
+    return render_template('console/followups.html', board=b, rows=rows, stage=stage, stages=followups.STAGES,
+                           order=followups.ORDER, base_domain=tenancy.base_domain())
+
+
+@console_bp.route('/follow-ups/queue')
+@login_required
+def followups_queue():
+    """One due trial at a time: the message to check, Open WhatsApp (logged), Skip, Next."""
+    from . import followups
+    trials, contacts = _followup_trials()
+    b = followups.board(trials, contacts)
+    skip = set(request.args.getlist('skip'))
+    due = [r for r in b['due'] if r['slug'] not in skip]
+    row = due[0] if due else None
+    if row:
+        row['message'] = _followup_message(row)
+        row['phone'] = re.sub(r'\D', '', row['contact'].get('phone') or '')
+    return render_template('console/followups_queue.html', row=row, left=len(due), skip=sorted(skip),
+                           stages=followups.STAGES, base_domain=tenancy.base_domain())
+
+
+@console_bp.route('/follow-ups/<slug>/whatsapp', methods=['POST'])
+@login_required
+def followups_whatsapp(slug):
+    """Log the follow-up and open it in the operator's WhatsApp (nothing is sent from here)."""
+    from . import followups
+    _trial_or_404(slug)
+    phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    message = request.form.get('message', '')[:3000]
+    if not phone:
+        flash('No WhatsApp number for this trial.', 'error')
+        return redirect(url_for('console.followups_page'))
+    followups.log(slug, request.form.get('stage', '')[:20], 'whatsapp', message[:300])
+    audit('followup_whatsapp', slug, request.form.get('stage', ''))
+    return redirect(_wa_link(phone, message))
+
+
+@console_bp.route('/follow-ups/<slug>/mark', methods=['POST'])
+@login_required
+def followups_mark(slug):
+    """Snooze, hot / not interested, a note, or "messaged another way"."""
+    from . import followups
+    _trial_or_404(slug)
+    f = request.form
+    if f.get('snooze'):
+        followups.snooze(slug, max(1, min(int(f.get('snooze') or 1), 60)))
+    if 'mark' in f:
+        followups.set_mark(slug, mark=f.get('mark') if f.get('mark') in ('hot', 'lost', '') else '')
+    if 'note' in f:
+        followups.set_mark(slug, note=f.get('note', '').strip()[:500])
+    if f.get('contacted'):
+        followups.log(slug, f.get('stage', '')[:20], f.get('contacted')[:10], f.get('what', '')[:300])
+    audit('followup_mark', slug, ', '.join(f'{k}={f.get(k)}' for k in ('snooze', 'mark', 'contacted') if f.get(k) is not None))
+    nxt = f.get('next', '')
+    return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('console.followups_page'))
 
 
 @console_bp.route('/trials/<slug>/extend', methods=['POST'])
@@ -1328,6 +1471,14 @@ def cron_tick():
                 out['spares'] = made
         except Exception as exc:
             out['spares'] = f'failed: {exc}'
+    try:
+        from . import followups
+        trials_f, _ = _followup_trials()
+        stage_mails = followups.send_stage_emails(trials_f)   # not signed in / no details / no quotation (once each)
+        if stage_mails:
+            out['stage_emails'] = stage_mails
+    except Exception as exc:
+        out['stage_emails'] = f'failed: {exc}'
     try:
         sent = subscription.send_reminders()             # trial / plan ending emails (once each)
         if sent:

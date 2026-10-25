@@ -1,0 +1,45 @@
+{% extends "console/_layout.html" %}
+{% block title %}Follow-ups{% endblock %}
+{% block content %}
+<h1>Follow-ups</h1>
+<p class="muted small">Where each running trial is, and who to message today. Messages open in your own WhatsApp (you press
+  send); each one is logged so nobody gets two in a row. The early stages also get an email from hello@ once each, by
+  themselves.</p>
+
+<div class="row" style="gap:10px;flex-wrap:wrap">
+  {% for key in order %}
+  <a class="card" href="{{ url_for('console.followups_page', stage=key) }}" style="text-decoration:none;min-width:130px{% if stage == key %};outline:2px solid var(--pine){% endif %}">
+    <div class="muted small">{{ stages[key][0] }}</div>
+    <div style="font-size:1.5rem;font-weight:700">{{ board.counts[key] }}</div></a>
+  {% endfor %}
+  <a class="card" href="{{ url_for('console.followups_page') }}" style="text-decoration:none;min-width:130px{% if not stage %};outline:2px solid var(--pine){% endif %}">
+    <div class="muted small">All running</div><div style="font-size:1.5rem;font-weight:700">{{ board.rows|length }}</div></a>
+</div>
+{% if board.lost %}<p class="muted small">{{ board.lost }} marked not interested.</p>{% endif %}
+
+<h2>Due today <span class="badge {{ 'b-reminder' if board.due else 'b-active' }}">{{ board.due|length }}</span></h2>
+{% if board.due %}
+<p><a class="btn btn-primary" href="{{ url_for('console.followups_queue') }}">Start: one after another →</a></p>
+{% else %}<p class="muted">Nobody to message today. 🎉</p>{% endif %}
+
+<h2>{{ stages[stage][0] if stage else 'All running trials' }}</h2>
+{% if not rows %}<p class="muted">None.</p>{% else %}
+<div class="card" style="overflow-x:auto"><table class="small">
+  <tr><th>Trial</th><th>Stage</th><th>Days left</th><th>Last seen</th><th>Last message</th><th></th></tr>
+  {% for r in rows %}
+  <tr>
+    <td><a href="{{ url_for('console.trial_detail', slug=r.slug) }}"><strong>{{ r.contact.company or r.company_name or r.slug }}</strong></a>
+      {% if r.mark.mark == 'hot' %}<span class="badge b-reminder">hot</span>{% elif r.mark.mark == 'lost' %}<span class="badge b-due">not interested</span>{% endif %}
+      <div class="muted">{{ r.contact.name }}{% if r.contact.phone %} · {{ r.contact.phone }}{% endif %}</div>
+      {% if r.mark.note %}<div class="muted">📝 {{ r.mark.note }}</div>{% endif %}</td>
+    <td>{{ r.stage_label }}<div class="muted">{{ r.next_step }}</div></td>
+    <td>{{ r.status_obj.days_left if r.status_obj and r.status_obj.has_limit else '—' }}</td>
+    <td>{{ r.usage.last_seen_at|ist if r.usage and r.usage.last_seen_at else 'never' }}</td>
+    <td>{% if r.last %}{{ r.last[0]|ist }}<div class="muted">{{ r.last[2] }}{% if r.last[1] %} · {{ stages[r.last[1]][0] if r.last[1] in stages else r.last[1] }}{% endif %}</div>{% else %}—{% endif %}
+      {% if r.mark.snooze_until %}<div class="muted">snoozed to {{ r.mark.snooze_until.strftime('%d %b') }}</div>{% endif %}</td>
+    <td style="white-space:nowrap">{% if r.due %}<span class="badge b-reminder">due</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}
