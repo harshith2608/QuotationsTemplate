@@ -111,6 +111,7 @@
       <div><label for="plplan">Plan</label>
         <select id="plplan" name="plan"><option value="1y">12 months · ₹{{ '{:,}'.format(prices['1y']) }}</option>
           <option value="6m">6 months · ₹{{ '{:,}'.format(prices['6m']) }}</option></select></div>
+      <div class="grow"><label for="plpayer">Their name</label><input id="plpayer" type="text" name="payer" value="{{ contact.name }}" maxlength="120"></div>
       <div class="grow"><label for="plphone">WhatsApp number</label><input id="plphone" type="tel" name="phone" value="{{ contact.phone }}"></div>
       <div class="grow"><label for="plemail">Email</label><input id="plemail" type="email" name="email" value="{{ pay_email }}"></div>
     </div>

@@ -50,6 +50,8 @@
       <div><label for="m_method">Paid by</label>
         <select id="m_method" name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
       <div><label for="m_date">Paid on</label><input type="date" id="m_date" name="paid_on" value="{{ today }}" max="{{ today }}"></div>
+      <div class="grow"><label for="m_payer">Their name <span class="muted small">(for the receipt; blank: from their trial request)</span></label>
+        <input type="text" id="m_payer" name="payer" maxlength="120"></div>
       <div class="grow"><label for="m_ref">Reference <span class="muted small">(UPI / bank reference, optional)</span></label>
         <input type="text" id="m_ref" name="reference" maxlength="40"></div>
     </div>
@@ -67,7 +69,7 @@
 <table>
   <tr><th>Paid</th><th>Business</th><th>Plan</th><th>Amount</th><th>Until</th><th>Receipt</th><th>Via</th><th></th></tr>
   {% for r in rows %}
-  <tr><td class="small">{{ r.paid_at|ist }}</td><td>{{ r.business_name or r.slug }} <span class="muted small">{{ r.slug }}</span></td>
+  <tr><td class="small">{{ r.paid_at|ist }}</td><td>{{ r.business_name or r.slug }}{% if r.payer_name %} · {{ r.payer_name }}{% endif %} <span class="muted small">{{ r.slug }}</span></td>
       <td>{{ '6 months' if r.plan == '6m' else '12 months' }}</td><td>₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}</td>
       <td class="small">{{ r.plan_end.strftime('%d %b %Y') if r.plan_end else '—' }}</td>
       <td><a href="{{ url_for('console.payment_receipt', payment_id=r.id) }}" target="_blank" rel="noopener">{{ r.receipt_no }}</a></td>

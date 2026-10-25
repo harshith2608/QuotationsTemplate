@@ -695,7 +695,7 @@ end_before = st_pf.ends_on
 before = len(outbox())
 r = c.post('/payments/manual', data={'slug': 'paidfirst', 'plan': '6m', 'amount': '4999', 'method': 'UPI',
                                      'reference': 'UPI-123456', 'paid_on': _pm.today().isoformat(), 'add_plan': '1',
-                                     'notify': '1'}, follow_redirects=True)
+                                     'notify': '1', 'payer': 'Ravi Kumar'}, follow_redirects=True)
 with app.app_context():
     with db.engine.connect() as conn:
         mrow = conn.execute(text("select id, receipt_no, source, paid_by, payment_id, amount_paise, plan_end from "
@@ -711,6 +711,9 @@ import io as _io2, re as _re2
 from pypdf import PdfReader as _PR2
 rt = _re2.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in _PR2(_io2.BytesIO(c.get(f'/payments/{mrow[0]}/receipt').data)).pages))
 ok('…its receipt says how it was paid (not Razorpay)', 'Paid by UPI' in rt and 'Razorpay' not in rt)
+ok('…and their name: on the receipt, the email greets them, the Payments list shows it', 'Name Ravi Kumar' in rt
+   and next(x for x in mails[0].walk() if x.get_content_type() == 'text/plain').get_payload(decode=True).decode()
+       .startswith('Hello Ravi,') and 'Ravi Kumar' in c.get('/payments').text)
 bad = c.post('/payments/manual', data={'slug': 'nobody', 'plan': '6m', 'amount': '4999', 'method': 'UPI'}, follow_redirects=True)
 ok('a business that doesn\'t exist is refused', 'No trial or customer' in bad.text)
 r = c.post(f'/payments/{mrow[0]}/delete', follow_redirects=True)

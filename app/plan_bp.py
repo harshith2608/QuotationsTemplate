@@ -36,7 +36,7 @@ def order():
     brand = get_brand()
     try:
         row = subscription.create_order(tenancy.current_slug(), plan, brand['name'], current_user.username,
-                                        brand.get('email') or '')
+                                        brand.get('email') or '', payer_name=current_user.display_name)
     except subscription.PaymentError as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
     return jsonify({'ok': True, 'order_id': row['order_id'], 'amount': row['amount_paise'], 'currency': 'INR',

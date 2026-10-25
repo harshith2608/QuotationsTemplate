@@ -94,6 +94,7 @@ def ensure_table():
                               "NOT NULL DEFAULT 'checkout'"))          # checkout (in the app) / link / new (a new customer)
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS link_url TEXT'))
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS phone VARCHAR(20)'))
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS payer_name VARCHAR(120)'))
             conn.execute(text(REMINDERS_DDL))
         _table_ready = True
 
@@ -119,7 +120,7 @@ def _api(method, path, payload=None):
 
 # ── Buying ───────────────────────────────────────────────────────────────────
 
-def create_order(slug, plan, business_name='', paid_by='', email=''):
+def create_order(slug, plan, business_name='', paid_by='', email='', payer_name=''):
     """A Razorpay order for `plan` ('6m' / '1y'), remembered as "created". Returns the order row (dict)."""
     if plan not in LENGTHS:
         raise PaymentError('Choose the 6-month or 12-month plan.')
@@ -130,9 +131,9 @@ def create_order(slug, plan, business_name='', paid_by='', email=''):
                                      'notes': {'slug': slug, 'plan': plan}})
     with db.engine.begin() as conn:
         conn.execute(text('INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, business_name, paid_by, '
-                          'email) VALUES (:s, :p, :a, :o, :n, :u, :e)'),
+                          'email, payer_name) VALUES (:s, :p, :a, :o, :n, :u, :e, :pn)'),
                      {'s': slug, 'p': plan, 'a': amount, 'o': order['id'], 'n': (business_name or '')[:120],
-                      'u': (paid_by or '')[:80], 'e': (email or '')[:120] or None})
+                      'u': (paid_by or '')[:80], 'e': (email or '')[:120] or None, 'pn': (payer_name or '').strip()[:120] or None})
     return get_by_order(order['id'])
 
 
@@ -141,7 +142,7 @@ def links_enabled():
     return bool(_env('PLATFORM_RAZORPAY_KEY_ID') and _env('PLATFORM_RAZORPAY_KEY_SECRET'))
 
 
-def create_payment_link(slug, plan, business_name='', phone='', email='', kind='link', paid_by='console'):
+def create_payment_link(slug, plan, business_name='', phone='', email='', kind='link', paid_by='console', payer_name=''):
     """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email). kind 'new': a customer whose app
     is made once they pay. Returns the payment row (dict, with link_url)."""
     if plan not in LENGTHS:
@@ -151,7 +152,8 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
     ensure_table()
     amount = prices()[plan] * 100
     digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
-    customer = {k: v for k, v in (('name', (business_name or slug)[:60]), ('email', email or ''),
+    payer_name = (payer_name or '').strip()[:120]
+    customer = {k: v for k, v in (('name', (payer_name or business_name or slug)[:60]), ('email', email or ''),
                                   ('contact', ('+' + digits) if digits else '')) if v}
     link = _api('POST', '/payment_links', {
         'amount': amount, 'currency': 'INR', 'accept_partial': False,
@@ -161,10 +163,10 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
         'expire_by': int(datetime.utcnow().timestamp()) + 7 * 86400})
     with db.engine.begin() as conn:
         conn.execute(text('INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, business_name, paid_by, '
-                          'email, kind, link_url, phone) VALUES (:s, :p, :a, :o, :n, :u, :e, :k, :l, :ph)'),
+                          'email, kind, link_url, phone, payer_name) VALUES (:s, :p, :a, :o, :n, :u, :e, :k, :l, :ph, :pn)'),
                      {'s': slug, 'p': plan, 'a': amount, 'o': link['id'], 'n': (business_name or '')[:120],
                       'u': paid_by[:80], 'e': (email or '')[:120] or None, 'k': kind, 'l': link.get('short_url'),
-                      'ph': digits[:20] or None})
+                      'ph': digits[:20] or None, 'pn': payer_name or None})
     return get_by_order(link['id'])
 
 
@@ -288,7 +290,7 @@ def _business_details(slug):
     return got.get('company_name') or '', got.get('company_email') or ''
 
 
-def record_manual(slug, plan, amount, method, reference='', paid_on=None, add_plan=True):
+def record_manual(slug, plan, amount, method, reference='', paid_on=None, add_plan=True, payer_name=''):
     """A payment received outside Razorpay, recorded from the console: counted under Payments with a receipt
     number like any other, and (add_plan) the plan added to their app the same way. Returns the payment row."""
     from datetime import time
@@ -315,17 +317,23 @@ def record_manual(slug, plan, amount, method, reference='', paid_on=None, add_pl
     with db.engine.begin() as conn:
         row = conn.execute(text(
             "INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, payment_id, status, business_name, "
-            "paid_by, source, paid_at, email, kind) VALUES (:s, :p, :a, :o, :ref, 'paid', :n, :m, 'manual', :t, :e, "
-            "'manual') RETURNING id"),
+            "paid_by, source, paid_at, email, kind, payer_name) VALUES (:s, :p, :a, :o, :ref, 'paid', :n, :m, 'manual', "
+            ":t, :e, 'manual', :pn) RETURNING id"),
             {'s': slug, 'p': plan, 'a': paise, 'o': 'manual_' + base64.b32encode(os.urandom(10)).decode().lower(),
              'ref': (reference or '').strip()[:40] or None, 'n': (name or slug)[:120], 'm': method, 't': when,
-             'e': (email or '')[:120] or None}).first()
+             'e': (email or '')[:120] or None, 'pn': (payer_name or '').strip()[:120] or None}).first()
         conn.execute(text('UPDATE public.platform_payments SET receipt_no = :r WHERE id = :i'),
                      {'r': f'QR{when:%y%m}-{row[0]:04d}', 'i': row[0]})
     pay = get(row[0])
     if add_plan:
         apply_plan_for(slug, pay)
     return get(row[0])
+
+
+def set_payer_name(payment_row_id, name):
+    with db.engine.begin() as conn:
+        conn.execute(text('UPDATE public.platform_payments SET payer_name = :n WHERE id = :i'),
+                     {'n': (name or '').strip()[:120] or None, 'i': payment_row_id})
 
 
 def delete_payment(payment_row_id):
@@ -440,7 +448,7 @@ def notify_paid(row):
     amount = f'₹{row["amount_paise"] / 100:,.0f}'
     name = row.get('business_name') or row['slug']
     if row.get('email'):
-        mailer.send(row['email'], f'Payment received: QuoteRoom {plan_label}', f"""Hello,
+        mailer.send(row['email'], f'Payment received: QuoteRoom {plan_label}', f"""Hello{(' ' + row['payer_name'].split()[0]) if row.get('payer_name') else ''},
 
 Thank you! We've received {amount} for your QuoteRoom {plan_label}.
 
@@ -456,7 +464,7 @@ Questions? Just reply to this email.
 QuoteRoom
 """, attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
     mailer.send(mailer.operator(), f'Payment: {amount} from {name}',
-                f'{name} ({row["slug"]}) paid {amount} for the {plan_label}.\n'
+                f'{name} ({row["slug"]}){" · " + row["payer_name"] if row.get("payer_name") else ""} paid {amount} for the {plan_label}.\n'
                 f'Receipt {row.get("receipt_no")} · payment {row.get("payment_id")} · via {row.get("source")}\n'
                 f'Plan until {fmt(row.get("plan_end"))}.\n')
 
@@ -570,6 +578,7 @@ def receipt_pdf(row):
           Spacer(1, 10)]
     info = [['Receipt no.', row.get('receipt_no') or '—', 'Date', fmt(row.get('paid_at'))],
             ['Received from', row.get('business_name') or row['slug'], 'App', f'{row["slug"]}.{tenancy.base_domain()}'],
+            *([['Name', row['payer_name'], '', '']] if row.get('payer_name') else []),
             ['Payment ID', row.get('payment_id') or '—', 'Paid by', row.get('paid_by') or '—']]
     t = Table(info, colWidths=[3 * cm, 5.5 * cm, 2.5 * cm, 6 * cm])
     t.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('TEXTCOLOR', (0, 0), (0, -1), dark),
@@ -630,6 +639,8 @@ def proforma_pdf(row, bill_to='', address=''):
           Paragraph('Not a GST invoice', ParagraphStyle('h2', parent=small, textColor=colors.HexColor('#b42318'))),
           Spacer(1, 10)]
     to = escape(bill_to or row.get('business_name') or row['slug'])
+    if row.get('payer_name'):
+        to += '<br/>' + escape(row['payer_name'])
     if address:
         to += '<br/>' + escape(address).replace('\n', '<br/>')
     info = [['Proforma no.', proforma_no(row), 'Date', fmt(made)],
