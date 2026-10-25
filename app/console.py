@@ -478,6 +478,14 @@ def _first_name(name):
     return words[0].title() if words and len(words[0]) > 1 else (name or '').strip()
 
 
+def contact_name(slug):
+    """The person's name from the trial request this business came from (console_lead_links), or ''."""
+    try:
+        return trial_contact({'slug': slug, 'status': ''})['name'] or ''
+    except Exception:
+        return ''
+
+
 def trial_contact(t):
     """{'name', 'phone', 'company'} for a trial: from the trial request it was made from (console_lead_links), else
     the phone and company name filled in on the trial."""
@@ -1057,7 +1065,7 @@ def customer_detail(slug):
                            wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,
                            head=c.head_revision(), admins=admins, locked=locked, live_error=live_error,
                            pooler_note=secrets_.get('pooler_note'), history=history, url=c.app_url(slug),
-                           badge=c.plan_badge(row), boq=boq_state)
+                           badge=c.plan_badge(row), boq=boq_state, contact_name=contact_name(slug))
 
 
 @console_bp.route('/customers/<slug>/retry', methods=['POST'])
@@ -1365,7 +1373,8 @@ def payments_manual():
         paid_on = None
     try:
         row = subscription.record_manual(f.get('slug', ''), f.get('plan', ''), f.get('amount', ''), f.get('method', ''),
-                                         f.get('reference', ''), paid_on, add_plan=f.get('add_plan') == '1')
+                                         f.get('reference', ''), paid_on, add_plan=f.get('add_plan') == '1',
+                                         payer_name=f.get('payer', '').strip() or contact_name(f.get('slug', '')))
     except subscription.PaymentError as exc:
         flash(f'Could not record the payment: {exc}', 'error')
         return redirect(url_for('console.payments') + '#record')
@@ -1421,6 +1430,11 @@ def payment_receipt(payment_id):
     row = subscription.get(payment_id)
     if not row or row['status'] != 'paid':
         abort(404)
+    if not row.get('payer_name'):                  # paid before names were kept: from their trial request, and keep it
+        name = contact_name(row['slug'])
+        if name:
+            row['payer_name'] = name
+            subscription.set_payer_name(row['id'], name)
     return send_file(subscription.receipt_pdf(row), mimetype='application/pdf',
                      download_name=f'QuoteRoom-receipt-{row["receipt_no"]}.pdf')
 
@@ -1567,7 +1581,8 @@ def payment_link_create():
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
     try:
         pay = subscription.create_payment_link(slug, request.form.get('plan', ''), request.form.get('name', '').strip(),
-                                               phone, request.form.get('email', '').strip())
+                                               phone, request.form.get('email', '').strip(),
+                                               payer_name=request.form.get('payer', '').strip() or contact_name(slug))
     except subscription.PaymentError as exc:
         flash(f'Could not make the payment link: {exc}', 'error')
         return redirect(request.referrer or url_for('console.payments'))
