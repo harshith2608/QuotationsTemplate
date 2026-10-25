@@ -157,6 +157,14 @@
     <button class="btn" type="submit" name="on" value="1">{{ 'Change rate' if boq.gst.on else 'Turn GST on' }}</button>
     {% if boq.gst.on %}<button class="btn" type="submit" name="on" value="0">Turn GST off</button>{% endif %}
   </form>
+  {% if boq.on %}<div style="border-top:1px solid var(--line);padding-top:12px"><strong>Rate column</strong> · <span class="badge {{ 'b-active' if boq.show_rate else 'b-other' }}">{{ 'shown' if boq.show_rate else 'hidden' }}</span></div>
+  <p class="muted small" style="margin:0">Whether their customer sees each line's rate (PDF, link, WhatsApp), or only the
+    quantity, unit and amount. They can also change it in Settings → Quotation PDFs.</p>
+  <form method="post" action="{{ url_for('console.trial_rate_column', slug=t.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.show_rate else '1' }}">
+    <button class="btn" type="submit">{{ 'Hide the Rate column' if boq.show_rate else 'Show the Rate column' }}</button>
+  </form>{% endif %}
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Load price list</strong></div>
   <p class="muted small" style="margin:0">This firm's own lines (title, description, unit, rate), a ready-made starting
     quotation and their notes and payment terms, from the .json file prepared from their old quotations. Goes into this

@@ -20,6 +20,13 @@ LAYOUT_BOQ = 'boq'
 LAYOUTS = {LAYOUT_ROOMS: 'By room: items with sizes, one amount per room', LAYOUT_MATERIALS: 'By material: amount per material',
            LAYOUT_BOQ: 'BOQ: every line with its description, quantity, unit, rate and amount'}
 LAYOUT_KEY = 'initial_layout'
+HIDE_RATE_KEY = 'boq_hide_rate'      # '1': the customer's BOQ shows quantities and amounts, no Rate column
+
+
+def show_rate():
+    """The Rate column on the customer's BOQ (PDF, link, WhatsApp). On unless the business turned it off."""
+    from .models import AppSetting
+    return AppSetting.get(HIDE_RATE_KEY, '') != '1'
 SECTION_KEYS = [('material_specs', 'Material Specifications'), ('payment_terms', 'Payment Terms'),
                 ('delivery_terms', 'Delivery Terms'), ('important_notes', 'Important Notes')]
 

@@ -1017,6 +1017,9 @@ def settings():
                 AppSetting.set(key, request.form.get(key, '').strip())
             if request.form.get('initial_layout') in layout.layouts():
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
+            if 'boq_rate_shown' in request.form:     # the BOQ's Rate column (only offered with the BOQ layout)
+                shown = '1' in request.form.getlist('boq_rate_shown')
+                AppSetting.set(layout.HIDE_RATE_KEY, '' if shown else '1')
         elif tab == 'pricing':
             from . import boq
             mode = request.form.get('pricing_mode')
@@ -1064,6 +1067,7 @@ def settings():
     pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready()} if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
+                           show_rate=layout.show_rate() if tab == 'documents' else True,
                            section_variables=layout.VARIABLES,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
