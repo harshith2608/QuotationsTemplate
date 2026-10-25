@@ -81,7 +81,7 @@ def email_setup_link(email, name, company, url):
     """Email the set-up link (the website sends it instead of showing it, once email is set up). True if sent."""
     from . import mailer
     first = (name or '').split(' ')[0] or 'there'
-    return mailer.send(email, 'Set up your QuoteRoom app', f"""Hi {first},
+    return mailer.send(email, 'Set up your QuoteRoom app', bcc=mailer.sender(), text=f"""Hi {first},
 
 Thanks for asking for a QuoteRoom free trial{f' for {company}' if company else ''}.
 

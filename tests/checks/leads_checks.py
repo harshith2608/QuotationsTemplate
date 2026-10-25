@@ -157,6 +157,8 @@ ok('email set up: the set-up link is emailed, not shown (the page says where it 
    and d['emailed_to'] == 'ki***@kiraninteriors.example' and len(mails) == 1
    and mails[0]['To'] == 'kiran@kiraninteriors.example' and mails[0]['Subject'] == 'Set up your QuoteRoom app'
    and 'https://ops.quote-room.test/start?t=' in mails[0].get_payload(decode=True).decode())
+ok('…with a hidden copy to hello@ (app emails don\'t show in the mailbox\'s Sent folder)',
+   mails[0]['Bcc'] == 'hello@quote-room.co.in')
 t = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
             environ_base={'REMOTE_ADDR': '10.9.0.5'}).text
 ok('…and the page without JavaScript says "Check your email"', 'Check your email' in t and 'x***@kiraninteriors.example' in t)
