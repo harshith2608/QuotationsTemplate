@@ -123,6 +123,11 @@ with app.app_context():
        and [o['name'] for o in finishes.options()] == ['Laminate', 'Acrylic', 'Veneer'] and finishes.extra('acrylic') == 25
        and saved['Wardrobe'].get('finish') and not saved['Site Cleaning'].get('finish')
        and '3 finishes' in price_list.summary_text(res))
+    more = {'finishes': FIN['finishes'], 'lines': [{'name': 'Janitor Unit', 'unit': 'sqft', 'rate': 2350, 'finish': True}]}
+    price_list.apply(price_list.parse(json.dumps(more).encode()))
+    saved = {b['name']: b for b in boq.saved_lines()}
+    ok('a later file with a few new lines in finishes adds their tick and keeps the others', saved['Janitor Unit'].get('finish')
+       and saved['Wardrobe'].get('finish'))
 f = c.get('/projects/new?blank=1').text
 ok('the form gets the finishes', '"Acrylic"' in f and 'boqFinishes' in f
    and 'onBoqFinish' in c.get('/static/js/project_form.js').text)
