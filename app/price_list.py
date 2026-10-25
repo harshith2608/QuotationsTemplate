@@ -28,6 +28,9 @@ Quotations (optional): real quotations from the firm's own sheets, added as quot
                      "rooms": [{"name": "Kitchen", "items": [{"name": "Tall Unit", "description": "...",
                                                                 "unit": "sqft", "quantity": 18, "rate": 2200}]}]}]}
 
+How their quotations look (optional): "options": {"show_rate": false, "gst": 18} hides the Rate column on the customer's
+BOQ and turns GST on quotations on at 18% ("gst": false turns it off).
+
 A firm that prices by material ("pricing": "material"):
     {"pricing": "material",
      "materials": [{"name": "Laminates", "rates": {"Box Work": 850, "Frame Work": 650}}, {"name": "Glass", "rate": 400}],
@@ -155,6 +158,29 @@ def parse(raw):
             desc = [_text(d, 300) for d in ([desc] if isinstance(desc, str) else desc) if _text(d, 300)]
             rooms.append({'name': _text(r['name'], 100), 'items': items, 'description': desc})
         templates.append({'name': _text(t['name'], 60), 'rooms': rooms})
+    # How their quotations look (optional): "options": {"show_rate": false, "gst": 18} (gst: a rate, or false = off)
+    options = {}
+    raw_opts = data.get('options') or {}
+    if not isinstance(raw_opts, dict):
+        raise PriceListError('"options" should be like {"show_rate": false, "gst": 18}.')
+    if 'show_rate' in raw_opts:
+        if not isinstance(raw_opts['show_rate'], bool):
+            raise PriceListError('"show_rate" should be true or false.')
+        options['show_rate'] = raw_opts['show_rate']
+    if 'gst' in raw_opts:
+        from . import quote_gst
+        g_ = raw_opts['gst']
+        if g_ is False or g_ is None:
+            options['gst'] = None
+        else:
+            try:
+                g_ = float(g_)
+            except (TypeError, ValueError):
+                raise PriceListError('"gst" should be a GST rate (5, 12, 18 or 28) or false.')
+            if g_ not in quote_gst.RATES:
+                raise PriceListError('"gst" should be a GST rate (5, 12, 18 or 28) or false.')
+            options['gst'] = g_
+
     quotations = []
     for n, q in enumerate(data.get('quotations') or [], 1):
         if not isinstance(q, dict) or not _text(q.get('customer_name'), 120):
@@ -192,7 +218,7 @@ def parse(raw):
             raise PriceListError(f'Quotation {n} ("{q["customer_name"]}") adds up to {got:,.2f}, not {float(expect):,.2f}.')
     if any(l['finish'] for l in lines) and not finishes:
         raise PriceListError('Some lines say "finish": true, but the file has no "finishes".')
-    if not lines and not templates and not materials and not fittings and not quotations:
+    if not lines and not templates and not materials and not fittings and not quotations and not options:
         raise PriceListError('The file has no lines.')
     if not data.get('pricing') and not lines and not materials and not fittings:
         pricing = None                         # only quotations / templates: how they price stays as it is
@@ -202,7 +228,7 @@ def parse(raw):
         if key in SETTINGS and isinstance(value, str):
             settings[key] = value.strip()[:5000]
     return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'finishes': finishes,
-            'templates': templates, 'quotations': quotations,
+            'templates': templates, 'quotations': quotations, 'options': options,
             'settings': settings, '_by_name': by_name}
 
 
@@ -351,6 +377,14 @@ def apply(parsed, remove_starter=True, replace_settings=False):
         if replace_settings or AppSetting.get(key) is None:
             AppSetting.set(key, value)
             settings.append(key)
+    opts = parsed.get('options') or {}
+    if 'show_rate' in opts:                             # the customer's BOQ: Rate column shown or hidden
+        AppSetting.set(layout.HIDE_RATE_KEY, '' if opts['show_rate'] else '1')
+        settings.append('Rate column ' + ('shown' if opts['show_rate'] else 'hidden'))
+    if 'gst' in opts:                                   # GST on quotations, at this rate (None: off)
+        from . import quote_gst
+        quote_gst.set_gst(opts['gst'] is not None, opts['gst'] or quote_gst.DEFAULT_RATE)
+        settings.append(f"GST on quotations {opts['gst']:g}%" if opts['gst'] is not None else 'GST on quotations off')
     made_quotes = _add_quotations(parsed.get('quotations') or [])
     db.session.commit()
     return {'added': added, 'updated': updated, 'removed': removed, 'templates': made, 'materials': mats,

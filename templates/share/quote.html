@@ -108,7 +108,8 @@
   <div class="q-card">
     <div class="fw-semibold mb-2">Bill of quantities</div>
     {% for sec in boq_sections %}
-    <div class="fw-semibold small mt-3 mb-1" style="color:var(--p)">{{ sec.letter }}. {{ sec.name }}</div>
+    <div class="fw-semibold small mt-3 mb-1 d-flex justify-content-between" style="color:var(--p)"><span>{{ sec.letter }}. {{ sec.name }}</span>
+      {% if sec.total %}<span class="text-nowrap">&#8377;{{ "{:,.2f}".format(sec.total) }}</span>{% endif %}</div>
     {% if sec.description %}<div class="small q-muted" style="white-space:pre-line">{{ sec.description }}</div>{% endif %}
     <div class="table-responsive"><table class="table table-sm small mb-0">
       <tbody>
@@ -116,7 +117,7 @@
         <tr>
           <td class="text-muted" style="width:2em">{{ ln.no }}</td>
           <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
-            {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>
+            {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>
             {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ "{:,.0f}".format(ln.rate) }} per {{ ln.unit }}</div>{% endif %}</td>
           <td class="text-end text-nowrap">{% if ln.tbc %}price to follow{% elif ln.amount %}&#8377;{{ "{:,.2f}".format(ln.amount) }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>
         </tr>

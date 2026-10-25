@@ -1,6 +1,6 @@
 """A firm's own price list (app/price_list.py) and the number checks on BOQ lines: "Price to follow", lines from a
 starting quotation still waiting for their size, the form's Add line."""
-import io, json, re
+import io, json, re, urllib.parse
 from pypdf import PdfReader
 from app import create_app, db, billing, boq, price_list
 from app.models import AppSetting, BoqItem, Item, Project, Room
@@ -76,6 +76,9 @@ with app.app_context():
     ok('a "Price to follow" line has no rate and isn\'t added: total = 7 × 8 × 1,950 only', tbc.price_to_follow
        and tbc.unit_price is None and abs(p.grand_total - 56 * 1950) < 0.01 and abs(snap['subtotal'] - 56 * 1950) < 0.01)
     ok('…kept in the snapshot', any(i.get('tbc') for r in snap['rooms'] for i in r['items']))
+    from app import layout as _lay0
+    ok('BOQ sections carry their total (without "Price to follow" or rate-only lines)',
+       [sec['total'] for sec in _lay0.boq_rows(snap)] == [56 * 1950])
     lines = billing.invoice_lines(snap, '9403')
     ok('…and never billed on an invoice', [l['description'] for l in lines] == ['Wardrobe'])
 pdf = pdftext(f'/projects/{pid}/pdf/customer')
@@ -94,6 +97,22 @@ ok('(the Full Quotation itself, if they switch back: section totals, no areas, r
    'Section Total' in fullq and 'Material & Work Type' not in fullq and 'sqft' not in fullq.replace('Sq.ft', '')
    and re.search(r'COB Light — Nos\. 520 —', fullq) is not None and 'price to follow' in fullq.lower())
 ok('the quotation page shows Price to follow too', 'price to follow' in v)
+# The Rate column: some firms show quantities and amounts only
+with app.app_context():
+    AppSetting.set('boq_hide_rate', '1'); db.session.commit()
+nr = pdftext(f'/projects/{pid}/pdf/customer')
+ok('Rate column off: the PDF has no Rate column, amounts and the rate-only line\'s rate still shown',
+   ' Rate ' not in nr.split('Bill of Quantities')[1].split('Wardrobe')[0] and 'Amount' in nr and '1,09,200' in nr.replace('109,200', '1,09,200')
+   and 'Rate 520' in nr)
+ok('…the WhatsApp text gives amounts, not rates', '× Rs.1,950' not in urllib.parse.unquote(c.get(f'/projects/{pid}/whatsapp').headers.get('Location', '')))
+s_ = c.get('/admin/settings?tab=documents').text
+ok('…a "Show the Rate column" setting (unticked now) in Settings → Quotation PDFs', 'name="boq_rate_shown"' in s_
+   and not re.search(r'id="boq_rate_shown" value="1"\s+checked', s_))
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'boq', 'boq_rate_shown': ['0', '1']})
+with app.app_context():
+    ok('…ticked again: the Rate column is back', AppSetting.get('boq_hide_rate') == '')
+ok('…on the PDF too', ' Rate ' in pdftext(f'/projects/{pid}/pdf/customer').split('Bill of Quantities')[1].split('Wardrobe')[0])
+
 ok('quotation page priced by item: Qty / Unit / Rate / Amount per section, section totals, no plywood or areas',
    'Section Total' in v and '<th>Section</th>' in v and 'Room Total:' not in v and 'id="quotePlywood"' not in v
    and 'rate only' in v)
@@ -201,6 +220,14 @@ with app.app_context():
     again = price_list.apply(price_list.parse(json.dumps(QF).encode()))
     ok('loading the file again adds it only once', again['quotations'] == []
        and sum(1 for p in Project.query.all() if p.customer_name == 'Sheet Home (2 BHK)') == 1)
+ok('"options" are checked', 'GST rate' in bad({'options': {'gst': 7}}) and 'true or false' in bad({'options': {'show_rate': 'no'}}))
+with app.app_context():
+    from app import quote_gst as _qg2, layout as _lay2
+    r_opt = price_list.apply(price_list.parse(json.dumps({'options': {'show_rate': False, 'gst': 18}}).encode()))
+    ok('a file can hide the Rate column and turn GST on (and say so)', not _lay2.show_rate() and _qg2.rate() == 18
+       and 'Rate column hidden' in price_list.summary_text(r_opt) and 'GST on quotations 18%' in price_list.summary_text(r_opt))
+    price_list.apply(price_list.parse(json.dumps({'options': {'show_rate': True, 'gst': False}}).encode()))
+    ok('…and back again', _lay2.show_rate() and _qg2.rate() == 0)
 ok('it opens like any quotation', c.get(f'/projects/{q.id}').status_code == 200 and 'Vanity Storage' in c.get(f'/projects/{q.id}').text)
 
 # ── Pricing: by item / by material (Settings → Pricing, a setup guide step) ──

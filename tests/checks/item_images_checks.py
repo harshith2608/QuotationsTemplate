@@ -67,6 +67,22 @@ with app.app_context():
        its['Sofa Wall'].image_id == pid_img and its['Coffee Table'].image_id == second and its['Rug'].image_id is None)
     snap = billing.quotation_snapshot(p)
     ok('…kept in the revision', sorted(i.get('image_id') or 0 for r in snap['rooms'] for i in r['items']) == sorted([0, pid_img, second]))
+lib = c.get('/item-images/library').get_json()['photos']
+byid = {x['id']: x for x in lib}
+ok('"My photos": every photo of the business, newest first, with the items it\'s on', [x['id'] for x in lib][:2] == [second, pid_img]
+   and byid[pid_img]['names'] == ['Sofa Wall'] and byid[second]['names'] == ['Coffee Table']
+   and byid[second]['url'].endswith(f'/item-images/{second}'))
+ok('the form offers New and My photos', 'imageLibrary' in c.get('/projects/new?blank=1').text
+   and 'openPhotoLibrary' in c.get('/static/js/project_form.js').text and 'My photos' in c.get('/static/js/project_form.js').text)
+c.post('/projects/new', data={'customer_name': 'Reuse Home', 'mobile': '9000000803', 'discount_type': 'none',
+                              'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Hall', 'items': [
+    {'name': 'Coffee Table', 'type': 'fixed', 'quantity': 1, 'unit_price': 15000, 'image_id': second}]}])})
+with app.app_context():
+    rid = Project.query.order_by(Project.id.desc()).first().id
+    reused = Item.query.join(Item.room).filter(Room.project_id == rid).first().image_id
+    n_images = ItemImage.query.count()
+ok('a photo picked from My photos is used again (no new copy)', reused == second and n_images == 2
+   and next(x for x in c.get('/item-images/library').get_json()['photos'] if x['id'] == second)['names'] == ['Coffee Table'])
 v = c.get(f'/projects/{pid}').text
 ok('the quotation page shows the photos', v.count('class="ki-line-photo"') == 2 and f'/item-images/{pid_img}' in v)
 e = c.get(f'/projects/{pid}/edit').text

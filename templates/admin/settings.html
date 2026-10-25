@@ -398,6 +398,15 @@
         room's fittings as a "Hardware" row.{% if 'boq' in layouts %} BOQ: sections A, B, C (your rooms), each line
         numbered with its description, quantity, unit, rate and amount, like a turnkey bill of quantities.{% endif %}
         {% if 'boq' in layouts %}Pricing by item, you have this one quotation PDF.{% else %}Your Full Quotation (every rate and amount) doesn't change.{% endif %}</div>
+      {% if 'boq' in layouts %}
+      <div class="form-check mt-3">
+        <input type="hidden" name="boq_rate_shown" value="0">
+        <input class="form-check-input" type="checkbox" name="boq_rate_shown" id="boq_rate_shown" value="1" {{ 'checked' if show_rate }}>
+        <label class="form-check-label" for="boq_rate_shown">Show the <strong>Rate</strong> column</label>
+        <div class="form-text">Untick to show your customer only the quantity, unit and amount of each line (on the PDF, the
+          customer's link and WhatsApp). Your quotation page always shows the rates.</div>
+      </div>
+      {% endif %}
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3" id="room-descriptions">

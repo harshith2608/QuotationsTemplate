@@ -269,17 +269,20 @@ def _boq_elements(project, page_width, palette, styles):
     from . import item_images
     photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
     grid = colors.HexColor('#bdbdbd')
-    if photos:                                 # a Photo column only when some line has a photo
-        cw = [page_width * f for f in (0.06, 0.38, 0.15, 0.08, 0.08, 0.10, 0.15)]
-        data = [['Sr. No.', 'Description', 'Photo', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
-    else:
-        cw = [page_width * f for f in (0.07, 0.49, 0.09, 0.09, 0.11, 0.15)]
-        data = [['Sr. No.', 'Description', 'Qty', 'Unit', 'Rate', 'Amount (Rs.)']]
-    pc = 1 if photos else 0                    # columns after Description shift by one with a Photo column
+    rate_col = layout.show_rate()              # some firms show quantities and amounts only (Settings → Quotation PDFs)
+    # columns: Sr. No., Description, [Photo only when some line has one], Qty, Unit, [Rate], Amount
+    heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + ['Qty', 'Unit'] + (['Rate'] if rate_col else []) \
+        + ['Amount (Rs.)']
+    fixed = {'Sr. No.': 0.07, 'Photo': 0.15, 'Qty': 0.09, 'Unit': 0.09, 'Rate': 0.11, 'Amount (Rs.)': 0.15}
+    widths = [fixed.get(h, 0) for h in heads]
+    widths[1] = 1 - sum(widths)                # the description takes what's left
+    cw = [page_width * f for f in widths]
+    data = [heads]
+    last = len(heads) - 1
     cmds = [('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (4 + pc, -1), 'CENTER'),
-            ('ALIGN', (5 + pc, 0), (5 + pc, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (last - 1, -1), 'CENTER'),
+            ('ALIGN', (last, 0), (last, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
     for sec in sections:
@@ -287,9 +290,11 @@ def _boq_elements(project, page_width, palette, styles):
         head = escape(sec['name'])
         if sec['description']:
             head += f'<br/><font size="7" color="#455a64">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
-        data.append([sec['letter'], Paragraph(head, title)] + [''] * (4 + pc))
-        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-1, k)),
-                 ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
+        # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
+        data.append([sec['letter'], Paragraph(head, title)] + [''] * (last - 2) + [_money(sec['total']) if sec['total'] else ''])
+        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-2, k)),
+                 ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('FONTNAME', (-1, k), (-1, k), 'Helvetica-Bold'),
+                 ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
         if sec['lines']:
             cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
         for ln in sec['lines']:
@@ -297,10 +302,12 @@ def _boq_elements(project, page_width, palette, styles):
             if ln['description']:
                 text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
             amount = 'Price to follow' if ln.get('tbc') else _money(ln['amount']) if ln['amount'] else '—'
+            if not rate_col and not ln['qty'] and ln['rate']:          # a rate-only line still says its rate
+                amount = f"Rate {_money(ln['rate'], ',.0f')}"
             data.append([str(ln['no']), Paragraph(text, small)]
                         + ([item_images.pdf_image(photos.get(ln.get('image_id')), 2.6, 2.6) or ''] if photos else [])
-                        + [f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit'],
-                           _money(ln['rate'], ',.0f') if ln['rate'] else '', amount])
+                        + [f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']]
+                        + ([_money(ln['rate'], ',.0f') if ln['rate'] else ''] if rate_col else []) + [amount])
     table = Table(data, colWidths=cw, repeatRows=1)
     table.setStyle(TableStyle(cmds))
     return [table] + _totals_elements(snap, page_width, palette)

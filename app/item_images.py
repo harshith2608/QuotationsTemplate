@@ -151,3 +151,23 @@ def pdf_image(data, max_w_cm=THUMB_PDF_CM, max_h_cm=THUMB_PDF_CM):
         return None
     scale = min(max_w_cm * cm / w, max_h_cm * cm / h)
     return RLImage(io.BytesIO(data), width=w * scale, height=h * scale)
+
+
+LIBRARY_LIMIT = 300
+
+
+def library(limit=LIBRARY_LIMIT):
+    """[{'id', 'names': [item names it's on, most used first]}] newest first, for "My photos" (two queries)."""
+    from .models import Item, ItemImage
+    rows = db.session.query(ItemImage.id).order_by(ItemImage.id.desc()).limit(limit).all()
+    ids = [r[0] for r in rows]
+    if not ids:
+        return []
+    counts = {}
+    for image_id, name in db.session.query(Item.image_id, Item.name).filter(Item.image_id.in_(ids)):
+        per = counts.setdefault(image_id, {})
+        key = (name or '').strip()
+        if key:
+            per[key] = per.get(key, 0) + 1
+    return [{'id': i, 'names': [n for n, _ in sorted(counts.get(i, {}).items(), key=lambda kv: -kv[1])][:3]}
+            for i in ids]

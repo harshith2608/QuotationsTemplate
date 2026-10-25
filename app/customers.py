@@ -522,9 +522,19 @@ def locked_fields(slug):
 
 def boq_status(slug):
     """How they price ({'ready', 'on'}) and whether photos on lines are on ('photos': {'ready', 'on'})."""
-    from . import boq, item_images, quote_gst
+    from . import boq, item_images, layout, quote_gst
     with open_customer(slug):
-        return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status())
+        return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status(),
+                    show_rate=layout.show_rate())
+
+
+def set_show_rate(slug, on):
+    """The Rate column on the customer's BOQ shown or hidden, for a customer."""
+    from . import layout
+    from .models import AppSetting
+    with open_customer(slug):
+        AppSetting.set(layout.HIDE_RATE_KEY, '' if on else '1')
+        db.session.commit()
 
 
 def set_quote_gst(slug, on, rate):

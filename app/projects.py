@@ -1034,6 +1034,18 @@ def upload_item_image():
     return jsonify({'id': row.id, 'url': url_for('projects.item_image', image_id=row.id)})
 
 
+@projects_bp.route('/item-images/library')
+@login_required
+def item_image_library():
+    """The business's photos to pick from (newest first), each with the item names it's been used on."""
+    from flask import jsonify
+    from . import item_images
+    if not item_images.ready():
+        return jsonify({'photos': []})
+    return jsonify({'photos': [dict(p, url=url_for('projects.item_image', image_id=p['id']))
+                               for p in item_images.library()]})
+
+
 @projects_bp.route('/item-images/<int:image_id>')
 @login_required
 def item_image(image_id):
@@ -1132,6 +1144,8 @@ def whatsapp_share(project_id):
     from . import units
     _ft_in = units.length
 
+    from . import layout as _layout_wa
+    _show_rate = _layout_wa.show_rate()        # some firms show quantities and amounts only
     for room in rooms:
         lines.append(f"\n🏠 *{room.name}*")
         for item in room.item_list:
@@ -1139,7 +1153,9 @@ def whatsapp_share(project_id):
                 lines.append(f"  • {item.display_name}: price to follow")
             elif item.is_boq:
                 _size = (_ft_in(item.length) + (f" × {_ft_in(item.width)}" if item.width else '') + ' = ') if item.length else ''
-                lines.append(f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
+                lines.append((f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
+                              if _show_rate else
+                              f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} = Rs.{item.quantity * item.unit_price:,.0f}")
                              if item.unit_price and item.quantity else
                              f"  • {item.display_name}: rate Rs.{item.unit_price:,.0f} per {item.unit_text}" if item.unit_price
                              else f"  • {item.display_name}")

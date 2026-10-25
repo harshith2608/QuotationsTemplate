@@ -157,7 +157,8 @@ def view(token):
     rows = layout.room_rows(snap) if chosen == layout.LAYOUT_ROOMS else None
     boq_sections = layout.boq_rows(snap) if chosen == layout.LAYOUT_BOQ else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
-                                    pay=pay, paid=billing.paid_total(project), room_rows=rows, boq_sections=boq_sections))
+                                    pay=pay, paid=billing.paid_total(project), room_rows=rows, boq_sections=boq_sections,
+                                    show_rate=layout.show_rate()))
 
 
 @share_bp.route('/q/<token>/pdf')
