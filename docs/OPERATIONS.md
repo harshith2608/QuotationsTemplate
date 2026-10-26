@@ -555,6 +555,12 @@ under every item on the quotation form, for a reference image (a sofa, a chair, 
 Photo column of the PDF and shows on the quotation page and the customer's link. Needs "Update all" once after the
 update that added it.
 
+**Presentation pages** (console → their page → Features → **Turn presentation pages on**; off by default): their
+quotation PDF opens with a title page (logo, firm name and tagline, then "Quotation for" the client, quotation no.,
+date) and their **About us**, then the quotation and terms, and ends with **Next steps** and the thank-you note. They
+write About us and Next steps in Settings → Quotation PDFs; a price list file can set them too (`"settings":
+{"about_us": …, "next_steps": …}` and `"options": {"presentation": true}`).
+
 **GST on quotations** (console → their page → Features → choose the rate → **Turn GST on**; off by default): their
 quotations show Total, GST @ rate and the grand total with GST (page, PDFs, customer's link, WhatsApp). What the
 customer owes includes GST, and a new invoice adds GST on the quoted prices at that rate. Prices stay without GST.

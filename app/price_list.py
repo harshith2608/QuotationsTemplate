@@ -46,7 +46,8 @@ import json
 from . import db
 
 MAX_BYTES = 512 * 1024
-SETTINGS = ('important_notes', 'payment_terms', 'terms_conditions', 'material_specs', 'delivery_terms')
+SETTINGS = ('important_notes', 'payment_terms', 'terms_conditions', 'material_specs', 'delivery_terms', 'about_us',
+            'next_steps')
 
 
 class PriceListError(ValueError):
@@ -167,6 +168,10 @@ def parse(raw):
         if not isinstance(raw_opts['show_rate'], bool):
             raise PriceListError('"show_rate" should be true or false.')
         options['show_rate'] = raw_opts['show_rate']
+    if 'presentation' in raw_opts:
+        if not isinstance(raw_opts['presentation'], bool):
+            raise PriceListError('"presentation" should be true or false.')
+        options['presentation'] = raw_opts['presentation']
     if 'gst' in raw_opts:
         from . import quote_gst
         g_ = raw_opts['gst']
@@ -381,6 +386,10 @@ def apply(parsed, remove_starter=True, replace_settings=False):
     if 'show_rate' in opts:                             # the customer's BOQ: Rate column shown or hidden
         AppSetting.set(layout.HIDE_RATE_KEY, '' if opts['show_rate'] else '1')
         settings.append('Rate column ' + ('shown' if opts['show_rate'] else 'hidden'))
+    if 'presentation' in opts:                          # title page, About us, …, Next steps
+        from . import presentation
+        presentation.set_enabled(opts['presentation'])
+        settings.append('presentation pages ' + ('on' if opts['presentation'] else 'off'))
     if 'gst' in opts:                                   # GST on quotations, at this rate (None: off)
         from . import quote_gst
         quote_gst.set_gst(opts['gst'] is not None, opts['gst'] or quote_gst.DEFAULT_RATE)

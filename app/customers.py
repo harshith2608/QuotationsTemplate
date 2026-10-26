@@ -524,8 +524,17 @@ def boq_status(slug):
     """How they price ({'ready', 'on'}) and whether photos on lines are on ('photos': {'ready', 'on'})."""
     from . import boq, item_images, layout, quote_gst
     with open_customer(slug):
+        from . import presentation
         return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status(),
-                    show_rate=layout.show_rate())
+                    show_rate=layout.show_rate(), cover=presentation.console_status())
+
+
+def set_presentation(slug, on):
+    """Presentation pages (title page, About us, Next steps) on or off, for a customer."""
+    from . import presentation
+    with open_customer(slug):
+        presentation.set_enabled(on)
+        db.session.commit()
 
 
 def set_show_rate(slug, on):
