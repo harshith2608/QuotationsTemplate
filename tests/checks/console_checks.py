@@ -202,7 +202,7 @@ with app.app_context():
        and '27 Oct' in _d['ended'] and '26 Nov' in _d['ended'] and '₹8,999' in _d['ended'])
 
 r = c.post('/trials', data={'slug': 'ravi-modular', 'days': '7'}, follow_redirects=True)
-ok('duplicate address refused with a message', 'already exists' in r.text)
+ok('duplicate address refused with a message', 'is already a trial' in r.text)
 r = c.post('/trials', data={'slug': 'www', 'days': '7'}, follow_redirects=True)
 ok('reserved address refused', 'reserved' in r.text)
 r = c.post('/trials', data={'slug': 'ops', 'days': '7'}, follow_redirects=True)
@@ -429,6 +429,12 @@ ok('a request you already made a trial for by hand: the emailed link opens that 
    and spares_mid2 == spares_mid)
 with app.app_context():
     _ops.delete_trial('rao-made')
+_r = signed.post('/trials', data={'slug': 'meera-again', 'lead_id': str(self_id), 'name': 'Meera Shah', 'days': '7'})
+ok('Create trial on a request they already set up themselves: no error, it opens their trial',
+   _r.status_code == 302 and _r.headers['Location'].endswith('/trials/shah-studio'))
+_r = signed.post('/trials', data={'slug': 'taken-one', 'days': '7'})
+ok('…an address that is already a trial: it opens that trial and says so', _r.status_code == 302
+   and _r.headers['Location'].endswith('/trials/taken-one'))
 _dash = signed.get('/').text
 ok('the dashboard shows self-serve and the ready-made trials', 'Self-serve trials' in _dash and 'shah-studio' in _dash
    and 'ready-made trial' in _dash)

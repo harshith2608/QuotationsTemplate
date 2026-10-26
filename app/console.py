@@ -675,11 +675,29 @@ def create_trial():
     city = ' '.join(request.form.get('city', '').split())[:60]
     email = request.form.get('email', '').strip()[:120]
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    if lead_id:                                   # set up already, e.g. by them from the emailed link meanwhile
+        with db.engine.connect() as conn:
+            done = conn.execute(text("SELECT slug FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial'"),
+                                {'i': lead_id}).scalar()
+        if done:
+            flash(f'This request already has a trial: "{done}" (they may have set it up themselves from the email '
+                  'link). Here it is.', 'ok')
+            return redirect(url_for('console.trial_detail', slug=done))
     try:
         days = int(days)
         t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email)
     except (ops.OpsError, ValueError) as exc:
-        flash(f'Could not create trial: {exc}', 'error')
+        with db.engine.connect() as conn:
+            existing = conn.execute(text('SELECT status FROM public.tenants WHERE slug = :s'), {'s': slug}).scalar()
+        if existing == 'active':
+            flash(f'"{slug}" is already a trial (here it is). For this request, choose another address name.', 'error')
+            return redirect(url_for('console.trial_detail', slug=slug))
+        if existing:
+            flash(f'Could not create trial: "{slug}" is taken by an app that is {existing} '
+                  f'({"stopped half-way while being made: delete it on its page, then try again" if existing == "creating" else "see Customers"}).',
+                  'error')
+        else:
+            flash(f'Could not create trial: {exc}', 'error')
         return redirect(url_for('console.dashboard'))
     if lead_id:
         _link_lead(lead_id, 'trial', t['slug'])
