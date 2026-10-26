@@ -429,8 +429,9 @@ def boq_status(slug):
     from . import boq, item_images, layout, quote_gst
     with tenancy.tenant_context(slug, schema_of(slug)):
         from . import presentation
+        from . import item_costs
         return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status(),
-                    show_rate=layout.show_rate(), cover=presentation.console_status())
+                    show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status())
 
 
 def set_presentation(slug, on):
@@ -458,6 +459,16 @@ def set_quote_gst(slug, on, rate):
             quote_gst.set_gst(on, rate)
         except ValueError as exc:
             raise OpsError(str(exc))
+        db.session.commit()
+
+
+def set_item_costs(slug, on):
+    """Your cost on each line of a quotation (admins, and staff they allow) on or off, for a trial."""
+    from . import item_costs
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        if on and not item_costs.console_status()['ready']:
+            raise OpsError('This trial needs the latest database update first (Updates → Update all).')
+        item_costs.set_enabled(on)
         db.session.commit()
 
 

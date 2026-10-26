@@ -32,6 +32,10 @@
   {% if fu.history %}<table class="small">{% for h in fu.history[:6] %}
     <tr><td style="white-space:nowrap">{{ h.at|ist }}</td><td>{{ h.channel }}</td><td class="muted">{{ h.note or '' }}</td></tr>{% endfor %}</table>
   {% else %}<p class="muted small" style="margin:0">Not messaged yet.</p>{% endif %}
+  {% if sent_emails %}<div class="small"><strong>Emails</strong>
+    {% for e in sent_emails[:4] %}<div>{{ e.subject }} <span class="muted">· {{ e.sent_at|ist if e.sent_at else 'by the website' }}</span>
+      {% if e.clicked_at %}<span class="badge b-active">link clicked</span>{% elif e.opened_at %}<span class="badge b-active">opened</span>{% else %}<span class="badge b-other">not opened yet</span>{% endif %}</div>{% endfor %}
+  </div>{% endif %}
   <div class="row" style="gap:8px;flex-wrap:wrap">
     {% for f, v, label in [('snooze', 3, 'Snooze 3 days'), ('mark', '' if fu.mark.mark == 'hot' else 'hot', 'Not hot' if fu.mark.mark == 'hot' else '🔥 Hot'),
                            ('mark', '' if fu.mark.mark == 'lost' else 'lost', 'Interested again' if fu.mark.mark == 'lost' else 'Not interested')] %}
@@ -46,6 +50,7 @@
       <input type="hidden" name="what" value="Spoke on the phone">
       <input type="hidden" name="next" value="{{ url_for('console.trial_detail', slug=t.slug) }}#followup">
       <button class="btn btn-sm" type="submit">Log a call</button></form>
+    <a class="btn btn-sm" href="{{ url_for('console.email_compose', slug=t.slug) }}">✉️ Send an email</a>
   </div>
   <form method="post" action="{{ url_for('console.followups_mark', slug=t.slug) }}" class="row" style="margin:0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -185,6 +190,19 @@
     <input type="hidden" name="on" value="{{ '0' if boq.photos.on else '1' }}">
     <button class="btn" type="submit" {% if not boq.photos.ready and not boq.photos.on %}disabled{% endif %}>
       {{ 'Turn photos off' if boq.photos.on else 'Turn photos on' }}</button>
+  </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Your cost on each item</strong> · <span class="badge {{ 'b-active' if boq.costs.on else 'b-other' }}">{{ 'on' if boq.costs.on else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">A "Your cost" box under each item on the quotation form, for a firm that
+    charges each customer differently: they type what the item costs them and see the profit per item and for the whole
+    quotation as they quote. Admins always see it; their admin chooses which staff can (Admin → Costs &amp; profit).
+    Never printed or shown to their customer. An empty box uses Costs &amp; profit. Turning it off hides the box; costs
+    already typed stay in the profit.</p>
+  {% if not boq.costs.ready %}<p class="small" style="margin:0;color:var(--bad)">Needs the latest database update first (Updates → Update all).</p>{% endif %}
+  <form method="post" action="{{ url_for('console.trial_costs', slug=t.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.costs.on else '1' }}">
+    <button class="btn" type="submit" {% if not boq.costs.ready and not boq.costs.on %}disabled{% endif %}>
+      {{ 'Turn "Your cost" off' if boq.costs.on else 'Turn "Your cost" on' }}</button>
   </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>GST on quotations</strong> · <span class="badge {{ 'b-active' if boq.gst.on else 'b-other' }}">{{ ('on, ' ~ ('%g' % boq.gst.rate) ~ '%') if boq.gst.on else 'off' }}</span></div>
   <p class="muted small" style="margin:0">Quotations show their total, then GST at this rate, then the grand total with

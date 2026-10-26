@@ -312,7 +312,7 @@ def trial_request():
     setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
     emailed = None
     if setup and mailer.enabled():               # the link goes to their email: proves the address is theirs
-        if signup.email_setup_link(data['email'], data['name'], data['company_name'], setup):
+        if signup.email_setup_link(data['email'], data['name'], data['company_name'], setup, lead_id=lead_id):
             emailed, setup = mailer.mask(data['email']), None
     if wants_json:
         return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup, 'emailed_to': emailed})

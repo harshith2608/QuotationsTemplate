@@ -56,8 +56,9 @@ def website_offers(business_type):
             and business_type in ELIGIBLE)
 
 
-def setup_url(lead_id):
-    return f'{_env("SIGNUP_URL").rstrip("/")}/start?t={urllib.parse.quote(make_token(lead_id))}'
+def setup_url(lead_id, base=None):
+    """base: the console's address (the website uses SIGNUP_URL; the console its own)."""
+    return f'{(base or _env("SIGNUP_URL")).rstrip("/")}/start?t={urllib.parse.quote(make_token(lead_id))}'
 
 
 def turnstile_site_key():
@@ -77,11 +78,12 @@ def turnstile_ok(response, ip=''):
         return False
 
 
-def email_setup_link(email, name, company, url):
-    """Email the set-up link (the website sends it instead of showing it, once email is set up). True if sent."""
-    from . import mailer
+def email_setup_link(email, name, company, url, lead_id=None):
+    """Email the set-up link (the website sends it instead of showing it, once email is set up). True if sent.
+    lead_id: the request, so the console can see the email opened (app/emails.py)."""
+    from . import emails, mailer
     first = (name or '').split(' ')[0] or 'there'
-    return mailer.send(email, 'Set up your QuoteRoom app', bcc=mailer.sender(), text=f"""Hi {first},
+    body = f"""Hi {first},
 
 Thanks for asking for a QuoteRoom free trial{f' for {company}' if company else ''}.
 
@@ -93,4 +95,6 @@ The link works for {TOKEN_HOURS // 24} days. Your free 7-day trial starts when y
 Any questions? Just reply to this email or message us on WhatsApp.
 
 QuoteRoom
-""")
+"""
+    html = emails.setup_html(body, lead_id) if lead_id else None
+    return mailer.send(email, 'Set up your QuoteRoom app', body, bcc=mailer.sender(), html=html)

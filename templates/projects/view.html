@@ -818,12 +818,12 @@
   </div>
 </div>
 
-{% if current_user.is_admin %}
-<!-- Profit (admins only) -->
+{% if current_user.is_admin or q2c.profit %}
+<!-- Profit (admins, and staff allowed to type costs) -->
 <div class="card shadow-sm border-0 mt-3" id="profit">
   <div class="card-header ki-card-header d-flex justify-content-between align-items-center">
     <span><i class="bi bi-graph-up-arrow me-2"></i>Estimated profit <span class="fw-normal">(before GST)</span></span>
-    <span class="small"><i class="bi bi-eye-slash me-1"></i>only admins see this</span>
+    <span class="small"><i class="bi bi-eye-slash me-1"></i>{{ 'only admins see this' if not q2c.profit or not q2c.profit.own else 'never shown to your customer' }}</span>
   </div>
   <div class="card-body">
     {% set pr = q2c.profit %}
@@ -841,7 +841,10 @@
       Profit = price before GST − your costs.</div>
     {% if pr.missing %}
     <div class="small text-warning-emphasis mt-2"><i class="bi bi-exclamation-circle me-1"></i>No cost set for {{ pr.missing|length }} item{{ '' if pr.missing|length == 1 else 's' }}
-      (counted as zero cost): {{ pr.missing[:4]|join(', ') }}{% if pr.missing|length > 4 %}…{% endif %}. <a href="{{ url_for('admin.costs') }}">Add costs</a></div>
+      (counted as zero cost): {{ pr.missing[:4]|join(', ') }}{% if pr.missing|length > 4 %}…{% endif %}.{% if current_user.is_admin %} <a href="{{ url_for('admin.costs') }}">Add costs</a>{% endif %}</div>
+    {% endif %}
+    {% if pr.own %}
+    <div class="small text-muted mt-1"><i class="bi bi-pencil me-1"></i>{{ pr.own }} item{{ '' if pr.own == 1 else 's' }} use{{ 's' if pr.own == 1 }} the cost typed on the quotation; the rest use Costs &amp; profit.</div>
     {% endif %}
     {% else %}
     <p class="small text-muted mb-0">Add what your materials and fittings cost you in <a href="{{ url_for('admin.costs') }}">Admin → Costs &amp; profit</a>,

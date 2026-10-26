@@ -290,6 +290,7 @@
             <span class="fw-bold fs-6">{{ 'Grand Total (incl. GST)' if quote_gst_rate else 'Final Total' }}</span>
             <span class="fw-bold fs-5 text-success" id="final-total-display">&#8377;0.00</span>
           </div>
+          {% if item_costs %}<div id="profit-estimate" class="border-top mt-2 pt-2" title="Only you see this, never your customer"></div>{% endif %}
         </div>
         <div class="card-footer bg-transparent">
           <div class="d-grid gap-2">
@@ -531,6 +532,7 @@
     boqSaved:    {{ boq_form.saved|tojson }},
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
     itemImages:  {{ (item_images or false)|tojson }},
+    itemCosts:   {{ (item_costs or none)|tojson }},               // your cost on each line (console; admins + allowed staff)
     gstRate:     {{ (quote_gst_rate or 0)|tojson }},                 // GST % added on quotations (console: per business)          // photos on lines (console: per business)
     imageUpload: {{ url_for('projects.upload_item_image')|tojson }},
     imageUrl:    {{ url_for('projects.item_image', image_id=0)|tojson }},

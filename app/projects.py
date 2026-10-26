@@ -133,12 +133,18 @@ def _form_catalog(project, rooms=None):
                        'saved': boq.saved_lines(lump_only=not on) if on or lump else [],
                        'by_item': boq.enabled(), 'lump_sum': lump}   # by_item: priced by item, BOQ lines only
     from . import item_images, quote_gst
-    feats = AppSetting.get_many([item_images.KEY, quote_gst.KEY, quote_gst.RATE_KEY])    # one query for both
+    feats = AppSetting.get_many([item_images.KEY, quote_gst.KEY, quote_gst.RATE_KEY, 'feature_item_costs'])    # one query for both
     quote_gst.prime(feats)
     has_img = item_images.ready() and project is not None and any(
         i.image_id for r in (rooms if rooms is not None else project.rooms_with_items()) for i in r.item_list)
     cat['item_images'] = (feats[item_images.KEY] == '1' and item_images.ready()) or has_img   # photos (console)
     cat['quote_gst_rate'] = quote_gst.rate()                          # GST shown on quotations (console: per business)
+    # Your cost on each line (console: per business; admins, and staff the admin allows) — or costs already typed
+    from . import item_costs
+    cat['item_costs'] = None
+    if item_costs.can_edit() and (feats[item_costs.KEY] == '1' or (project is not None and any(
+            i.own_cost is not None for r in (rooms if rooms is not None else project.rooms_with_items()) for i in r.item_list))):
+        cat['item_costs'] = item_costs.form_data(_get_item_rates())
     if on:
         from . import finishes
         cat['boq_form']['finishes'] = finishes.for_form()     # Laminate / Acrylic +25%… (None: no finishes)
@@ -166,9 +172,27 @@ def _int(value):
         return None
 
 
+def _set_cost(item, data, room_name, cost_ok, kept, per_area):
+    """Your cost on the line (app/item_costs.py): as typed when the user may type costs and the form sent one
+    (per the area unit for a measured item, stored per sqft); otherwise the cost already on that line, if any."""
+    from . import item_costs
+    if 'cost' in data and cost_ok:
+        value = item_costs.clean(data.get('cost'))
+        if value is not None and per_area:
+            from . import units
+            value = round(units.rate_to_sqft(value), 6)
+    else:
+        value = kept.get((room_name.lower(), item.name.lower()))
+    if value is not None:
+        item.cost_price = value
+
+
 def _save_project_data(project, rooms_data, remember=True):
     """Delete existing rooms/items and save new ones. Returns grand_total. remember: learn its BOQ lines (not for
     auto-saved drafts, where a name may be half-typed)."""
+    from . import item_costs
+    cost_ok = item_costs.can_edit()            # may type costs; otherwise keep the ones already typed
+    kept_costs = item_costs.own_costs(project) if item_costs.ready() else {}
     # Remove existing rooms (cascade deletes items)
     for room in project.rooms.all():
         db.session.delete(room)
@@ -253,6 +277,7 @@ def _save_project_data(project, rooms_data, remember=True):
                     item.description = description
                 if img_ok and _int(id_.get('image_id')) in img_ok:
                     item.image_id = _int(id_.get('image_id'))
+                _set_cost(item, id_, room_name, cost_ok, kept_costs, per_area=False)
                 db.session.add(item)
                 grand_total += quantity * unit_price
                 continue
@@ -287,6 +312,7 @@ def _save_project_data(project, rooms_data, remember=True):
                 item.description = description
             if img_ok and _int(id_.get('image_id')) in img_ok:
                 item.image_id = _int(id_.get('image_id'))
+            _set_cost(item, id_, room_name, cost_ok, kept_costs, per_area=True)
             item_ply = None
             if ply_ready:                      # only once the database has the column
                 item_ply = plywood.clean_choice(id_.get('plywood'))
@@ -621,7 +647,7 @@ def view_project(project_id):
         'share': share_status(project, history[0][0].number if history else None),
         'last_reminder': billing.last_reminder(project) if balance > 0 else None,
         'profit': billing.profit(project, rooms, invoice=invoice, settings=billing.invoice_settings(settings))
-                  if current_user.is_admin else None,
+                  if current_user.is_admin or _staff_sees_costs() else None,
         'wa_number': billing.whatsapp_number(project.mobile),
         'email_ready': billing.email_ready(settings),
     }
@@ -653,6 +679,12 @@ def view_project(project_id):
                            can_change_stage=_can_change_stage(project),
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            title=f'Quotation – {project.customer_name}')
+
+
+def _staff_sees_costs():
+    """Staff the admin allowed to type costs on lines see the quotation's profit too (item_costs)."""
+    from . import item_costs
+    return item_costs.enabled() and item_costs.can_edit()
 
 
 def _can_change_stage(project):
@@ -777,7 +809,8 @@ def edit_project(project_id):
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
 
-    existing_json = _build_rooms_json(project, rooms if request.method == 'GET' else None)
+    from . import item_costs
+    existing_json = _build_rooms_json(project, rooms if request.method == 'GET' else None, costs=item_costs.can_edit())
     return render_template('projects/form.html',
                            title='Edit Quotation',
                            master_rooms=master_rooms,
@@ -796,11 +829,18 @@ def edit_project(project_id):
                            project=project)
 
 
-def _build_rooms_json(project, rooms=None):
-    from . import boq, plywood, item_images
+def _build_rooms_json(project, rooms=None, costs=False):
+    """costs: include your cost on each line (only for someone allowed to see them: item_costs.can_edit())."""
+    from . import boq, plywood, item_images, units
     from . import layout
     boq_ready = boq.ready()
     img_ready = item_images.ready()
+
+    def cost(item):
+        c = item.own_cost
+        if not costs or c is None:
+            return {}
+        return {'cost': round(c if item.is_fixed else units.rate_value(c), 2)}
     rooms_data = []
     for room in (rooms if rooms is not None else project.rooms_with_items()):
         room_dict = {
@@ -819,6 +859,7 @@ def _build_rooms_json(project, rooms=None):
                     **({'tbc': True} if item.price_to_follow else {}),
                     **({'finish': item.finish} if item.finish else {}),
                     **({'image_id': item.image_id} if img_ready and item.image_id else {}),
+                    **cost(item),
                     'plywood': plywood.item_plywood(item),
                     'count': item.boq_count if item.is_boq else item.count,
                     **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),

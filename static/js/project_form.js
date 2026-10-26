@@ -38,7 +38,7 @@ function addDescRow(tr, ik, value, handler, before, after) {
   d.innerHTML = `<td colspan="7" class="pt-0">${before || ''}
       <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
                 placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
-      ${after || ''}
+      <div class="ki-line-tools" id="item_tools_${ik}">${after || ''}</div>
     </td>`;
   tr.after(d);
   autoGrow(d.querySelector('textarea'));
@@ -73,7 +73,8 @@ const itemPhotos = {};                       // ik → image id
 function photoUrl(id) { return (CATALOG.imageUrl || '/item-images/0').replace(/0$/, String(id)); }
 function addPhotoControl(rk, ik) {
   if (!PHOTOS && !itemPhotos[ik]) return;
-  const td = document.querySelector(`#item_row_${ik} > td`);
+  // on the line under the description (full width) when the item has one, else under the name
+  const td = document.getElementById('item_tools_' + ik) || document.querySelector(`#item_row_${ik} > td`);
   if (!td || document.getElementById('item_photo_' + ik)) return;
   const d = document.createElement('div');
   d.className = 'ki-photo';
@@ -99,6 +100,89 @@ function renderPhoto(rk, ik) {
          <button type="button" class="btn btn-link btn-sm p-0 small ki-photo-add text-nowrap" onclick="openPhotoLibrary('${rk}','${ik}')"
                  title="Use a photo you've added before"><i class="bi bi-images"></i> My photos</button>` : '');
 }
+// Your cost on each line (console: per business; admins, and staff the admin allows; never printed): per area unit for
+// a measured item, per unit for the others. Empty = the cost from Admin → Costs & profit (shown as the placeholder).
+const COSTS = CATALOG.itemCosts || null;
+const itemCosts = {};                        // ik → typed cost ('' = use Costs & profit)
+let _costTotal = 0, _costMissing = 0;
+function _lineAmount(item) {
+  if (item.type === 'fixed' || item.type === 'boq') return item.tbc ? 0 : (item.quantity || 0) * (item.unit_price || 0);
+  return (item.area || 0) * (itemRates[priceKey(item.wood_type, item.work_type, item.plywood)] || 0);
+}
+function _defaultCost(item) {                // per unit / per area unit, or null
+  if (!COSTS) return null;
+  const v = (item.type === 'fixed' || item.type === 'boq')
+    ? COSTS.fittings[(item.name || '').toLowerCase()]
+    : COSTS.materials[priceKey(item.wood_type, item.work_type, item.plywood)];
+  return v === undefined ? null : v;
+}
+function _lineCost(item, ik) {               // ₹ for the whole line, or null (no cost known)
+  const typed = itemCosts[ik];
+  const c = (typed !== undefined && typed !== '') ? parseFloat(typed) : _defaultCost(item);
+  if (c === null || isNaN(c)) return null;
+  if (item.type === 'fixed' || item.type === 'boq') return (item.quantity || 0) * c;
+  return (item.area || 0) * UNITS.areaFactor * c;
+}
+function addCostControl(rk, ik) {
+  if (!COSTS) return;
+  const td = document.getElementById('item_tools_' + ik) || document.querySelector(`#item_row_${ik} > td`);
+  if (!td || document.getElementById('item_costbox_' + ik)) return;
+  const item = (rooms[rk] || { items: {} }).items[ik] || {};
+  const per = (item.type === 'fixed' || item.type === 'boq') ? 'per unit' : UNITS.rateLabel;
+  const d = document.createElement('div');
+  d.className = 'ki-cost d-flex flex-wrap align-items-center gap-1 small';
+  d.id = 'item_costbox_' + ik;
+  d.innerHTML = `<span class="text-muted text-nowrap" title="What this costs you. Only you see it, never your customer.">
+      <i class="bi bi-eye-slash"></i> Your cost</span>
+    <div class="input-group input-group-sm" style="width:118px">
+      <span class="input-group-text px-1 small text-muted">₹</span>
+      <input type="number" class="form-control text-end px-1" id="item_cost_${ik}" min="0" step="any"
+             value="${escHtml(itemCosts[ik] !== undefined ? String(itemCosts[ik]) : '')}"
+             oninput="onCostField('${ik}')" title="Your cost ${escHtml(per)} (empty: from Costs &amp; profit)">
+    </div>
+    <span class="text-muted text-nowrap" id="item_costper_${ik}">${escHtml(per)}</span>
+    <span class="text-nowrap ms-1" id="item_profit_${ik}"></span>`;
+  td.appendChild(d);
+  _renderLineCost(rk, ik, item);
+}
+function setCost(ik, value) {
+  if (value === undefined || value === null) return;
+  itemCosts[ik] = value;
+  const el = document.getElementById('item_cost_' + ik);
+  if (el) el.value = value;
+}
+function onCostField(ik) {
+  const el = document.getElementById('item_cost_' + ik);
+  itemCosts[ik] = el ? el.value.trim() : '';
+  recalcAll();
+}
+function _renderLineCost(rk, ik, item) {
+  const el = document.getElementById('item_profit_' + ik);
+  if (!el) return;
+  const per = document.getElementById('item_costper_' + ik);
+  if (per) per.textContent = (item.type === 'fixed' || item.type === 'boq') ? 'per unit' : UNITS.rateLabel;
+  const input = document.getElementById('item_cost_' + ik);
+  const def = _defaultCost(item);
+  if (input) input.placeholder = def === null ? '' : String(def);
+  const cost = _lineCost(item, ik);
+  if (cost === null) { el.innerHTML = '<span class="text-muted">no cost yet</span>'; return; }
+  const p = _lineAmount(item) - cost;
+  const r = v => '₹' + Math.round(v).toLocaleString('en-IN');
+  el.innerHTML = `<span class="text-muted">cost ${r(cost)} ·</span> <span class="fw-semibold ${p >= 0 ? 'text-success' : 'text-danger'}">profit ${r(p)}</span>`;
+}
+function renderProfit(finalTotal) {
+  const box = document.getElementById('profit-estimate');
+  if (!box || !COSTS) return;
+  const selling = finalTotal / (COSTS.gstDivisor || 1);
+  if (!_costTotal && !selling) { box.innerHTML = ''; return; }
+  const p = selling - _costTotal;
+  const r = v => '₹' + Math.round(v).toLocaleString('en-IN');
+  box.innerHTML = `<div class="d-flex justify-content-between small"><span class="text-muted"><i class="bi bi-eye-slash me-1"></i>Your cost</span><span>${r(_costTotal)}</span></div>
+    <div class="d-flex justify-content-between"><span class="fw-semibold">Profit${COSTS.gstDivisor > 1 ? ' (before GST)' : ''}</span>
+      <span class="fw-bold ${p >= 0 ? 'text-success' : 'text-danger'}">${r(p)}${selling ? ` <span class="small">(${(p / selling * 100).toFixed(1)}%)</span>` : ''}</span></div>
+    ${_costMissing ? `<div class="small text-warning-emphasis">${_costMissing} item${_costMissing === 1 ? '' : 's'} without a cost (counted as zero)</div>` : ''}`;
+}
+
 // "My photos": pick a photo added before (any quotation of this business), searched by the item it was used on
 let _photoLib = null, _photoFor = null;
 async function openPhotoLibrary(rk, ik) {
@@ -366,7 +450,7 @@ async function _doSaveDraft() {
     const itemsPayload = [];
     Object.entries(room.items).forEach(([ik, item]) => {
       const p = _itemPayload(item);
-      if (p) { if (itemPhotos[ik]) p.image_id = itemPhotos[ik]; itemsPayload.push(p); }
+      if (p) { if (itemPhotos[ik]) p.image_id = itemPhotos[ik]; if (COSTS) p.cost = itemCosts[ik] ?? ''; itemsPayload.push(p); }
     });
     const desc = roomDescriptionValues(rk).join('\n');
     roomsPayload.push({ name: roomName, items: itemsPayload, description: desc });
@@ -602,6 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
       (rd.items || []).forEach(id => {
         _loadItem(rk, id);
         if (id.image_id) setPhoto(rk, 'item_' + itemCounter, id.image_id);     // the row just added
+        if (id.cost !== undefined && id.cost !== null) setCost('item_' + itemCounter, id.cost);
       });
     });
   }
@@ -1059,6 +1144,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
   addPhotoControl(rk, ik);
+  addCostControl(rk, ik);
   return ik;
 }
 
@@ -1182,6 +1268,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
   if (nameInput && priceList.length) initAutocomplete(nameInput, () => priceList.map(p => p.name));
   onFixedField(rk, ik);
   addPhotoControl(rk, ik);
+  addCostControl(rk, ik);
   return ik;
 }
 
@@ -1385,6 +1472,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
   if (area > 0) recalcAll();
   addPhotoControl(rk, ik);
+  addCostControl(rk, ik);
   return ik;
 }
 
@@ -1403,6 +1491,7 @@ function removeItem(rk, ik) {
   if (row) row.remove();
   document.getElementById('item_descrow_' + ik)?.remove();
   if (rooms[rk] && rooms[rk].items) delete rooms[rk].items[ik];
+  delete itemCosts[ik];
   recalcAll();
 }
 
@@ -1459,8 +1548,14 @@ function recalcAll() {
   let totalArea = 0;
 
   let fixedTotal = 0, boqTotal = 0;
+  _costTotal = 0; _costMissing = 0;
   Object.entries(rooms).forEach(([rk, room]) => {
     let roomArea = 0, roomPriced = 0, hasMeasured = false, hasPriced = false;
+    if (COSTS) Object.entries(room.items).forEach(([ik, item]) => {      // your cost and profit, line by line
+      const c = _lineCost(item, ik);
+      if (c === null) { if (item.name) _costMissing++; } else _costTotal += c;
+      _renderLineCost(rk, ik, item);
+    });
     Object.values(room.items).forEach(item => {
       if (item.type === 'fixed' || item.type === 'boq') {
         const amt = (item.quantity || 0) * (item.unit_price || 0);
@@ -1548,6 +1643,7 @@ function _updateFinalTotal(grandTotal) {
   const finalFmt = money(finalTotal + gst);
   if (finalEl) finalEl.textContent = finalFmt;
   if (mobEl)   mobEl.textContent   = finalFmt;
+  renderProfit(finalTotal);
 
   // Sync hidden form fields
   if (typeField) typeField.value = dtype;
@@ -1649,6 +1745,7 @@ function _validateForm() {
       const p = _itemPayload(item);
       if (!p) return;
       if (itemPhotos[ik]) p.image_id = itemPhotos[ik];
+      if (COSTS) p.cost = itemCosts[ik] ?? '';
       itemsPayload.push(p);
       hasItem = true;
     });

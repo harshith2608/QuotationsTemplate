@@ -46,6 +46,9 @@ def build(today=None):
         rooms = Room.query.filter(Room.project_id.in_(ids)).order_by(Room.id).all()
         items_by_room = {}
         iq = Item.query.filter(Item.room_id.in_([r.id for r in rooms])).order_by(Item.id)
+        from . import item_costs
+        if item_costs.ready():
+            iq = iq.options(undefer(Item.cost_price))          # costs typed on lines (one query)
         for it in (iq.options(undefer(Item.plywood)) if ply else iq):
             items_by_room.setdefault(it.room_id, []).append(it)
         for r in rooms:

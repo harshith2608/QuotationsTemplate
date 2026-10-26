@@ -556,9 +556,9 @@ def trial_contact(t):
     the phone and company name filled in on the trial."""
     from . import crypto
     from .models import AppSetting, Lead
-    out = {'name': '', 'phone': '', 'company': ''}
+    out = {'name': '', 'phone': '', 'company': '', 'email': '', 'lead_id': None}
     with db.engine.connect() as conn:
-        lead_id = conn.execute(text("SELECT lead_id FROM public.console_lead_links WHERE slug = :s AND status = 'trial' "
+        lead_id = out['lead_id'] = conn.execute(text("SELECT lead_id FROM public.console_lead_links WHERE slug = :s AND status = 'trial' "
                                     'ORDER BY lead_id DESC LIMIT 1'), {'s': t['slug']}).scalar()
     engine = _leads_engine_or_none() if lead_id else None
     if engine is not None:
@@ -567,10 +567,11 @@ def trial_contact(t):
             lt = Lead.__table__
             with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
                 present = {c['name'] for c in inspect(conn).get_columns('leads')}
-                cols = [lt.c.name, lt.c.phone] + ([lt.c.company_name] if 'company_name' in present else [])
+                cols = [lt.c.name, lt.c.phone] + [getattr(lt.c, c) for c in ('company_name', 'email') if c in present]
                 row = conn.execute(select(*cols).where(lt.c.id == lead_id)).mappings().first()
             if row:
-                out.update(name=row['name'] or '', phone=row['phone'] or '', company=row.get('company_name') or '')
+                out.update(name=row['name'] or '', phone=row['phone'] or '', company=row.get('company_name') or '',
+                           email=row.get('email') or '')
         except Exception:                     # the leads database being unreachable mustn't break the trial page
             pass
     if t['status'] == 'active' and not (out['phone'] and out['company']):
@@ -637,8 +638,14 @@ def dashboard():
         demo_stats = load_demo_stats()
     except Exception as exc:                 # the demo database being unreachable shouldn't break the dashboard
         demo_stats = {'error': str(exc)}
-    from . import signup
+    from . import emails, signup
+    try:
+        email_seen = emails.by_lead() if new_leads else {}
+        email_since = emails.tracking_since() if new_leads else None
+    except Exception:
+        email_seen, email_since = {}, None
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
+                           email_seen=email_seen, email_since=email_since,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
 
@@ -723,7 +730,13 @@ def trial_detail(slug):
                   'mark': followups.marks().get(slug, {})}
         except Exception:
             fu = None
+    from . import emails
+    try:
+        sent_emails = emails.for_trial(slug, contact.get('lead_id'))
+    except Exception:
+        sent_emails = []
     return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history, fu=fu,
+                           sent_emails=sent_emails,
                            extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested,
                            boq=boq_state, links=subscription.links_enabled(), pay_email=pay_email,
                            prices=subscription.prices())
@@ -741,7 +754,13 @@ def followups_page():
         r['message'] = _followup_message(r)
         phone = re.sub(r'\D', '', r['contact'].get('phone') or '')
         r['phone'] = phone
+    from . import emails
+    try:
+        email_stats = emails.stats(load_leads(500))
+    except Exception:
+        email_stats = None
     return render_template('console/followups.html', board=b, rows=rows, stage=stage, stages=followups.STAGES,
+                           email_stats=email_stats,
                            order=followups.ORDER, base_domain=tenancy.base_domain())
 
 
@@ -776,6 +795,113 @@ def followups_whatsapp(slug):
     followups.log(slug, request.form.get('stage', '')[:20], 'whatsapp', message[:300])
     audit('followup_whatsapp', slug, request.form.get('stage', ''))
     return redirect(_wa_link(phone, message))
+
+
+# ── Email from the console ───────────────────────────────────────────────────
+
+EMAIL_SUBJECTS = {
+    'signin': 'Your {product} app is ready', 'details': 'Add your company details to {product}',
+    'firstquote': 'Make your first quotation in {product}', 'rates': 'Setting up your rates in {product}',
+    'quote': 'Your first real quotation with {product}', 'checkin': 'How is your {product} trial going?',
+    'ending': 'Your {product} trial ends on {ends_on}', 'ended': 'Continue with {product}', 'custom': '',
+}
+
+
+def _email_signoff():
+    return f"\n\n{_env('CONSOLE_SENDER_NAME', 'Harshith')}\n{_product()}\n(Just reply to this email if you have any questions.)"
+
+
+def _email_drafts_trial(t):
+    """([(key, label, subject, body)], suggested) for a trial: the WhatsApp follow-ups, as emails."""
+    from . import activity
+    with tenancy.tenant_context(t['slug'], t['schema_name']):
+        t2 = dict(t, status_obj=plan_mod.load_status(on=plan_mod.today()), usage=activity.usage())
+    drafts, pick = follow_ups(t2)
+    st = t2['status_obj']
+    ends = st.ends_on.strftime('%d %b') if st and st.has_limit else ''
+    out = []
+    for key, label, body in drafts:
+        subject = EMAIL_SUBJECTS.get(key, '').format(product=_product(), ends_on=ends)
+        out.append((key, label, subject, (body.rstrip() + '\n\n' if key == 'custom' else body) + _email_signoff()))
+    from . import followups
+    return out, pick, followups.stage_of(t2) or ''
+
+
+def _email_drafts_lead(lead):
+    from . import emails, signup
+    out = []
+    if lead.get('business_type') in signup.ELIGIBLE and signup._env('SIGNUP_SECRET'):
+        link = signup.setup_url(lead['id'], base=emails.base_url() or None)
+        out.append(('setup', 'Set-up link again', f'Your {_product()} set-up link',
+                    f"Hi {{name}},\n\nThanks for asking for a {_product()} free trial. Here is your link to set up your "
+                    f"app, in case the first email got lost:\n{link}\n\nIt takes a minute: choose your web address and "
+                    f"password, and your free 7-day trial starts. The link works for {signup.TOKEN_HOURS // 24} days."
+                    + _email_signoff()))
+    out.append(('hello', 'Thanks for your interest', f'Your {_product()} free trial',
+                f"Hi {{name}},\n\nThanks for your interest in {_product()}. I'd be happy to set up your free trial "
+                f"with you, with your own items and rates. When is a good time for a quick call?" + _email_signoff()))
+    out.append(('custom', 'Custom message', '', 'Hi {name},\n\n' + _email_signoff()))
+    return out, out[0][0]
+
+
+@console_bp.route('/email', methods=['GET', 'POST'])
+@login_required
+def email_compose():
+    """Write an email to a trial (?slug=), a trial request (?lead=) or anyone; sent from hello@ with a copy there,
+    and you can see if it's opened (app/emails.py)."""
+    from . import emails, mailer
+    slug = (request.values.get('slug') or '').strip()
+    lead_id = request.values.get('lead', type=int)
+    t = _trial_or_404(slug) if slug else None
+    lead = load_lead(lead_id) if lead_id else None
+    if lead_id and not lead:
+        abort(404)
+    to, name, drafts, suggested, sent, back, stage = '', '', [], 'custom', [], url_for('console.dashboard'), ''
+
+    if t:
+        contact = trial_contact(t)
+        name = contact['name']
+        if t['status'] == 'active':
+            from .models import AppSetting
+            with tenancy.tenant_context(slug, t['schema_name']):
+                to = AppSetting.get('company_email', '') or ''
+        to = to or contact['email']
+        lead_id = lead_id or contact['lead_id']
+        drafts, suggested, stage = _email_drafts_trial(t) if t['status'] == 'active' else ([], 'custom', '')
+        sent = emails.for_trial(slug, contact['lead_id'])
+        back = url_for('console.trial_detail', slug=slug)
+    elif lead:
+        to, name = lead.get('email') or '', _first_name(lead.get('name'))
+        drafts, suggested = _email_drafts_lead(lead)
+        sent = emails.for_lead(lead_id)
+    if not drafts:
+        drafts = [('custom', 'Custom message', '', 'Hi {name},\n\n' + _email_signoff())]
+    if request.method == 'POST':
+        to = (request.form.get('to') or '').strip()[:200]
+        subject = ' '.join((request.form.get('subject') or '').split())[:200]
+        body = (request.form.get('body') or '').replace('\r', '').strip()[:10000]
+        problem = None
+        if not mailer.enabled():
+            problem = 'Email isn\'t set up on the console (PLATFORM_SMTP_* in Vercel).'
+        elif not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', to):
+            problem = 'Enter a valid email address.'
+        elif not subject or not body:
+            problem = 'Write a subject and a message.'
+        if problem:
+            flash(problem, 'error')
+        elif emails.send(to, subject, body, kind='console', slug=slug or None, lead_id=lead_id):
+            if t:
+                from . import followups
+                followups.log(slug, stage, 'email', subject)
+            audit('email_sent', slug or (f'lead {lead_id}' if lead_id else None), f'{mailer.mask(to)}: {subject}'[:300])
+            flash(f'Email sent to {to}. You\'ll see here when it\'s opened.', 'ok')
+            return redirect(request.full_path if (t or lead) else url_for('console.email_compose'))
+        else:
+            flash('The email could not be sent. Check the mail settings and try again.', 'error')
+        return render_template('console/email.html', t=t, lead=lead, to=to, name=name, drafts=drafts, suggested=suggested,
+                               sent=sent, back=back, form={'subject': subject, 'body': body})
+    return render_template('console/email.html', t=t, lead=lead, to=to, name=name, drafts=drafts, suggested=suggested,
+                           sent=sent, back=back, form=None)
 
 
 @console_bp.route('/follow-ups/<slug>/mark', methods=['POST'])
@@ -863,6 +989,21 @@ def trial_boq(slug):
     else:
         audit('trial_boq', slug, 'on' if on else 'off')
         flash(f'"{slug}" now prices {"by item (BOQ lines)" if on else "by material"}.', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/trials/<slug>/costs', methods=['POST'])
+@login_required
+def trial_costs(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        ops.set_item_costs(slug, on)
+    except ops.OpsError as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('trial_costs', slug, 'on' if on else 'off')
+        flash(f'"Your cost" on each item is now {"on" if on else "off"} for "{slug}".', 'ok')
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
@@ -1294,6 +1435,21 @@ def customer_unlock(slug):
     return redirect(url_for('console.customer_detail', slug=slug))
 
 
+@console_bp.route('/customers/<slug>/costs', methods=['POST'])
+@login_required
+def customer_costs(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_item_costs(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_costs', slug, 'on' if on else 'off')
+        flash(f'"Your cost" on each item is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/customers/<slug>/photos', methods=['POST'])
 @login_required
 def customer_photos(slug):
@@ -1673,6 +1829,33 @@ def _signup(lead_id):
                                      "AND slug IS NOT NULL"), {'i': lead_id}).scalar())
 
 
+@console_bp.route('/e/o/<token>.gif')
+def email_opened(token):
+    """Public: the open image in an email (app/emails.py)."""
+    from flask import Response
+    from . import emails
+    if re.fullmatch(r'[A-Za-z0-9._-]{10,60}', token):
+        try:
+            emails.record_open(token)
+        except Exception:
+            pass
+    return Response(emails.GIF, mimetype='image/gif',
+                    headers={'Cache-Control': 'no-store, max-age=0', 'X-Robots-Tag': 'noindex'})
+
+
+@console_bp.route('/e/c/<token>/<int:n>')
+def email_clicked(token, n):
+    """Public: a link in an email; noted, then on to where it points (only links that email had)."""
+    from . import emails
+    url = None
+    if re.fullmatch(r'[A-Za-z0-9._-]{10,60}', token):
+        try:
+            url = emails.record_click(token, n)
+        except Exception:
+            url = None
+    return redirect(url if url and url.startswith(('https://', 'http://')) else _site_url())
+
+
 @console_bp.route('/start', methods=['GET', 'POST'])
 def start_trial():
     """Public: the business that asked for a trial on the website sets up its own app (signed, single-use link)."""
@@ -1683,6 +1866,12 @@ def start_trial():
     if not lead or lead.get('business_type') not in signup.ELIGIBLE:
         return render_template('console/start.html', problem='This link has expired or isn\'t valid. Request a free '
                                'trial again on the website, or message us on WhatsApp.', site=_site_url()), 404
+    if request.method == 'GET':
+        from . import emails
+        try:
+            emails.setup_link_opened(lead_id)       # the set-up email worked: they opened its link
+        except Exception:
+            pass
     done = _signup(lead_id)
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url())

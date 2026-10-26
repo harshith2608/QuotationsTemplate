@@ -622,6 +622,13 @@ body > main { flex: 1 0 auto; }
 
 /* Photos on quotation lines (item_images) */
 .ki-photo { margin-top: 4px; }
+.ki-cost { margin-top: 4px; }
+/* Under the description: photo, price to follow and your cost on one line */
+.ki-line-tools { display: flex; flex-wrap: wrap; align-items: center; column-gap: 18px; row-gap: 4px; margin-top: 4px; }
+.ki-line-tools:empty { display: none; }
+.ki-line-tools > .ki-photo, .ki-line-tools > .ki-cost, .ki-line-tools > .ki-tbc { margin: 0; }
+.ki-line-tools > .ki-photo { display: flex; align-items: center; gap: 8px; }
+.ki-line-tools > .ki-photo img { max-height: 48px; }
 .ki-photo img { display: block; max-width: 72px; max-height: 72px; border-radius: 6px; border: 1px solid #dee2e6;
                 object-fit: cover; margin-bottom: 2px; }
 .ki-photo-add { text-decoration: none; }
