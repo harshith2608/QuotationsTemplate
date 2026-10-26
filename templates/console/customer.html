@@ -157,6 +157,15 @@
     <input type="hidden" name="on" value="{{ '0' if boq.show_rate else '1' }}">
     <button class="btn" type="submit">{{ 'Hide the Rate column' if boq.show_rate else 'Show the Rate column' }}</button>
   </form>{% endif %}
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Presentation pages</strong> · <span class="badge {{ 'b-active' if boq.cover.on else 'b-other' }}">{{ 'on' if boq.cover.on else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">Their quotation PDF opens with a title page (their logo and name, then "Quotation
+    for" the client) and their About us, and ends with the Next steps and a thank-you note. They write About us and Next
+    steps in Settings → Quotation PDFs (or put "about_us" / "next_steps" in their price list file).</p>
+  <form method="post" action="{{ url_for('console.customer_presentation', slug=row.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.cover.on else '1' }}">
+    <button class="btn" type="submit">{{ 'Turn presentation pages off' if boq.cover.on else 'Turn presentation pages on' }}</button>
+  </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Load price list</strong></div>
   <p class="muted small" style="margin:0">This firm's own lines (title, description, unit, rate), a ready-made starting
     quotation and their notes and payment terms, from the .json file prepared from their old quotations. Goes into this

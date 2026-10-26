@@ -907,6 +907,17 @@ def trial_rate_column(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/presentation', methods=['POST'])
+@login_required
+def trial_presentation(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    ops.set_presentation(slug, on)
+    audit('trial_presentation', slug, 'on' if on else 'off')
+    flash(f'Presentation pages are now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/trials/<slug>/price-list', methods=['POST'])
 @login_required
 def trial_price_list(slug):
@@ -1325,6 +1336,21 @@ def customer_rate_column(slug):
     else:
         audit('customer_rate_column', slug, 'shown' if on else 'hidden')
         flash(f'The Rate column is now {"shown" if on else "hidden"} on "{slug}"\'s quotations.', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/presentation', methods=['POST'])
+@login_required
+def customer_presentation(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_presentation(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_presentation', slug, 'on' if on else 'off')
+        flash(f'Presentation pages are now {"on" if on else "off"} for "{slug}".', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 

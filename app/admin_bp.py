@@ -479,6 +479,12 @@ def _lump_lines():
     return BoqItem.query.filter(BoqItem.unit == boq.LUMP_SUM).order_by(BoqItem.category, BoqItem.name).all()
 
 
+def _presentation_texts():
+    """About us / Next steps for Settings, when presentation pages are on for this business (else None)."""
+    from . import presentation
+    return presentation.texts() if presentation.enabled() else None
+
+
 def _finish_context():
     from . import finishes
     return {'finish_options': finishes.all_options(), 'finish_on': bool(finishes.options()),
@@ -1017,6 +1023,9 @@ def settings():
                 AppSetting.set(key, request.form.get(key, '').strip())
             if request.form.get('initial_layout') in layout.layouts():
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
+            if 'about_us' in request.form:          # presentation pages (shown when turned on from the console)
+                from . import presentation
+                presentation.save_texts(request.form.get('about_us'), request.form.get('next_steps'))
             if 'boq_rate_shown' in request.form:     # the BOQ's Rate column (only offered with the BOQ layout)
                 shown = '1' in request.form.getlist('boq_rate_shown')
                 AppSetting.set(layout.HIDE_RATE_KEY, '' if shown else '1')
@@ -1068,6 +1077,7 @@ def settings():
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
+                           presentation=_presentation_texts() if tab == 'documents' else None,
                            section_variables=layout.VARIABLES,
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),

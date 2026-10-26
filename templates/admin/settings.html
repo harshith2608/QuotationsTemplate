@@ -409,6 +409,23 @@
       {% endif %}
     </div>
   </div>
+  {% if presentation %}
+  <div class="card shadow-sm border-0 mb-3" id="presentation">
+    <div class="card-header ki-card-header"><i class="bi bi-journal-richtext me-2"></i>Presentation pages</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">Your quotation PDF opens with a title page (your logo and name, then "Quotation for"
+        your client) and your <strong>About us</strong>, and ends with the <strong>Next steps</strong> and a thank-you note.</p>
+      <label class="form-label fw-semibold" for="about_us">About us</label>
+      <textarea name="about_us" id="about_us" class="form-control mb-1" rows="7" maxlength="5000"
+                placeholder="Who you are, how long you've been doing this, what you're known for, projects you've done.&#10;&#10;A blank line starts a new paragraph. Lines starting with - become a list.">{{ presentation.about_us }}</textarea>
+      <div class="form-text mb-3">Leave it empty to leave the About us page out.</div>
+      <label class="form-label fw-semibold" for="next_steps">Next steps <span class="fw-normal text-muted">(one per line)</span></label>
+      <textarea name="next_steps" id="next_steps" class="form-control" rows="5" maxlength="5000"
+                placeholder="Go through this quotation and tell us any changes you would like.&#10;Confirm the quotation and pay the booking advance.&#10;Site measurement, then the final design and material selection.&#10;Production and installation, as per the agreed timeline.&#10;Handover, with a final walkthrough together.">{{ presentation.next_steps }}</textarea>
+      <div class="form-text">Empty: the steps shown above in grey are used.</div>
+    </div>
+  </div>
+  {% endif %}
   <div class="card shadow-sm border-0 mb-3" id="room-descriptions">
     <div class="card-header ki-card-header"><i class="bi bi-list-ul me-2"></i>Room descriptions</div>
     <div class="card-body">

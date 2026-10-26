@@ -8,7 +8,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, HRFlowable, Image, KeepTogether)
+                                 TableStyle, HRFlowable, Image, KeepTogether, PageBreak)
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from . import db
@@ -807,13 +807,22 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         fontSize=9, fontName='Helvetica'
     )
 
-    # ------- HEADER -------
-    elements += _header_elements(title_style, subtitle_style, BRAND_ACCENT)
-
-    # QUOTATION LABEL
     ref = _quote_ref(project) if rsnap is None else (
         f'Quotation #: {project.id}  ·  Rev {revision.number}\n'
         f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
+    cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
+                                            'email': project.email or '', 'address': project.address or ''}
+    from . import presentation
+    cover = presentation.enabled()             # title page, About us, …, Next steps (console: per business)
+    palette = (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND)
+    if cover:
+        elements += _title_page(project, cust, ref, page_width, palette, styles)
+        elements += _about_page(page_width, palette, styles)
+    else:
+        # ------- HEADER -------
+        elements += _header_elements(title_style, subtitle_style, BRAND_ACCENT)
+
+    # QUOTATION LABEL
     quot_header = Table(
         [['CUSTOMER QUOTATION', ref]],
         colWidths=['65%', '35%']
@@ -834,11 +843,10 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     elements.append(quot_header)
     elements.append(Spacer(1, 12))
 
-    # ------- CUSTOMER DETAILS -------
+    # ------- CUSTOMER DETAILS (on the title page instead, with presentation pages) -------
+    mark = len(elements)
     elements.append(Paragraph("Customer Details", section_style))
     elements.append(Spacer(1, 4))
-    cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
-                                            'email': project.email or '', 'address': project.address or ''}
     cust_data = [
         ['Customer Name', cust['name'], 'Mobile', cust['mobile']],
         ['Email', cust['email'] or '—', 'Prepared By', project.creator.display_name],
@@ -865,6 +873,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     ] + span_cmds))
     elements.append(cust_table)
     elements.append(Spacer(1, 18))
+    if cover:
+        del elements[mark:]
 
     from . import layout, plywood
     _rooms2 = project.rooms_with_items()
@@ -995,11 +1005,12 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
 
     # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
     elements += _section_elements(styles, BRAND_DARK, project, _rooms2)
-    _with_thanks(elements, Paragraph(
-        _thank_you_text(),
-        ParagraphStyle('Footer2', parent=styles['Normal'],
-                       fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
-    ))
+    if not cover:                              # (with presentation pages, the thank-you is on the last page)
+        _with_thanks(elements, Paragraph(
+            _thank_you_text(),
+            ParagraphStyle('Footer2', parent=styles['Normal'],
+                           fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
+        ))
 
     # ------- PAYMENT DETAILS -------
     ps = payment_settings or {}
@@ -1037,6 +1048,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
             ] + span_cmds_pay))
             elements.append(pay_table)
 
+    if cover:
+        elements += _closing_page(page_width, palette, styles)
     _build(doc, elements)
     buffer.seek(0)
     return buffer
@@ -1195,3 +1208,97 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
     _build(doc, elements)
     buffer.seek(0)
     return buffer
+
+
+# ── Presentation pages (app/presentation.py): title page, About us, Next steps ──
+
+def _title_page(project, cust, ref, page_width, palette, styles):
+    """Page 1: the firm (logo, name, tagline), then "Quotation for" the client, the quotation's number and date."""
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
+    brand = get_brand()
+    center = lambda name, size, color=BRAND_DARK, bold=False, space=6, leading=None: ParagraphStyle(
+        name, parent=styles['Normal'], fontSize=size, leading=leading or size * 1.25, textColor=color, alignment=TA_CENTER,
+        fontName='Helvetica-Bold' if bold else 'Helvetica', spaceAfter=space)
+    out = [Spacer(1, 2.2 * cm)]
+    logo = _logo_flowable(brand, max_height=3.2 * cm, max_width=8 * cm)
+    if logo:
+        logo.hAlign = 'CENTER'
+        out += [logo, Spacer(1, 14)]
+    out.append(Paragraph(escape(brand['name']), center('CvName', 28, bold=True, space=6)))
+    if brand.get('tagline'):
+        out.append(Paragraph(escape(brand['tagline']), center('CvTag', 12, colors.HexColor('#546e7a'))))
+    out += [Spacer(1, 10), HRFlowable(width='40%', thickness=2, color=BRAND_ACCENT, hAlign='CENTER'), Spacer(1, 2.4 * cm),
+            Paragraph('QUOTATION', center('CvQ', 13, BRAND_ACCENT, bold=True, space=10)),
+            Paragraph('Prepared for', center('CvFor', 10, colors.HexColor('#546e7a'), space=4)),
+            Paragraph(escape(cust['name'] or ''), center('CvCust', 22, bold=True, space=6))]
+    for line in [cust.get('address') or '', cust.get('mobile') or '', cust.get('email') or '']:
+        if line:
+            out.append(Paragraph(escape(line).replace('\n', '<br/>'), center('CvCl', 10, colors.HexColor('#37474f'), space=2)))
+    no, _, date = ref.partition('\n')
+    info = Table([[no.replace('Quotation #:', 'Quotation no.').strip(), date.replace('Date:', '').strip(),
+                   'Prepared by ' + project.creator.display_name]], colWidths=[page_width / 3] * 3)
+    info.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('TEXTCOLOR', (0, 0), (-1, -1), BRAND_DARK),
+                              ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('LINEABOVE', (0, 0), (-1, 0), 0.5, colors.HexColor('#bdbdbd')),
+                              ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.HexColor('#bdbdbd')), ('PADDING', (0, 0), (-1, -1), 8)]))
+    out += [Spacer(1, 1.6 * cm), info, Spacer(1, 2.2 * cm)]
+    contact = '  |  '.join(x for x in [(brand['address'] or '').replace('\n', ', '), brand['phone'] and f"Ph: {brand['phone']}",
+                                        brand['email'], brand['gstin'] and f"GSTIN: {brand['gstin']}"] if x)
+    if contact:
+        out.append(Paragraph(escape(contact), center('CvContact', 8.5, colors.HexColor('#546e7a'))))
+    out.append(PageBreak())
+    return out
+
+
+def _about_page(page_width, palette, styles):
+    """Page 2: the firm's own "About us" (left out when they haven't written one)."""
+    from . import presentation
+    paras = presentation.content()['about']
+    if not paras:
+        return []
+    dark = palette[0]
+    brand = get_brand()
+    head = ParagraphStyle('AbH', parent=styles['Normal'], fontSize=20, leading=26, textColor=dark, fontName='Helvetica-Bold',
+                          spaceAfter=6)
+    body = ParagraphStyle('AbB', parent=styles['Normal'], fontSize=10.5, leading=16, textColor=colors.HexColor('#263238'),
+                          spaceAfter=10)
+    bullet = ParagraphStyle('AbL', parent=body, leftIndent=14, firstLineIndent=-10, spaceAfter=4)
+    out = [Spacer(1, 1 * cm), Paragraph(f'About {escape(brand["name"])}', head),
+           HRFlowable(width='20%', thickness=2, color=palette[1], hAlign='LEFT', spaceAfter=14)]
+    for p in paras:
+        lines = p.split('\n')
+        if all(l.strip()[:1] in ('-', '•', '*') for l in lines if l.strip()):
+            out += [Paragraph('•&nbsp;&nbsp;' + escape(l.strip().lstrip('-•* ')), bullet) for l in lines if l.strip()]
+            out.append(Spacer(1, 6))
+        else:
+            out.append(Paragraph(escape(p).replace('\n', '<br/>'), body))
+    out.append(PageBreak())
+    return out
+
+
+def _closing_page(page_width, palette, styles):
+    """Last page: the next steps (numbered) and the thank-you note, with the firm's contact details."""
+    from . import presentation
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
+    brand = get_brand()
+    head = ParagraphStyle('NxH', parent=styles['Normal'], fontSize=20, leading=26, textColor=BRAND_DARK,
+                          fontName='Helvetica-Bold', spaceAfter=6)
+    body = ParagraphStyle('NxB', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=colors.HexColor('#263238'))
+    num = ParagraphStyle('NxN', parent=body, fontName='Helvetica-Bold', textColor=ON_BRAND, alignment=TA_CENTER)
+    steps = presentation.content()['steps']
+    rows = [[Paragraph(str(i), num), Paragraph(escape(step), body)] for i, step in enumerate(steps, 1)]
+    t = Table(rows, colWidths=[1 * cm, page_width - 1.3 * cm])
+    t.setStyle(TableStyle([('BACKGROUND', (0, 0), (0, -1), BRAND_DARK), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                           ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                           ('LEFTPADDING', (1, 0), (1, -1), 12), ('LINEBELOW', (1, 0), (1, -2), 0.5, colors.HexColor('#e0e0e0'))]))
+    thanks = ParagraphStyle('NxT', parent=styles['Normal'], fontSize=15, leading=21, textColor=BRAND_DARK, alignment=TA_CENTER)
+    small = ParagraphStyle('NxS', parent=styles['Normal'], fontSize=9, leading=13, textColor=colors.HexColor('#546e7a'),
+                           alignment=TA_CENTER)
+    contact = '  |  '.join(x for x in [brand['phone'] and f"Ph: {brand['phone']}", brand['email']] if x)
+    return [PageBreak(), Spacer(1, 1 * cm), Paragraph('Next steps', head),
+            HRFlowable(width='20%', thickness=2, color=BRAND_ACCENT, hAlign='LEFT', spaceAfter=16), t,
+            Spacer(1, 2.4 * cm), HRFlowable(width='40%', thickness=1, color=BRAND_ACCENT, hAlign='CENTER', spaceAfter=18),
+            Paragraph(_thank_you_text(), thanks), Spacer(1, 8),
+            Paragraph('We look forward to working with you.' if 'look forward' not in _thank_you_text() else '', small),
+            Spacer(1, 6), Paragraph(escape(contact), small) if contact else Spacer(1, 1)]
