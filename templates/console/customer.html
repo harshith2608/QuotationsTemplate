@@ -6,6 +6,8 @@
 <h1>{{ row.name }} <span class="badge {{ badge[1] }}" style="vertical-align:middle">{{ badge[0] }}</span></h1>
 <p class="muted">{% if row.status == 'active' %}<a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a>{% else %}{{ url }}{% endif %}
   · {{ row.slug }}{% if row.source_trial %} · converted from trial{% endif %} · since {{ row.created_at|ist }}</p>
+{% set _mail = (info|selectattr(2, 'equalto', 'mail')|map(attribute=1)|first) if info else none %}
+{% with email_url=url_for('console.email_compose', to=_mail) if _mail else None %}{% include "console/_contact.html" %}{% endwith %}
 
 {% if row.status in ('provisioning', 'failed') %}
 <div class="card stack" {% if row.status == 'failed' %}style="border-color:var(--bad)"{% endif %}>

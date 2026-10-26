@@ -1,0 +1,23 @@
+{# Everything known about the business (console.full_contact): label, value, how to show it, where it came from #}
+{% if info %}
+<div class="card" id="contact">
+  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+    <strong>Contact</strong>
+    {% if email_url %}<a class="btn btn-sm" href="{{ email_url }}">✉️ Send an email</a>{% endif %}
+  </div>
+  <table class="small" style="width:100%">
+    {% for label, value, kind, source in info %}
+    <tr><td class="muted" style="width:150px;white-space:nowrap;vertical-align:top">{{ label }}</td>
+      <td>{% set digits = value|replace(' ', '')|replace('+', '')|replace('-', '') %}
+        {% if kind == 'wa' %}<a href="https://wa.me/{{ digits }}" target="_blank" rel="noopener">+{{ digits }}</a> <span class="muted">(WhatsApp)</span>
+        {% elif kind == 'tel' %}<a href="tel:{{ value|replace(' ', '') }}">{{ value }}</a>
+          {% set wa = digits[-10:] %}{% if wa|length == 10 %} · <a href="https://wa.me/91{{ wa }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+        {% elif kind == 'mail' %}<a href="mailto:{{ value }}">{{ value }}</a>
+        {% else %}{{ value }}{% endif %}</td>
+      <td class="muted" style="text-align:right;white-space:nowrap">{{ source }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<p class="muted small">No contact details yet: no linked trial request, and their app has no company details.</p>
+{% endif %}

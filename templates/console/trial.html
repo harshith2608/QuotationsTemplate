@@ -6,6 +6,7 @@
 <h1>{{ t.slug }}</h1>
 <p class="muted"><a href="{{ t.url }}" target="_blank" rel="noopener">{{ t.url }}</a> · registry status: {{ t.status }}
   · created {{ t.created_at|ist }}</p>
+{% with email_url=url_for('console.email_compose', slug=t.slug) %}{% include "console/_contact.html" %}{% endwith %}
 
 {% if st and st.has_limit %}
 <div class="card stack">
