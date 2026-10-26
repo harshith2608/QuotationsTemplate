@@ -38,7 +38,7 @@ function addDescRow(tr, ik, value, handler, before, after) {
   d.innerHTML = `<td colspan="7" class="pt-0">${before || ''}
       <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
                 placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
-      ${after || ''}
+      <div class="ki-line-tools" id="item_tools_${ik}">${after || ''}</div>
     </td>`;
   tr.after(d);
   autoGrow(d.querySelector('textarea'));
@@ -73,7 +73,8 @@ const itemPhotos = {};                       // ik → image id
 function photoUrl(id) { return (CATALOG.imageUrl || '/item-images/0').replace(/0$/, String(id)); }
 function addPhotoControl(rk, ik) {
   if (!PHOTOS && !itemPhotos[ik]) return;
-  const td = document.querySelector(`#item_row_${ik} > td`);
+  // on the line under the description (full width) when the item has one, else under the name
+  const td = document.getElementById('item_tools_' + ik) || document.querySelector(`#item_row_${ik} > td`);
   if (!td || document.getElementById('item_photo_' + ik)) return;
   const d = document.createElement('div');
   d.className = 'ki-photo';
@@ -124,12 +125,12 @@ function _lineCost(item, ik) {               // ₹ for the whole line, or null 
 }
 function addCostControl(rk, ik) {
   if (!COSTS) return;
-  const td = document.querySelector(`#item_row_${ik} > td`);
+  const td = document.getElementById('item_tools_' + ik) || document.querySelector(`#item_row_${ik} > td`);
   if (!td || document.getElementById('item_costbox_' + ik)) return;
   const item = (rooms[rk] || { items: {} }).items[ik] || {};
   const per = (item.type === 'fixed' || item.type === 'boq') ? 'per unit' : UNITS.rateLabel;
   const d = document.createElement('div');
-  d.className = 'ki-cost d-flex flex-wrap align-items-center gap-1 mt-1 small';
+  d.className = 'ki-cost d-flex flex-wrap align-items-center gap-1 small';
   d.id = 'item_costbox_' + ik;
   d.innerHTML = `<span class="text-muted text-nowrap" title="What this costs you. Only you see it, never your customer.">
       <i class="bi bi-eye-slash"></i> Your cost</span>
