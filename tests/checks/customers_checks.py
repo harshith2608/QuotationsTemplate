@@ -278,6 +278,9 @@ t = c.get('/customers/acme').text
 m = re.search(r'Password:</strong> <span class="secret">([^<]+)</span>', t)
 ok('new customer: admin password shown once', m and 'Username:</strong> <span class="secret">boss' in t)
 ok('…and not again', 'shown once' not in c.get('/customers/acme').text)
+_ct = c.get('/customers/acme').text
+ok('the customer page has a Contact card (their app\'s admin login)', 'id="contact"' in _ct and 'Admin logins' in _ct
+   and 'boss' in _ct.split('id="contact"')[1][:3000])
 with app.app_context():
     s2 = cust.unseal(cust.get('acme')['secrets'])
 with create_engine(s2['direct_url'].replace('postgresql://', 'postgresql+psycopg2://')).connect() as conn:

@@ -486,6 +486,84 @@ def _first_name(name):
     return words[0].title() if words and len(words[0]) > 1 else (name or '').strip()
 
 
+CONTACT_KEYS = ['company_name', 'company_mobile', 'company_email', 'company_address', 'company_gstin',
+                'signatory_name', 'signatory_title']
+
+
+def full_contact(slugs, open_app=None, extra_phone=''):
+    """Everything known about a business, for the top of its trial / customer page: [(label, value, kind, source)],
+    kind 'wa' / 'tel' / 'mail' / '' (how to show it). slugs: its trial and customer addresses (the request is linked by
+    either). open_app: a context manager into its app (company details, admins), or None. Values seen once only."""
+    from . import crypto, subscription
+    from .marketing import BUSINESS_TYPES
+    from .models import Lead
+    rows, seen = [], set()
+
+    def add(label, value, kind='', source=''):
+        value = ' '.join(str(value or '').split()) if kind != 'multi' else str(value or '').strip()
+        key = (kind if kind in ('wa', 'tel', 'mail') else label, re.sub(r'\D', '', value)[-10:] if kind in ('wa', 'tel') else value.lower())
+        if value and key not in seen:
+            seen.add(key)
+            rows.append((label, value, kind, source))
+
+    slugs = [x for x in dict.fromkeys(slugs) if x]
+    lead = None
+    with db.engine.connect() as conn:
+        lead_id = conn.execute(text("SELECT lead_id FROM public.console_lead_links WHERE slug = ANY(:s) AND status = 'trial' "
+                                    'ORDER BY lead_id DESC LIMIT 1'), {'s': slugs}).scalar() if slugs else None
+    if lead_id:
+        try:
+            lead = load_lead(lead_id)
+        except Exception:
+            lead = None
+    if lead:
+        src = 'trial request'
+        add('Name', lead.get('name'), '', src)
+        add('WhatsApp', lead.get('phone'), 'wa', src)
+        add('Email', lead.get('email'), 'mail', src)
+        add('Company', lead.get('company_name'), '', src)
+        add('City', lead.get('city'), '', src)
+        bt = lead.get('business_type')
+        add('Business', lead.get('business_other') if bt == 'other' and lead.get('business_other') else BUSINESS_TYPES.get(bt, bt), '', src)
+        add('Came from', lead.get('source'), '', src)
+        if lead.get('created_at'):
+            add('Asked for a trial', ist(lead['created_at']), '', src)
+    if open_app is not None:
+        try:
+            from .models import AppSetting, User
+            with open_app:
+                st = AppSetting.get_many(CONTACT_KEYS)
+                admins = [(u.username, u.full_name) for u in User.query.filter_by(role='admin').order_by(User.id)]
+            src = 'their app'
+            add('Company', st['company_name'], '', src)
+            add('Phone', st['company_mobile'], 'tel', src)
+            add('Email', st['company_email'], 'mail', src)
+            add('Address', st['company_address'], '', src)
+            add('GSTIN', st['company_gstin'], '', src)
+            if st['signatory_name']:
+                add('Signs as', f"{st['signatory_name']}{', ' + st['signatory_title'] if st['signatory_title'] else ''}", '', src)
+            add('Admin logins', ', '.join(f'{u}{f" ({n})" if n else ""}' for u, n in admins), '', src)
+        except Exception:                         # an unreachable app mustn't break the page
+            pass
+    add('Phone', extra_phone, 'tel', 'customer record')
+    if slugs:
+        try:
+            subscription.ensure_table()
+            with db.engine.connect() as conn:
+                pay = conn.execute(text("SELECT payer_name, business_name, email, phone FROM public.platform_payments "
+                                        "WHERE slug = ANY(:s) ORDER BY (status = 'paid') DESC, created_at DESC LIMIT 1"),
+                                   {'s': slugs}).mappings().first()
+            if pay:
+                src = 'payment'
+                add('Paid by', pay['payer_name'], '', src)
+                add('Billing name', pay['business_name'], '', src)
+                add('Email', pay['email'], 'mail', src)
+                add('Phone', pay['phone'], 'tel', src)
+        except Exception:
+            pass
+    return rows
+
+
 def contact_name(slug):
     """The person's name from the trial request this business came from (console_lead_links), or ''."""
     try:
@@ -675,11 +753,29 @@ def create_trial():
     city = ' '.join(request.form.get('city', '').split())[:60]
     email = request.form.get('email', '').strip()[:120]
     phone = re.sub(r'\D', '', request.form.get('phone', ''))[:15]
+    if lead_id:                                   # set up already, e.g. by them from the emailed link meanwhile
+        with db.engine.connect() as conn:
+            done = conn.execute(text("SELECT slug FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial'"),
+                                {'i': lead_id}).scalar()
+        if done:
+            flash(f'This request already has a trial: "{done}" (they may have set it up themselves from the email '
+                  'link). Here it is.', 'ok')
+            return redirect(url_for('console.trial_detail', slug=done))
     try:
         days = int(days)
         t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email)
     except (ops.OpsError, ValueError) as exc:
-        flash(f'Could not create trial: {exc}', 'error')
+        with db.engine.connect() as conn:
+            existing = conn.execute(text('SELECT status FROM public.tenants WHERE slug = :s'), {'s': slug}).scalar()
+        if existing == 'active':
+            flash(f'"{slug}" is already a trial (here it is). For this request, choose another address name.', 'error')
+            return redirect(url_for('console.trial_detail', slug=slug))
+        if existing:
+            flash(f'Could not create trial: "{slug}" is taken by an app that is {existing} '
+                  f'({"stopped half-way while being made: delete it on its page, then try again" if existing == "creating" else "see Customers"}).',
+                  'error')
+        else:
+            flash(f'Could not create trial: {exc}', 'error')
         return redirect(url_for('console.dashboard'))
     if lead_id:
         _link_lead(lead_id, 'trial', t['slug'])
@@ -730,13 +826,14 @@ def trial_detail(slug):
                   'mark': followups.marks().get(slug, {})}
         except Exception:
             fu = None
+    info = full_contact([slug], tenancy.tenant_context(slug, t['schema_name']) if t['status'] == 'active' else None)
     from . import emails
     try:
         sent_emails = emails.for_trial(slug, contact.get('lead_id'))
     except Exception:
         sent_emails = []
     return render_template('console/trial.html', t=t, admins=admins, locked=locked, history=history, fu=fu,
-                           sent_emails=sent_emails,
+                           sent_emails=sent_emails, info=info,
                            extend_choices=EXTEND_CHOICES, contact=contact, drafts=drafts, suggested=suggested,
                            boq=boq_state, links=subscription.links_enabled(), pay_email=pay_email,
                            prices=subscription.prices())
@@ -874,6 +971,9 @@ def email_compose():
         to, name = lead.get('email') or '', _first_name(lead.get('name'))
         drafts, suggested = _email_drafts_lead(lead)
         sent = emails.for_lead(lead_id)
+    if not (t or lead):
+        to = (request.args.get('to') or '').strip()[:200]           # e.g. a paying customer's email
+        name = (request.args.get('name') or '').strip()[:60]
     if not drafts:
         drafts = [('custom', 'Custom message', '', 'Hi {name},\n\n' + _email_signoff())]
     if request.method == 'POST':
@@ -1352,7 +1452,9 @@ def customer_detail(slug):
                 pay_email = AppSetting.get('company_email', '') or ''
         except Exception:
             pass
-    return render_template('console/customer.html', row=row, c=c, steps=c.steps_for(row), step_labels=c.STEP_LABELS,
+    info = full_contact([slug, row.get('source_trial')], c.open_customer(slug) if row['status'] == 'active' and live is not None
+                        else None, extra_phone=row.get('phone') or '')
+    return render_template('console/customer.html', row=row, c=c, steps=c.steps_for(row), step_labels=c.STEP_LABELS, info=info,
                            links=subscription.links_enabled(), pending_link=pending_link, pay_email=pay_email,
                            prices=subscription.prices(),
                            next_step=c.next_step(row) if row['status'] in ('provisioning', 'failed') else None,
