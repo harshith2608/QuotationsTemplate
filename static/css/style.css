@@ -133,7 +133,7 @@ body {
 
 /* ---- Brand / Login ---- */
 .ki-brand-text { color: var(--ki-primary); }
-.ki-navbar-logo { height: 28px; width: auto; vertical-align: middle; }
+.ki-navbar-logo { height: 34px; max-width: 160px; width: auto; object-fit: contain; vertical-align: middle; }
 .ki-login-logo  { max-height: 72px; max-width: 220px; width: auto; }
 .ki-login-icon {
   font-size: 3.5rem;
