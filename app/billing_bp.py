@@ -279,6 +279,46 @@ def revision(project_id, number):
                            rev=rev, snap=snap, changes=changes, latest=latest, restore=restore)
 
 
+@billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/pdf')
+@login_required
+def revision_pdf(project_id, number):
+    """A revision as it was: its PDF (own items, rates, totals, customer details and date)."""
+    from flask import send_file
+    from .models import QuoteRevision
+    from .pdf_utils import generate_customer_pdf
+    project = _project_or_403(project_id)
+    if not billing.ready():
+        abort(404)
+    rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
+    buf = generate_customer_pdf(project, revision=rev)
+    name = ''.join(ch if ch.isalnum() else '_' for ch in (json.loads(rev.snapshot)['customer']['name'] or 'Quotation'))
+    return send_file(buf, mimetype='application/pdf', as_attachment=request.args.get('download') == '1',
+                     download_name=f'Quotation_{name}_{project.id}_Rev{rev.number}.pdf')
+
+
+@billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/compare')
+@login_required
+def revision_compare(project_id, number):
+    """Two revisions side by side, what changed highlighted (default: this one and the current one)."""
+    from .models import QuoteRevision
+    project = _project_or_403(project_id)
+    if not billing.ready():
+        abort(404)
+    latest = billing.latest_revision_number(project)
+    other = request.args.get('with', type=int) or (latest if number != latest else number - 1)
+    revs = {r.number: r for r in QuoteRevision.query.filter(QuoteRevision.project_id == project.id,
+                                                            QuoteRevision.number.in_([number, other])).all()}
+    if number not in revs or other not in revs or other == number:
+        abort(404)
+    older, newer = (revs[number], revs[other]) if number < other else (revs[other], revs[number])
+    cmp = billing.compare_snapshots(json.loads(older.snapshot), json.loads(newer.snapshot))
+    numbers = [n for (n,) in QuoteRevision.query.with_entities(QuoteRevision.number)
+               .filter_by(project_id=project.id).order_by(QuoteRevision.number).all()]
+    return render_template('billing/compare.html', title=f'Quotation #{project.id} – Rev {older.number} vs {newer.number}',
+                           project=project, older=older, newer=newer, cmp=cmp, latest=latest, numbers=numbers,
+                           number=number, other=other)
+
+
 @billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/restore', methods=['POST'])
 @login_required
 @admin_required

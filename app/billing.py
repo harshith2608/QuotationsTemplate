@@ -262,6 +262,62 @@ def _describe(item):
     return f"{_fmt_dim(item['length'])} × {_fmt_dim(item['width'])}{count}, {item['material']}"
 
 
+def compare_snapshots(old, new):
+    """Two revisions side by side: [{'name', 'status', 'old_total', 'new_total', 'rows': [{'status', 'old', 'new',
+    'old_text', 'new_text', 'changed': {field…}}]}] in the newer one's room order (rooms only in the older one last),
+    and the totals. status: 'same' / 'changed' / 'added' / 'removed'. Items are matched by name within a room (the 1st
+    "Wardrobe" with the 1st, …); a changed one says which parts changed (quantity, rate, amount, size, description…)."""
+    def describe(it):
+        return _describe(it) if it else ''
+
+    fields = (('quantity', 'qty'), ('unit_price', 'rate'), ('rate', 'rate'), ('tbc', 'rate'), ('amount', 'amount'),
+              ('unit', 'unit'), ('description', 'description'), ('length', 'size'), ('width', 'size'),
+              ('count', 'size'), ('material', 'material'), ('finish', 'finish'), ('image_id', 'photo'))
+
+    def changed(a, b):
+        """Which parts of an item differ (missing and empty count as the same)."""
+        return {field for key, field in fields if (a.get(key) or None) != (b.get(key) or None)}
+
+    old_rooms = {r['name']: r for r in old.get('rooms', [])}
+    new_rooms = {r['name']: r for r in new.get('rooms', [])}
+    names = [r['name'] for r in new.get('rooms', [])] + [n for n in old_rooms if n not in new_rooms]
+    out = []
+    for name in names:
+        o, n = old_rooms.get(name), new_rooms.get(name)
+        before, after = {}, {}
+        for it in (o or {}).get('items', []):
+            before.setdefault(it['name'], []).append(it)
+        rows, seen = [], {}
+        for it in (n or {}).get('items', []):
+            k = seen.get(it['name'], 0)
+            seen[it['name']] = k + 1
+            prev = before.get(it['name'], [])
+            if k < len(prev):
+                diff = changed(prev[k], it)
+                rows.append({'status': 'changed' if diff else 'same', 'old': prev[k], 'new': it, 'changed': diff,
+                             'old_text': describe(prev[k]), 'new_text': describe(it)})
+            else:
+                rows.append({'status': 'added', 'old': None, 'new': it, 'changed': set(), 'old_text': '',
+                             'new_text': describe(it)})
+        for item_name, prev in before.items():                # items there before, not (or fewer) now
+            for it in prev[seen.get(item_name, 0):]:
+                rows.append({'status': 'removed', 'old': it, 'new': None, 'changed': set(), 'old_text': describe(it),
+                             'new_text': ''})
+        total = lambda r: round(sum((i.get('amount') or 0) for i in (r or {}).get('items', []) if not i.get('tbc')), 2)
+        status = 'added' if o is None else 'removed' if n is None else (
+            'changed' if any(r['status'] != 'same' for r in rows)
+            or (o.get('description') or '') != (n.get('description') or '') else 'same')
+        out.append({'name': name, 'status': status, 'rows': rows, 'old_total': total(o), 'new_total': total(n),
+                    'old_description': (o or {}).get('description') or '', 'new_description': (n or {}).get('description') or ''})
+    pick = lambda snap, key: (snap.get(key) if key != 'discount' else (snap.get('discount') or {}).get('amount')) or 0
+    totals = [(label, pick(old, key), pick(new, key)) for label, key in
+              (('Subtotal', 'subtotal'), ('Discount', 'discount'), ('Total', 'total'), ('GST', 'gst'),
+               ('Grand total (incl. GST)', 'payable'))
+              if key in ('subtotal', 'total') or pick(old, key) or pick(new, key)]
+    return {'rooms': out, 'totals': totals,
+            'counts': {s: sum(1 for r in out for row in r['rows'] if row['status'] == s) for s in ('added', 'removed', 'changed')}}
+
+
 def diff_snapshots(old, new):
     """Readable list of what changed between two snapshots."""
     changes = []

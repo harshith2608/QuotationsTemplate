@@ -179,12 +179,13 @@ def _with_thanks(elements, paragraph):
     elements.append(KeepTogether(([last] if last is not None else []) + tail + [Spacer(1, 8), paragraph]))
 
 
-def _room_rows_elements(project, page_width, palette, styles):
-    """The room-by-room table of the Initial Quotation (layout.room_rows), then Basic Total, discount and Total."""
+def _room_rows_elements(project, page_width, palette, styles, snap=None):
+    """The room-by-room table of the Initial Quotation (layout.room_rows), then Basic Total, discount and Total.
+    snap: a saved revision's snapshot (default: the quotation as it is now)."""
     from . import billing, layout
     (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
-    snap = billing.quotation_snapshot(project)
+    snap = snap or billing.quotation_snapshot(project)
     rows = layout.room_rows(snap)
     from . import item_images
     photos = item_images.data_for(it.get('image_id') for r in rows for it in r['items'])
@@ -256,13 +257,13 @@ def _totals_elements(snap, page_width, palette):
     return [Spacer(1, 6), KeepTogether([tt])]             # Basic Total, discount and Total on one page
 
 
-def _boq_elements(project, page_width, palette, styles):
+def _boq_elements(project, page_width, palette, styles, snap=None):
     """The BOQ layout of the Initial Quotation (layout.boq_rows): sections A, B, C… with numbered lines — description,
     quantity, unit, rate and amount — then Basic Total, discount and Total."""
     from . import billing, layout
     (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
-    snap = billing.quotation_snapshot(project)
+    snap = snap or billing.quotation_snapshot(project)
     small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
     title = ParagraphStyle('BQT', parent=small, fontName='Helvetica-Bold')
     sections = layout.boq_rows(snap)
@@ -740,12 +741,35 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     return buffer
 
 
-def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
+def _summary_from_snapshot(snap, page_width, palette):
+    """A saved revision's cost summary (one amount per material & work, fittings, other work), then the totals."""
+    (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
+     TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
+    rows = [['Material & Work Type', 'Amount (Rs.)']]
+    rows += [[s['label'], _money(s['amount'])] for s in snap.get('summary') or [] if s.get('amount')]
+    if snap.get('fittings_total'):
+        rows.append([snap.get('fittings_label') or FIXED_ITEMS_LABEL, _money(snap['fittings_total'])])
+    if snap.get('boq_total'):
+        rows.append([snap.get('boq_label') or BOQ_ITEMS_LABEL, _money(snap['boq_total'])])
+    t = Table(rows, colWidths=[page_width * 0.6, page_width * 0.4])
+    t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
+                           ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 10),
+                           ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, BRAND_LIGHT]),
+                           ('ALIGN', (1, 0), (1, -1), 'RIGHT'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+                           ('PADDING', (0, 0), (-1, -1), 8)]))
+    return [t] + _totals_elements(snap, page_width, palette)
+
+
+def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revision=None):
     """
     The Initial Quotation (customer copy). Room by room (default, Settings → Quotation PDFs): each room with what it's
     made of, its items with sizes and No's, and one amount; fittings as a Hardware row per room. Or by material:
     amount per material. Then the sections (specifications, terms, notes) and payment details.
+    revision: a saved revision (QuoteRevision): the quotation exactly as it was then (its own items, rates, totals,
+    customer details and date), in the business's layout.
     """
+    import json as _json
+    rsnap = _json.loads(revision.snapshot) if revision is not None else None
     (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = _palette()
     buffer = BytesIO()
@@ -787,9 +811,11 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     elements += _header_elements(title_style, subtitle_style, BRAND_ACCENT)
 
     # QUOTATION LABEL
+    ref = _quote_ref(project) if rsnap is None else (
+        f'Quotation #: {project.id}  ·  Rev {revision.number}\n'
+        f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
     quot_header = Table(
-        [['CUSTOMER QUOTATION',
-          _quote_ref(project)]],
+        [['CUSTOMER QUOTATION', ref]],
         colWidths=['65%', '35%']
     )
     quot_header.setStyle(TableStyle([
@@ -811,15 +837,17 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     # ------- CUSTOMER DETAILS -------
     elements.append(Paragraph("Customer Details", section_style))
     elements.append(Spacer(1, 4))
+    cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
+                                            'email': project.email or '', 'address': project.address or ''}
     cust_data = [
-        ['Customer Name', project.customer_name, 'Mobile', project.mobile],
-        ['Email', project.email or '—', 'Prepared By', project.creator.display_name],
+        ['Customer Name', cust['name'], 'Mobile', cust['mobile']],
+        ['Email', cust['email'] or '—', 'Prepared By', project.creator.display_name],
     ]
-    if project.address:
-        cust_data.append(['Address', Paragraph(project.address, normal_style), '', ''])
+    if cust['address']:
+        cust_data.append(['Address', Paragraph(escape(cust['address']), normal_style), '', ''])
     cust_table = Table(cust_data, colWidths=['18%', '32%', '18%', '32%'])
     span_cmds = []
-    if project.address:
+    if cust['address']:
         last = len(cust_data) - 1
         span_cmds = [('SPAN', (1, last), (3, last))]
     cust_table.setStyle(TableStyle([
@@ -846,7 +874,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph("Bill of Quantities", section_style))
         elements.append(Spacer(1, 8))
         elements += _boq_elements(project, page_width, (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG,
-                                                        ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND), styles)
+                                                        ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND), styles,
+                                  snap=rsnap)
         elements.append(Spacer(1, 20))
     elif layout.initial_layout() == layout.LAYOUT_ROOMS:
         # ------- ROOM BY ROOM: items with sizes and No's, one amount per room, a Hardware row per room -------
@@ -854,7 +883,16 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph("Quotation", section_style))
         elements.append(Spacer(1, 8))
         elements += _room_rows_elements(project, page_width, (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG,
-                                                              ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND), styles)
+                                                              ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND), styles,
+                                        snap=rsnap)
+        elements.append(Spacer(1, 20))
+    elif rsnap is not None:
+        # ------- COST SUMMARY of a saved revision (its own amounts) -------
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        elements.append(Paragraph("Cost Summary", section_style))
+        elements.append(Spacer(1, 8))
+        elements += _summary_from_snapshot(rsnap, page_width, (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG,
+                                                               ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND))
         elements.append(Spacer(1, 20))
     else:
         # ------- COST SUMMARY -------

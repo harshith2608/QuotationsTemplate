@@ -54,6 +54,22 @@ ok('revision 1 still shows the old version', '10 ft × 5 ft' in t and '12 ft' no
 t = c.get(f'/projects/{pid}/revisions/2').text
 ok('revision 2 lists what changed', 'Changes from revision 1' in t and 'Discount ₹0 → ₹1,000' in t)
 ok('PDFs show the revision number', 'Rev 2' in pdftext(c, f'/projects/{pid}/pdf') and 'Rev 2' in pdftext(c, f'/projects/{pid}/pdf/customer'))
+t1 = c.get(f'/projects/{pid}/revisions/1').text
+ok('an old revision offers its PDF and Compare with the current one', f'/projects/{pid}/revisions/1/pdf' in t1
+   and 'Compare with the current one (Rev 2)' in t1)
+r1pdf = pdftext(c, f'/projects/{pid}/revisions/1/pdf').replace('\n', ' ')
+ok('the PDF of revision 1 is the quotation as it was (its total, no Shoe Rack, "Rev 1")', 'Rev 1' in r1pdf
+   and '50,000.00' in r1pdf and 'Shoe Rack' not in r1pdf and 'Billing Test' in r1pdf)
+cmp_ = c.get(f'/projects/{pid}/revisions/1/compare').text
+ok('Compare: revision 1 and the current one side by side, what changed highlighted', 'Revision 1 vs revision 2' in cmp_
+   and 'ki-cmp-changed' in cmp_ and 'ki-cmp-added' in cmp_ and 'Shoe Rack' in cmp_ and '10 ft × 5 ft' in cmp_
+   and '12 ft × 5 ft' in cmp_ and '1 added · 0 removed · 1 changed' in cmp_ and 'size' in cmp_ and 'Discount' in cmp_)
+with app.app_context():
+    _r = {r.number: json.loads(r.snapshot) for r in QuoteRevision.query.filter_by(project_id=pid)}
+    back = billing.compare_snapshots(_r[2], _r[1])          # the other way round: the Shoe Rack is removed
+ok('…the other way round, an item that\'s gone is "removed"', back['counts']['removed'] == 1 and back['counts']['added'] == 0)
+ok('…any two revisions (with=), not a revision with itself', c.get(f'/projects/{pid}/revisions/2/compare?with=1').status_code == 200
+   and c.get(f'/projects/{pid}/revisions/1/compare?with=1').status_code == 404)
 with app.app_context():
     old = next(p for p in Project.query.all() if p.customer_name == 'Kavya Demo')   # names are encrypted
     QuoteRevision.query.filter_by(project_id=old.id).delete(); db.session.commit()
@@ -123,7 +139,7 @@ rid = new_quote(name='Restore Test', mobile='9000000222')                     # 
 c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': json.dumps(rooms2),
        'discount_type': 'fixed', 'discount_value': '1000'})                     # Rev 2
 t = c.get(f'/projects/{rid}').text
-ok('quotation page says older revisions can be restored', 'Open an older revision to restore it' in t)
+ok('quotation page says revisions can be downloaded, compared and restored', 'compare it side by side' in t and 'or restore it' in t)
 t = c.get(f'/projects/{rid}/revisions/1').text
 ok('older revision offers Restore, saved as a new revision, with both totals', 'Restore revision 1' in t and '(Rev 3)' in t
    and 'After restoring' in t and '50,000.00' in t and 'rates have changed' not in t)

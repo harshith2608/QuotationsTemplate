@@ -13,6 +13,14 @@
     {% if snap.restored_from %}<span class="badge bg-light text-dark border align-middle small">restored from Rev {{ snap.restored_from }}</span>{% endif %}</h4>
   <div class="small text-muted">Saved {{ rev.created_at|ist_time }}{% if rev.user %} by {{ rev.user.display_name }}{% endif %}
     · Total <strong>&#8377;{{ "{:,.2f}".format(snap.total) }}</strong></div>
+  <div class="d-flex flex-wrap gap-2 mt-2">
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('billing.revision_pdf', project_id=project.id, number=rev.number) }}" target="_blank" rel="noopener">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF of revision {{ rev.number }}</a>
+    {% if latest and latest > 1 %}
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('billing.revision_compare', project_id=project.id, number=rev.number) }}">
+      <i class="bi bi-layout-split me-1"></i>{{ 'Compare with the current one (Rev ' ~ latest ~ ')' if rev.number != latest else 'Compare with Rev ' ~ (rev.number - 1) }}</a>
+    {% endif %}
+  </div>
 </div>
 
 {% if restore %}
