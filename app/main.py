@@ -46,7 +46,7 @@ def brand_logo():
 
 def _icon_url(size):
     brand = get_brand()
-    return url_for('main.app_icon', size=size, v=f"{brand['theme_version']}{brand.get('logo_version') or ''}")
+    return url_for('main.app_icon', size=size, v=f"{brand['theme_version']}{brand.get('logo_version') or ''}t")
 
 
 @main_bp.route('/manifest.webmanifest')

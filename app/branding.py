@@ -193,7 +193,7 @@ def build_brand(saved):
     brand['logo_version'] = version
     brand['logo_file'] = '' if version else _logo_file()
     if version:
-        brand['logo_url'] = url_for('main.brand_logo', v=version)
+        brand['logo_url'] = url_for('main.brand_logo', v=f'{version}t')   # t: margins trimmed (new URL, no stale cache)
     elif brand['logo_file']:
         brand['logo_url'] = url_for('static', filename=brand['logo_file'])
     else:
@@ -368,7 +368,7 @@ def process_logo_upload(raw):
     except (UnidentifiedImageError, OSError):
         raise LogoError('That file is not a readable image.')
 
-    img = img.convert('RGBA')
+    img = trim_margins(img.convert('RGBA'))
     img.thumbnail((MAX_LOGO_SIDE, MAX_LOGO_SIDE))
     out = io.BytesIO()
     img.save(out, format='PNG', optimize=True)
@@ -376,11 +376,47 @@ def process_logo_upload(raw):
     return png, hashlib.sha1(png).hexdigest()[:12]
 
 
+def trim_margins(img, pad=0.04):
+    """The logo without the empty margin around it (white or transparent), so it shows at full size in the header and
+    the PDF (a square file with a small mark in the middle otherwise prints tiny). Keeps a small padding. RGBA in/out."""
+    from PIL import Image, ImageChops
+    rgba = img.convert('RGBA')
+    alpha = rgba.getchannel('A').point(lambda a: 255 if a > 16 else 0)
+    gray = rgba.convert('L').point(lambda v: 255 if v < 240 else 0)              # not (near) white
+    ink = ImageChops.multiply(alpha, gray)
+    box = ink.getbbox()
+    if not box:
+        return rgba
+    w, h = rgba.size
+    if (box[2] - box[0]) * (box[3] - box[1]) >= 0.9 * w * h:
+        return rgba                                                            # hardly any margin: leave it
+    p = int(max(box[2] - box[0], box[3] - box[1]) * pad)
+    return rgba.crop((max(box[0] - p, 0), max(box[1] - p, 0), min(box[2] + p, w), min(box[3] + p, h)))
+
+
+_trimmed = {}
+
+
 def load_logo_png():
-    """Uploaded logo bytes, or None."""
+    """Uploaded logo bytes (margins trimmed, also for logos uploaded before trimming existed), or None."""
     from .models import AppSetting
     data = AppSetting.get(LOGO_DATA_KEY, '')
-    return base64.b64decode(data) if data else None
+    if not data:
+        return None
+    key = hashlib.sha1(data[:4096].encode() + str(len(data)).encode()).hexdigest()
+    if key not in _trimmed:
+        raw = base64.b64decode(data)
+        try:
+            from PIL import Image
+            img = trim_margins(Image.open(io.BytesIO(raw)))
+            out = io.BytesIO()
+            img.save(out, format='PNG', optimize=True)
+            _trimmed[key] = out.getvalue()
+        except Exception:
+            _trimmed[key] = raw
+        if len(_trimmed) > 64:
+            _trimmed.pop(next(iter(_trimmed)))
+    return _trimmed[key]
 
 
 def save_logo_png(png, version):

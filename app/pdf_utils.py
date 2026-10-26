@@ -96,7 +96,7 @@ def _palette():
             colors.HexColor(readable_text_on(_ink(primary))))
 
 
-def _logo_flowable(brand, max_height=1.6 * cm, max_width=6 * cm):
+def _logo_flowable(brand, max_height=2 * cm, max_width=6 * cm):
     """Logo uploaded in Settings (stored in the DB), else LOGO_FILE under static/, else None."""
     source = None
     if brand.get('logo_version'):

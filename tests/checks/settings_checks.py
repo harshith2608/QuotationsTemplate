@@ -63,6 +63,21 @@ ok('logo shown in navbar', bool(m))
 lr = c.get(m.group(1)); im = Image.open(io.BytesIO(lr.data))
 ok(f'logo served as PNG resized to {im.size}', lr.mimetype == 'image/png' and max(im.size) == 600 and 'immutable' in lr.headers['Cache-Control'])
 ok('logo on login page (logged out)', app.test_client().get(m.group(1)).status_code == 200)
+# A logo with wide empty margins (a small mark in a big square) is trimmed, so it shows at full size
+from app import branding as _br
+_pad = Image.new('RGB', (1000, 1000), (255, 255, 255)); _pad.paste((0, 0, 0), (400, 350, 600, 650))
+_png, _ = _br.process_logo_upload((lambda b: (_pad.save(b, 'PNG'), b.getvalue())[1])(io.BytesIO()))
+_t = Image.open(io.BytesIO(_png))
+ok(f'a logo with empty margins is trimmed on upload ({_t.size})', 200 <= _t.size[0] <= 230 and 300 <= _t.size[1] <= 330)
+with app.app_context():
+    import base64 as _b64
+    from app.models import AppSetting as _AS
+    _keep = _AS.get(_br.LOGO_DATA_KEY)
+    _raw = io.BytesIO(); _pad.save(_raw, 'PNG')
+    _AS.set(_br.LOGO_DATA_KEY, _b64.b64encode(_raw.getvalue()).decode()); db.session.commit()
+    _old = Image.open(io.BytesIO(_br.load_logo_png()))
+    _AS.set(_br.LOGO_DATA_KEY, _keep); db.session.commit()
+ok('…and a logo uploaded before trimming is shown trimmed too', _old.size[0] < 300 and _old.size[1] < 400)
 for u in ['/projects/1/pdf', '/projects/1/pdf/customer']:
     pdf = PdfReader(io.BytesIO(c.get(u).data)); txt = '\n'.join(p.extract_text() for p in pdf.pages)
     ok(f'{u}: logo + company, no signature block', sum(len(p.images) for p in pdf.pages) == 1 and 'Acme Interiors' in txt
