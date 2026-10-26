@@ -222,13 +222,18 @@ def by_lead():
     return out
 
 
+def tracking_since():
+    """When open tracking started (emails sent before can't show as opened)."""
+    ensure_tables()
+    with db.engine.connect() as conn:
+        return conn.execute(text('SELECT MIN(since) FROM public.console_emails_since')).scalar()
+
+
 def stats(leads=None, days=30):
     """Opened / clicked over the last `days`: the set-up email (out of the requests with an email: the website sends
     it to each) and the emails sent from here (stage + console)."""
     since = _now() - timedelta(days=days)
-    ensure_tables()
-    with db.engine.connect() as conn:
-        started = conn.execute(text('SELECT MIN(since) FROM public.console_emails_since')).scalar()
+    started = tracking_since()
     lead_since = max(since, started) if started else since
     setup = {'sent': 0, 'opened': 0, 'clicked': 0}
     seen = by_lead()

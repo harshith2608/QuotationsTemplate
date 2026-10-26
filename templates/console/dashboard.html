@@ -21,7 +21,8 @@
         {% if l.city %}<span> · {{ l.city }}</span>{% endif %}
         {% if l.email %}<span> · <a href="mailto:{{ l.email }}">{{ l.email }}</a></span>{% endif %}
         {% if l.source %}<span class="muted"> · {{ l.source }}</span>{% endif %}</div>
-      {% if l.email %}{% set es = email_seen.get(l.id, {}) %}
+      {% set es = email_seen.get(l.id, {}) %}
+      {% if l.email and (es or (email_since and l.created_at and l.created_at >= email_since)) %}
       <div class="small" style="margin-top:4px">✉️
         {% if es.clicked_at %}<span class="badge b-active">opened the set-up link</span> {{ es.clicked_at|ist }}
         {% elif es.opened_at %}<span class="badge b-reminder">opened the email</span> {{ es.opened_at|ist }} <span class="muted">· link not opened yet</span>

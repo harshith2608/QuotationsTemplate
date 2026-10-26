@@ -641,10 +641,11 @@ def dashboard():
     from . import emails, signup
     try:
         email_seen = emails.by_lead() if new_leads else {}
+        email_since = emails.tracking_since() if new_leads else None
     except Exception:
-        email_seen = {}
+        email_seen, email_since = {}, None
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           email_seen=email_seen,
+                           email_seen=email_seen, email_since=email_since,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
 
