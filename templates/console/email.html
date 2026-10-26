@@ -1,0 +1,67 @@
+{% extends "console/_layout.html" %}
+{% block title %}Email{% endblock %}
+{% macro when(v) %}{% if v %}{{ v|ist }}{% else %}<span class="muted">—</span>{% endif %}{% endmacro %}
+{% block content %}
+<p><a href="{{ back }}">← {{ 'Trial ' ~ t.slug if t else 'Trials' }}</a></p>
+<h1>Email{% if t %} {{ t.slug }}{% elif lead %} {{ lead.company_name or lead.name }}{% endif %}</h1>
+<p class="muted small">Sent from hello@, with a copy in that mailbox. Replies come to hello@. You'll see below when it's
+  opened and when a link in it is clicked.</p>
+
+<form method="post" action="{{ request.full_path }}" class="card stack wa-card" id="emailForm"
+      data-confirm="Send this email?">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row">
+    <div class="grow"><label for="emTo">To</label>
+      <input id="emTo" type="email" name="to" value="{{ to }}" maxlength="200" required placeholder="name@example.com"></div>
+    <div><label for="emName">Name</label><input id="emName" type="text" value="{{ name }}" maxlength="60" placeholder="e.g. Ravi"></div>
+    <div class="grow"><label for="emDraft">Draft</label>
+      <select id="emDraft">{% for key, label, subject, body in drafts %}
+        <option value="{{ key }}" data-subject="{{ subject }}" data-body="{{ body }}" {% if key == suggested %}selected{% endif %}>{{ label }}{{ ' (suggested)' if key == suggested and drafts|length > 1 }}</option>{% endfor %}
+      </select></div>
+  </div>
+  {% if not to %}<p class="small" style="margin:0;color:var(--bad)">No email address on this {{ 'trial' if t else 'request' if lead else 'message' }} yet: type it in.</p>{% endif %}
+  <div><label for="emSubject">Subject</label>
+    <input id="emSubject" type="text" name="subject" maxlength="200" required value="{{ form.subject if form else '' }}"></div>
+  <div><label for="emBody">Message</label>
+    <textarea id="emBody" name="body" rows="12" required>{{ form.body if form else '' }}</textarea></div>
+  <div class="row"><button class="btn btn-primary" type="submit">Send email</button>
+    <span class="muted small">Links in the message are clickable for them.</span></div>
+</form>
+
+{% if t or lead %}
+<h2>Emails to them</h2>
+{% if sent %}
+<div class="card" style="overflow-x:auto"><table class="small">
+  <tr><th>Sent</th><th>Email</th><th>Opened</th><th>Link clicked</th></tr>
+  {% for e in sent %}
+  <tr><td style="white-space:nowrap">{{ when(e.sent_at) if e.sent_at else '<span class="muted">by the website</span>'|safe }}</td>
+    <td>{{ e.subject }}<div class="muted">{{ {'setup': 'set-up link (website)', 'stage': 'automatic', 'console': 'from you'}.get(e.kind, e.kind) }}{% if e.to_addr %} · {{ e.to_addr }}{% endif %}</div></td>
+    <td style="white-space:nowrap">{% if e.opened_at %}<span class="badge b-active">opened</span> {{ e.opened_at|ist }}{% if e.opens > 1 %} <span class="muted">({{ e.opens }}×)</span>{% endif %}{% else %}<span class="badge b-other">not yet</span>{% endif %}</td>
+    <td style="white-space:nowrap">{% if e.clicked_at %}<span class="badge b-active">clicked</span> {{ e.clicked_at|ist }}{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+  {% endfor %}
+</table></div>
+<p class="muted small">"Opened" shows when their mail app loads the email's images (most do). Some never do, so "not yet"
+  isn't proof they didn't read it. A clicked link is certain.</p>
+{% else %}<p class="muted">No emails recorded yet.</p>{% endif %}
+{% endif %}
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const name = $('emName'), draft = $('emDraft'), subject = $('emSubject'), body = $('emBody');
+  let edited = {{ 'true' if form else 'false' }};
+  const fill = () => {
+    const opt = draft.options[draft.selectedIndex];
+    const who = name.value.trim();
+    body.value = opt.dataset.body.replace('Hi {name},', who ? 'Hi ' + who + ',' : 'Hi,').split('{name}').join(who);
+    if (opt.dataset.subject || !subject.value) subject.value = opt.dataset.subject;
+    edited = false;
+  };
+  draft.addEventListener('change', () => { if (!edited || confirm('Replace your message with this draft?')) fill(); });
+  name.addEventListener('input', () => { if (!edited) fill(); });
+  body.addEventListener('input', () => { edited = true; });
+  subject.addEventListener('input', () => { edited = true; });
+  if (!edited) fill();
+})();
+</script>
+{% endblock %}

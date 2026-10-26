@@ -45,7 +45,7 @@ h2 { font-size: 1.1rem; margin: 26px 0 10px; }
 .btn-danger { border-color: var(--bad); color: var(--bad); background: transparent; }
 .btn-wa { background: #25d366; border-color: #25d366; color: #0b2e17; }
 .btn-sm { min-height: 34px; padding: 0 11px; font-size: .84rem; }
-input[type=text], input[type=password], input[type=number], input[type=tel], select, textarea {
+input[type=text], input[type=password], input[type=number], input[type=tel], input[type=email], select, textarea {
   width: 100%; min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 10px;
   background: var(--paper); color: var(--ink); font: 1rem system-ui, sans-serif; }
 textarea { min-height: 150px; font-family: ui-monospace, Menlo, monospace; font-size: .9rem; }
@@ -83,6 +83,7 @@ code, .mono { font-family: ui-monospace, Menlo, monospace; }
   <nav>
     <a href="{{ url_for('console.dashboard') }}">Trials</a>
     <a href="{{ url_for('console.followups_page') }}">Follow-ups</a>
+    <a href="{{ url_for('console.email_compose') }}">Email</a>
     <a href="{{ url_for('console.customers_list') }}">Customers</a>
     <a href="{{ url_for('console.payments') }}">Payments</a>
     <a href="{{ url_for('console.tutorials') }}">Tutorials</a>

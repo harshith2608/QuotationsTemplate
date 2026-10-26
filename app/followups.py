@@ -224,8 +224,10 @@ def send_stage_emails(trials):
             if not fresh:
                 continue
             name = (t.get('contact') or {}).get('name', '').split(' ')[0]
-            mailer.send(email, subject, f"Hello{(' ' + name) if name else ''},\n\n" + body.format(url=t['url'])
-                        + '\n\nQuestions? Just reply to this email or message us on WhatsApp.\n\nQuoteRoom\n')
+            from . import emails
+            emails.send(email, subject, f"Hello{(' ' + name) if name else ''},\n\n" + body.format(url=t['url'])
+                        + '\n\nQuestions? Just reply to this email or message us on WhatsApp.\n\nQuoteRoom\n',
+                        kind='stage', slug=t['slug'], bcc=False)
             log(t['slug'], stage, 'email', subject)
             out[t['slug']] = stage
         except Exception as exc:                        # one trial's problem mustn't stop the others

@@ -497,6 +497,75 @@ mails = [_em.message_from_bytes(open(f, 'rb').read()) for f in sorted(_glob.glob
 ok('stage emails: "not signed in" and "no quotation" once each (not to a trial ending soon), not twice',
    sent1.get('fu-new') == 'signin' and sent1.get('fu-set') == 'firstquote' and 'fu-end' not in sent1 and not sent2
    and {m['To'] for m in mails} == {'fu-new@x.example', 'fu-set@x.example'})
+
+# ── Emails: opened / clicked, writing from the console, the website's set-up email ──
+from app import emails as _ems
+def _html(m):
+    part = m.get_body(preferencelist=('html',)) if hasattr(m, 'get_body') else None
+    for p_ in m.walk():
+        if p_.get_content_type() == 'text/html':
+            return p_.get_payload(decode=True).decode()
+    return ''
+_new = next(m for m in mails if m['To'] == 'fu-new@x.example')
+_h1 = _html(_new)
+_tokm = re.search(r'/e/o/([A-Za-z0-9_-]+)\.gif', _h1)
+_lnk = re.search(r'href="[^"]*/e/c/([A-Za-z0-9_-]+)/(\d+)"', _h1)
+ok('a stage email has an HTML copy with the open image and its link through the console', bool(_tokm and _lnk)
+   and _new.get_content_type() == 'multipart/alternative')
+g = anon.get(f'/e/o/{_tokm.group(1)}.gif')
+ok('the open image: a tiny GIF, public, never cached', g.status_code == 200 and g.mimetype == 'image/gif'
+   and 'no-store' in g.headers['Cache-Control'])
+cl = anon.get(f'/e/c/{_lnk.group(1)}/{_lnk.group(2)}')
+ok('a link: noted, then on to where it pointed (their app)', cl.status_code == 302 and 'fu-new.quote-room.test' in cl.headers['Location'])
+ok('an unknown link goes to the website, never elsewhere', 'quote-room.co.in' in anon.get('/e/c/unknowntoken123/0').headers['Location'])
+with app.app_context():
+    _row = [e for e in _ems.for_trial('fu-new') if e['kind'] == 'stage'][0]
+ok('…and the trial shows it opened and clicked', _row['opened_at'] and _row['clicked_at'] and _row['opens'] == 1)
+ok('Email needs the console sign-in', anon.get('/email?slug=fu-new').status_code == 302)
+ep = signed.get('/email?slug=fu-new').text
+ok('Email a trial: their address filled in, the follow-up drafts as emails, what was sent before', 'value="fu-new@x.example"' in ep
+   and 'Your QuoteRoom app is ready' in ep and 'automatic' in ep and 'opened' in ep)
+r = signed.post('/email?slug=fu-new', data={'to': 'fu-new@x.example', 'subject': 'Quick question',
+                                            'body': 'Hi,\n\nOpen your app: https://fu-new.quote-room.test\n\nHarshith'})
+mails2 = [_em.message_from_bytes(open(f, 'rb').read()) for f in sorted(_glob.glob(_box + '/*.eml'))]
+mine = [m for m in mails2 if m['Subject'] == 'Quick question']
+ok('…sent from hello@ with a copy there, logged as a follow-up', r.status_code == 302 and len(mine) == 1
+   and mine[0]['Bcc'] and 'Quick question' in signed.get('/trials/fu-new').text)
+ok('…a bad address is refused', 'valid email' in signed.post('/email?slug=fu-new', data={'to': 'nope', 'subject': 'x', 'body': 'y'},
+                                                           follow_redirects=True).text)
+lp = signed.get(f'/email?lead={self_id}').text
+ok('Email a trial request: the set-up link again (a fresh one), to the address they gave', 'Set-up link again' in lp
+   and '/start?t=' in lp and 'meera@shahstudio.example' in lp)
+ok('Email anyone: a blank email', signed.get('/email').status_code == 200 and 'Email' in signed.get('/').text)
+# The website's set-up email: the open image is signed; the console adds the row on the first open, /start is the click
+os.environ['SIGNUP_URL'] = 'https://ops.quote-room.test'
+with app.app_context():
+    sent_ok = _su.email_setup_link('meera@shahstudio.example', 'Meera Shah', 'Shah Design Studio',
+                                   _su.setup_url(self_id), lead_id=self_id)
+setup_mail = [_em.message_from_bytes(open(f, 'rb').read()) for f in sorted(_glob.glob(_box + '/*.eml'))][-1]
+_sh = _html(setup_mail)
+_st = re.search(r'https://ops\.quote-room\.test/e/o/(L\d+\.[0-9a-f]+)\.gif', _sh)
+ok("the website's set-up email carries a signed open image (no name or email in it)", sent_ok and bool(_st)
+   and 'Meera' not in _st.group(1) and '/start?t=' in _sh)
+_opens = lambda: sum(e['opens'] for e in _ems.for_lead(self_id))
+with app.app_context():
+    before = _opens()
+anon.get(f'/e/o/L{self_id}.{"0" * 32}.gif')
+with app.app_context():
+    forged = _opens() - before
+anon.get(f'/e/o/{_st.group(1)}.gif')
+with app.app_context():
+    real = _opens() - before - forged
+    seen = _ems.by_lead().get(self_id, {})
+ok('…a forged one is ignored; the real one shows the set-up email opened', forged == 0 and real == 1 and seen.get('opened_at'))
+anon.get('/start?t=' + _su.make_token(self_id))
+with app.app_context():
+    seen = _ems.by_lead().get(self_id, {})
+ok('…and opening the set-up link counts as the click', bool(seen.get('clicked_at')))
+fp = signed.get('/follow-ups').text
+ok('Follow-ups shows how many set-up emails are opened, and the emails sent from here', 'Set-up link email' in fp
+   and 'Sent from here' in fp)
+os.environ.pop('SIGNUP_URL', None)
 os.environ.pop('MAIL_OUTBOX_DIR', None)
 with app.app_context():
     for sl in ('fu-new', 'fu-set', 'fu-end'):
@@ -505,6 +574,6 @@ with app.app_context():
 # Clean up the public console tables so other suites start from a clean trials database
 with app.app_context(), db.engine.begin() as conn:
     for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups', 'console_followups',
-                  'console_trial_marks', 'plan_reminders', 'platform_payments'):
+                  'console_trial_marks', 'plan_reminders', 'platform_payments', 'console_emails', 'console_emails_since'):
         conn.execute(text(f'DROP TABLE IF EXISTS public.{tname}'))
     conn.execute(text('DELETE FROM public.tenants'))

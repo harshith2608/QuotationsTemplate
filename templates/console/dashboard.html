@@ -21,6 +21,11 @@
         {% if l.city %}<span> · {{ l.city }}</span>{% endif %}
         {% if l.email %}<span> · <a href="mailto:{{ l.email }}">{{ l.email }}</a></span>{% endif %}
         {% if l.source %}<span class="muted"> · {{ l.source }}</span>{% endif %}</div>
+      {% if l.email %}{% set es = email_seen.get(l.id, {}) %}
+      <div class="small" style="margin-top:4px">✉️
+        {% if es.clicked_at %}<span class="badge b-active">opened the set-up link</span> {{ es.clicked_at|ist }}
+        {% elif es.opened_at %}<span class="badge b-reminder">opened the email</span> {{ es.opened_at|ist }} <span class="muted">· link not opened yet</span>
+        {% else %}<span class="badge b-other">email not opened yet</span>{% endif %}</div>{% endif %}
       <details style="margin-top:10px">
         <summary>Create trial</summary>
         <form method="post" action="{{ url_for('console.create_trial') }}" class="row" style="margin-top:10px"
@@ -42,6 +47,7 @@
       </details>
       <div class="item-actions">
         <a class="btn btn-sm btn-wa" href="https://wa.me/{{ l.phone }}?text={{ ('Hi ' ~ l.name ~ ', thanks for your interest in QuoteRoom!')|urlencode }}" target="_blank" rel="noopener">WhatsApp</a>
+        <a class="btn btn-sm" href="{{ url_for('console.email_compose', lead=l.id) }}">Email</a>
         <form method="post" action="{{ url_for('console.dismiss_lead', lead_id=l.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm" type="submit">Not interested</button>

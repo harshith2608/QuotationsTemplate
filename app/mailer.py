@@ -33,9 +33,10 @@ def operator():
     return _env('OPERATOR_EMAIL') or sender()
 
 
-def send(to, subject, text, attachments=(), reply_to=None, bcc=None):
+def send(to, subject, text, attachments=(), reply_to=None, bcc=None, html=None):
     """Send a plain-text email. attachments: [(filename, bytes, 'application/pdf')]. bcc: a hidden copy (e.g. to
     hello@ itself: emails sent by the app don't appear in the mailbox's Sent folder). Returns True if sent.
+    html: an HTML version of the same text (app/emails.py: links and the open check), shown by most mail apps.
     Never raises: a failed email must not break a payment or a sign-up (the reason is logged)."""
     if not enabled() or not to or '@' not in to:
         return False
@@ -49,6 +50,8 @@ def send(to, subject, text, attachments=(), reply_to=None, bcc=None):
     if bcc and '@' in bcc and bcc.lower() != to.lower():
         msg['Bcc'] = bcc                         # send_message delivers it and leaves the header out
     msg.set_content(text)
+    if html:
+        msg.add_alternative(html, subtype='html')
     for filename, data, mime in attachments:
         main, sub = mime.split('/', 1)
         msg.add_attachment(data, maintype=main, subtype=sub, filename=filename)

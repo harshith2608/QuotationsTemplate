@@ -32,6 +32,10 @@
   {% if fu.history %}<table class="small">{% for h in fu.history[:6] %}
     <tr><td style="white-space:nowrap">{{ h.at|ist }}</td><td>{{ h.channel }}</td><td class="muted">{{ h.note or '' }}</td></tr>{% endfor %}</table>
   {% else %}<p class="muted small" style="margin:0">Not messaged yet.</p>{% endif %}
+  {% if sent_emails %}<div class="small"><strong>Emails</strong>
+    {% for e in sent_emails[:4] %}<div>{{ e.subject }} <span class="muted">· {{ e.sent_at|ist if e.sent_at else 'by the website' }}</span>
+      {% if e.clicked_at %}<span class="badge b-active">link clicked</span>{% elif e.opened_at %}<span class="badge b-active">opened</span>{% else %}<span class="badge b-other">not opened yet</span>{% endif %}</div>{% endfor %}
+  </div>{% endif %}
   <div class="row" style="gap:8px;flex-wrap:wrap">
     {% for f, v, label in [('snooze', 3, 'Snooze 3 days'), ('mark', '' if fu.mark.mark == 'hot' else 'hot', 'Not hot' if fu.mark.mark == 'hot' else '🔥 Hot'),
                            ('mark', '' if fu.mark.mark == 'lost' else 'lost', 'Interested again' if fu.mark.mark == 'lost' else 'Not interested')] %}
@@ -46,6 +50,7 @@
       <input type="hidden" name="what" value="Spoke on the phone">
       <input type="hidden" name="next" value="{{ url_for('console.trial_detail', slug=t.slug) }}#followup">
       <button class="btn btn-sm" type="submit">Log a call</button></form>
+    <a class="btn btn-sm" href="{{ url_for('console.email_compose', slug=t.slug) }}">✉️ Send an email</a>
   </div>
   <form method="post" action="{{ url_for('console.followups_mark', slug=t.slug) }}" class="row" style="margin:0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

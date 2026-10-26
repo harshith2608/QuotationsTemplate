@@ -591,6 +591,20 @@ WhatsApp; it's logged) → **Next**. Snooze, 🔥 hot, not interested and a note
 (which also logs its "Open in WhatsApp" and has **Log a call**). The daily task also emails the early stages once each
 (not signed in after a day, no company details after a day, no quotation after two days), from hello@.
 
+### Emails from the console, and who opens them
+**Email** (top menu; or ✉️ on a trial's page, a row in Follow-ups, or a new trial request on Trials): write an email
+from hello@ with a copy in that mailbox; replies come to hello@. A trial gets the follow-up drafts as emails (to the
+company email in their app, else the one on their request); a trial request gets **Set-up link again** (a fresh link,
+for someone whose first email got lost) or a hello; the menu's **Email** is a blank one to anyone. Sent to a trial, it is
+logged in Follow-ups.
+Every email the platform sends (the website's set-up link, the stage emails, yours) shows whether it was **opened** (their
+mail app loaded its images: most do; some never do, Apple Mail does for everyone) and whether a **link was clicked**
+(certain; for the set-up email, the click is opening the set-up page). See it on Trials (each new request: email not
+opened / opened / opened the set-up link), on the trial's page, on the Email page and as totals on Follow-ups. A new
+request whose email isn't opened after a day: WhatsApp them, or **Email → Set-up link again**.
+The emails' links and the open image go through the console's address: `CONSOLE_URL` (console project, e.g.
+`https://ops.quote-room.co.in`) is optional but best set; otherwise the address it is visited on is used.
+
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
 
