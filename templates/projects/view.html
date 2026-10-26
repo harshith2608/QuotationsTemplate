@@ -869,8 +869,9 @@
       {% endfor %}
     </div>
   </div>
-  {% if current_user.is_admin and q2c.history|length > 1 %}
-  <div class="card-footer bg-transparent small text-muted"><i class="bi bi-arrow-counterclockwise me-1"></i>Open an older revision to restore it.</div>
+  {% if q2c.history|length > 1 %}
+  <div class="card-footer bg-transparent small text-muted"><i class="bi bi-layout-split me-1"></i>Open a revision to download its PDF
+    or compare it side by side with the current one{% if current_user.is_admin %}, or restore it{% endif %}.</div>
   {% endif %}
 </div>
 {% endif %}
