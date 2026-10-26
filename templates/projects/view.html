@@ -955,7 +955,7 @@
       </div>
       <div class="modal-body">
         <label class="form-label small fw-semibold" for="eqTo">To</label>
-        <input id="eqTo" type="email" name="to" class="form-control mb-3" required value="{{ project.email or '' }}" placeholder="customer@example.com">
+        <input id="eqTo" type="email" name="to" class="form-control mb-3" required value="{{ project.email or '' }}">
         {% if single_pdf %}
         <input type="hidden" name="pdf" value="initial">
         <p class="small text-muted mb-3"><i class="bi bi-paperclip me-1"></i>The quotation PDF is attached.</p>

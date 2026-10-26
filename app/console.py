@@ -710,6 +710,11 @@ def _with_badges(trials):
 @login_required
 def dashboard():
     trials = _with_badges(ops.list_trials())
+    trials.sort(key=lambda t: t.get('created_at') or datetime.min, reverse=True)      # newest first
+    try:
+        contacts = trial_contacts(trials)       # name, phone, company: shown and searched
+    except Exception:
+        contacts = {}
     leads = load_leads()
     new_leads = [l for l in (leads or []) if not l['link_status']]
     try:
@@ -723,7 +728,7 @@ def dashboard():
     except Exception:
         email_seen, email_since = {}, None
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           email_seen=email_seen, email_since=email_since,
+                           email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
 

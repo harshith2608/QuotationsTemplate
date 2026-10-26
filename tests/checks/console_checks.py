@@ -440,6 +440,11 @@ _tp = _tp[1].split('</table>')[0] if len(_tp) > 1 else ''
 ok('a trial page shows everything known: name, WhatsApp, email, company, city, business, admin login',
    'Meera Shah' in _tp and 'wa.me/919811100022' in _tp and 'meera@shahstudio.example' in _tp and 'Shah Design Studio' in _tp
    and 'Pune' in _tp and 'Admin logins' in _tp and 'trial request' in _tp and 'their app' in _tp)
+_dsh = signed.get('/').text
+_srch = re.findall(r'data-kind="trial"\s+data-search="([^"]*)"', _dsh)
+ok('Trials page: a search box; each trial searchable by address, company, name and phone; newest first',
+   'id="tsQ"' in _dsh and any('shah-studio' in x and 'meera shah' in x and '919811100022' in x for x in _srch)
+   and _dsh.index('shah-studio') < _dsh.index('taken-one'))
 _dash = signed.get('/').text
 ok('the dashboard shows self-serve and the ready-made trials', 'Self-serve trials' in _dash and 'shah-studio' in _dash
    and 'ready-made trial' in _dash)

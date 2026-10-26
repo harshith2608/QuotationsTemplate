@@ -122,7 +122,6 @@
                 Customer Name <span class="text-danger">*</span>
               </label>
               <input type="text" class="form-control" name="customer_name" id="customer_name"
-                     placeholder="e.g. Rajesh Kumar"
                      value="{{ form_data.get('customer_name', '') }}"
                      required maxlength="100" autocomplete="off">
               <div class="invalid-feedback">Customer name is required.</div>
@@ -134,7 +133,6 @@
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-telephone"></i></span>
                 <input type="tel" class="form-control" name="mobile" id="mobile"
-                       placeholder="9876543210"
                        value="{{ form_data.get('mobile', '') }}"
                        required maxlength="15" pattern="[0-9+\-\s]{7,15}">
                 <div class="invalid-feedback">Valid mobile number is required.</div>
@@ -145,7 +143,6 @@
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-envelope"></i></span>
                 <input type="email" class="form-control" name="email" id="email"
-                       placeholder="customer@example.com"
                        value="{{ form_data.get('email', '') }}"
                        maxlength="100">
               </div>
@@ -155,7 +152,6 @@
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
                 <textarea class="form-control" name="address" id="address" rows="2"
-                          placeholder="Site / delivery address"
                           maxlength="300">{{ form_data.get('address', '') }}</textarea>
               </div>
             </div>
