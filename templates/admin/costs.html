@@ -14,6 +14,28 @@
   Leave a box empty if you don't want to track it.
 </div>
 
+{% if line_costs %}
+<div class="card shadow-sm border-0 mb-3" id="line-costs">
+  <div class="card-header ki-card-header"><i class="bi bi-pencil-square me-2"></i>Your cost on each item while quoting</div>
+  <div class="card-body">
+    <p class="small text-muted mb-2">On the quotation form, each item has a <strong>Your cost</strong> box: type what it
+      costs you for that customer and see the profit as you quote. An empty box uses the cost below. Admins always see it;
+      choose which staff can see and change costs (they then also see each quotation's profit, and the costs below as
+      the suggested cost). Staff who aren't ticked never see costs, and costs already typed stay when they save.</p>
+    {% if line_costs.staff %}
+    <form method="POST" action="{{ url_for('admin.cost_staff') }}" class="d-flex flex-wrap align-items-center gap-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for u in line_costs.staff %}
+      <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="staff" value="{{ u.id }}"
+             {{ 'checked' if u.id in line_costs.allowed }}> {{ u.display_name }}</label>
+      {% endfor %}
+      <button class="btn btn-sm btn-primary" type="submit">Save</button>
+    </form>
+    {% else %}<p class="small mb-0">You have no staff logins, so only you see costs.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
 <form method="POST" action="{{ url_for('admin.costs') }}" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="card shadow-sm border-0 mb-3">

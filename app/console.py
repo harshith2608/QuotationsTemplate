@@ -866,6 +866,21 @@ def trial_boq(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/costs', methods=['POST'])
+@login_required
+def trial_costs(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        ops.set_item_costs(slug, on)
+    except ops.OpsError as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('trial_costs', slug, 'on' if on else 'off')
+        flash(f'"Your cost" on each item is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/trials/<slug>/photos', methods=['POST'])
 @login_required
 def trial_photos(slug):
@@ -1292,6 +1307,21 @@ def customer_unlock(slug):
             audit('customer_unlock', slug, ', '.join(fields))
             flash(f'Unlocked {", ".join(fields)} for one change.', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug))
+
+
+@console_bp.route('/customers/<slug>/costs', methods=['POST'])
+@login_required
+def customer_costs(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_item_costs(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_costs', slug, 'on' if on else 'off')
+        flash(f'"Your cost" on each item is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 
 @console_bp.route('/customers/<slug>/photos', methods=['POST'])

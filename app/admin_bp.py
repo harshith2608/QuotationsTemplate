@@ -805,9 +805,27 @@ def costs():
     ply_rows = []
     if plywood.table_ready():
         ply_rows = [o for o in plywood.context()['options'] if not o['default']]
+    from . import item_costs
+    line_costs = None
+    if item_costs.enabled():                 # your cost on each line (console): which staff may see and type it
+        line_costs = {'staff': User.query.filter_by(role='employee').order_by(User.id).all(),
+                      'allowed': item_costs.staff_ids()}
     return render_template('admin/costs.html', title='Costs & profit', combos=combos, rates=rates,
                            fittings=fittings, extra=extra, plywood_rows=ply_rows, plywood_default=plywood.default_name(),
-                           costs={k: v.cost for k, v in existing.items()})
+                           costs={k: v.cost for k, v in existing.items()}, line_costs=line_costs)
+
+
+@admin_bp.route('/costs/staff', methods=['POST'])
+def cost_staff():
+    """Which staff may see and type your cost on each line of a quotation (and so see its profit)."""
+    from . import item_costs
+    staff = {u.id for u in User.query.filter_by(role='employee')}
+    ids = {int(x) for x in request.form.getlist('staff') if x.isdigit() and int(x) in staff}
+    item_costs.set_staff(ids)
+    db.session.commit()
+    flash(f'{len(ids)} staff member{"" if len(ids) == 1 else "s"} can now see and enter costs on quotations.'
+          if ids else 'Only admins can now see and enter costs on quotations.', 'success')
+    return redirect(url_for('admin.costs') + '#line-costs')
 
 
 PAYMENT_KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',

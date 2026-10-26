@@ -121,6 +121,10 @@ class Project(db.Model):
             if item_images.ready():
                 from sqlalchemy.orm import undefer
                 q = q.options(undefer(Item.image_id))         # with the items, not one query per item
+            from . import item_costs
+            if item_costs.ready():
+                from sqlalchemy.orm import undefer
+                q = q.options(undefer(Item.cost_price))
             for item in q:
                 items_by_room[item.room_id].append(item)
         for room in rooms:
@@ -244,6 +248,8 @@ class Item(db.Model):
     unit = db.deferred(db.Column(db.String(20), nullable=True, server_default=db.FetchedValue()))
     # A photo on the line (app/item_images.py, turned on per business); deferred like plywood: safe before the update
     image_id = db.deferred(db.Column(db.Integer, nullable=True, server_default=db.FetchedValue()))
+    # Your cost for the line (app/item_costs.py, admins only, never printed): per sqft (measured) or per unit
+    cost_price = db.deferred(db.Column(EncryptedFloat, nullable=True, server_default=db.FetchedValue()))
 
     @property
     def is_fixed(self):
@@ -278,6 +284,12 @@ class Item(db.Model):
         """The line's photo id, or None (never reads the column before the database update)."""
         from . import item_images
         return self.image_id if item_images.ready() else None
+
+    @property
+    def own_cost(self):
+        """Your cost typed on this line, or None (never reads the column before the database update)."""
+        from . import item_costs
+        return self.cost_price if item_costs.ready() else None
 
     @property
     def finish(self):

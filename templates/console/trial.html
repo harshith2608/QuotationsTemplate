@@ -186,6 +186,19 @@
     <button class="btn" type="submit" {% if not boq.photos.ready and not boq.photos.on %}disabled{% endif %}>
       {{ 'Turn photos off' if boq.photos.on else 'Turn photos on' }}</button>
   </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Your cost on each item</strong> · <span class="badge {{ 'b-active' if boq.costs.on else 'b-other' }}">{{ 'on' if boq.costs.on else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">A "Your cost" box under each item on the quotation form, for a firm that
+    charges each customer differently: they type what the item costs them and see the profit per item and for the whole
+    quotation as they quote. Admins always see it; their admin chooses which staff can (Admin → Costs &amp; profit).
+    Never printed or shown to their customer. An empty box uses Costs &amp; profit. Turning it off hides the box; costs
+    already typed stay in the profit.</p>
+  {% if not boq.costs.ready %}<p class="small" style="margin:0;color:var(--bad)">Needs the latest database update first (Updates → Update all).</p>{% endif %}
+  <form method="post" action="{{ url_for('console.trial_costs', slug=t.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.costs.on else '1' }}">
+    <button class="btn" type="submit" {% if not boq.costs.ready and not boq.costs.on %}disabled{% endif %}>
+      {{ 'Turn "Your cost" off' if boq.costs.on else 'Turn "Your cost" on' }}</button>
+  </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>GST on quotations</strong> · <span class="badge {{ 'b-active' if boq.gst.on else 'b-other' }}">{{ ('on, ' ~ ('%g' % boq.gst.rate) ~ '%') if boq.gst.on else 'off' }}</span></div>
   <p class="muted small" style="margin:0">Quotations show their total, then GST at this rate, then the grand total with
     GST: on the quotation page, the PDF, the customer's link and WhatsApp. What the customer owes (balance, reminders)

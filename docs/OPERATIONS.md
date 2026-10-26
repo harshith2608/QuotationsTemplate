@@ -555,6 +555,13 @@ under every item on the quotation form, for a reference image (a sofa, a chair, 
 Photo column of the PDF and shows on the quotation page and the customer's link. Needs "Update all" once after the
 update that added it.
 
+**Your cost on each item** (console → their page → Features → **Turn "Your cost" on**; off by default): for a firm
+that charges each customer differently. A "Your cost" box under every item on the quotation form (per sqft / sq m for
+a measured item, per unit for the rest): they see the cost and profit of each line and of the whole quotation as they
+quote, and the quotation page's Estimated profit uses it. An empty box uses Admin → Costs & profit. Admins always see
+it; the admin ticks which staff can too (Admin → Costs & profit → "Your cost on each item while quoting"). Never
+printed, never on the customer's link, WhatsApp or a revision. Needs "Update all" once after the update that added it.
+
 **Presentation pages** (console → their page → Features → **Turn presentation pages on**; off by default): their
 quotation PDF opens with a title page (logo, firm name and tagline, then "Quotation for" the client, quotation no.,
 date) and their **About us**, then the quotation and terms, and ends with **Next steps** and the thank-you note. They

@@ -840,15 +840,18 @@ def profit(project, rooms=None, invoice=False, costs=None, settings=None, gst_re
     """Estimated cost and profit of a quotation, before GST, from Admin → Costs. None when no costs are set.
     invoice: its active invoice if known (None = not invoiced); left as False, it is looked up."""
     costs = costs if costs is not None else cost_rates()
-    if not costs:
+    rooms = rooms if rooms is not None else project.rooms_with_items()
+    own = sum(1 for r in rooms for i in r.item_list if i.own_cost is not None)   # costs typed on lines (item_costs)
+    if not costs and not own:
         return None
     from . import plywood
-    rooms = rooms if rooms is not None else project.rooms_with_items()
     project_ply = plywood.project_plywood(project)
     total_cost, missing = 0.0, []
     for room in rooms:
         for i in room.item_list:
-            if i.is_fixed:
+            if i.own_cost is not None:                      # your cost typed on this line wins
+                total_cost += (i.quantity or 0) * i.own_cost if i.is_fixed else i.area * i.own_cost
+            elif i.is_fixed:
                 c = costs.get(('fitting', i.name.lower()))
                 if c is None:
                     missing.append(f'{room.name}: {i.name}')
@@ -866,4 +869,4 @@ def profit(project, rooms=None, invoice=False, costs=None, settings=None, gst_re
     profit_ = round(selling - total_cost, 2)
     return {'selling': selling, 'quoted': project.final_total, 'gst_removed': gst_removed,
             'invoiced': invoice is not None, 'cost': round(total_cost, 2), 'profit': profit_,
-            'margin': round(profit_ / selling * 100, 1) if selling else 0.0, 'missing': missing}
+            'margin': round(profit_ / selling * 100, 1) if selling else 0.0, 'missing': missing, 'own': own}
