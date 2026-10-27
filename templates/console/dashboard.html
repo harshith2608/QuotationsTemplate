@@ -198,6 +198,33 @@
     <button class="btn btn-sm" type="submit">Make more</button></form>
 </div>
 
+<h2 id="ai-import">Bring your old quotation (AI)</h2>
+<div class="card">
+  <div class="row" style="align-items:center">
+    <div class="grow small">
+      <strong>{{ 'On' if ai.on else 'Off' }}</strong> for every trial and paying customer in the shared app.
+      When on, their admins can upload a quotation they've sent before (PDF or Excel) and their items, rates and terms
+      are set up from it (5 imports in a trial, 20 a month after). Needs <span class="mono">ANTHROPIC_API_KEY</span> on
+      the trials project.
+    </div>
+    <form method="post" action="{{ url_for('console.ai_import_switch') }}"
+          data-confirm="{{ 'Turn it off for every trial and customer?' if ai.on else 'Turn it on for every trial and customer?' }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="on" value="{{ '0' if ai.on else '1' }}">
+      <button class="btn btn-sm" type="submit">{{ 'Turn off' if ai.on else 'Turn on' }}</button></form>
+  </div>
+  {% if ai.recent %}
+  <details style="margin-top:10px"><summary class="small">Recent imports</summary>
+    <table class="small">
+      <tr><th>When (UTC)</th><th>Business</th><th>File</th><th>Result</th><th>Lines</th><th>Cost</th></tr>
+      {% for r in ai.recent %}<tr><td>{{ r.at.strftime('%d %b %H:%M') }}</td><td>{{ r.slug or '—' }}</td><td>{{ r.kind }}</td>
+        <td>{{ 'read' if r.ok else (r.note or 'failed') }}</td><td>{{ r.lines if r.lines is not none else '' }}</td>
+        <td>{% if r.tokens_in is not none %}₹{{ '%.2f' % ((r.tokens_in * 0.10 + r.tokens_out * 0.50) / 1000000 * 88) }}{% endif %}</td></tr>{% endfor %}
+    </table>
+  </details>
+  {% endif %}
+</div>
+
 <h2>New trial (without a request)</h2>
 <div class="card">
   <form method="post" action="{{ url_for('console.create_trial') }}" class="row" data-confirm="Create this trial?">

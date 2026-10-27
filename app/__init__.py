@@ -176,11 +176,15 @@ def create_app(config_name='default'):
         if current_user.is_authenticated and current_user.is_admin and session.get('setup_step') and request.endpoint:
             from . import setup_guide             # only while following the setup guide
             setup_banner = setup_guide.banner(request.endpoint, request.args)
+        ai_import_on = False
+        if current_user.is_authenticated and current_user.is_admin:
+            from . import ai_import             # Bring your old quotation: one switch for every business
+            ai_import_on = ai_import.available()
         demo_guide = None
         if demo_enabled() and current_user.is_authenticated:
             from . import demo
             demo_guide = demo.guide()
-        return {'demo_guide': demo_guide, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
+        return {'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
