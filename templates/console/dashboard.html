@@ -58,7 +58,7 @@
         </form>
       </details>
       <div class="item-actions">
-        <a class="btn btn-sm btn-wa" href="https://wa.me/{{ l.phone }}?text={{ ('Hi ' ~ l.name ~ ', thanks for your interest in QuoteRoom!')|urlencode }}" target="_blank" rel="noopener">WhatsApp</a>
+        <a class="btn btn-sm btn-wa" href="https://wa.me/{{ l.phone }}?text={{ lead_wa.replace('{name}', l.name or '')|urlencode }}" target="_blank" rel="noopener">WhatsApp</a>
         <a class="btn btn-sm" href="{{ url_for('console.email_compose', lead=l.id) }}">Email</a>
         <form method="post" action="{{ url_for('console.dismiss_lead', lead_id=l.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

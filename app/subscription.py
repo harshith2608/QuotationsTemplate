@@ -170,21 +170,24 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
     return get_by_order(link['id'])
 
 
+def _link_text(row, after=''):
+    from . import texts
+    return texts.render('pay_link', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
+                        amount=f'₹{row["amount_paise"] / 100:,.0f}', link=row['link_url'], after=after)
+
+
 def link_message(row):
-    """The WhatsApp / email text that goes with a payment link."""
-    plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
-    amount = f'₹{row["amount_paise"] / 100:,.0f}'
+    """The WhatsApp / email text that goes with a payment link (console → Messages: "Payment link")."""
     after = ('Once it\'s paid we set up your app and send you your login.' if row.get('kind') == 'new' else
              'Once it\'s paid, your plan is active straight away: same address, same login, all your quotations.')
-    return (f'Hi! Here is the payment link for your QuoteRoom {plan_label} ({amount}, your whole team, all features):\n\n'
-            f'{row["link_url"]}\n\nPay by UPI, card or net banking. {after} You\'ll get a receipt by email.\n\n'
-            f'Thank you!')
+    return _link_text(row, after)[1]
 
 
 def email_link(row, to):
     from . import mailer
-    return mailer.send(to, f'Your QuoteRoom payment link ({plan_mod.PLANS.get(row["plan"], row["plan"])})',
-                       'Hello,\n\n' + link_message(row).replace('Hi! ', '') + '\n\nQuoteRoom\n')
+    subject = _link_text(row)[0]
+    return mailer.send(to, subject, 'Hello,\n\n' + link_message(row).replace('Hi! ', '') + '\n\nQuoteRoom\n',
+                       bcc=mailer.sender())
 
 
 def verify_checkout(order_id, payment_id, signature):
@@ -368,6 +371,10 @@ def handle_webhook(payload):
     row, newly = mark_paid(row['order_id'], pay.get('id') or row.get('payment_id') or '', 'webhook')
     if not newly:
         return 'already recorded'
+    if not row.get('email') and '@' in (pay.get('email') or ''):       # the payer's email from Razorpay, for the receipt
+        with db.engine.begin() as conn:
+            conn.execute(text('UPDATE public.platform_payments SET email = :e WHERE id = :i'),
+                         {'e': pay['email'][:120], 'i': row['id']})
     if row.get('kind') == 'new':                           # a new customer: make their app now (plan from today)
         from . import customers
         c = customers.activate_pending(row['slug'])
@@ -438,6 +445,43 @@ def _app_link(slug, path=''):
     return f'https://{slug}.{tenancy.base_domain()}{path}'
 
 
+def receipt_email(row):
+    """Where the receipt goes: the email on the payment, else the business's email in its app."""
+    if row.get('email') and '@' in row['email']:
+        return row['email']
+    from .models import AppSetting
+    from . import ops
+    try:
+        with tenancy.tenant_context(row['slug'], ops.schema_of(row['slug'])):        # a trial (shared database)
+            return AppSetting.get('company_email', '') or ''
+    except Exception:
+        pass
+    try:
+        from . import customers
+        with customers.open_customer(row['slug']):                                   # a paying customer (console)
+            return AppSetting.get('company_email', '') or ''
+    except Exception:
+        return ''
+
+
+def send_receipt(row, to=None):
+    """Email the receipt (with a copy to hello@, as app emails don't show in the mailbox's Sent folder). True if sent.
+    to: another address (console → Payments → Email receipt)."""
+    from . import mailer, texts
+    to = to or receipt_email(row)
+    if not to or not mailer.enabled():
+        return False
+    fmt = lambda d: d.strftime('%d %b %Y') if d else '—'
+    first = (row.get('payer_name') or '').split(' ')[0]
+    subject, body = texts.render('pay_receipt', hello=f'Hello {first}' if first else 'Hello',
+                                 amount=f'₹{row["amount_paise"] / 100:,.0f}', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
+                                 business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
+                                 plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
+                                 receipt_no=row.get('receipt_no'))
+    return mailer.send(to, subject, body, bcc=mailer.sender(),
+                       attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
+
+
 def notify_paid(row):
     """"You're on your paid plan" with the receipt (to the business's email), and a note to the operator."""
     from . import mailer
@@ -447,29 +491,16 @@ def notify_paid(row):
     plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
     amount = f'₹{row["amount_paise"] / 100:,.0f}'
     name = row.get('business_name') or row['slug']
-    if row.get('email'):
-        mailer.send(row['email'], f'Payment received: QuoteRoom {plan_label}', f"""Hello{(' ' + row['payer_name'].split()[0]) if row.get('payer_name') else ''},
-
-Thank you! We've received {amount} for your QuoteRoom {plan_label}.
-
-Business: {name}
-Your app: {_app_link(row['slug'])}
-Plan: {fmt(row.get('plan_start'))} to {fmt(row.get('plan_end'))}
-Receipt: {row.get('receipt_no')} (attached)
-
-Everything you've set up and every quotation stays exactly as it is. Same address, same login.
-
-Questions? Just reply to this email.
-
-QuoteRoom
-""", attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
+    sent = send_receipt(row)
     mailer.send(mailer.operator(), f'Payment: {amount} from {name}',
                 f'{name} ({row["slug"]}){" · " + row["payer_name"] if row.get("payer_name") else ""} paid {amount} for the {plan_label}.\n'
                 f'Receipt {row.get("receipt_no")} · payment {row.get("payment_id")} · via {row.get("source")}\n'
-                f'Plan until {fmt(row.get("plan_end"))}.\n')
+                f'Plan until {fmt(row.get("plan_end"))}.\n'
+                + (f'Receipt emailed to {receipt_email(row)} (a copy is in this mailbox).\n' if sent else
+                   'No email address to send the receipt to: send it from console → Payments.\n'))
 
 
-REMINDERS = {   # kind → (subject, first line)
+REMINDERS = {   # kind → (subject, first line): the defaults; the texts sent are console → Messages (app/texts.py)
     'trial_2':   ('Your QuoteRoom free trial ends {when}',
                   'Your free trial ends {when} ({end}). Choose a plan to keep everything you have set up and keep quoting.'),
     'trial_end': ('Your QuoteRoom free trial has ended',
@@ -526,19 +557,11 @@ def send_reminders():
             when = 'today' if st.days_left == 0 else 'tomorrow' if st.days_left == 1 else f'in {st.days_left} days'
             words = dict(when=when, end=fmt(st.ends_on), plan=st.label, grace=fmt(st.grace_until),
                          delete=fmt(st.delete_on))
-            subject, first = REMINDERS[kind]
             p = prices()
-            mailer.send(email, subject.format(**words), f"""Hello,
-
-{first.format(**words)}
-
-Choose a plan in your app: {_app_link(slug, '/plan')}
-6 months ₹{p['6m']:,} · 12 months ₹{p['1y']:,} (your whole team, all features)
-
-Questions? Just reply to this email.
-
-QuoteRoom
-""")
+            from . import texts
+            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), price_6m=f"{p['6m']:,}",
+                                         price_1y=f"{p['1y']:,}", **words)
+            mailer.send(email, subject, body)
             out[slug] = kind
         except Exception as exc:                           # one business's problem mustn't stop the others
             out[slug] = f'failed: {exc}'

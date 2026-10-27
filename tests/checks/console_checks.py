@@ -581,6 +581,31 @@ ok('…and opening the set-up link counts as the click', bool(seen.get('clicked_
 fp = signed.get('/follow-ups').text
 ok('Follow-ups shows how many set-up emails are opened, and the emails sent from here', 'Set-up link email' in fp
    and 'Sent from here' in fp)
+# ── Messages: every draft and email text, editable ──
+mp = signed.get('/messages').text
+ok('Messages: every draft and email listed by group, with its placeholders', 'Follow-ups' in mp and 'Automatic emails' in mp
+   and 'Payment received (with the receipt)' in mp and 'Trial is ready (login)' in mp and '{receipt_no}' in mp)
+r = signed.post('/messages/fu_signin', data={'subject': 'Your {product} login', 'body': 'Hey {name}, here is {url} again.'},
+                follow_redirects=True)
+ep2 = signed.get('/email?slug=fu-new').text
+ok('an edited follow-up is used: the WhatsApp draft and the email (with its subject)', 'Saved' in r.text
+   and 'Hey {name}, here is https://fu-new.quote-room.test again.' in _h.unescape(ep2) and 'Your QuoteRoom login' in _h.unescape(ep2)
+   and 'Hey {name}, here is https://fu-new.quote-room.test again.' in _h.unescape(signed.get('/trials/fu-new').text))
+r = signed.post('/messages/fu_signin', data={'subject': 'x', 'body': 'Hi {nmae}'}, follow_redirects=True)
+ok('a misspelt placeholder isn\'t saved', 'isn' in r.text and '{nmae}' in _h.unescape(r.text)
+   and 'Hey {name}' in _h.unescape(signed.get('/messages').text))
+signed.post('/messages/stage_signin', data={'subject': 'Welcome aboard', 'body': '{hello}, open {url} today.'})
+with app.app_context(), db.engine.begin() as conn:
+    conn.execute(text("DELETE FROM public.plan_reminders WHERE slug = 'fu-new'"))
+with app.app_context(), app.test_request_context():
+    _tr, _ = _followup_trials()
+    _fu.send_stage_emails([t for t in _tr if t['slug'] == 'fu-new'])
+_last = [_em.message_from_bytes(open(f, 'rb').read()) for f in sorted(_glob.glob(_box + '/*.eml'))][-1]
+ok('an edited automatic email is what goes out', _last['Subject'] == 'Welcome aboard'
+   and 'open https://fu-new.quote-room.test today.' in next(p_ for p_ in _last.walk() if p_.get_content_type() == 'text/plain')
+       .get_payload(decode=True).decode())
+signed.post('/messages/fu_signin/reset'); signed.post('/messages/stage_signin/reset')
+ok('Reset: back to the original wording', 'just checking you got the login' in _h.unescape(signed.get('/email?slug=fu-new').text).lower())
 os.environ.pop('SIGNUP_URL', None)
 os.environ.pop('MAIL_OUTBOX_DIR', None)
 with app.app_context():
@@ -590,6 +615,7 @@ with app.app_context():
 # Clean up the public console tables so other suites start from a clean trials database
 with app.app_context(), db.engine.begin() as conn:
     for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups', 'console_followups',
-                  'console_trial_marks', 'plan_reminders', 'platform_payments', 'console_emails', 'console_emails_since'):
+                  'console_trial_marks', 'plan_reminders', 'platform_payments', 'console_emails', 'console_emails_since',
+                  'console_texts'):
         conn.execute(text(f'DROP TABLE IF EXISTS public.{tname}'))
     conn.execute(text('DELETE FROM public.tenants'))

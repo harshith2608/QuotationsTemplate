@@ -717,6 +717,13 @@ ok('…its receipt says how it was paid (not Razorpay)', 'Paid by UPI' in rt and
 ok('…and their name: on the receipt, the email greets them, the Payments list shows it', 'Name Ravi Kumar' in rt
    and next(x for x in mails[0].walk() if x.get_content_type() == 'text/plain').get_payload(decode=True).decode()
        .startswith('Hello Ravi,') and 'Ravi Kumar' in c.get('/payments').text)
+ok('…with a copy to hello@ (app emails don\'t show in its Sent folder)', mails[0]['Bcc'] == 'hello@quote-room.co.in')
+before = len(outbox())
+r = c.post(f'/payments/{mrow[0]}/receipt-email', data={'to': 'accounts@paidfirst.example'}, follow_redirects=True)
+again = [m for m in outbox()[before:] if m['To'] == 'accounts@paidfirst.example']
+ok('Payments → Email receipt: sends it again, to the address typed (copy to hello@)', len(again) == 1
+   and 'Payment received' in again[0]['Subject'] and again[0]['Bcc'] == 'hello@quote-room.co.in'
+   and 'emailed to accounts@paidfirst.example' in r.text and 'Email receipt' in r.text)
 bad = c.post('/payments/manual', data={'slug': 'nobody', 'plan': '6m', 'amount': '4999', 'method': 'UPI'}, follow_redirects=True)
 ok('a business that doesn\'t exist is refused', 'No trial or customer' in bad.text)
 r = c.post(f'/payments/{mrow[0]}/delete', follow_redirects=True)

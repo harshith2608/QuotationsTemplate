@@ -424,16 +424,12 @@ def _tutorials_line():
 
 
 def _welcome_message(name, url, username, password, ends_on, company=''):
-    hello = f'Hi {name}!' if name else 'Hi!'
-    whose = f' for {company}' if company else ''
+    from . import texts
     ready = (f"I've already put in {company} and your contact details, so your quotations carry your name. "
              "Add your logo, full address and GSTIN in Settings → Company, and your own rates in Rates.\n\n") if company else ''
-    return (f"{hello} Your {_product()} free trial{whose} is ready.\n\n"
-            f"Open: {url}\nUsername: {username}\nPassword: {password}\n\n"
-            "When you sign in, a short setup guide takes you through your rates and settings step by step.\n\n"
-            + ready + _tutorials_line() +
-            f"Your trial runs until {ends_on.strftime('%d %b %Y')}. On your phone, add the page to your home screen "
-            "for one-tap access. Reply here if you need any help!")
+    return texts.render('trial_welcome', hello=f'Hi {name}!' if name else 'Hi!', product=_product(),
+                        for_company=f' for {company}' if company else '', url=url, username=username, password=password,
+                        company_note=ready, tutorials=_tutorials_line(), ends_on=ends_on.strftime('%d %b %Y'))[1]
 
 
 def _wa_link(phone, message):
@@ -446,39 +442,10 @@ def _wa_link(phone, message):
 
 PLAN_PRICES = '6 months ₹4,999 or 12 months ₹8,999, one price for your whole team'
 
-FOLLOW_UPS = [
-    ('signin', 'Not signed in yet',
-     "Hi {name}, this is {sender} from {product}. Just checking you got the login I sent. If you have any trouble "
-     "signing in, tell me and I'll sort it out right away.\n\nOpen: {url}\n\nIt takes about 10 minutes to set up your "
-     "rates and make your first quotation."),
-    ('details', 'Company details and logo',
-     "Hi {name}, good to see you've signed in to {product} 👍 Next: add your company name, address and logo in "
-     "Settings, so every quotation goes out in your brand. It takes 2 minutes: {url}/admin/settings\n\nOr send me your "
-     "logo here and I'll add it for you."),
-    ('firstquote', 'Their first quotation',
-     "Hi {name}, your {product} is set up 👍 Try your first quotation now: New Quotation, pick a starting quotation, "
-     "type the sizes and send the PDF on WhatsApp.\n\nIf you send me one of your old quotations, I'll set up your items "
-     "and rates for you, so it's ready in your own format."),
-    ('rates', 'Help with rates (offer a call)',
-     "Hi {name}, good to see you've started on {product} 👍 The next step is your rates for each material and work "
-     "type. Once they're in, every quotation works itself out. If it's easier, I can set up your rates with you on a "
-     "10-minute call, whenever suits you."),
-    ('quote', 'Going well: make a real quotation',
-     "Hi {name}, great to see you're set up on {product}! Try making a quotation for one of the customers you're "
-     "quoting this week. You can send it on WhatsApp as a PDF, or as a link they can accept online. If you send me "
-     "your logo, I'll add it so the PDF is in your brand. Anything you need, just message me."),
-    ('checkin', 'Quiet for a while: check in',
-     "Hi {name}, {sender} from {product} here. How is the trial going? If something got in the way or didn't work "
-     "the way you quote, tell me. I'm happy to set it up with you on a quick call."),
-    ('ending', 'Trial ending soon (plans)',
-     "Hi {name}, your {product} trial ends on {ends_on}. Everything you've set up (rates, logo, quotations) stays "
-     "when you continue. Plans: {prices}. Which one suits you? Happy to answer any questions on a quick call."),
-    ('ended', 'Trial ended: continue or feedback',
-     "Hi {name}, your {product} trial ended on {ends_on}. Your data is kept until {delete_on}, so you can continue "
-     "right where you left off: {prices}. If it wasn't the right fit, could you tell me what was missing? It really "
-     "helps."),
-    ('custom', 'Custom message', 'Hi {name}, '),
-]
+def _follow_up_texts():
+    """[(key, label, text)] for the WhatsApp drafts (console → Messages can change them)."""
+    from . import texts
+    return [(k[3:], texts.TEXTS[k][1], texts.get(k)[1]) for k in texts.TEXTS if k.startswith('fu_')]
 
 
 def _first_name(name):
@@ -670,8 +637,8 @@ def follow_ups(t):
     values = dict(product=_product(), sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), url=t['url'], prices=PLAN_PRICES,
                   ends_on=fmt(st.ends_on) if st and st.has_limit else '',
                   delete_on=fmt(st.delete_on) if st and st.has_limit else '')
-    drafts = [(k, label, body.replace('{name}', '\0').format(**values).replace('\0', '{name}'))
-              for k, label, body in FOLLOW_UPS]
+    from . import texts
+    drafts = [(k, label, texts.fill(body, **values)) for k, label, body in _follow_up_texts()]   # {name}: on the page
     from . import followups                      # the same stages as Follow-ups
     stage = followups.stage_of(dict(t, status='active')) if t.get('status', 'active') == 'active' else None
     if stage == 'quoting':
@@ -727,7 +694,9 @@ def dashboard():
         email_since = emails.tracking_since() if new_leads else None
     except Exception:
         email_seen, email_since = {}, None
+    from . import texts
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
+                           lead_wa=texts.get('lead_whatsapp')[1],
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
@@ -899,18 +868,54 @@ def followups_whatsapp(slug):
     return redirect(_wa_link(phone, message))
 
 
+# ── Messages: every draft and email text, editable ───────────────────────────
+
+@console_bp.route('/messages')
+@login_required
+def messages_page():
+    from . import texts
+    return render_template('console/messages.html', groups=texts.listing())
+
+
+@console_bp.route('/messages/<key>', methods=['POST'])
+@login_required
+def messages_save(key):
+    from . import texts
+    if key not in texts.TEXTS:
+        abort(404)
+    has_subject = texts.TEXTS[key][3] is not None
+    subject = ' '.join((request.form.get('subject') or '').split())[:200] if has_subject else None
+    body = (request.form.get('body') or '').replace('\r', '')[:5000]
+    bad = texts.unknown_fields(key, subject, body)
+    if not body.strip():
+        flash('The message can\'t be empty (use Reset to go back to the original).', 'error')
+    elif bad:
+        flash(f'Not saved: {", ".join("{" + b + "}" for b in bad)} isn\'t a placeholder this message can use. '
+              f'It can use: {", ".join("{" + f + "}" for f in texts.TEXTS[key][5])}.', 'error')
+    else:
+        texts.save(key, subject, body)
+        audit('message_edit', None, f'{key}: {texts.TEXTS[key][1]}'[:300])
+        flash(f'Saved "{texts.TEXTS[key][1]}". It\'s used from now on.', 'ok')
+    return redirect(url_for('console.messages_page') + f'#m-{key}')
+
+
+@console_bp.route('/messages/<key>/reset', methods=['POST'])
+@login_required
+def messages_reset(key):
+    from . import texts
+    if key not in texts.TEXTS:
+        abort(404)
+    texts.reset(key)
+    audit('message_reset', None, key)
+    flash(f'"{texts.TEXTS[key][1]}" is back to the original wording.', 'ok')
+    return redirect(url_for('console.messages_page') + f'#m-{key}')
+
+
 # ── Email from the console ───────────────────────────────────────────────────
 
-EMAIL_SUBJECTS = {
-    'signin': 'Your {product} app is ready', 'details': 'Add your company details to {product}',
-    'firstquote': 'Make your first quotation in {product}', 'rates': 'Setting up your rates in {product}',
-    'quote': 'Your first real quotation with {product}', 'checkin': 'How is your {product} trial going?',
-    'ending': 'Your {product} trial ends on {ends_on}', 'ended': 'Continue with {product}', 'custom': '',
-}
-
-
 def _email_signoff():
-    return f"\n\n{_env('CONSOLE_SENDER_NAME', 'Harshith')}\n{_product()}\n(Just reply to this email if you have any questions.)"
+    from . import texts
+    return texts.render('email_signoff', sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), product=_product())[1]
 
 
 def _email_drafts_trial(t):
@@ -922,26 +927,23 @@ def _email_drafts_trial(t):
     st = t2['status_obj']
     ends = st.ends_on.strftime('%d %b') if st and st.has_limit else ''
     out = []
+    from . import texts
     for key, label, body in drafts:
-        subject = EMAIL_SUBJECTS.get(key, '').format(product=_product(), ends_on=ends)
+        subject = texts.render(f'fu_{key}', product=_product(), ends_on=ends)[0] or ''
         out.append((key, label, subject, (body.rstrip() + '\n\n' if key == 'custom' else body) + _email_signoff()))
     from . import followups
     return out, pick, followups.stage_of(t2) or ''
 
 
 def _email_drafts_lead(lead):
-    from . import emails, signup
+    from . import emails, signup, texts
     out = []
     if lead.get('business_type') in signup.ELIGIBLE and signup._env('SIGNUP_SECRET'):
         link = signup.setup_url(lead['id'], base=emails.base_url() or None)
-        out.append(('setup', 'Set-up link again', f'Your {_product()} set-up link',
-                    f"Hi {{name}},\n\nThanks for asking for a {_product()} free trial. Here is your link to set up your "
-                    f"app, in case the first email got lost:\n{link}\n\nIt takes a minute: choose your web address and "
-                    f"password, and your free 7-day trial starts. The link works for {signup.TOKEN_HOURS // 24} days."
-                    + _email_signoff()))
-    out.append(('hello', 'Thanks for your interest', f'Your {_product()} free trial',
-                f"Hi {{name}},\n\nThanks for your interest in {_product()}. I'd be happy to set up your free trial "
-                f"with you, with your own items and rates. When is a good time for a quick call?" + _email_signoff()))
+        subject, body = texts.render('lead_setup', product=_product(), link=link, days=signup.TOKEN_HOURS // 24)
+        out.append(('setup', 'Set-up link again', subject, body + _email_signoff()))
+    subject, body = texts.render('lead_hello', product=_product())
+    out.append(('hello', 'Thanks for your interest', subject, body + _email_signoff()))
     out.append(('custom', 'Custom message', '', 'Hi {name},\n\n' + _email_signoff()))
     return out, out[0][0]
 
@@ -1433,13 +1435,12 @@ def customer_detail(slug):
             live_error = str(exc)
     secrets_ = c.unseal(row['secrets']) if row['secrets'] else {}
     message = ''
+    from . import texts
     if password:
-        message = (f"Hi! Your {_product()} app is ready.\n\nOpen: {c.app_url(slug)}\nUsername: {username}\n"
-                   f"Password: {password}\n\n" + _tutorials_line() + "On your phone, add the page to your home screen for one-tap access. "
-                   "Reply here if you need any help!")
+        message = texts.render('customer_ready', product=_product(), url=c.app_url(slug), username=username,
+                               password=password, tutorials=_tutorials_line())[1]
     elif row['status'] == 'active' and row['source_trial']:
-        message = (f"Hi! Thank you for subscribing to {_product()}. Your app is now on your paid plan: same address "
-                   f"({c.app_url(slug)}), same login and all your quotations. Reply here if you need any help!")
+        message = texts.render('customer_subscribed', product=_product(), url=c.app_url(slug))[1]
     with db.engine.connect() as conn:
         history = conn.execute(text("SELECT at, action, detail FROM public.console_audit WHERE target = :s "
                                     "ORDER BY at DESC LIMIT 30"), {'s': slug}).mappings().all()
@@ -1844,6 +1845,30 @@ def payments_delete(payment_id):
     audit('payment_delete', row['slug'], f"{row.get('receipt_no') or row['order_id']} ₹{row['amount_paise'] / 100:,.0f}")
     flash(f"Removed payment {row.get('receipt_no') or ''} (₹{row['amount_paise'] / 100:,.0f}, {row['slug']}). "
           "Their plan wasn't changed.", 'ok')
+    return redirect(url_for('console.payments'))
+
+
+@console_bp.route('/payments/<int:payment_id>/receipt-email', methods=['POST'])
+@login_required
+def payments_receipt_email(payment_id):
+    """Email (again) the receipt of a payment, to the address typed or the one on the payment / in their app."""
+    from . import mailer, subscription
+    row = subscription.get(payment_id)
+    if not row or row['status'] != 'paid':
+        abort(404)
+    to = (request.form.get('to') or '').strip()[:120] or subscription.receipt_email(row)
+    if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', to or ''):
+        flash('No email address for this payment: type one next to "Email receipt".', 'error')
+    elif not mailer.enabled():
+        flash('Email isn\'t set up on the console (PLATFORM_SMTP_*).', 'error')
+    elif subscription.send_receipt(row, to):
+        if not row.get('email'):
+            with db.engine.begin() as conn:
+                conn.execute(text('UPDATE public.platform_payments SET email = :e WHERE id = :i'), {'e': to, 'i': row['id']})
+        audit('payment_receipt_email', row['slug'], f"{row['receipt_no']} to {mailer.mask(to)}")
+        flash(f"Receipt {row['receipt_no']} emailed to {to}, with a copy in hello@.", 'ok')
+    else:
+        flash('The receipt could not be sent. Check the mail settings and try again.', 'error')
     return redirect(url_for('console.payments'))
 
 

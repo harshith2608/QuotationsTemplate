@@ -1,0 +1,39 @@
+{% extends "console/_layout.html" %}
+{% block title %}Messages{% endblock %}
+{% block content %}
+<h1>Messages</h1>
+<p class="muted small">Every WhatsApp draft and email the console and the apps use. Change the wording and Save: it's used
+  from then on (for drafts, the next time you open them). Words in braces, like <span class="mono">{name}</span>, are
+  filled in for each person: keep them as they are, and use only the ones listed under each message.
+  <strong>Reset</strong> goes back to the original wording. The website's own set-up link email isn't here (it's part of
+  the website).</p>
+<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
+  {% for group, items in groups %}<a class="btn btn-sm" href="#g-{{ loop.index }}">{{ group }} <span class="muted">({{ items|length }})</span></a>{% endfor %}
+</div>
+
+{% for group, items in groups %}
+<h2 id="g-{{ loop.index }}">{{ group }}</h2>
+{% for m in items %}
+<form method="post" action="{{ url_for('console.messages_save', key=m.key) }}" class="card stack wa-card" id="m-{{ m.key }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row" style="justify-content:space-between;align-items:baseline">
+    <div><strong>{{ m.label }}</strong> <span class="muted small">· {{ m.channel }}</span>
+      {% if m.edited %}<span class="badge b-reminder">edited</span>{% endif %}</div>
+  </div>
+  {% if m.subject is not none %}
+  <div><label for="s-{{ m.key }}">Email subject</label>
+    <input id="s-{{ m.key }}" type="text" name="subject" value="{{ m.subject }}" maxlength="200"></div>
+  {% endif %}
+  <div><label for="b-{{ m.key }}">{{ 'Message' if m.subject is none else 'Message (WhatsApp, and the email\'s text)' if 'WhatsApp' in m.channel else 'Email text' }}</label>
+    <textarea id="b-{{ m.key }}" name="body" rows="{{ [[m.body.count('\n') + 3, 5]|max, 18]|min }}" maxlength="5000" required>{{ m.body }}</textarea></div>
+  <div class="small muted">Can use:
+    {% for f, what in m.fields.items() %}<span class="mono" title="{{ what }}">{{ '{' ~ f ~ '}' }}</span> <span>{{ what }}</span>{{ ' · ' if not loop.last }}{% endfor %}</div>
+  <div class="row" style="gap:8px">
+    <button class="btn btn-primary btn-sm" type="submit">Save</button>
+    {% if m.edited %}<button class="btn btn-sm" type="submit" formaction="{{ url_for('console.messages_reset', key=m.key) }}"
+            formnovalidate onclick="return confirm('Go back to the original wording of this message?')">Reset to original</button>{% endif %}
+  </div>
+</form>
+{% endfor %}
+{% endfor %}
+{% endblock %}
