@@ -509,7 +509,7 @@ c.post('/admin/rates', data={'item_rates_submit': 'save', f'name_{mat_id}': 'Lam
 with app.app_context():
     ok('renaming a material keeps its cost', billing.cost_rates().get(('material', 'Laminate|Box Work')) == 500)
 
-# ── Demo: invoice PDFs are marked and figures altered ──
+# ── Demo: invoice PDFs are marked ──
 import os
 os.environ['DEMO_MODE'] = '1'
 demo_app = create_app('development'); demo_app.config['WTF_CSRF_ENABLED'] = False
@@ -518,7 +518,8 @@ with demo_app.app_context():
     rahul_id = next(p.id for p in Project.query.all() if p.customer_name == 'Rahul Sample')
     rahul_inv = Invoice.query.filter_by(project_id=rahul_id).first()
 dtxt = pdftext(dc, f'/projects/{rahul_inv.project_id}/invoices/{rahul_inv.id}/pdf')
-ok('demo invoice PDF: DEMO notice, no amount in words', 'DEMO' in dtxt and 'Amount in words' not in dtxt)
+ok('demo invoice PDF: DEMO notice, real amounts with the amount in words', 'DEMO' in dtxt and 'Amount in words' in dtxt
+   and f'{rahul_inv.total:,.2f}' in dtxt)
 ok('demo cannot save costs', 'disabled in the demo' in dc.post('/admin/costs', data={}, follow_redirects=True).text)
 os.environ.pop('DEMO_MODE')
 

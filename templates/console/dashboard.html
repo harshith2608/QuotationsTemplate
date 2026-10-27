@@ -149,12 +149,14 @@
   {% else %}
   {% macro pct(v) %}{% if v is not none %}<span class="muted small"> · {{ v }}%</span>{% endif %}{% endmacro %}
   <table>
-    <tr><th></th><th>Site visitors</th><th>Opened live demo</th><th>Made a quotation</th><th>Opened a PDF</th><th>Requested a trial</th></tr>
+    <tr><th></th><th>Site visitors</th><th>Opened live demo</th><th>Saw the sample PDF</th><th>Started their own</th><th>Made a quotation</th><th>Opened their PDF</th><th>Requested a trial</th></tr>
     {% for label, k in [('Today', 'today'), ('Last 7 days', 'week'), ('Last 30 days', 'month')] %}
     {% set t = demo_stats[k] %}
     <tr><td>{{ label }}</td>
       <td><strong>{{ t.site_visitors if demo_stats.visitors_ready else '—' }}</strong></td>
       <td><strong>{{ t.starts }}</strong>{{ pct(t.pct.starts) }}</td>
+      <td>{% if demo_stats.steps_ready %}{{ t.sample_pdfs }}{{ pct(t.pct.sample_pdfs) }}{% else %}—{% endif %}</td>
+      <td>{% if demo_stats.steps_ready %}{{ t.tried }}{{ pct(t.pct.tried) }}{% else %}—{% endif %}</td>
       <td>{{ t.quotations }}{{ pct(t.pct.quotations) }}</td>
       <td>{{ t.pdfs }}{{ pct(t.pct.pdfs) }}</td>
       <td><strong>{{ t.requests }}</strong>{{ pct(t.pct.requests) }}</td></tr>
@@ -163,17 +165,21 @@
   {% if demo_stats.days %}
   <details style="margin-top:10px"><summary class="small">By day</summary>
     <table class="small">
-      <tr><th></th><th>Site</th><th>Demo</th><th>Quotations</th><th>PDFs</th><th>Trial requests</th></tr>
+      <tr><th></th><th>Site</th><th>Demo</th><th>Sample PDF</th><th>Own started</th><th>Quotations</th><th>Own PDFs</th><th>Trial requests</th></tr>
       {% for d in demo_stats.days %}<tr><td>{{ d.day.strftime('%a %d %b') }}</td><td>{{ d.site_visitors if d.site_visitors is not none else '—' }}</td>
-        <td>{{ d.starts }}</td><td>{{ d.quotations }}</td><td>{{ d.pdfs }}</td><td>{{ d.requests }}</td></tr>{% endfor %}
+        <td>{{ d.starts }}</td><td>{{ d.sample_pdfs if d.sample_pdfs is not none else '—' }}</td>
+        <td>{{ d.tried if d.tried is not none else '—' }}</td><td>{{ d.quotations }}</td><td>{{ d.pdfs }}</td><td>{{ d.requests }}</td></tr>{% endfor %}
     </table>
   </details>
   {% endif %}
   <p class="muted small" style="margin-top:8px">Anonymous counts, no personal data. A site visitor is a browser opening the website for
     the first time; a demo visitor, a browser opening the demo for the first time (returning ones aren't counted again).
-    Bots and link previews are left out. % for the demo and trial requests is of site visitors; for quotations and PDFs, of
-    demo visitors. Days are UTC.{% if demo_stats.started %} Counting since {{ demo_stats.started.strftime('%d %b %Y') }}.{% endif %}{% if not demo_stats.visitors_ready %} Site visitors are counted after the next database
-    update (Updates → Update all).{% endif %}</p>
+    Bots and link previews are left out. % for the demo and trial requests is of site visitors; for the rest, of demo
+    visitors. The demo opens on a sample quotation: "Saw the sample PDF" is its PDF, "Started their own" opened Make your
+    own, "Opened their PDF" is the PDF of a quotation they made (before 28 Oct 2026 it counted any PDF opened in the
+    demo). Days are UTC.{% if demo_stats.started %} Counting since {{ demo_stats.started.strftime('%d %b %Y') }}.{% endif %}{% if not demo_stats.visitors_ready %} Site visitors are counted after the next database
+    update (Updates → Update all).{% endif %}{% if not demo_stats.steps_ready %} The sample PDF and Started their own
+    are counted after the next database update (Updates → Update all).{% endif %}</p>
   {% endif %}
 </div>
 {% endif %}

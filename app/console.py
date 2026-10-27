@@ -307,21 +307,24 @@ def load_demo_stats(days=30):
         requests_by_day[d] = requests_by_day.get(d, 0) + 1
     by_day = {r['day']: r for r in rows}
     for d, n in requests_by_day.items():                  # a day with requests but no demo use still shows
-        by_day.setdefault(d, {'day': d, 'starts': 0, 'quotations': 0, 'pdfs': 0})
+        by_day.setdefault(d, {'day': d, 'starts': 0, 'quotations': 0, 'pdfs': 0, 'sample_pdfs': 0, 'tried': 0})
     rows = sorted(by_day.values(), key=lambda r: r['day'], reverse=True)
     for r in rows:
         r.setdefault('site_visitors', None)
+        r.setdefault('sample_pdfs', None)              # the guide's steps: a later update
+        r.setdefault('tried', None)
         r['requests'] = requests_by_day.get(r['day'], 0)
-    keys = ('site_visitors', 'starts', 'quotations', 'pdfs', 'requests')
+    keys = ('site_visitors', 'starts', 'sample_pdfs', 'tried', 'quotations', 'pdfs', 'requests')
 
     def total(n):
         picked = [r for r in rows if r['day'] > today - timedelta(days=n)]
         out = {k: sum(r[k] or 0 for r in picked) for k in keys}
         out['pct'] = {k: (round(out[k] / out['site_visitors'] * 100) if out['site_visitors'] else None)
                       for k in ('starts', 'requests')}
-        out['pct'].update({k: (round(out[k] / out['starts'] * 100) if out['starts'] else None) for k in ('quotations', 'pdfs')})
+        out['pct'].update({k: (round(out[k] / out['starts'] * 100) if out['starts'] else None)
+                           for k in ('sample_pdfs', 'tried', 'quotations', 'pdfs')})
         return out
-    return {'pending': False, 'visitors_ready': 'site_visitors' in present, 'today': total(1), 'week': total(7),
+    return {'pending': False, 'visitors_ready': 'site_visitors' in present, 'steps_ready': 'tried' in present, 'today': total(1), 'week': total(7),
             'month': total(30), 'days': rows[:14], 'started': started}
 
 

@@ -50,9 +50,7 @@ GREY_BG = colors.HexColor('#f5f5f5')
 
 
 def _money(value, spec=',.2f'):
-    """Format an amount. In the public demo, amounts are deliberately wrong (see demo.scramble_amount)."""
-    from .demo import demo_enabled, scramble_amount
-    return format(scramble_amount(value) if demo_enabled() else value, spec)
+    return format(value, spec)
 
 
 def _build(doc, elements):
@@ -1190,9 +1188,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
         ('FONTNAME', (0, ti), (-1, ti), 'Helvetica-Bold'), ('FONTSIZE', (0, ti), (-1, ti), 11),
     ]))
     elements += [totals, Spacer(1, 6)]
-    from .demo import demo_enabled
-    if not demo_enabled():          # demo amounts are altered, so the words would contradict them
-        elements.append(Paragraph(f"<b>Amount in words:</b> {escape(data['total_words'])}", small))
+    elements.append(Paragraph(f"<b>Amount in words:</b> {escape(data['total_words'])}", small))
     if data.get('notes'):
         elements += [Spacer(1, 10), Paragraph('<b>Notes</b>', small_b)]
         for line in data['notes'].splitlines():

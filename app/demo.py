@@ -13,10 +13,10 @@ In demo mode:
   * anything that could vandalise the demo or produce a convincing fake is
     blocked: all admin saves (settings, branding, rates, users), deleting,
     payment links and access changes
-  * every PDF carries a large "DEMO — NOT A VALID QUOTATION" watermark, a
-    notice box at the top, and deliberately WRONG amounts (each figure is
-    altered independently, so rows and totals don't add up) — a demo PDF can
-    never be passed off as a real quotation
+  * every PDF carries a "DEMO" watermark and a notice at the top saying it's a sample from the demo, made out by
+    the fictional Demo Interiors: the amounts are the real calculation, so a visitor sees a quotation that adds up
+  * a guide at the top walks a visitor through it: see a finished sample quotation and its PDF, make their own
+    (started from the sample's first room: change a size, save), get their PDF, then start a free trial
   * /demo/reset (called by the Vercel cron with CRON_SECRET) wipes and
     reloads the demo data
 """
@@ -44,30 +44,10 @@ BLOCKED_ENDPOINTS = {
 
 WATERMARK_TEXT = 'DEMO — NOT A VALID QUOTATION'
 NOTICE_TITLE = 'DEMO QUOTATION — NOT VALID'
-NOTICE_TEXT = ('This PDF was made in a public demo. All amounts shown are deliberately altered sample '
-               'figures, not actual calculated values, and totals will not add up. Do not use it as a quotation.')
-FOOTER_TEXT = 'Demo PDF · amounts are altered sample figures, not actual calculated values'
-
-
-def scramble_amount(value):
-    """A deliberately wrong amount for demo PDFs: the real value × 0.35–0.85 or 1.15–1.85, rounded.
-    Deterministic (same input → same output) so a PDF looks stable, but each figure is changed
-    independently, so rows never add up to the totals."""
-    try:
-        value = float(value or 0)
-    except (TypeError, ValueError):
-        return value
-    if not value:
-        return 0.0
-    h = int(hashlib.sha256(f'{value:.2f}'.encode()).hexdigest()[:8], 16)
-    step = (h % 1000) / 1000                       # 0.000–0.999
-    factor = 0.35 + step * 0.5 if h & 1 << 20 else 1.15 + step * 0.7
-    wrong = value * factor
-    if abs(wrong) >= 100:
-        wrong = round(wrong, -1)
-    elif round(wrong, 2) == round(value, 2):
-        wrong += 1
-    return round(wrong, 2)
+NOTICE_TEXT = ('A sample made in the QuoteRoom demo by Demo Interiors, a fictional firm. It is not a quotation '
+               'from any real business. In your own app, this PDF carries your name, logo and rates.')
+FOOTER_TEXT = 'Demo PDF · made with QuoteRoom · not a valid quotation'
+SAMPLE_KEY = 'demo_sample_project'      # AppSetting: the finished quotation the demo opens on (set by seed_demo)
 
 
 def demo_notice_flowable(width):
@@ -99,12 +79,25 @@ def demo_username():
     return (os.environ.get('DEMO_USER') or 'demo-admin').strip()
 
 
+def sample_id():
+    """The sample quotation's id, or None (before the seed sets it, or once it's gone)."""
+    from flask import g
+    if 'demo_sample' not in g:
+        from .models import AppSetting
+        try:
+            g.demo_sample = int(AppSetting.get(SAMPLE_KEY) or 0) or None
+        except (TypeError, ValueError):
+            g.demo_sample = None
+    return g.demo_sample
+
+
 # endpoint → (counter, methods, counts when the response status is in this range)
 COUNTED = {
     'projects.create_project':        ('quotations', 'POST', range(300, 400)),   # saved → redirect to it
     'projects.download_pdf':          ('pdfs', 'GET', range(200, 300)),
     'projects.download_customer_pdf': ('pdfs', 'GET', range(200, 300)),
 }
+PDF_ENDPOINTS = ('projects.download_pdf', 'projects.download_customer_pdf')
 
 
 _BOT = ('bot', 'crawl', 'spider', 'slurp', 'facebookexternalhit', 'preview', 'whatsapp', 'headless', 'lighthouse')
@@ -143,9 +136,17 @@ def count(field):
 
 def count_demo_use(response):
     """after_request hook: count quotations created and PDFs opened in the demo."""
+    if not demo_enabled():
+        return response
     rule = COUNTED.get(request.endpoint)
-    if rule and demo_enabled() and request.method == rule[1] and response.status_code in rule[2]:
-        count(rule[0])
+    if rule and request.method == rule[1] and response.status_code in rule[2]:
+        field = rule[0]
+        if request.endpoint in PDF_ENDPOINTS and (request.view_args or {}).get('project_id') == sample_id():
+            field = 'sample_pdfs'          # the sample's PDF (step 1); 'pdfs' is a quotation they made
+        count(field)
+    elif (request.endpoint == 'projects.create_project' and request.method == 'GET' and request.args.get('try')
+          and response.status_code == 200):
+        count('tried')                     # opened "Make your own" (step 2)
     return response
 
 
@@ -186,10 +187,9 @@ def start():
     if not demo_enabled():
         abort(404)
     from flask_login import current_user
-    from .auth import safe_next
     from .models import User
     if current_user.is_authenticated:
-        return redirect(safe_next())
+        return redirect(_landing())
     user = User.query.filter_by(username=demo_username()).first()
     if not user:
         # No redirect to the login page here: in demo mode that sends visitors back to /demo (a loop)
@@ -198,8 +198,30 @@ def start():
                 '<p>Please try again in a minute.</p><p><a href="/demo">Try again</a></p></body>', 503)
     login_user(user, remember=True)     # stays signed in after the browser is closed
     count('starts')                     # once per browser: later visits are already signed in
-    flash('Welcome to the demo! Explore freely — everything resets every night.', 'success')
-    return redirect(safe_next())
+    return redirect(_landing())
+
+
+def _landing():
+    """?next= when it's a page on this site, else the sample quotation (step 1 of the guide), else the list."""
+    from .auth import safe_next
+    if request.args.get('next') or not sample_id():
+        return safe_next()
+    return url_for('projects.view_project', project_id=sample_id())
+
+
+def guide():
+    """The demo guide's state for this page: {'step': 1–3 (0 elsewhere), 'sample': id, 'pdf': this quotation's PDF,
+    'try': on "Make your own"}."""
+    from . import layout
+    sid = sample_id()
+    pid = (request.view_args or {}).get('project_id')
+    out = {'step': 0, 'sample': sid, 'pdf': None, 'try': False}
+    if request.endpoint == 'projects.view_project' and pid:
+        pdf = 'projects.download_customer_pdf' if layout.single_pdf() else 'projects.download_pdf'
+        out.update(step=1 if pid == sid else 3, pdf=url_for(pdf, project_id=pid))
+    elif request.endpoint == 'projects.create_project':
+        out['step'], out['try'] = 2, bool(request.args.get('try'))
+    return out
 
 
 @demo_bp.route('/demo/reset', methods=['GET', 'POST'])
@@ -220,13 +242,11 @@ def _draw_watermark(canvas):
     width, height = canvas._pagesize
     canvas.saveState()
     canvas.setFillColor(colors.HexColor('#c62828'))
-    canvas.setFillAlpha(0.14)
+    canvas.setFillAlpha(0.10)
     canvas.setFont('Helvetica-Bold', 38)
     canvas.translate(width / 2, height / 2)
     canvas.rotate(40)
     canvas.drawCentredString(0, 0, WATERMARK_TEXT)
-    canvas.setFont('Helvetica-Bold', 16)
-    canvas.drawCentredString(0, -34, 'Amounts are altered sample figures, not calculated values')
     canvas.restoreState()
     canvas.saveState()
     canvas.setFillColor(colors.HexColor('#c62828'))

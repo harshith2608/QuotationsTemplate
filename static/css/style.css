@@ -561,7 +561,20 @@ body > main { flex: 1 0 auto; }
   background: #fff7d6; color: #5c4400; border-bottom: 1px solid #f1d98a;
   font-size: .82rem; text-align: center; padding: 6px 12px; line-height: 1.4;
 }
-.ki-demo-banner a { color: #5c4400; }
+.ki-demo-banner a:not(.btn) { color: #5c4400; }
+/* The demo guide: three steps, then a hint for this page */
+.ki-demo-steps { list-style: none; display: flex; justify-content: center; gap: 6px; margin: 0 auto 6px; padding: 0; max-width: 560px; }
+.ki-demo-steps li { flex: 1; font-size: .78rem; font-weight: 600; color: #8a6d1f; display: flex; align-items: center;
+  justify-content: center; gap: 5px; padding: 4px 6px; border-radius: 999px; background: rgba(255,255,255,.55); white-space: nowrap; }
+.ki-demo-steps li a { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; color: inherit !important; }
+.ki-demo-steps li span, .ki-demo-steps li a span { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: #f1d98a; color: #5c4400; font-size: .7rem; flex-shrink: 0; }
+.ki-demo-steps li.is-on { background: #5c4400; color: #fff; }
+.ki-demo-steps li.is-on span { background: #fff; color: #5c4400; }
+.ki-demo-steps li.is-done span { background: #2e7d32; color: #fff; }
+.ki-demo-hint { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 8px; font-size: .85rem; }
+.ki-demo-trial { margin-left: 4px; }
+@media (max-width: 420px) { .ki-demo-steps li { font-size: .72rem; padding: 4px 4px; } }
 
 /* ---- Quotation stages ---- */
 .ki-stage-badge { font-weight: 600; font-size: .75rem; padding: .35em .65em; white-space: nowrap; }
