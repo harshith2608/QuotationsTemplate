@@ -4,12 +4,15 @@ Business reports for admins: by Indian financial year (April–March), all time,
 - Quotations made: by the date they were created.
 - Won: quotations that reached Confirmed (or later) and weren't cancelled, by the date they were confirmed.
 - Invoiced / GST: issued invoices by invoice date. Collected: payments by the date recorded.
-- Estimated profit: won quotations priced with today's costs (Admin → Costs & profit).
+- Estimated profit: won quotations priced with today's costs (Admin → Costs & profit), or the cost typed on a line
+  (app/item_costs.py).
+- Values are what the customer pays: with GST when the business shows GST on quotations (app/quote_gst.py), so
+  they compare with what was collected.
 Amounts are encrypted in the database, so everything is added up here in Python.
 """
 from datetime import date, datetime, timedelta
 
-from . import billing, db
+from . import billing, db, quote_gst
 
 WON = ('confirmed', 'ongoing', 'completed', 'on_hold')
 IST = timedelta(hours=5, minutes=30)
@@ -62,7 +65,8 @@ def build(today=None):
     years, months = {}, {}
     total = _blank()
     costs = billing.cost_rates()
-    has_costs = bool(costs)
+    own_costs = any(i.own_cost is not None for rs in rooms_by_project.values() for r in rs for i in r.item_list)
+    has_costs = bool(costs) or own_costs             # Costs & profit, or costs typed on quotation lines
     settings = billing.invoice_settings()
     gst_registered = bool(billing.business_state_code())
     issued = Invoice.query.filter_by(status='issued').all() if billing.ready() else []
@@ -81,9 +85,9 @@ def build(today=None):
         y, _ = bucket(made)
         for b in (y, total):
             b['made'] += 1
-            b['made_value'] += p.final_total
+            b['made_value'] += p.total_payable
         if p.stage == 'pending':
-            pending_value += p.final_total
+            pending_value += p.total_payable
             pending_count += 1
         if p.stage in WON:
             when = _day(won_at.get(p.id, p.created_at))
@@ -95,7 +99,7 @@ def build(today=None):
                 targets.append(months.setdefault((when.year, when.month), _blank()))
             for b in targets:
                 b['won'] += 1
-                b['won_value'] += p.final_total
+                b['won_value'] += p.total_payable
                 if pr:
                     b['profit'] += pr['profit']
                     b['cost'] += pr['cost']
@@ -164,6 +168,6 @@ def build(today=None):
     return {
         'today': today, 'current_fy': current_fy, 'current': cur, 'months': month_rows, 'max_month': max_month,
         'years': sorted(years.items(), reverse=True), 'total': total, 'projection': projection,
-        'outstanding': round(outstanding, 2), 'has_costs': has_costs,
+        'outstanding': round(outstanding, 2), 'has_costs': has_costs, 'gst_on': quote_gst.enabled(),
     }
 

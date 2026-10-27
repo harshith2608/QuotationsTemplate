@@ -34,6 +34,26 @@ ok('page 2: About us, with the list', after[1].startswith('About ') and 'since 2
 ok('page 3: the quotation (client details not repeated)', 'CUSTOMER QUOTATION' in after[2] and 'Customer Details' not in after[2])
 ok('last page: Next steps (numbering cleaned) and the thank-you', 'Next steps' in after[-1] and 'Confirm the quotation' in after[-1]
    and '1. 1.' not in after[-1] and 'Thank you for choosing' in after[-1] and 'Thank you for choosing' not in after[-2])
+# The rich text editors: headings, colours, alignment and lists, cleaned before saving
+s2 = c.get('/admin/settings?tab=documents').text
+ok('Settings: rich text editors (Quill), with the plain text saved before shown as formatted text',
+   'quill@2.0.3' in s2 and 'class="ki-rich' in s2 and '&lt;ul&gt;&lt;li data-list=&#34;bullet&#34;&gt;300+ homes' in s2.replace('&quot;', '&#34;'))
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms',
+    'about_us': '<h2 class="ql-align-center">Our <span style="color: rgb(201, 162, 39);">story</span></h2>'
+                '<p class="ql-align-justify" onclick="x()">We <strong>design</strong> homes.<script>alert(1)</script></p>'
+                '<ol><li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>Own factory</li></ol>'
+                '<img src="https://evil.example/x.png"><a href="javascript:alert(1)">click</a>',
+    'next_steps': '<ol><li data-list="ordered">Approve</li><li data-list="ordered">Pay the <u>advance</u></li></ol>'})
+with app.app_context():
+    from app.models import AppSetting
+    saved = AppSetting.get('about_us')
+ok('saved HTML is cleaned: no script, event, image or link; colour and alignment kept', '<script' not in saved
+   and 'onclick' not in saved and '<img' not in saved and 'href' not in saved and 'ql-ui' not in saved
+   and 'color: #c9a227' in saved and 'ql-align-center' in saved)
+rich = pages(f'/projects/{pid}/pdf/customer')
+ok('PDF: About us with the heading, text and list; Next steps numbered as written',
+   'Our story' in rich[1] and 'We design homes.' in rich[1] and 'Own factory' in rich[1] and 'alert' not in rich[1]
+   and '1. Approve' in rich[-1] and '2. Pay the advance' in rich[-1])
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'about_us': '', 'next_steps': ''})
 empty = pages(f'/projects/{pid}/pdf/customer')
 ok('no About us written: that page is left out; no steps: the usual ones', not any(t.startswith('About ') for t in empty)
