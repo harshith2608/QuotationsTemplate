@@ -416,13 +416,17 @@
       <p class="small text-muted mb-3">Your quotation PDF opens with a title page (your logo and name, then "Quotation for"
         your client) and your <strong>About us</strong>, and ends with the <strong>Next steps</strong> and a thank-you note.</p>
       <label class="form-label fw-semibold" for="about_us">About us</label>
-      <textarea name="about_us" id="about_us" class="form-control mb-1" rows="7" maxlength="5000"
-                placeholder="Who you are, how long you've been doing this, what you're known for, projects you've done.&#10;&#10;A blank line starts a new paragraph. Lines starting with - become a list.">{{ presentation.about_us }}</textarea>
-      <div class="form-text mb-3">Leave it empty to leave the About us page out.</div>
-      <label class="form-label fw-semibold" for="next_steps">Next steps <span class="fw-normal text-muted">(one per line)</span></label>
-      <textarea name="next_steps" id="next_steps" class="form-control" rows="5" maxlength="5000"
-                placeholder="Go through this quotation and tell us any changes you would like.&#10;Confirm the quotation and pay the booking advance.&#10;Site measurement, then the final design and material selection.&#10;Production and installation, as per the agreed timeline.&#10;Handover, with a final walkthrough together.">{{ presentation.next_steps }}</textarea>
-      <div class="form-text">Empty: the steps shown above in grey are used.</div>
+      <div class="ki-rich mb-1" data-for="about_us"
+           data-placeholder="Who you are, how long you've been doing this, what you're known for, projects you've done."></div>
+      <textarea name="about_us" id="about_us" class="form-control mb-1" rows="7">{{ presentation.about_us }}</textarea>
+      <div class="form-text mb-3">Headings, bold, colours, alignment and lists print on the PDF as you see them here.
+        Leave it empty to leave the About us page out.</div>
+      <label class="form-label fw-semibold" for="next_steps">Next steps</label>
+      <div class="ki-rich mb-1" data-for="next_steps"
+           data-placeholder="1. Go through this quotation and tell us any changes you would like.  2. Confirm the quotation and pay the booking advance.  3. Site measurement, then the final design…"></div>
+      <textarea name="next_steps" id="next_steps" class="form-control" rows="5">{{ presentation.next_steps }}</textarea>
+      <div class="form-text">Empty: our usual five steps (go through the quotation, confirm and pay the advance, site
+        measurement, production and installation, handover) are used.</div>
     </div>
   </div>
   {% endif %}
@@ -764,6 +768,29 @@
 {% endblock %}
 
 {% block scripts %}
+{% if presentation %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+// Rich text editors for the presentation pages (app/richtext.py cleans what's saved). Without the script, the plain
+// boxes below them still work.
+(function () {
+  if (!window.Quill) return;
+  const toolbar = [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline'], [{ color: [] }],
+                   [{ align: [] }], [{ list: 'ordered' }, { list: 'bullet' }], ['clean']];
+  document.querySelectorAll('.ki-rich').forEach(div => {
+    const box = document.getElementById(div.dataset.for);
+    if (!box) return;
+    const q = new Quill(div, { theme: 'snow', placeholder: div.dataset.placeholder || '', modules: { toolbar } });
+    if (box.value.trim()) q.clipboard.dangerouslyPasteHTML(box.value);
+    box.classList.add('d-none');
+    const sync = () => { box.value = q.getText().trim() ? q.root.innerHTML : ''; };
+    q.on('text-change', sync);
+    box.form && box.form.addEventListener('submit', sync);
+  });
+})();
+</script>
+{% endif %}
 {% if tab == 'email' %}
 <script>
   document.querySelectorAll('[data-smtp]').forEach(btn => btn.addEventListener('click', () => {

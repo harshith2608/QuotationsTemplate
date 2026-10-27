@@ -105,3 +105,25 @@ save(admin, f'/projects/{sid}/edit', 'Staff Home', rooms())
 with app.app_context():
     pr = billing.profit(db.session.get(Project, sid))
 ok('off: costs already typed are kept and still counted', costs_of(sid)['TV Wall'] == 750.0 and pr and pr['own'] == 2)
+
+# Reports: costs typed on lines count in the profit (no Costs & profit needed); with GST on quotations, won value
+# includes GST (it compares with what was collected)
+from app import reports, quote_gst
+with app.app_context():
+    from app.models import CostRate
+    CostRate.query.delete()
+    p = db.session.get(Project, sid); p.stage = 'confirmed'
+    db.session.commit()
+    rep = reports.build()
+    cur = rep['current']
+    exp = billing.profit(db.session.get(Project, sid))
+    ok('Reports: the profit counts the costs typed on lines (no Costs & profit set)', rep['has_costs'] and cur['profit_jobs'] >= 1
+       and exp and abs(cur['cost'] - exp['cost']) < 0.01 and exp['cost'] > 0)
+    won_before = cur['won_value']
+    quote_gst.set_gst(True, 18); db.session.commit()
+    rep2 = reports.build()
+    ok('Reports with GST on quotations: won value includes GST, profit stays without GST', rep2['gst_on']
+       and abs(rep2['current']['won_value'] - round(won_before * 1.18, 2)) < 0.05
+       and abs(rep2['current']['profit'] - cur['profit']) < 0.01)
+r = admin.get('/admin/reports').text
+ok('…and the page says so', 'including GST' in r and 'Won work (incl. GST)' in r)

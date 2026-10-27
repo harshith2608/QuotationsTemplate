@@ -565,7 +565,9 @@ printed, never on the customer's link, WhatsApp or a revision. Needs "Update all
 **Presentation pages** (console → their page → Features → **Turn presentation pages on**; off by default): their
 quotation PDF opens with a title page (logo, firm name and tagline, then "Quotation for" the client, quotation no.,
 date) and their **About us**, then the quotation and terms, and ends with **Next steps** and the thank-you note. They
-write About us and Next steps in Settings → Quotation PDFs; a price list file can set them too (`"settings":
+write About us and Next steps in Settings → Quotation PDFs, in a rich text editor (headings, bold / italic / underline,
+font colour, alignment, bullet and numbered lists: printed on the PDF as they see it); a price list file can set them
+too as plain text (`"settings":
 {"about_us": …, "next_steps": …}` and `"options": {"presentation": true}`).
 
 **GST on quotations** (console → their page → Features → choose the rate → **Turn GST on**; off by default): their

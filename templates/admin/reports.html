@@ -9,8 +9,8 @@
   <span class="badge bg-light text-dark border">Financial year {{ r.current_fy }} · day {{ pj.days_elapsed }} of {{ pj.days_in_year }}</span>
 </div>
 <p class="small text-muted mb-3">Won = quotations confirmed (or later) and not cancelled, counted on the day they were confirmed.
-  {% if r.has_costs %}Profit is before GST (price without GST − your <a href="{{ url_for('admin.costs') }}">costs</a> today); margin is on the price before GST.
-  Won value, invoiced and collected are what customers pay, including any GST.{% else %}
+  Quoted, won, invoiced and collected are what customers pay{% if r.gst_on %}, <strong>including GST</strong>{% else %}, including any GST{% endif %}.
+  {% if r.has_costs %}Profit is before GST (price without GST − your <a href="{{ url_for('admin.costs') }}">costs</a>, or the cost typed on each item); margin is on the price before GST.{% else %}
   <a href="{{ url_for('admin.costs') }}">Add your costs</a> to see profit.{% endif %}</p>
 
 <!-- This financial year -->
@@ -36,7 +36,7 @@
   <div class="card-header ki-card-header"><i class="bi bi-graph-up me-2"></i>Projected for {{ r.current_fy }} (to 31 March)</div>
   <div class="card-body">
     <div class="row g-3 text-center">
-      <div class="col-6 col-md-3"><div class="small text-muted">Won work</div><div class="fs-5 fw-bold">{{ rs(pj.won_value) }}</div></div>
+      <div class="col-6 col-md-3"><div class="small text-muted">Won work{% if r.gst_on %} (incl. GST){% endif %}</div><div class="fs-5 fw-bold">{{ rs(pj.won_value) }}</div></div>
       <div class="col-6 col-md-3"><div class="small text-muted">Collections</div><div class="fs-5 fw-bold">{{ rs(pj.collected) }}</div></div>
       <div class="col-6 col-md-3"><div class="small text-muted">Profit</div><div class="fs-5 fw-bold text-success">{{ rs(pj.profit) if pj.profit is not none else '—' }}</div></div>
       <div class="col-6 col-md-3"><div class="small text-muted">From open quotations</div><div class="fs-5 fw-bold">{{ rs(pj.pipeline_expected) }}</div>
@@ -54,7 +54,7 @@
     <div class="d-flex gap-3 small mb-2"><span><span class="ki-rep-key" style="background:var(--ki-primary)"></span>Won</span>
       <span><span class="ki-rep-key bg-success"></span>Collected</span></div>
     <div class="table-responsive"><table class="table table-sm align-middle small mb-0 ki-rep-table">
-      <thead class="table-light"><tr><th>Month</th><th style="min-width:160px"></th><th class="text-end">Won</th><th class="text-end">Collected</th><th class="text-end">Invoiced</th><th class="text-end">Est. profit (ex GST)</th></tr></thead>
+      <thead class="table-light"><tr><th>Month</th><th style="min-width:160px"></th><th class="text-end">Won{% if r.gst_on %} (incl. GST){% endif %}</th><th class="text-end">Collected</th><th class="text-end">Invoiced</th><th class="text-end">Est. profit (ex GST)</th></tr></thead>
       <tbody>
       {% for m in r.months %}
         <tr class="{{ 'text-muted' if m.future }}">

@@ -10,7 +10,7 @@ from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                  TableStyle, HRFlowable, Image, KeepTogether, PageBreak)
 from reportlab.lib.utils import ImageReader
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from . import db
 from .models import AppSetting
 from .catalog import BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
@@ -1250,11 +1250,49 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     return out
 
 
+def _rich_flowables(html, dark, styles):
+    """Text from the rich text editor (app/richtext.py) as PDF paragraphs: headings, alignment, colours, lists."""
+    from . import richtext
+    align = {'left': TA_LEFT, 'center': TA_CENTER, 'right': TA_RIGHT, 'justify': TA_JUSTIFY}
+    body = ParagraphStyle('RtB', parent=styles['Normal'], fontSize=10.5, leading=16, textColor=colors.HexColor('#263238'),
+                          spaceAfter=8)
+    heads = {'h1': (17, 8), 'h2': (14, 6), 'h3': (12, 4)}
+    out, counters = [], {}
+    for b in richtext.blocks(html):
+        al = align.get(b['align'], TA_LEFT)
+        if b['kind'] in heads:
+            size, after = heads[b['kind']]
+            st = ParagraphStyle(f'Rt{b["kind"]}', parent=body, fontName='Helvetica-Bold', fontSize=size, leading=size * 1.3,
+                                textColor=dark, spaceBefore=6, spaceAfter=after, alignment=al)
+            out.append(Paragraph(b['markup'] or '&nbsp;', st))
+            counters.clear()
+        elif b['kind'] == 'li':
+            level = b['indent']
+            if b['list'] == 'ordered':
+                for deeper in [k for k in counters if k > level]:
+                    counters.pop(deeper)
+                counters[level] = counters.get(level, 0) + 1
+                mark = f'{counters[level]}.'
+            else:
+                mark = '•'
+            st = ParagraphStyle('RtLi', parent=body, leftIndent=18 + 16 * level, bulletIndent=4 + 16 * level,
+                                spaceAfter=4, alignment=al)
+            out.append(Paragraph(b['markup'] or '&nbsp;', st, bulletText=mark))
+        else:
+            counters.clear()
+            if not b['markup'] or b['markup'] == '<br/>':
+                out.append(Spacer(1, 8))
+                continue
+            out.append(Paragraph(b['markup'], ParagraphStyle('RtP', parent=body, alignment=al)))
+    return out
+
+
 def _about_page(page_width, palette, styles):
     """Page 2: the firm's own "About us" (left out when they haven't written one)."""
     from . import presentation
-    paras = presentation.content()['about']
-    if not paras:
+    content = presentation.content()
+    paras = content['about']
+    if not paras and not content['about_html']:
         return []
     dark = palette[0]
     brand = get_brand()
@@ -1265,6 +1303,9 @@ def _about_page(page_width, palette, styles):
     bullet = ParagraphStyle('AbL', parent=body, leftIndent=14, firstLineIndent=-10, spaceAfter=4)
     out = [Spacer(1, 1 * cm), Paragraph(f'About {escape(brand["name"])}', head),
            HRFlowable(width='20%', thickness=2, color=palette[1], hAlign='LEFT', spaceAfter=14)]
+    if content['about_html']:
+        out += _rich_flowables(content['about_html'], dark, styles)
+        paras = []
     for p in paras:
         lines = p.split('\n')
         if all(l.strip()[:1] in ('-', '•', '*') for l in lines if l.strip()):
@@ -1286,18 +1327,23 @@ def _closing_page(page_width, palette, styles):
                           fontName='Helvetica-Bold', spaceAfter=6)
     body = ParagraphStyle('NxB', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=colors.HexColor('#263238'))
     num = ParagraphStyle('NxN', parent=body, fontName='Helvetica-Bold', textColor=ON_BRAND, alignment=TA_CENTER)
-    steps = presentation.content()['steps']
-    rows = [[Paragraph(str(i), num), Paragraph(escape(step), body)] for i, step in enumerate(steps, 1)]
-    t = Table(rows, colWidths=[1 * cm, page_width - 1.3 * cm])
-    t.setStyle(TableStyle([('BACKGROUND', (0, 0), (0, -1), BRAND_DARK), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                           ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-                           ('LEFTPADDING', (1, 0), (1, -1), 12), ('LINEBELOW', (1, 0), (1, -2), 0.5, colors.HexColor('#e0e0e0'))]))
+    content = presentation.content()
+    if content['steps_html']:                     # formatted in the editor: as they wrote it
+        t = _rich_flowables(content['steps_html'], BRAND_DARK, styles)
+    else:
+        steps = content['steps']
+        rows = [[Paragraph(str(i), num), Paragraph(escape(step), body)] for i, step in enumerate(steps, 1)]
+        t = Table(rows, colWidths=[1 * cm, page_width - 1.3 * cm])
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (0, -1), BRAND_DARK), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                               ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                               ('LEFTPADDING', (1, 0), (1, -1), 12), ('LINEBELOW', (1, 0), (1, -2), 0.5, colors.HexColor('#e0e0e0'))]))
+        t = [t]
     thanks = ParagraphStyle('NxT', parent=styles['Normal'], fontSize=15, leading=21, textColor=BRAND_DARK, alignment=TA_CENTER)
     small = ParagraphStyle('NxS', parent=styles['Normal'], fontSize=9, leading=13, textColor=colors.HexColor('#546e7a'),
                            alignment=TA_CENTER)
     contact = '  |  '.join(x for x in [brand['phone'] and f"Ph: {brand['phone']}", brand['email']] if x)
     return [PageBreak(), Spacer(1, 1 * cm), Paragraph('Next steps', head),
-            HRFlowable(width='20%', thickness=2, color=BRAND_ACCENT, hAlign='LEFT', spaceAfter=16), t,
+            HRFlowable(width='20%', thickness=2, color=BRAND_ACCENT, hAlign='LEFT', spaceAfter=16), *t,
             Spacer(1, 2.4 * cm), HRFlowable(width='40%', thickness=1, color=BRAND_ACCENT, hAlign='CENTER', spaceAfter=18),
             Paragraph(_thank_you_text(), thanks), Spacer(1, 8),
             Paragraph('We look forward to working with you.' if 'look forward' not in _thank_you_text() else '', small),

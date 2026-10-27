@@ -649,3 +649,8 @@ body > main { flex: 1 0 auto; }
 .ki-cmp tr.ki-cmp-changed > td { background: #fff6d6; }
 .ki-cmp-key { display: inline-block; width: .9em; height: .9em; border-radius: 3px; vertical-align: -1px; border: 1px solid #ccc; }
 .ki-cmp-key.ki-cmp-added { background: #e8f6ee; } .ki-cmp-key.ki-cmp-removed { background: #fdecea; } .ki-cmp-key.ki-cmp-changed { background: #fff6d6; }
+
+/* Rich text editors (Settings → Presentation pages) */
+.ki-rich .ql-editor { min-height: 140px; font-size: .95rem; }
+.ql-toolbar.ql-snow { border-radius: .375rem .375rem 0 0; background: #f8f9fa; }
+.ql-container.ql-snow { border-radius: 0 0 .375rem .375rem; background: #fff; }
