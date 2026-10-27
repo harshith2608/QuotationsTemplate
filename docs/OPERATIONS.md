@@ -621,6 +621,22 @@ drafts, the automatic emails (stage emails and plan reminders), the payment link
 with the receipt. Change the wording and **Save**; **Reset to original** goes back. Placeholders like `{name}` are
 filled in for each person; a misspelt one isn't saved. Not here: the website's own set-up link email.
 
+### Bring your old quotation (AI import)
+
+A firm's admin uploads a quotation it has sent before (PDF with text, or Excel .xlsx; scans are refused) → the AI
+(Claude Haiku, Anthropic API) reads its sections, items, sizes, units, quantities and rates → they check every line
+(the page warns when the lines don't add up to the file's total) → **Looks right, set up my app** loads it like the
+console's Load price list: their items and rates (priced by item), a starting quotation named after the job, their
+payment terms and notes (only if they had none), GST if chosen, and the quotation rebuilt (named "… (your old
+quotation)", with no customer details). About ₹0.10–0.50 a file. 5 imports in a trial, 20 a month on a plan.
+
+**One switch for everyone:** console dashboard → **Bring your old quotation (AI)** → Turn on / Turn off. It takes
+effect in every trial and shared-hosting customer within a minute; the card lists the recent imports (business,
+result, lines, cost). It also needs, once, on the **trials** project in Vercel: `ANTHROPIC_API_KEY` = your Anthropic
+API key (console.anthropic.com → API keys; set a monthly spend limit there too), then redeploy. Without the key the
+switch has no effect. Customers with their own Vercel app get it only with `AI_IMPORT=1` and the key on their
+project. It's always off in the public demo.
+
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
 

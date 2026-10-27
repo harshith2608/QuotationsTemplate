@@ -94,6 +94,7 @@
                        ('admin.users', 'people', 'Users'), ('admin.rates', 'currency-rupee', 'Rates'),
                        ('admin.costs', 'graph-up-arrow', 'Costs & Profit'), ('admin.payment_settings', 'credit-card', 'Payment Settings'),
                        ('admin.settings', 'sliders', 'Settings'), ('admin.notifications', 'bell', 'Notifications')] %}
+{% if ai_import_on %}{% set admin_links = admin_links[:1] + [('admin.ai_import', 'magic', 'Import a quotation')] + admin_links[1:] %}{% endif %}
 <nav class="navbar navbar-expand-lg {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar sticky-top" id="ki-navbar">
   <div class="container-fluid px-3">
     <a class="navbar-brand fw-bold text-truncate" href="{{ url_for('projects.list_projects') }}">

@@ -49,6 +49,46 @@ def setup():
     return render_template('admin/setup.html', title='Setup guide', guide=setup_guide.status())
 
 
+@admin_bp.route('/import', methods=['GET', 'POST'])
+def ai_import():
+    """Bring your old quotation (app/ai_import.py): upload a PDF or Excel file, then check what was read."""
+    from . import ai_import as AI, quote_gst
+    if not AI.available():
+        abort(404)
+    left, limit = AI.left()
+    if request.method == 'POST':
+        f = request.files.get('file')
+        try:
+            data = AI.read_upload(f.filename if f else '', f.read() if f else b'')
+        except AI.ImportProblem as exc:
+            flash(str(exc), 'danger')
+            return redirect(url_for('admin.ai_import'))
+        return render_template('admin/import_review.html', title='Check your quotation', data=data,
+                               left=AI.left()[0], gst_rates=quote_gst.RATES)
+    return render_template('admin/import.html', title='Bring your old quotation', left=left, limit=limit)
+
+
+@admin_bp.route('/import/set-up', methods=['POST'])
+def ai_import_set_up():
+    from . import ai_import as AI, price_list as PL
+    if not AI.available():
+        abort(404)
+    data = AI.from_form(request.form)
+    if not data['sections']:
+        flash('Keep at least one line to set up your app.', 'danger')
+        return redirect(url_for('admin.ai_import'))
+    try:
+        result, project_id = AI.set_up(data)
+    except PL.PriceListError as exc:
+        db.session.rollback()
+        flash(f'Your app couldn\'t be set up from it: {exc}', 'danger')
+        return redirect(url_for('admin.ai_import'))
+    flash(f'Your app is set up from your quotation: {result["added"] + result["updated"]} items with their rates, '
+          f'the starting quotation "{data["job_title"]}", and your quotation rebuilt below.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project_id) if project_id
+                    else url_for('projects.list_projects'))
+
+
 @admin_bp.route('/setup/<key>/open')
 def setup_open(key):
     """Open a step's page with the guide banner on it."""

@@ -92,6 +92,25 @@ with le.begin() as conn:
     conn.execute(text('alter table demo_stats add column site_visitors integer not null default 0'))
     conn.execute(text('alter table demo_stats add column sample_pdfs integer not null default 0'))
     conn.execute(text('alter table demo_stats add column tried integer not null default 0'))
+# Bring your old quotation: one switch for every trial and customer (app/ai_import.py)
+from app import ai_import as _ai
+ok('AI import: off at first, with a Turn on button', 'Bring your old quotation (AI)' in t and '>Turn on</button>' in t)
+r = c.post('/features/ai-import', data={'on': '1'}, follow_redirects=True)
+with app.app_context():
+    on_console = _ai.console_switch()
+    os.environ['TENANT_MODE'] = '1'
+    _ai._switch.clear()
+    on_apps = _ai.switched_on()
+    os.environ.pop('TENANT_MODE')
+ok('…Turn on: on for the shared app (read from the trials database), audited', on_console and on_apps
+   and '>Turn off</button>' in r.text and 'ai import' in c.get('/activity').text)
+c.post('/features/ai-import', data={'on': '0'})
+with app.app_context():
+    os.environ['TENANT_MODE'] = '1'
+    _ai._switch.clear()
+    off_apps = not _ai.switched_on() and not _ai.console_switch()
+    os.environ.pop('TENANT_MODE')
+ok('…Turn off: off again everywhere', off_apps)
 ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
    and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
    and 'name="company" value="Kumar Woodcraft" maxlength="80"' in t)

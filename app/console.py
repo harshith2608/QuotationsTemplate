@@ -697,12 +697,30 @@ def dashboard():
         email_since = emails.tracking_since() if new_leads else None
     except Exception:
         email_seen, email_since = {}, None
-    from . import texts
+    from . import ai_import, texts
+    try:
+        ai = {'on': ai_import.console_switch(), 'recent': ai_import.recent(10)}
+    except Exception:
+        ai = {'on': False, 'recent': []}
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
+                           ai=ai,
                            lead_wa=texts.get('lead_whatsapp')[1],
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+
+
+@console_bp.route('/features/ai-import', methods=['POST'])
+@login_required
+def ai_import_switch():
+    """Bring your old quotation (app/ai_import.py): on or off for every trial and customer in the shared app."""
+    from . import ai_import
+    on = request.form.get('on') == '1'
+    ai_import.set_switch(on)
+    audit('ai_import', None, 'on' if on else 'off')
+    flash('Bring your old quotation is ' + ('on for every trial and customer (within a minute).' if on else
+                                            'off for every trial and customer (within a minute).'), 'ok')
+    return redirect(url_for('console.dashboard') + '#ai-import')
 
 
 @console_bp.route('/spares', methods=['POST'])

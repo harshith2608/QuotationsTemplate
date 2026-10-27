@@ -25,6 +25,7 @@
       <div class="small text-muted">{{ setup.done }} of {{ setup.total }} steps done{% if setup.next %} · next: {{ setup.next.title }}{% endif %}</div>
       <div class="progress mt-1" style="height:6px;max-width:320px"><div class="progress-bar bg-success" style="width:{{ setup.done * 100 // setup.total }}%"></div></div>
     </div>
+    {% if ai_import_on %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.ai_import') }}"><i class="bi bi-magic me-1"></i>Set up from your old quotation</a>{% endif %}
     <a class="btn btn-sm btn-primary" href="{{ url_for('admin.setup') }}">Continue setup</a>
     <form method="post" action="{{ url_for('admin.setup_hide') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
