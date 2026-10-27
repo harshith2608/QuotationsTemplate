@@ -46,21 +46,54 @@
     <h1>Link not valid</h1>
     <p class="lead">{{ problem }}</p>
     <a class="btn" href="{{ site }}">Go to the website</a>
+  {% elif ready and just_paid %}
+    <div class="tick">✓</div>
+    <h1>Payment received. Thank you!</h1>
+    <p class="lead">Your {{ '12-month' if plan == '1y' else '6-month' }} plan is active on <strong>{{ ready }}.{{ base }}</strong>.
+      Sign in with the username and password you chose. Your receipt is on its way to your email.</p>
+    <a class="btn" href="https://{{ ready }}.{{ base }}/login">Open my app</a>
+    <p class="hint" style="text-align:center;margin-top:14px">Bookmark it, or add it to your phone's home screen.
+      Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a> or message us on WhatsApp.</p>
+  {% elif ready and plan and pay_failed %}
+    <div class="tick">✓</div>
+    <h1>Your app is ready!</h1>
+    <p class="lead">It's at <strong>{{ ready }}.{{ base }}</strong>. We couldn't open the payment page just now, so we'll
+      send you a payment link on WhatsApp shortly. Until then, your app works as a free trial: start using it now.</p>
+    <a class="btn" href="https://{{ ready }}.{{ base }}/login">Open my app</a>
+  {% elif ready and plan and not paid %}
+    <h1>{{ 'Payment not completed' if request.endpoint == 'console.start_paid' else 'Your app is ready' }}</h1>
+    <p class="lead">Your app is at <strong>{{ ready }}.{{ base }}</strong>. Pay for the
+      {{ '12-month' if plan == '1y' else '6-month' }} plan to keep it running after the 7 free days.</p>
+    <form method="post" action="{{ url_for('console.start_pay') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="t" value="{{ token }}">
+      <input type="hidden" name="plan" value="{{ plan }}">
+      <button type="submit">Pay ₹{{ '{:,}'.format(price) }} securely</button>
+    </form>
+    <p class="hint" style="text-align:center">UPI, cards or net banking, through Razorpay.</p>
+    <p class="hint" style="text-align:center;margin-top:14px">Not now? <a href="https://{{ ready }}.{{ base }}/login">Open my app</a>
+      and use the free trial first.</p>
   {% elif ready %}
     <div class="tick">✓</div>
     <h1>{{ 'Your app is ready!' if new else 'Your app is already set up' }}</h1>
-    <p class="lead">Your free 7-day trial is at <strong>{{ ready }}.{{ base }}</strong>.
+    <p class="lead">{% if paid %}Your app, with its paid plan, is at{% else %}Your free 7-day trial is at{% endif %} <strong>{{ ready }}.{{ base }}</strong>.
       {% if new %}Sign in with the username and password you just chose. Bookmark it, or add it to your phone's home screen.{% endif %}</p>
     <a class="btn" href="https://{{ ready }}.{{ base }}/login{% if username %}?u={{ username|urlencode }}{% endif %}">Open my app</a>
     <p class="hint" style="text-align:center;margin-top:14px">Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a>
       or reply to us on WhatsApp.</p>
   {% else %}
     <h1>Set up your app</h1>
+    {% if plan %}
+    <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ '12-month' if plan == '1y' else '6-month' }} plan,
+      ₹{{ '{:,}'.format(price) }}</strong>. Check your company name and choose a password, then pay.</p>
+    {% else %}
     <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>
+    {% endif %}
     {% if errors.form %}<div class="formerr">{{ errors.form }}</div>{% endif %}
     <form method="post" action="{{ url_for('console.start_trial') }}" id="startForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="t" value="{{ token }}">
+      {% if plan %}<input type="hidden" name="plan" value="{{ plan }}">{% endif %}
       <label for="company">Company name</label>
       <input type="text" id="company" name="company" value="{{ form.company }}" maxlength="80" required>
       <div class="hint">On your quotations. You can correct it once later.</div>
@@ -84,8 +117,13 @@
       {% if errors.terms %}<div class="err">{{ errors.terms }}</div>{% endif %}
 
       {% if turnstile %}<div class="cf-turnstile" data-sitekey="{{ turnstile }}" style="margin-top:14px"></div>{% endif %}
-      <button type="submit" id="go">Create my app</button>
+      {% if plan %}
+      <button type="submit" id="go" data-busy="Setting up your app…">Create my app and pay ₹{{ '{:,}'.format(price) }}</button>
+      <p class="hint" style="text-align:center">Next, pay securely through Razorpay: UPI, cards or net banking.</p>
+      {% else %}
+      <button type="submit" id="go" data-busy="Setting up your app…">Create my app</button>
       <p class="hint" style="text-align:center">Free for 7 days. No payment details needed.</p>
+      {% endif %}
     </form>
   {% endif %}
   </div>

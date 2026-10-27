@@ -437,6 +437,63 @@ with app.app_context():
 ok('a request you already made a trial for by hand: the emailed link opens that app (no second app)',
    'already set up' in r.text and 'rao-made.quote-room.test' in r.text and 'name="password"' not in r.text
    and spares_mid2 == spares_mid)
+
+# ── Buying on the website: /start?plan=1y → the app is made → Razorpay payment link → back to /start/paid → plan added ──
+import hmac as _hm, hashlib as _hs
+os.environ.update(PLATFORM_RAZORPAY_KEY_ID='rzp_test_key', PLATFORM_RAZORPAY_KEY_SECRET='rzp-test-secret')
+from app import subscription as _sub
+_calls = []
+def _fake_rzp(method, path, payload=None):
+    _calls.append(payload)
+    return {'id': f'plink_B{len(_calls)}', 'short_url': f'https://rzp.io/l/B{len(_calls)}', 'amount': payload['amount']}
+_real_api, _sub._api = _sub._api, _fake_rzp
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    buy_id = conn.execute(Lead.__table__.insert().values(name='Kiran Buyer', phone='919811100031', business_type='other',
+                          business_other='Modular kitchens', company_name='Buyer Kitchens', city='Pune',
+                          email='kiran@buyer.example', created_at=datetime.utcnow())).inserted_primary_key[0]
+with app.app_context():
+    _ops.top_up_spares(1)
+btok = _su.make_token(buy_id)
+r = anon.get(f'/start?t={btok}&plan=1y')
+ok('buying: any business can set up and pay (the plan and price shown, "Create my app and pay")', r.status_code == 200
+   and '12-month plan' in r.text and 'Create my app and pay ₹8,999' in r.text and 'name="plan" value="1y"' in r.text
+   and anon.get('/start?t=' + btok).status_code == 404 and anon.get(f'/start?t={btok}&plan=99y').status_code == 404)
+r = anon.post('/start', data=dict(t=btok, plan='1y', company='Buyer Kitchens', username='kiran', password='kiran-pass-123',
+                                  password2='kiran-pass-123', terms='1'))
+cb = (_calls[0] or {}).get('callback_url', '') if _calls else ''
+ok('…"Create my app and pay": the app is made, then straight to Razorpay for ₹8,999 with their details and a way back',
+   r.status_code == 302 and r.headers['Location'] == 'https://rzp.io/l/B1' and _calls[0]['amount'] == 899900
+   and _calls[0]['notes']['slug'] == 'buyer-kitchens' and _calls[0]['customer'].get('email') == 'kiran@buyer.example'
+   and cb.endswith('/start/paid?t=' + btok) and _calls[0]['callback_method'] == 'get')
+r = anon.get(f'/start?t={btok}&plan=1y')
+r2 = anon.post('/start/pay', data={'t': btok, 'plan': '1y'})
+ok('back on the link without paying: "Pay ₹8,999" (the same payment link, not a new one) or use the trial first',
+   'Pay ₹8,999 securely' in r.text and 'buyer-kitchens.quote-room.test' in r.text and r2.headers['Location'] == 'https://rzp.io/l/B1'
+   and len(_calls) == 1)
+cb_args = dict(razorpay_payment_id='pay_B1', razorpay_payment_link_id='plink_B1', razorpay_payment_link_reference_id='',
+               razorpay_payment_link_status='paid')
+r = anon.get('/start/paid', query_string=dict(cb_args, t=btok, razorpay_signature='forged'))
+with app.app_context():
+    brow = _sub.get_by_order('plink_B1')
+ok('a forged return from Razorpay is not counted as paid', 'Payment received' not in r.text and brow['status'] == 'created'
+   and 'Payment not completed' in r.text)
+sig = _hm.new(b'rzp-test-secret', 'plink_B1||paid|pay_B1'.encode(), _hs.sha256).hexdigest()
+r = anon.get('/start/paid', query_string=dict(cb_args, t=btok, razorpay_signature=sig))
+with app.app_context():
+    brow = _sub.get_by_order('plink_B1')
+    with tenancy.tenant_context('buyer-kitchens'):
+        bst = _pl.load_status(on=_pl.today())
+ok('paid and sent back: "Payment received", the 12-month plan is on their app at once (trial days kept), recorded once',
+   'Payment received' in r.text and 'https://buyer-kitchens.quote-room.test/login' in r.text and brow['status'] == 'paid'
+   and brow['source'] == 'callback' and bst.plan == '1y' and bst.ends_on == _pl.add_length(_pl.today() + _td(days=7), '1y'))
+r = anon.get('/start/paid', query_string=dict(cb_args, t=btok, razorpay_signature=sig))
+with app.app_context():
+    with tenancy.tenant_context('buyer-kitchens'):
+        bst2 = _pl.load_status(on=_pl.today())
+ok('…opening the page again doesn\'t add the plan twice', 'Payment received' in r.text and bst2.ends_on == bst.ends_on)
+_sub._api = _real_api
+for k in ('PLATFORM_RAZORPAY_KEY_ID', 'PLATFORM_RAZORPAY_KEY_SECRET'):
+    os.environ.pop(k, None)
 with app.app_context():
     _ops.delete_trial('rao-made')
 _r = signed.post('/trials', data={'slug': 'meera-again', 'lead_id': str(self_id), 'name': 'Meera Shah', 'days': '7'})

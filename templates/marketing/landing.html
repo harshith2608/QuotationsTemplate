@@ -192,7 +192,12 @@
           <div class="price"><span class="amount">₹4,999</span><span class="per">/6 months</span></div>
           <p class="sub">About ₹833 a month for your whole team, paid once.</p>
           <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li><li>Renewal reminders, no auto-charge</li></ul>
+          {% if sells %}
+          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial', plan='6m') }}" data-trial data-plan="6m"
+             data-plan-title="6-month plan · ₹4,999">Choose 6 months</a>
+          {% else %}
           <a class="btn btn-ghost" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27m%20interested%20in%20the%20{{ product|urlencode }}%206-month%20plan" target="_blank" rel="noopener" data-cta>Choose 6 months</a>
+          {% endif %}
         </div>
         <div class="plan featured">
           <span class="badge">Best value · save ₹999</span>
@@ -200,7 +205,12 @@
           <div class="price"><span class="amount">₹8,999</span><span class="per">/year</span></div>
           <p class="sub">About ₹750 a month for your whole team, paid once.</p>
           <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li><li>Priority support</li></ul>
+          {% if sells %}
+          <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1y') }}" data-trial data-plan="1y"
+             data-plan-title="12-month plan · ₹8,999">Choose 12 months</a>
+          {% else %}
           <a class="btn btn-primary" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27m%20interested%20in%20the%20{{ product|urlencode }}%2012-month%20plan" target="_blank" rel="noopener" data-cta>Choose 12 months</a>
+          {% endif %}
         </div>
       </div>
       <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.</p>

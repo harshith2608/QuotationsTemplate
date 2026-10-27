@@ -142,9 +142,11 @@ def links_enabled():
     return bool(_env('PLATFORM_RAZORPAY_KEY_ID') and _env('PLATFORM_RAZORPAY_KEY_SECRET'))
 
 
-def create_payment_link(slug, plan, business_name='', phone='', email='', kind='link', paid_by='console', payer_name=''):
-    """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email). kind 'new': a customer whose app
-    is made once they pay. Returns the payment row (dict, with link_url)."""
+def create_payment_link(slug, plan, business_name='', phone='', email='', kind='link', paid_by='console', payer_name='',
+                        callback_url=None):
+    """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email, or opened straight away by a
+    business buying on the website). kind 'new': a customer whose app is made once they pay. callback_url: where
+    Razorpay sends the payer back after paying. Returns the payment row (dict, with link_url)."""
     if plan not in LENGTHS:
         raise PaymentError('Choose the 6-month or 12-month plan.')
     if not links_enabled():
@@ -160,7 +162,8 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
         'description': f'QuoteRoom {plan_mod.PLANS.get(plan, plan)} for {business_name or slug}'[:2048],
         'customer': customer, 'notify': {'sms': False, 'email': False}, 'reminder_enable': False,
         'notes': {'slug': slug, 'plan': plan, 'kind': kind},
-        'expire_by': int(datetime.utcnow().timestamp()) + 7 * 86400})
+        'expire_by': int(datetime.utcnow().timestamp()) + 7 * 86400,
+        **({'callback_url': callback_url, 'callback_method': 'get'} if callback_url else {})})
     with db.engine.begin() as conn:
         conn.execute(text('INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, business_name, paid_by, '
                           'email, kind, link_url, phone, payer_name) VALUES (:s, :p, :a, :o, :n, :u, :e, :k, :l, :ph, :pn)'),
@@ -195,6 +198,26 @@ def verify_checkout(order_id, payment_id, signature):
     secret = _env('PLATFORM_RAZORPAY_KEY_SECRET')
     expected = hmac.new(secret.encode(), f'{order_id}|{payment_id}'.encode(), hashlib.sha256).hexdigest()
     return bool(secret) and hmac.compare_digest(expected, signature or '')
+
+
+def verify_link_callback(args):
+    """The signature Razorpay adds when it sends a payer back from a payment link (callback_url):
+    HMAC-SHA256(link id|reference id|status|payment id) with the key secret."""
+    secret = _env('PLATFORM_RAZORPAY_KEY_SECRET')
+    body = '|'.join(args.get(k, '') for k in ('razorpay_payment_link_id', 'razorpay_payment_link_reference_id',
+                                                'razorpay_payment_link_status', 'razorpay_payment_id'))
+    expected = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return bool(secret) and hmac.compare_digest(expected, args.get('razorpay_signature', ''))
+
+
+def open_link(slug, plan):
+    """An unpaid payment link made in the last 6 days for this business and plan (reused when they come back to pay)."""
+    ensure_table()
+    with db.engine.connect() as conn:
+        row = conn.execute(text("SELECT * FROM public.platform_payments WHERE slug = :s AND plan = :p AND status = 'created' "
+                                "AND link_url IS NOT NULL AND created_at > (now() AT TIME ZONE 'utc') - INTERVAL '6 days' "
+                                "ORDER BY id DESC LIMIT 1"), {'s': slug, 'p': plan}).mappings().first()
+    return dict(row) if row else None
 
 
 def verify_webhook(body, signature):
@@ -368,13 +391,22 @@ def handle_webhook(payload):
         row = get_by_order(pay['order_id'])
     if row is None:
         return 'not ours'
-    row, newly = mark_paid(row['order_id'], pay.get('id') or row.get('payment_id') or '', 'webhook')
+    row, newly = settle(row, pay.get('id') or row.get('payment_id') or '', 'webhook', payer_email=pay.get('email'))
     if not newly:
         return 'already recorded'
-    if not row.get('email') and '@' in (pay.get('email') or ''):       # the payer's email from Razorpay, for the receipt
+    return f'paid: {row["slug"]} {row["plan"]}'
+
+
+def settle(row, payment_id, source, payer_email=None):
+    """A payment Razorpay confirmed (webhook, or the payer sent back from a payment link): record it once, add the
+    plan (or make a new customer's app), send the receipt. Returns (row, newly_paid)."""
+    row, newly = mark_paid(row['order_id'], payment_id, source)
+    if not newly:
+        return row, False
+    if not row.get('email') and '@' in (payer_email or ''):           # the payer's email from Razorpay, for the receipt
         with db.engine.begin() as conn:
             conn.execute(text('UPDATE public.platform_payments SET email = :e WHERE id = :i'),
-                         {'e': pay['email'][:120], 'i': row['id']})
+                         {'e': payer_email[:120], 'i': row['id']})
     if row.get('kind') == 'new':                           # a new customer: make their app now (plan from today)
         from . import customers
         c = customers.activate_pending(row['slug'])
@@ -385,7 +417,7 @@ def handle_webhook(payload):
     else:
         apply_plan_for(row['slug'], row)
     notify_paid(get(row['id']))
-    return f'paid: {row["slug"]} {row["plan"]}'
+    return get(row['id']), True
 
 
 def paid_trials():

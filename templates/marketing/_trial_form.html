@@ -58,10 +58,16 @@
   <input type="hidden" name="utm_source" value="{{ form.get('utm_source', '') }}">
   <input type="hidden" name="utm_campaign" value="{{ form.get('utm_campaign', '') }}">
   <input type="hidden" name="page" value="{{ form.get('page', '') }}">
+  <input type="hidden" name="plan" value="{{ form.get('plan', '') }}">
   <p class="form-error" data-error-for="form" role="alert" {% if not errors.form %}hidden{% endif %}>{{ errors.form }}</p>
-  <button class="btn btn-primary trial-submit" type="submit">Request my free trial</button>
-  <p class="fine">No payment needed. We'll use these details to set up your trial and to message you about it on
+  {% set buying = form.get('plan') %}
+  <button class="btn btn-primary trial-submit" type="submit" data-label-trial="Request my free trial"
+          data-label-buy="Continue to payment">{{ 'Continue to payment' if buying else 'Request my free trial' }}</button>
+  <p class="fine" data-fine-trial {% if buying %}hidden{% endif %}>No payment needed. We'll use these details to set up your trial and to message you about it on
     WhatsApp and email. <a href="{{ privacy_url }}">Privacy policy</a></p>
+  <p class="fine" data-fine-buy {% if not buying %}hidden{% endif %}>Next you choose your password, then pay securely through
+    Razorpay (UPI, cards, net banking). Your app is ready the moment you pay. We'll use these details for your app, your
+    receipt and to message you on WhatsApp and email. <a href="{{ privacy_url }}">Privacy policy</a></p>
 </form>
 {%- endmacro %}
 
