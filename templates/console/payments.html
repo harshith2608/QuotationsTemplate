@@ -74,7 +74,11 @@
       <td class="small">{{ r.plan_end.strftime('%d %b %Y') if r.plan_end else '—' }}</td>
       <td><a href="{{ url_for('console.payment_receipt', payment_id=r.id) }}" target="_blank" rel="noopener">{{ r.receipt_no }}</a></td>
       <td class="small muted">{{ r.paid_by if r.source == 'manual' else r.source }}{% if r.source == 'manual' and r.payment_id %} · {{ r.payment_id }}{% endif %}</td>
-      <td><form method="post" action="{{ url_for('console.payments_delete', payment_id=r.id) }}"
+      <td style="min-width:240px"><form method="post" action="{{ url_for('console.payments_receipt_email', payment_id=r.id) }}" class="row" style="gap:6px;margin:0 0 6px">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="email" name="to" value="{{ r.email or '' }}" aria-label="Email the receipt to" style="width:150px" title="Empty: their email in their app">
+            <button class="btn btn-sm" type="submit">Email receipt</button></form>
+        <form method="post" action="{{ url_for('console.payments_delete', payment_id=r.id) }}"
                 data-confirm="Remove this payment record ({{ r.receipt_no }}, ₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}, {{ r.slug }})? Their plan won't change.">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm" type="submit" title="Remove (e.g. a test payment)">Remove</button></form></td></tr>

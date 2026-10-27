@@ -177,7 +177,7 @@ def snooze(slug, days):
 
 # ── Emails by stage (daily task) ─────────────────────────────────────────────
 
-EMAILS = {   # stage → (days since the trial started, subject, body)
+EMAILS = {   # stage → (days since the trial started, subject, body); the texts used: console → Messages (app/texts.py)
     'signin': (1, 'Your QuoteRoom app is ready',
                'Your QuoteRoom app is ready and waiting for you:\n{url}\n\nSign in with the username and password you '
                'chose (or the ones we sent you). Setting up takes about 10 minutes: your company details and logo, '
@@ -224,10 +224,9 @@ def send_stage_emails(trials):
             if not fresh:
                 continue
             name = (t.get('contact') or {}).get('name', '').split(' ')[0]
-            from . import emails
-            emails.send(email, subject, f"Hello{(' ' + name) if name else ''},\n\n" + body.format(url=t['url'])
-                        + '\n\nQuestions? Just reply to this email or message us on WhatsApp.\n\nQuoteRoom\n',
-                        kind='stage', slug=t['slug'], bcc=False)
+            from . import emails, texts
+            subject, body = texts.render(f'stage_{stage}', hello=f'Hello {name}' if name else 'Hello', url=t['url'])
+            emails.send(email, subject, body, kind='stage', slug=t['slug'], bcc=False)
             log(t['slug'], stage, 'email', subject)
             out[t['slug']] = stage
         except Exception as exc:                        # one trial's problem mustn't stop the others

@@ -607,6 +607,13 @@ request whose email isn't opened after a day: WhatsApp them, or **Email → Set-
 The emails' links and the open image go through the console's address: `CONSOLE_URL` (console project, e.g.
 `https://ops.quote-room.co.in`) is optional but best set; otherwise the address it is visited on is used.
 
+### Messages (console → Messages)
+Every WhatsApp draft and email the console and the apps use, in one place: the follow-ups (WhatsApp, and the same text
+as an email with its subject), "trial is ready" / "app is ready" / "thank you for subscribing", the trial request
+drafts, the automatic emails (stage emails and plan reminders), the payment link text and the "Payment received" email
+with the receipt. Change the wording and **Save**; **Reset to original** goes back. Placeholders like `{name}` are
+filled in for each person; a misspelt one isn't saved. Not here: the website's own set-up link email.
+
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
 
@@ -615,7 +622,9 @@ WhatsApp** (opens your WhatsApp with the message) and/or **Send by email**. When
 If they ask for an invoice before paying: on the payment link's page → **Proforma invoice** → their business name (and
 address) → **Download proforma invoice (PDF)**, and send it with the link. It shows the plan, the amount and the link,
 and says in plain words that it is not a GST invoice (you're not registered under GST: no GST charged, no GST credit).
-Their payment receipt is emailed automatically once they pay.
+Their payment receipt is emailed automatically once they pay: to the email on the payment link, else the payer's
+email from Razorpay, else the email in their app, with a copy in hello@. **Payments → Email receipt** sends it again
+(to the address typed, or theirs).
 
 **Paid you directly** (UPI to you, bank transfer, cash): console → **Payments → Record a payment** → business, plan,
 amount, how they paid, date and reference → **Record payment**. It gets a receipt number like any other payment, adds the
