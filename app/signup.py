@@ -1,10 +1,13 @@
 """Self-serve trials: a business that asks for a free trial on the website sets up its own app straight away.
 
-The website (MARKETING_SITE) stores the request as before. For interior designers and furniture works, its thank-you
+The website (MARKETING_SITE) stores the request as before. For the trades it's for (interiors, furniture, kitchens, uPVC, glass), its thank-you
 step offers "Set up your app now": a link to the console's public /start page carrying only a signed, single-use
 token for that request (no name, phone or email in the address). There they choose their web address, login and
 password; the console renames a ready-made trial (ops.claim_trial) and they sign in. "Others" still wait for the
 operator. Every self-started trial appears in the console linked to its request, with the WhatsApp follow-ups.
+
+Buying on the website: the plan buttons open the same form (any business), then /start?plan=6m|1y. After the app is
+made, the console sends them to a Razorpay payment link for that plan and back to /start/paid, which adds the plan.
 
     Website:  AUTO_TRIALS=1, SIGNUP_URL=https://ops.quote-room.co.in, SIGNUP_SECRET=<same as the console>
     Console:  SIGNUP_SECRET, TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY (optional: Cloudflare's free bot check),
@@ -18,7 +21,8 @@ import time
 import urllib.parse
 import urllib.request
 
-ELIGIBLE = {'interiors', 'furniture'}
+ELIGIBLE = {'interiors', 'furniture', 'kitchens', 'upvc', 'glass'}     # marketing.BUSINESS_TYPES but 'other'
+PLANS = ('6m', '1y')
 TOKEN_HOURS = 72
 MAX_PER_IP_PER_HOUR = 3
 
@@ -50,15 +54,20 @@ def read_token(token, now=None):
         return None
 
 
+def website_sells():
+    """True when the website's plan buttons set up the app and take the payment (else they open WhatsApp)."""
+    return _env('AUTO_TRIALS') in ('1', 'true', 'yes', 'on') and bool(_env('SIGNUP_URL')) and bool(_env('SIGNUP_SECRET'))
+
+
 def website_offers(business_type):
     """True if the website should offer "Set up your app now" for this request."""
-    return (_env('AUTO_TRIALS') in ('1', 'true', 'yes', 'on') and bool(_env('SIGNUP_URL')) and bool(_env('SIGNUP_SECRET'))
-            and business_type in ELIGIBLE)
+    return website_sells() and business_type in ELIGIBLE
 
 
-def setup_url(lead_id, base=None):
-    """base: the console's address (the website uses SIGNUP_URL; the console its own)."""
-    return f'{(base or _env("SIGNUP_URL")).rstrip("/")}/start?t={urllib.parse.quote(make_token(lead_id))}'
+def setup_url(lead_id, base=None, plan=None):
+    """base: the console's address (the website uses SIGNUP_URL; the console its own). plan: buying 6m / 1y."""
+    url = f'{(base or _env("SIGNUP_URL")).rstrip("/")}/start?t={urllib.parse.quote(make_token(lead_id))}'
+    return url + (f'&plan={plan}' if plan in PLANS else '')
 
 
 def turnstile_site_key():

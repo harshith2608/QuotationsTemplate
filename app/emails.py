@@ -237,8 +237,9 @@ def stats(leads=None, days=30):
     lead_since = max(since, started) if started else since
     setup = {'sent': 0, 'opened': 0, 'clicked': 0}
     seen = by_lead()
+    from . import signup
     for l in leads or []:
-        if l.get('email') and l.get('created_at') and l['created_at'] >= lead_since and l.get('business_type') in ('interiors', 'furniture'):
+        if l.get('email') and l.get('created_at') and l['created_at'] >= lead_since and l.get('business_type') in signup.ELIGIBLE:
             setup['sent'] += 1
             s = seen.get(l['id'], {})
             setup['opened'] += 1 if s.get('opened_at') else 0

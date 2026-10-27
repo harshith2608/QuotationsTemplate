@@ -8,9 +8,16 @@
   <div class="wrap">
     <div class="trial-card" data-trial-root>
       <div data-trial-start {% if name %}hidden{% endif %}>
+        {% set buying = (form or {}).get('plan') %}
+        {% if buying %}
+        <p class="eyebrow">{{ {'6m': '6-month plan · ₹4,999', '1y': '12-month plan · ₹8,999'}[buying] }}</p>
+        <h1>Get your own {{ product }} app</h1>
+        <p class="trial-lede">Tell us a little about you. Next you choose your password and pay, and your app is ready.</p>
+        {% else %}
         <p class="eyebrow">7-day free trial · no payment</p>
         <h1>Start your free trial</h1>
         <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+        {% endif %}
         {{ trial_form('page', errors or {}, form or {}) }}
       </div>
       {{ trial_done(name or '', setup_url, emailed_to) }}

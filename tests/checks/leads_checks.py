@@ -70,7 +70,7 @@ ok('no-JS post → thank-you page with the live demo button, no WhatsApp button'
 t = c2.get('/').text
 ok('pop-up form asks for the company name, city and email, no WhatsApp follow-up', 'name="company_name"' in t
    and 'name="city"' in t and 'name="email"' in t and 'Skip the wait' not in t)
-ok('only interior designers / furniture works count as a Lead; Others → LeadOther', "btype === 'interiors' || btype === 'furniture'" in t and "track('LeadOther')" in t)
+ok('every trade it\'s for counts as a Lead; Others → LeadOther', "if (btype && btype !== 'other') track('Lead'" in t and "track('LeadOther')" in t)
 ok('Lead event sends a value and INR currency (Meta asks for both)', 'leadValue: 1000.0' in t
    and "track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype })" in t)
 t = c2.post('/trial-request', data={'name': '', 'phone': ''}, environ_base={'REMOTE_ADDR': '10.9.9.8'}).text
@@ -143,6 +143,11 @@ ok('self-serve on: an interior designer gets "set up my app now" (a signed link 
 r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type='other', business_other='Tiles'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.2'})
 ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
+r = c5.post('/trial-request', data=dict(good, phone='9811100051', business_type='upvc'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.8'})
+ok('…uPVC, glass and kitchen firms set up their own app too', r.get_json()['ok'] and r.get_json()['setup_url']
+   and all(f'value="{v}"' in c5.get('/free-trial').text for v in ('kitchens', 'upvc', 'glass'))
+   and 'uPVC windows &amp; doors' in c5.get('/free-trial').text)
 t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
 ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
 
@@ -164,6 +169,24 @@ ok('…with a hidden copy to hello@ (app emails don\'t show in the mailbox\'s Se
 t = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
             environ_base={'REMOTE_ADDR': '10.9.0.5'}).text
 ok('…and the page without JavaScript says "Check your email"', 'Check your email' in t and 'x***@kiraninteriors.example' in t)
+# Buying a plan on the website: the plan buttons open the same form, then straight on to set up and pay (any business,
+# and the link is shown, not emailed: Razorpay checks the payer)
+lp = c5.get('/').text
+ok('plan buttons: the same form for that plan (no WhatsApp)', 'data-plan="6m"' in lp and 'data-plan="1y"' in lp
+   and '/free-trial?plan=1y' in lp and 'interested%20in%20the' not in lp and 'Continue to payment' in lp)
+t = c5.get('/free-trial?plan=1y').text
+ok('/free-trial?plan=1y (no JavaScript): the 12-month plan and "Continue to payment"', '12-month plan · ₹8,999' in t
+   and 'name="plan" value="1y"' in t and 'Continue to payment' in t)
+r = c5.post('/trial-request', data=dict(good, phone='9811100049', business_type='other', business_other='Kitchens', plan='1y'),
+            headers=J, environ_base={'REMOTE_ADDR': '10.9.0.6'}); d = r.get_json()
+ok('…submitted: on to /start for that plan (even "Others"; shown, not emailed)', d['ok'] and d['pay_url']
+   and d['pay_url'].startswith('https://ops.quote-room.test/start?t=') and d['pay_url'].endswith('&plan=1y'))
+r = c5.post('/trial-request', data=dict(good, phone='9811100050', plan='6m'), environ_base={'REMOTE_ADDR': '10.9.0.7'})
+ok('…without JavaScript: redirected there', r.status_code == 302 and r.headers['Location'].endswith('&plan=6m'))
+with app.app_context():
+    ok('…the request notes the plan they\'re buying', any('buying 6m' in (l.source or '') for l in Lead.query.all()))
 os.environ.pop('MAIL_OUTBOX_DIR', None)
 for k in ('AUTO_TRIALS', 'SIGNUP_URL', 'SIGNUP_SECRET'):
     os.environ.pop(k, None)
+lp = create_app('development').test_client().get('/').text
+ok('self-serve off: the plan buttons still open WhatsApp', 'interested%20in%20the' in lp and 'data-plan=' not in lp)

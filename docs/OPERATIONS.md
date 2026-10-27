@@ -385,6 +385,13 @@ How it works once set up:
    linked to the request, with the WhatsApp follow-ups.
 2. In their app, the admin taps **Choose a plan** (or **Renew**) → pays ₹4,999 / ₹8,999 by Razorpay → the plan is
    active at once (a trial's paid plan starts when the trial ends) → receipt (not a GST invoice).
+   **Buying straight from the website:** the pricing cards' **Choose 6 months / Choose 12 months** open the same
+   short form (any business), then `/start?plan=…` (firm name, login, password: **Create my app and pay**) → the app
+   is made and they go straight to a Razorpay payment link for that plan → back on `/start/paid`, which adds the plan
+   to their app at once (their 7 trial days are kept on top). Closed the page before paying? The same link opens
+   **Pay ₹…** again (same payment link, valid 6 days), or they use the trial first. The request shows "buying 6m/1y"
+   in its source; the payment shows under **Payments** (Paid by: website). Until `AUTO_TRIALS`, `SIGNUP_URL` and
+   `SIGNUP_SECRET` are set on the website, the plan buttons open WhatsApp as before.
 3. Razorpay tells the console (webhook) → the console moves the paid trial into **its own database** (with its own
    encryption key) in a few seconds. Same address, same login, the same shared app ("shared hosting"). You see it
    under **Payments** and **Customers**. A daily task (03:00 UTC) catches anything left over.

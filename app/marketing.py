@@ -36,7 +36,7 @@ from urllib.parse import quote
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import undefer
-from flask import Blueprint, Response, abort, current_app, jsonify, render_template, request, url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, url_for
 
 marketing_bp = Blueprint('marketing', __name__)
 
@@ -62,6 +62,7 @@ def _context():
     product = _env('MARKETING_PRODUCT_NAME', 'QuoteRoom')
     google_ads_id = _env('GOOGLE_ADS_ID')
     google_conv = _env('GOOGLE_ADS_CONVERSION')
+    from .signup import website_sells
     return dict(
         product=product,
         legal_name=_env('MARKETING_LEGAL_NAME', product),
@@ -81,7 +82,12 @@ def _context():
         year=datetime.utcnow().year,
         demo_video=youtube_id(_env('MARKETING_DEMO_VIDEO', 'cJgZoWVaB80')) or 'cJgZoWVaB80',
         has_tutorials=bool(tutorials()),
+        business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items()],
+        sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
     )
+
+
+PLAN_NAMES = {'6m': ('6-month plan', '₹4,999'), '1y': ('12-month plan', '₹8,999')}   # as on the pricing cards
 
 
 # ── Tutorials (videos hosted on YouTube, so the site stays light) ────────────
@@ -164,7 +170,10 @@ def terms():
 
 # ── Free-trial requests ──────────────────────────────────────────────────────
 
-BUSINESS_TYPES = {'interiors': 'Interior designer', 'furniture': 'Furniture works', 'other': 'Other'}
+# The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Every one but 'other' is a
+# trade QuoteRoom is for: they can set up their own app (signup.ELIGIBLE) and count as a Lead for the ads.
+BUSINESS_TYPES = {'interiors': 'Interior designer', 'furniture': 'Furniture works', 'kitchens': 'Modular kitchens',
+                  'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium works', 'other': 'Other'}
 MAX_PER_IP_PER_HOUR = 5
 KEEP_LEADS_DAYS = 365          # stated in the privacy policy
 
@@ -256,7 +265,9 @@ def free_trial():
         abort(404)
     form = {k: request.args.get(k, '')[:60] for k in ('utm_source', 'utm_campaign')}
     form['page'] = '/free-trial'
-    return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, form=form, **_context())
+    ctx = _context()
+    form['plan'] = request.args.get('plan') if ctx['sells'] and request.args.get('plan') in PLAN_NAMES else ''
+    return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, form=form, **ctx)
 
 
 @marketing_bp.route('/trial-request', methods=['POST'])
@@ -269,6 +280,7 @@ def trial_request():
     wants_json = request.accept_mimetypes.best == 'application/json'
     ctx = _context()
     data, errors = _validate_lead(request.form)
+    plan = request.form.get('plan') if ctx['sells'] and request.form.get('plan') in PLAN_NAMES else None   # buying
 
     if request.form.get('website'):                      # honeypot filled in → a bot; pretend it worked
         errors = {}
@@ -297,7 +309,7 @@ def trial_request():
         if not dup:
             source = ' · '.join(filter(None, [
                 (request.form.get('utm_source') or '')[:60], (request.form.get('utm_campaign') or '')[:60],
-                (request.form.get('page') or '')[:60]]))[:200]
+                (request.form.get('page') or '')[:60], f'buying {plan}' if plan else '']))[:200]
             values = dict(name=data['name'], phone=data['phone'], business_type=data['business_type'],
                           business_other=data['business_other'], source=source or None, ip_hash=ip_hash)
             for col in LATER_LEAD_COLUMNS:  # only once the database update has added the column
@@ -307,8 +319,14 @@ def trial_request():
         Lead.query.filter(Lead.created_at < now - timedelta(days=KEEP_LEADS_DAYS)).delete()
         db.session.commit()
 
-    # Interior designers and furniture works can set up their app straight away (app/signup.py)
+    # Buying a plan: straight on to set up the app and pay (Razorpay checks who's paying)
     from . import mailer, signup
+    if plan and lead_id:
+        pay_url = signup.setup_url(lead_id, plan=plan)
+        if wants_json:
+            return jsonify({'ok': True, 'name': data['name'], 'pay_url': pay_url})
+        return redirect(pay_url)
+    # The trades QuoteRoom is for can set up their app straight away (app/signup.py)
     setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
     emailed = None
     if setup and mailer.enabled():               # the link goes to their email: proves the address is theirs

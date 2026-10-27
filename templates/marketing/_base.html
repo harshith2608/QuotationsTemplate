@@ -383,8 +383,10 @@ footer nav { display: flex; gap: 1.2rem; }
   <div class="inner" data-trial-root>
     <button class="dlg-close" type="button" data-close-dialog aria-label="Close">×</button>
     <div data-trial-start>
-      <h2 id="trialDialogTitle">Start your 7&#8209;day free trial</h2>
-      <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+      <h2 id="trialDialogTitle" data-title-trial="Start your 7&#8209;day free trial">Start your 7&#8209;day free trial</h2>
+      <p class="trial-lede" data-lede-trial>Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+      <p class="trial-lede" data-lede-buy hidden>Tell us a little about you. Next you choose your password and pay, and your
+        own {{ product }} app is ready.</p>
       {{ trial_form('dlg') }}
     </div>
     {{ trial_done() }}
@@ -421,7 +423,7 @@ footer nav { display: flex; gap: 1.2rem; }
     }
   }
   // Meta standard events use 'track'; our own names (StartTrialClick, DemoClick) use 'trackCustom'
-  const STANDARD = new Set(['PageView', 'Lead', 'Contact']);
+  const STANDARD = new Set(['PageView', 'Lead', 'Contact', 'InitiateCheckout']);
   function track(metaEvent, googleConversion, params) {
     try { if (window.fbq) fbq(STANDARD.has(metaEvent) ? 'track' : 'trackCustom', metaEvent, params || {}); } catch (e) {}
     try { if (googleConversion && window.gtag && T.gconv) gtag('event', 'conversion', { send_to: T.gconv }); } catch (e) {}
@@ -489,15 +491,20 @@ footer nav { display: flex; gap: 1.2rem; }
         const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         const data = await res.json();
         if (!data.ok) { showErrors(data.errors || { form: 'Something went wrong. Please try again.' }); return; }
+        if (data.pay_url) {                 // buying a plan: on to choose a password and pay
+          track('InitiateCheckout', true, { value: form.plan.value === '1y' ? 8999 : 4999, currency: 'INR' });
+          location.href = data.pay_url;
+          return;
+        }
         // Only real target businesses count as a Lead, so the ads learn to find more of them;
         // "Others" requests are still recorded, as a separate event that ads don't optimise for
         const btype = (new FormData(form).get('business_type') || '');
-        if (btype === 'interiors' || btype === 'furniture') track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype });
+        if (btype && btype !== 'other') track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype });
         else track('LeadOther');
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
-        if (data.emailed_to) {              // interior designers / furniture works: the set-up link is in their email
+        if (data.emailed_to) {              // the trades it's for: the set-up link is in their email
           done.querySelector('[data-emailed-to]').textContent = data.emailed_to;
           done.querySelector('[data-emailed]').hidden = false;
           done.querySelector('[data-wait]').hidden = true;
@@ -511,7 +518,7 @@ footer nav { display: flex; gap: 1.2rem; }
       } catch (err) {
         showErrors({ form: 'Could not send. Check your internet connection and try again.' });
       } finally {
-        btn.disabled = false; btn.textContent = 'Request my free trial';
+        btn.disabled = false; btn.textContent = form.plan.value ? btn.dataset.labelBuy : btn.dataset.labelTrial;
       }
     });
   });
@@ -523,6 +530,17 @@ footer nav { display: flex; gap: 1.2rem; }
       const t = e.target.closest('[data-trial]');
       if (!t) return;
       e.preventDefault();
+      // A plan button: the same form, then on to pay for that plan; "Start free trial": the free trial
+      const plan = t.dataset.plan || '', form = dialog.querySelector('[data-trial-form]');
+      const title = dialog.querySelector('#trialDialogTitle');
+      form.plan.value = plan;
+      title.textContent = plan ? 'Get the ' + t.dataset.planTitle : title.dataset.titleTrial;
+      dialog.querySelector('[data-lede-trial]').hidden = !!plan;
+      dialog.querySelector('[data-lede-buy]').hidden = !plan;
+      form.querySelector('[data-fine-trial]').hidden = !!plan;
+      form.querySelector('[data-fine-buy]').hidden = !plan;
+      const btn = form.querySelector('.trial-submit');
+      btn.textContent = plan ? btn.dataset.labelBuy : btn.dataset.labelTrial;
       dialog.showModal();
       const start = dialog.querySelector('[data-trial-start]');
       if (!start.hidden) dialog.querySelector('input[name=name]').focus();
