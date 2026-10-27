@@ -49,9 +49,43 @@
 <body class="ki-header-{{ brand.header_style }}">
 
 {% if demo_mode %}
+{% set dg = demo_guide %}
+{% set trial_url = url_for('marketing.free_trial') if marketing_mode else '' %}
 <div class="ki-demo-banner">
+  {% if dg and dg.sample %}
+  {# The demo guide: see a finished quotation → make your own → get your PDF → free trial #}
+  <ol class="ki-demo-steps">
+    <li class="{{ 'is-on' if dg.step == 1 }}{{ ' is-done' if dg.step > 1 }}">
+      <a href="{{ url_for('projects.view_project', project_id=dg.sample) }}"><span>1</span>See a quotation</a></li>
+    <li class="{{ 'is-on' if dg.step == 2 }}{{ ' is-done' if dg.step > 2 }}">
+      <a href="{{ url_for('projects.create_project', try=1) }}"><span>2</span>Make your own</a></li>
+    <li class="{{ 'is-on' if dg.step == 3 }}"><span>3</span>Get your PDF</li>
+  </ol>
+  <div class="ki-demo-hint">
+    {% if dg.step == 1 %}
+      <span>This is a finished quotation from Demo Interiors.</span>
+      <a class="btn btn-sm btn-primary fw-semibold" href="{{ dg.pdf }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>See the PDF your customer gets</a>
+      <a class="btn btn-sm btn-outline-dark fw-semibold" href="{{ url_for('projects.create_project', try=1) }}">Next: make your own <i class="bi bi-arrow-right"></i></a>
+    {% elif dg.step == 2 and dg.try %}
+      <span>A bedroom is filled in for you. <strong>Change any size</strong> (try the wardrobe's width) and watch the total
+      change, then tap <strong>Save Quotation</strong> at the bottom.</span>
+    {% elif dg.step == 2 %}
+      <span>Add a room and an item, then tap <strong>Save Quotation</strong>. Or
+      <a href="{{ url_for('projects.create_project', try=1) }}" class="fw-semibold">start from a filled-in bedroom</a>.</span>
+    {% elif dg.step == 3 %}
+      <span>Your quotation is ready.</span>
+      <a class="btn btn-sm btn-primary fw-semibold" href="{{ dg.pdf }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>See your PDF</a>
+      {% if trial_url %}<a class="btn btn-sm btn-success fw-semibold" href="{{ trial_url }}">Start your free trial: 7 days, no payment</a>{% endif %}
+    {% else %}
+      <span>Start here: <a href="{{ url_for('projects.view_project', project_id=dg.sample) }}" class="fw-semibold">see a finished quotation →</a></span>
+      <span class="d-none d-md-inline">Everything resets every night.</span>
+    {% endif %}
+    {% if trial_url and dg.step != 3 %}<a href="{{ trial_url }}" class="ki-demo-trial fw-semibold">Start free trial →</a>{% endif %}
+  </div>
+  {% else %}
   <i class="bi bi-stars me-1"></i>You're exploring the demo. Saving settings is turned off and everything resets every night.
   {% if marketing_mode %}<a href="{{ url_for('marketing.landing') }}#pricing" class="fw-semibold ms-1">Get your own app →</a>{% endif %}
+  {% endif %}
 </div>
 {% endif %}
 {% if current_user.is_authenticated %}

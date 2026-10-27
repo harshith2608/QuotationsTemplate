@@ -176,7 +176,11 @@ def create_app(config_name='default'):
         if current_user.is_authenticated and current_user.is_admin and session.get('setup_step') and request.endpoint:
             from . import setup_guide             # only while following the setup guide
             setup_banner = setup_guide.banner(request.endpoint, request.args)
-        return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
+        demo_guide = None
+        if demo_enabled() and current_user.is_authenticated:
+            from . import demo
+            demo_guide = demo.guide()
+        return {'demo_guide': demo_guide, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}

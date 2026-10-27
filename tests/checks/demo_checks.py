@@ -20,7 +20,8 @@ with app.app_context():
 off_txt = pdftext(c, '/projects/1/pdf')
 ok('off: no watermark on PDFs', 'NOT A VALID QUOTATION' not in off_txt and 'DEMO QUOTATION' not in off_txt)
 ok('off: PDFs show the real totals', all(v in off_txt for v in REAL))
-ok('off: no demo banner', 'exploring the demo' not in c.get('/projects').text)
+ok('off: no demo banner or guide', 'exploring the demo' not in c.get('/projects').text and 'See a quotation' not in c.get('/projects').text)
+ok('off: /projects/new?try=1 is a normal new quotation', 'My first customer' not in c.get('/projects/new?try=1').text)
 
 # ── Demo mode ON ──
 app = make(DEMO_MODE='1', CRON_SECRET='s3cret-value', MARKETING_SITE='1'); c = app.test_client()
@@ -34,6 +35,9 @@ fresh = app.test_client()
 r = fresh.get(fresh.get(fresh.get('/projects/3').headers['Location']).headers['Location'])
 ok('…and lands on that page after signing in', r.status_code == 302 and r.headers['Location'].endswith('/projects/3'))
 ok('/demo?next= to another site is ignored', app.test_client().get('/demo?next=//evil.example').headers['Location'].endswith('/projects'))
+with app.app_context():
+    SAMPLE = int(AppSetting.get('demo_sample_project'))
+    ok('the seed marks the sample quotation', db.session.get(Project, SAMPLE).customer_name == 'Priya Example')
 # Closing the browser drops the session cookie; the remember-me cookie keeps them signed in
 b = app.test_client(); b.get('/demo')
 ok('demo sign-in sets a remember-me cookie', b.get_cookie('remember_token') is not None)
@@ -41,9 +45,24 @@ b.delete_cookie('session')
 ok('still signed in after the browser is closed', b.get('/projects').status_code == 200)
 ok('landing demo button → /demo', 'href="/demo" data-demo>Try the live demo — no signup' in c.get('/').text)
 r = c.get('/demo')
-ok('/demo signs in without a password', r.status_code == 302 and r.headers['Location'].endswith('/projects'))
+ok('/demo signs in without a password and opens the sample quotation', r.status_code == 302
+   and r.headers['Location'].endswith(f'/projects/{SAMPLE}'))
+ok('signed in already: /demo opens the sample again', c.get('/demo').headers['Location'].endswith(f'/projects/{SAMPLE}'))
 t = c.get('/projects').text
-ok('demo banner + get-your-own link', 'exploring the demo' in t and '/landingpage#pricing' in t)
+ok('demo guide on the list: 3 steps, start here, free trial', 'See a quotation' in t and 'Make your own' in t
+   and 'Get your PDF' in t and 'Start here' in t and '/free-trial' in t)
+t = c.get(f'/projects/{SAMPLE}').text
+ok('step 1 on the sample: its PDF and next step', 'class="is-on"' in t and f'/projects/{SAMPLE}/pdf' in t
+   and 'See the PDF your customer gets' in t and '/projects/new?try=1' in t)
+t = c.get('/projects/new?try=1').text
+ok('step 2: Make your own starts from the sample\'s first room with a made-up customer',
+   'Change any size' in t and 'Master Bedroom' in t and 'Wardrobe' in t and 'Kitchen' not in t.split('rooms_json')[-1][:4000]
+   and 'value="My first customer"' in t and 'value="9000000000"' in t and 'ki-start-cards' not in t)
+t = c.get('/projects/new').text
+ok('step 2 blank: points to the filled-in bedroom', 'start from a filled-in bedroom' in t)
+t = c.get('/projects/3').text
+ok('step 3 on their own quotation: their PDF and the free trial', 'See your PDF' in t and '/projects/3/pdf' in t
+   and 'Start your free trial' in t)
 
 with app.app_context():
     name_before = AppSetting.get('company_name')
@@ -78,15 +97,10 @@ with app.app_context():
 # Watermark + WhatsApp label
 for u in ['/projects/1/pdf', '/projects/1/pdf/customer']:
     t = pdftext(c, u)
-    ok(f'watermark, notice box and footer on {u}', 'DEMO — NOT A VALID QUOTATION' in t
-       and 'DEMO QUOTATION — NOT VALID' in t and 'not actual calculated values' in t
-       and t.count('amounts are altered sample figures') == len(PdfReader(io.BytesIO(c.get(u).data)).pages))
-    ok(f'real totals never appear on {u}', not any(v in t for v in REAL) and 'Rs. 0.00' not in t.split('Amount Paid')[0])
-from app.demo import scramble_amount
-vals = [1, 99.5, 4500, 18000, 172710, 181800.25]
-ok('scrambled amounts are always wrong, deterministic, positive',
-   all(scramble_amount(v) != v and scramble_amount(v) == scramble_amount(v) and scramble_amount(v) > 0 for v in vals)
-   and scramble_amount(0) == 0)
+    ok(f'watermark, notice box and footer on every page of {u}', 'DEMO — NOT A VALID QUOTATION' in t
+       and 'DEMO QUOTATION — NOT VALID' in t and 'fictional firm' in t
+       and t.count('made with QuoteRoom') == len(PdfReader(io.BytesIO(c.get(u).data)).pages))
+    ok(f'real totals on {u} (they add up)', all(v in t for v in REAL))
 wa = unquote(c.get('/projects/1/whatsapp').headers['Location'])
 ok('WhatsApp summary marked as demo', 'DEMO — NOT A VALID QUOTATION' in wa)
 
@@ -107,10 +121,13 @@ v.post('/projects/new', headers=UA, data={'customer_name': '', 'mobile': ''})   
 with app.app_context():
     pid = Project.query.order_by(Project.id.desc()).first().id
 v.get(f'/projects/{pid}/pdf', headers=UA); v.get(f'/projects/{pid}/pdf/customer', headers=UA)
+v.get(f'/projects/{SAMPLE}/pdf', headers=UA)
+v.get('/projects/new?try=1', headers=UA); v.get('/projects/new', headers=UA)
 with app.app_context():
     st = DemoStat.query.one()
-    ok(f'demo counts: 1 visitor (no repeat, no bot), 1 quotation, 2 PDFs ({st.starts}, {st.quotations}, {st.pdfs})',
-       (st.starts, st.quotations, st.pdfs) == (1, 1, 2))
+    ok(f'demo counts: 1 visitor (no repeat, no bot), 1 sample PDF, 1 Make your own, 1 quotation, 2 own PDFs '
+       f'({st.starts}, {st.sample_pdfs}, {st.tried}, {st.quotations}, {st.pdfs})',
+       (st.starts, st.sample_pdfs, st.tried, st.quotations, st.pdfs) == (1, 1, 1, 1, 2))
 
 # Nightly reset
 anon = app.test_client()

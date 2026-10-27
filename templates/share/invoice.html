@@ -87,7 +87,7 @@
       <tr class="fw-bold"><td>Invoice total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(d.total) }}</td></tr>
       </tbody>
     </table>
-    {% if not demo_mode %}<div class="small q-muted mt-2">{{ d.total_words }}</div>{% endif %}
+    <div class="small q-muted mt-2">{{ d.total_words }}</div>
     {% if d.notes %}<div class="small mt-2">{{ d.notes }}</div>{% endif %}
   </div>
 

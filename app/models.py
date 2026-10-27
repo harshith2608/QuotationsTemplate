@@ -726,6 +726,10 @@ class DemoStat(db.Model):
     # browsers opening the marketing site for the first time; added by a later database update, so no Python default:
     # inserts leave it out and the database fills in 0 (and nothing breaks before the update)
     site_visitors = db.Column(db.Integer, nullable=False, server_default='0')
+    # the demo guide's steps, added by a later update (same as site_visitors): opened the sample quotation's PDF,
+    # opened "Make your own"
+    sample_pdfs = db.Column(db.Integer, nullable=False, server_default='0')
+    tried       = db.Column(db.Integer, nullable=False, server_default='0')
 
     def __repr__(self):
         return f'<DemoStat {self.day}>'

@@ -319,6 +319,10 @@ def seed_demo(reset=False, password=None):
                                    recorded_at=created + timedelta(days=p_idx + 1)))
 
     db.session.commit()
+    from .demo import SAMPLE_KEY
+    sample = next(p for p in Project.query.all() if p.customer_name == DEMO_PROJECTS[0][0])
+    AppSetting.set(SAMPLE_KEY, str(sample.id))          # the finished quotation the public demo opens on
+    db.session.commit()
     log.append(f'Projects: {len(DEMO_PROJECTS)} quotations with rooms, items, payments and stage history.')
     extra = _seed_demo_quote_to_cash(users)
     if extra:

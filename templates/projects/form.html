@@ -56,7 +56,7 @@
   </div>
   {% endif %}
 </div>
-{% if not project and templates and not started_from and not request.args.get('blank') %}
+{% if not project and templates and not started_from and not request.args.get('blank') and not request.args.get('try') %}
 {# Starting quotations first: most quotations start from one, not from blank #}
 <div class="card shadow-sm border-0 mb-3 ki-start-cards">
   <div class="card-body">

@@ -116,9 +116,10 @@ The product's own sales page (pricing, features, a working sample quote) plus `/
 
 For your own demo deployment, set `DEMO_MODE=1`:
 
-- **One-click entry:** `/demo` signs visitors into the `DEMO_USER` account (default `demo-admin`); the login page and landing page link to it. No password is shown, so set `DEMO_PASSWORD` to something random.
+- **One-click entry:** `/demo` signs visitors into the `DEMO_USER` account (default `demo-admin`) and opens a finished sample quotation; the login page and landing page link to it. No password is shown, so set `DEMO_PASSWORD` to something random.
+- **Guide:** a bar at the top walks visitors through three steps: see the sample quotation and its PDF, make their own (`/projects/new?try=1` starts from the sample's first room with a made-up customer, so they only change a size and save), and get their PDF, then offers the free trial. The console counts each step (anonymous).
 - **Can't be vandalised or used for fakes:** saving Settings/branding, Payment Settings, Rates and Users is blocked, as are deleting quotations or payments, Razorpay links and access changes. Creating and editing quotations, stages and recording payments still work.
-- **Watermarked output:** every PDF is stamped "DEMO — NOT A VALID QUOTATION", and WhatsApp summaries are labelled as demo.
+- **Watermarked output:** every PDF is stamped "DEMO — NOT A VALID QUOTATION" with a notice that it's a sample by the fictional Demo Interiors (amounts are the real calculation, so it adds up), and WhatsApp summaries are labelled as demo.
 - **Nightly reset:** `vercel.json` schedules `/demo/reset` daily at 02:00 IST. It only runs when `DEMO_MODE=1` and the request carries `CRON_SECRET` (Vercel sends it automatically), and it **wipes and reloads the whole database** with demo data. On other hosts, run `flask seed-demo --reset --force` from a scheduler.
 
 ---

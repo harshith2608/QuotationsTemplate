@@ -518,8 +518,18 @@ def create_project():
 
     # Start from an earlier quotation (Duplicate) or a template: everything but the customer
     from . import quote_templates as QT
-    start, started_from = None, None
-    if request.args.get('from', type=int):
+    start, started_from, form_data = None, None, {}
+    from .demo import demo_enabled, sample_id
+    if request.args.get('try') and demo_enabled() and sample_id():
+        # Public demo, "Make your own": the sample's first room and a made-up customer, so a visitor only changes a size
+        sample = Project.query.get(sample_id())
+        if sample:
+            rooms = sample.rooms_with_items()[:1]
+            start = {'rooms_json': _build_rooms_json(sample, rooms=rooms), 'discount_type': 'none', 'discount_value': 0,
+                     'plywood_thickness': sample.plywood_thickness or ''}
+            form_cat = _form_catalog(sample, rooms)
+            form_data = {'customer_name': 'My first customer', 'mobile': '9000000000'}
+    elif request.args.get('from', type=int):
         from . import access, plywood as _ply
         src = Project.query.get(request.args.get('from', type=int))
         if src and src.status != 'draft' and access.can_view(src, current_user):
@@ -541,7 +551,7 @@ def create_project():
                            **form_cat,
                            item_rates=item_rates,
                            price_list=_get_price_list(),
-                           form_data={'plywood_thickness': start['plywood_thickness']} if start else {},
+                           form_data={**form_data, 'plywood_thickness': start['plywood_thickness']} if start else {},
                            rooms_json=start['rooms_json'] if start else '[]',
                            start=start, started_from=started_from, templates=QT.all_templates(),
                            chosen_template=request.args.get('template', ''),
