@@ -70,7 +70,7 @@ ok('no-JS post → thank-you page with the live demo button, no WhatsApp button'
 t = c2.get('/').text
 ok('pop-up form asks for the company name, city and email, no WhatsApp follow-up', 'name="company_name"' in t
    and 'name="city"' in t and 'name="email"' in t and 'Skip the wait' not in t)
-ok('only interior designers / furniture works count as a Lead; Others → LeadOther', "btype === 'interiors' || btype === 'furniture'" in t and "track('LeadOther')" in t)
+ok('every trade it\'s for counts as a Lead; Others → LeadOther', "if (btype && btype !== 'other') track('Lead'" in t and "track('LeadOther')" in t)
 ok('Lead event sends a value and INR currency (Meta asks for both)', 'leadValue: 1000.0' in t
    and "track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype })" in t)
 t = c2.post('/trial-request', data={'name': '', 'phone': ''}, environ_base={'REMOTE_ADDR': '10.9.9.8'}).text
@@ -143,6 +143,11 @@ ok('self-serve on: an interior designer gets "set up my app now" (a signed link 
 r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type='other', business_other='Tiles'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.2'})
 ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
+r = c5.post('/trial-request', data=dict(good, phone='9811100051', business_type='upvc'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.8'})
+ok('…uPVC, glass and kitchen firms set up their own app too', r.get_json()['ok'] and r.get_json()['setup_url']
+   and all(f'value="{v}"' in c5.get('/free-trial').text for v in ('kitchens', 'upvc', 'glass'))
+   and 'uPVC windows &amp; doors' in c5.get('/free-trial').text)
 t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
 ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
 

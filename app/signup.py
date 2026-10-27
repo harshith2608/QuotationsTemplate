@@ -1,6 +1,6 @@
 """Self-serve trials: a business that asks for a free trial on the website sets up its own app straight away.
 
-The website (MARKETING_SITE) stores the request as before. For interior designers and furniture works, its thank-you
+The website (MARKETING_SITE) stores the request as before. For the trades it's for (interiors, furniture, kitchens, uPVC, glass), its thank-you
 step offers "Set up your app now": a link to the console's public /start page carrying only a signed, single-use
 token for that request (no name, phone or email in the address). There they choose their web address, login and
 password; the console renames a ready-made trial (ops.claim_trial) and they sign in. "Others" still wait for the
@@ -21,7 +21,7 @@ import time
 import urllib.parse
 import urllib.request
 
-ELIGIBLE = {'interiors', 'furniture'}
+ELIGIBLE = {'interiors', 'furniture', 'kitchens', 'upvc', 'glass'}     # marketing.BUSINESS_TYPES but 'other'
 PLANS = ('6m', '1y')
 TOKEN_HOURS = 72
 MAX_PER_IP_PER_HOUR = 3

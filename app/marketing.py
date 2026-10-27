@@ -82,6 +82,7 @@ def _context():
         year=datetime.utcnow().year,
         demo_video=youtube_id(_env('MARKETING_DEMO_VIDEO', 'cJgZoWVaB80')) or 'cJgZoWVaB80',
         has_tutorials=bool(tutorials()),
+        business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items()],
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
     )
 
@@ -169,7 +170,10 @@ def terms():
 
 # ── Free-trial requests ──────────────────────────────────────────────────────
 
-BUSINESS_TYPES = {'interiors': 'Interior designer', 'furniture': 'Furniture works', 'other': 'Other'}
+# The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Every one but 'other' is a
+# trade QuoteRoom is for: they can set up their own app (signup.ELIGIBLE) and count as a Lead for the ads.
+BUSINESS_TYPES = {'interiors': 'Interior designer', 'furniture': 'Furniture works', 'kitchens': 'Modular kitchens',
+                  'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium works', 'other': 'Other'}
 MAX_PER_IP_PER_HOUR = 5
 KEEP_LEADS_DAYS = 365          # stated in the privacy policy
 
@@ -322,7 +326,7 @@ def trial_request():
         if wants_json:
             return jsonify({'ok': True, 'name': data['name'], 'pay_url': pay_url})
         return redirect(pay_url)
-    # Interior designers and furniture works can set up their app straight away (app/signup.py)
+    # The trades QuoteRoom is for can set up their app straight away (app/signup.py)
     setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
     emailed = None
     if setup and mailer.enabled():               # the link goes to their email: proves the address is theirs

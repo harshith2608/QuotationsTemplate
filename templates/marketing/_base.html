@@ -499,12 +499,12 @@ footer nav { display: flex; gap: 1.2rem; }
         // Only real target businesses count as a Lead, so the ads learn to find more of them;
         // "Others" requests are still recorded, as a separate event that ads don't optimise for
         const btype = (new FormData(form).get('business_type') || '');
-        if (btype === 'interiors' || btype === 'furniture') track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype });
+        if (btype && btype !== 'other') track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype });
         else track('LeadOther');
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
-        if (data.emailed_to) {              // interior designers / furniture works: the set-up link is in their email
+        if (data.emailed_to) {              // the trades it's for: the set-up link is in their email
           done.querySelector('[data-emailed-to]').textContent = data.emailed_to;
           done.querySelector('[data-emailed]').hidden = false;
           done.querySelector('[data-wait]').hidden = true;

@@ -39,7 +39,7 @@
   <fieldset class="field">
     <legend>Your business</legend>
     <div class="chips">
-      {% for value, label in [('interiors', 'Interior designer'), ('furniture', 'Furniture works'), ('other', 'Others')] %}
+      {% for value, label in business_types %}
       <label class="chip"><input type="radio" name="business_type" value="{{ value }}" required
              {% if form.get('business_type') == value %}checked{% endif %}><span>{{ label }}</span></label>
       {% endfor %}
