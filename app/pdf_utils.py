@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import timedelta
 from io import BytesIO
 from xml.sax.saxutils import escape
@@ -141,11 +142,19 @@ def _thank_you_text():
 
 
 def _quote_ref(project):
-    """'Quotation #: 12 · Rev 3\nDate: …' for the PDF header (the revision once revisions are kept)."""
+    """'Rev 3\nDate: …' for the PDF header (just the date before a second revision). The quotation's number is the
+    firm's own reference in the app; customers don't see it (firms asked for that)."""
     from .billing import latest_revision_number
     rev = latest_revision_number(project)
-    return (f'Quotation #: {project.id}' + (f'  ·  Rev {rev}' if rev and rev > 1 else '')
-            + f'\nDate: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
+    return ((f'Rev {rev}\n' if rev and rev > 1 else '')
+            + f'Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
+
+
+def pdf_filename(project, prefix='Quotation'):
+    """'Quotation_Priya_Sharma_27-10-2026.pdf': the customer sees it when the PDF is shared, so no quotation number."""
+    when = (project.created_at + timedelta(hours=5, minutes=30)).strftime('%d-%m-%Y')
+    name = re.sub(r'[^A-Za-z0-9]+', '_', project.customer_name or '').strip('_') or 'Customer'
+    return f'{prefix}_{name}_{when}.pdf'
 
 
 def _section_elements(styles, dark, project=None, rooms=None):
@@ -806,8 +815,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     )
 
     ref = _quote_ref(project) if rsnap is None else (
-        f'Quotation #: {project.id}  ·  Rev {revision.number}\n'
-        f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
+        f'Rev {revision.number}\n'                          # an earlier version: always say which
+        + f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
     cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
                                             'email': project.email or '', 'address': project.address or ''}
     from . import presentation
@@ -1108,8 +1117,9 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
         bill.append(Paragraph(escape(f"Mobile: {buyer['mobile']}"), small))
     if buyer.get('gstin'):
         bill.append(Paragraph(escape(f"GSTIN: {buyer['gstin']}"), small))
-    supply = [Paragraph('<b>Details</b>', small_b),
-              Paragraph(escape(f"Quotation #{data['quotation_id']}" + (f" (Rev {data['revision']})" if data.get('revision') else '')), small)]
+    supply = [Paragraph('<b>Details</b>', small_b)]
+    if (data.get('revision') or 0) > 1:
+        supply.append(Paragraph(escape(f"As per quotation Rev {data['revision']}"), small))
     if data['place_of_supply']['state']:
         supply.append(Paragraph(escape(f"Place of supply: {data['place_of_supply']['state']} ({data['place_of_supply']['code']})"), small))
     if data['gst_rate']:
@@ -1209,7 +1219,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
 # ── Presentation pages (app/presentation.py): title page, About us, Next steps ──
 
 def _title_page(project, cust, ref, page_width, palette, styles):
-    """Page 1: the firm (logo, name, tagline), then "Quotation for" the client, the quotation's number and date."""
+    """Page 1: the firm (logo, name, tagline), then "Quotation for" the client, the date (and revision)."""
     (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG,
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
     brand = get_brand()
@@ -1231,9 +1241,9 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     for line in [cust.get('address') or '', cust.get('mobile') or '', cust.get('email') or '']:
         if line:
             out.append(Paragraph(escape(line).replace('\n', '<br/>'), center('CvCl', 10, colors.HexColor('#37474f'), space=2)))
-    no, _, date = ref.partition('\n')
-    info = Table([[no.replace('Quotation #:', 'Quotation no.').strip(), date.replace('Date:', '').strip(),
-                   'Prepared by ' + project.creator.display_name]], colWidths=[page_width / 3] * 3)
+    cells = [line.replace('Date:', '').strip() for line in ref.split('\n') if line.strip()]
+    cells.append('Prepared by ' + project.creator.display_name)
+    info = Table([cells], colWidths=[page_width / len(cells)] * len(cells))
     info.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('TEXTCOLOR', (0, 0), (-1, -1), BRAND_DARK),
                               ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('LINEABOVE', (0, 0), (-1, 0), 0.5, colors.HexColor('#bdbdbd')),
                               ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.HexColor('#bdbdbd')), ('PADDING', (0, 0), (-1, -1), 8)]))

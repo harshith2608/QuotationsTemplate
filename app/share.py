@@ -171,7 +171,8 @@ def pdf(token):
     full = share.detail == 'full' and not layout.single_pdf()                     # priced by item: one quotation PDF
     make = generate_pdf if full else generate_customer_pdf                        # full or material breakdown
     buf = make(project, payment_settings=pay, total_paid=billing.paid_total(project))
-    name = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
+    from .pdf_utils import pdf_filename
+    name = pdf_filename(project)
     return _private(send_file(buf, mimetype='application/pdf', download_name=name, as_attachment=False))
 
 
