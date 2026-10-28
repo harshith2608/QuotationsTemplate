@@ -374,9 +374,10 @@ def tidy(quote):
                           'no_amount': amount is None and rate is not None})   # maybe not in their total
         if lines:
             sections.append({'name': _section(s.name) or 'Items', 'lines': lines})
-    charges = [{'name': _name(c.name), 'amount': _num(c.amount)} for c in quote.charges if _name(c.name) and _num(c.amount)]
+    charges = [{'name': _name(c.name), 'amount': _num(c.amount)} for c in quote.charges
+               if _name(c.name) and (_num(c.amount) or 0) > 0]
     return {'job_title': ' '.join(quote.job_title.split())[:60] or 'My quotation', 'sections': sections,
-            'charges': charges, 'subtotal': _num(quote.subtotal), 'discount': _num(quote.discount) or 0,
+            'charges': charges, 'subtotal': _num(quote.subtotal), 'discount': abs(_num(quote.discount) or 0),   # "- 10,000"
             'gst_percent': _num(quote.gst_percent), 'grand_total': _num(quote.grand_total),
             'payment_terms': quote.payment_terms.strip()[:3000], 'notes': quote.notes_and_terms.strip()[:5000]}
 
@@ -400,7 +401,7 @@ def from_form(form):
         if form.get(f'c{k}_keep') and _name(form.get(f'c{k}_name')) and _num(form.get(f'c{k}_amount')):
             charges.append({'name': _name(form.get(f'c{k}_name')), 'amount': _num(form.get(f'c{k}_amount'))})
     return {'job_title': ' '.join((form.get('job_title') or '').split())[:60] or 'My quotation', 'sections': sections,
-            'charges': charges, 'discount': _num(form.get('discount')) or 0, 'gst': _num(form.get('gst')),
+            'charges': charges, 'discount': abs(_num(form.get('discount')) or 0), 'gst': _num(form.get('gst')),
             'payment_terms': (form.get('payment_terms') or '').strip()[:3000], 'notes': (form.get('notes') or '').strip()[:5000]}
 
 

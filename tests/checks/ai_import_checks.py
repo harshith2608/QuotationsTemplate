@@ -41,7 +41,7 @@ READING = AI.Quote(
                   AI.Line(name='False ceiling', description='', size='696', unit='Sq.ft', quantity=1, rate=120, amount=83520),
                   AI.Line(name='Rotating chair', description='', size='', unit='Nos.', quantity=2, rate=40000, amount=None)])],
     charges=[AI.Charge(name='Design fee', amount=17331)],
-    subtotal=173312.5, discount=5000, gst_percent=18, grand_total=None,
+    subtotal=173312.5, discount=-5000, gst_percent=18, grand_total=None,
     payment_terms='50% advance, 40% before installation, 10% on handover.', notes_and_terms='Prices valid for 30 days.')
 calls = []
 
@@ -96,6 +96,8 @@ ok('…area and count columns: the printed amount wins (1 × ₹120 printed as �
    'name="s1_2_quantity" type="number" step="any" min="0" value="696"' in t)
 ok('…a line with a rate but no amount printed is pointed out (maybe not in their total)',
    t.count('No amount in your file') == 1)
+ok('…a discount printed as "- 5,000" comes in as 5,000 (the form takes no minus)',
+   'id="discount" name="discount" type="number" step="0.01" min="0" value="5000"' in t)
 ok('…the printed total for the add-up check, GST 18% picked, charges, terms', 'const printed = 173312.5' in t
    and '<option value="18" selected>' in t and 'value="Design fee"' in t and '50% advance' in t
    and 'value="2 BHK interiors"' in t)
