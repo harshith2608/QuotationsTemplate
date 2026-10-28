@@ -149,7 +149,12 @@ def scenes(S):
             d.text((W / 2, 1390), 'No payment to start  ·  quote-room.co.in', font=font(34, 'demi'), fill=MUTED, anchor='mm')
         return img
 
-    return [(hook, 2.8), (upload, 2.8), (read, 3.2), (setup, 3.0), (rebuilt, 3.0), (next_quote, 3.2), (end, 4.4)]
+    scenes_ = [(hook, 2.8), (upload, 2.8), (read, 3.2), (setup, 3.0), (rebuilt, 3.0), (next_quote, 3.2), (end, 4.4)]
+    # everything (scenes and the animations inside them) at 1/PACE speed: time to read each screen
+    return [((lambda fn: lambda t: fn(t / PACE))(fn), dur * PACE) for fn, dur in scenes_]
+
+
+PACE = 1.5
 
 
 if __name__ == '__main__':
