@@ -697,7 +697,7 @@ def quotation_email_text(project, link=''):
     from .branding import get_brand
     brand = get_brand()
     lines = [f'Hello {project.customer_name},', '',
-             f'Thank you for considering {brand["name"]}. Please find your quotation #{project.id} attached '
+             f'Thank you for considering {brand["name"]}. Please find your quotation attached '
              f'(total Rs.{project.final_total:,.2f}).']
     if link:
         lines += ['', 'You can also view it and accept it online:', link]
@@ -786,7 +786,7 @@ def reminder_message(project, amount, pay_link='', pay_settings=None):
     inv = active_invoice(project)
     total = amount_due_total(project, inv)
     paid = paid_total(project)
-    ref = f'Invoice {inv.number}' if inv else f'Quotation #{project.id}'
+    ref = f'Invoice {inv.number}' if inv else 'your quotation'
     lines = [f'Hello {project.customer_name},', '',
              f'This is a friendly reminder from *{brand["name"]}* about the payment for {ref}.', '',
              f'Total: Rs.{total:,.2f}']

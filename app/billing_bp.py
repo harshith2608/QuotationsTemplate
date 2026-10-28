@@ -199,8 +199,9 @@ def quotation_email(project_id):
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     pdf = (generate_pdf if full else generate_customer_pdf)(project, payment_settings=pay,
                                                             total_paid=billing.paid_total(project)).getvalue()
-    name = ('Quotation_' if full else 'CustomerQuotation_') + project.customer_name.replace(' ', '_') + f'_{project.id}.pdf'
-    subject = f'Quotation #{project.id} from {get_brand()["name"]}'
+    from .pdf_utils import pdf_filename
+    name = pdf_filename(project)
+    subject = f'Your quotation from {get_brand()["name"]}'
     if _send_email(to, subject, billing.quotation_email_text(project, link), attachments=[(name, pdf, 'pdf')]):
         flash(f'Quotation emailed to {to}.', 'success')
     else:
@@ -293,7 +294,7 @@ def revision_pdf(project_id, number):
     buf = generate_customer_pdf(project, revision=rev)
     name = ''.join(ch if ch.isalnum() else '_' for ch in (json.loads(rev.snapshot)['customer']['name'] or 'Quotation'))
     return send_file(buf, mimetype='application/pdf', as_attachment=request.args.get('download') == '1',
-                     download_name=f'Quotation_{name}_{project.id}_Rev{rev.number}.pdf')
+                     download_name=f'Quotation_{name}_Rev{rev.number}.pdf')
 
 
 @billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/compare')

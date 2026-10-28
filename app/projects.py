@@ -1030,7 +1030,7 @@ def create_razorpay_link(project, amount, remaining):
         'amount': int(round(amount * 100)),
         'currency': 'INR',
         'accept_partial': True,
-        'description': f"{get_brand()['name']} – " + (f'Invoice {inv.number}' if inv else f'Quotation #{project.id}')
+        'description': f"{get_brand()['name']} – " + (f'Invoice {inv.number}' if inv else 'Quotation')
                        + f" for {project.customer_name}" + ('' if amount == remaining else ' (part payment)'),
         'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean,
                      'email': project.email or ''},
@@ -1127,7 +1127,8 @@ def download_pdf(project_id):
     total_paid = sum(p.amount for p in payments_list)
     make = generate_customer_pdf if layout.single_pdf() else generate_pdf      # priced by item: one quotation PDF
     pdf_buffer = make(project, payment_settings=pay_settings, total_paid=total_paid)
-    filename = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
+    from .pdf_utils import pdf_filename
+    filename = pdf_filename(project)
     # ?download=1  → Content-Disposition: attachment  (force save to device)
     # default      → Content-Disposition: inline      (open in viewer / share sheet)
     as_attachment = request.args.get('download') == '1'
@@ -1147,7 +1148,8 @@ def download_customer_pdf(project_id):
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
     pdf_buffer = generate_customer_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
-    filename = f"CustomerQuotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
+    from .pdf_utils import pdf_filename
+    filename = pdf_filename(project)
     as_attachment = request.args.get('download') == '1'
     return send_file(pdf_buffer, as_attachment=as_attachment,
                      download_name=filename, mimetype='application/pdf')
@@ -1184,7 +1186,7 @@ def whatsapp_share(project_id):
         f"Thank you for considering *{get_brand()['name']}* for your home.",
         f"Here is your interior design quotation summary:",
         f"",
-        f"📋 *Quotation #{project.id}*",
+        f"📋 *Your quotation*",
         f"📅 Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime('%d %b %Y')}",
     ]
     if project.address:

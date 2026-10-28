@@ -28,8 +28,8 @@ c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms
                                 'about_us': 'We design homes in Pune since 2012.\n\n- 300+ homes\n- Own factory',
                                 'next_steps': '1. Confirm the quotation\n2. Site measurement'})
 after = pages(f'/projects/{pid}/pdf/customer')
-ok('page 1: the firm, then "Prepared for" the client, quotation no. and date', 'Prepared for' in after[0]
-   and cname in after[0] and 'Quotation no.' in after[0] and 'Demo Interiors' in after[0])
+ok('page 1: the firm, then "Prepared for" the client, the date (no quotation number)', 'Prepared for' in after[0]
+   and cname in after[0] and 'Quotation no' not in after[0] and 'Prepared by' in after[0] and 'Demo Interiors' in after[0])
 ok('page 2: About us, with the list', after[1].startswith('About ') and 'since 2012' in after[1] and '300+ homes' in after[1])
 ok('page 3: the quotation (client details not repeated)', 'CUSTOMER QUOTATION' in after[2] and 'Customer Details' not in after[2])
 ok('last page: Next steps (numbering cleaned) and the thank-you', 'Next steps' in after[-1] and 'Confirm the quotation' in after[-1]

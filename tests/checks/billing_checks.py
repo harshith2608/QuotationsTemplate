@@ -12,6 +12,7 @@ app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 staff = app.test_client(); staff.post('/login', data={'username': 'demo-staff', 'password': 'demo1234'})
 pdftext = lambda client, u: '\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(client.get(u).data)).pages)
+pdftext_bytes = lambda raw: '\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(raw)).pages)
 FY = billing.financial_year(date.today())
 
 def new_quote(name='Billing Test', mobile='9000000111', rooms=None, discount=('none', '0')):
@@ -343,9 +344,13 @@ ok('with email set up: sent with the PDF attached and the link in the message', 
 r = c.post(f'/projects/{pid}/email', data={'to': 'buyer@example.com', 'pdf': 'full', 'with_link': '1'}, follow_redirects=True)
 q = sent[-1]
 ok('quotation emailed: full PDF attached, link to accept online', 'Quotation emailed to buyer@example.com' in r.text
-   and q[3][0][0].startswith('Quotation_') and q[3][0][1][:4] == b'%PDF' and '/q/' in q[2] and f'Quotation #{pid}' in q[1])
+   and q[3][0][0].startswith('Quotation_') and q[3][0][1][:4] == b'%PDF' and '/q/' in q[2]
+   and q[1].startswith('Your quotation from '))
+ok('…no quotation number in the subject, the text, the file name or the PDF (firms don\'t show it to customers)',
+   f'#{pid}' not in q[1] + q[2] and f'_{pid}.pdf' not in q[3][0][0]
+   and 'Quotation #' not in pdftext_bytes(q[3][0][1]) and 'Quotation no' not in pdftext_bytes(q[3][0][1]))
 c.post(f'/projects/{pid}/email', data={'to': 'buyer@example.com', 'pdf': 'initial'})
-ok('…or the Initial Quotation without a link', sent[-1][3][0][0].startswith('CustomerQuotation_') and '/q/' not in sent[-1][2])
+ok('…or the Initial Quotation without a link', sent[-1][3][0][0].startswith('Quotation_') and '/q/' not in sent[-1][2])
 _projects._send_email = _orig_send
 with app.app_context():
     for k in ('smtp_host', 'smtp_user', 'smtp_pass'):
@@ -362,6 +367,9 @@ r = anon.get(f'/q/{token}')
 ok('link shows the Initial (room by room) view by default: sizes and room amounts, no rates or per-item amounts',
    'Room by room' in r.text and '10 ft × 5 ft' in r.text and 'Laminates – Box Work' in r.text and '= 50.00 sqft' not in r.text)
 ok('…and its PDF is the Initial (customer) quotation', 'Room-by-Room' not in pdftext(anon, f'/q/{token}/pdf'))
+_pr = anon.get(f'/q/{token}/pdf')
+ok('…the customer\'s page, its PDF and file name show no quotation number', f'Quotation #{mid}' not in r.text
+   and 'Quotation #' not in pdftext(anon, f'/q/{token}/pdf') and f'_{mid}.pdf' not in _pr.headers.get('Content-Disposition', ''))
 c.post(f'/projects/{mid}/share/detail', data={'detail': 'full'})
 rf = anon.get(f'/q/{token}')
 ok('switched to full detail: every item with size and amount, room totals', '10 ft × 5 ft' in rf.text and 'Hall total' in rf.text
