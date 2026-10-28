@@ -154,7 +154,7 @@ def scenes(S):
     return [((lambda fn: lambda t: fn(t / PACE))(fn), dur * PACE) for fn, dur in scenes_]
 
 
-PACE = 2.0
+PACE = 1.75
 
 
 if __name__ == '__main__':
