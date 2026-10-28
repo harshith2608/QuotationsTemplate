@@ -20,6 +20,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "Stop chasing payments" | Reel 21 s, 9:16 only, music | **Posted** (by 23 Oct) | `reel-payments-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_payments.py` |
 | "Do you know your profit?" | Reel 22 s, 9:16, music | **Posted** (by 23 Oct) | `reel-profit-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_profit.py` |
 | "Still typing every quotation from scratch?" (starting quotations, shown on a laptop) | Reel 22 s, 9:16 + 4:5, music | **Posted** (23 Oct) | `reel-templates-9x16.mp4`, `-4x5.mp4`, `-frames.png` | `tools/ad_video/reel_templates.py` (screens from the tutorial 14 recording) |
+| "Got an old quotation? Your app is set up." (Bring your old quotation, AI import, on a laptop) | Reel 22 s, 9:16, music | **Ready** (28 Oct) | `reel-import-9x16.mp4`, `-frames.png`; tutorial 15 (57 s) `tutorials/quoteroom-tutorial-15-bring-your-old-quotation.mp4` | `tools/ad_video/reel_import.py` (screens: `tools/tutorials/import_walkthrough.py`, old quotation: `import_sample_pdf.py`) |
 | "Does your quotation have all 6?" | Single image 4:5 | **Posted** (by 23 Oct) | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
