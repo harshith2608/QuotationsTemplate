@@ -1,4 +1,4 @@
-"""Reel 'Customer changed their mind?' (quotation revisions), 30 s:
+"""Reel 'Customer changed their mind?' (quotation revisions), 42 s:
 the problem (changes on WhatsApp, then final.pdf, final_v2.pdf… which one did they agree to?) → QuoteRoom keeps every
 version → edit, click Update (Rev 2, with what changed) → the same link shows it → changed their mind again: open
 Rev 1, Restore → they accept, and you know exactly which one → free trial. The app on a LAPTOP with a close-up below.
@@ -185,8 +185,13 @@ def scenes(S):
                    anchor='mm')
         return img
 
-    return [(hook, 3.8), (problem, 3.4), (solution, 2.3), (step_edit, 3.8), (step_kept, 3.3), (step_link, 3.0),
-            (step_restore, 4.0), (accepted, 2.9), (end, 3.4)]
+    scenes_ = [(hook, 3.8), (problem, 3.4), (solution, 2.3), (step_edit, 3.8), (step_kept, 3.3), (step_link, 3.0),
+               (step_restore, 4.0), (accepted, 2.9), (end, 3.4)]
+    # everything (scenes and the animations inside them) at 1/PACE speed: time to read each screen
+    return [((lambda fn: lambda t: fn(t / PACE))(fn), dur * PACE) for fn, dur in scenes_]
+
+
+PACE = 1.4
 
 
 if __name__ == '__main__':
