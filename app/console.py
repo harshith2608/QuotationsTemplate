@@ -1043,10 +1043,10 @@ def followups_mark(slug):
         followups.snooze(slug, max(1, min(int(f.get('snooze') or 1), 60)))
     if 'mark' in f:
         followups.set_mark(slug, mark=f.get('mark') if f.get('mark') in ('hot', 'lost', '') else '')
-    if 'note' in f:
-        followups.set_mark(slug, note=f.get('note', '').strip()[:500])
+    if f.get('note', '').strip():
+        followups.add_note(slug, f['note'], f.get('stage', '')[:20])
     if f.get('contacted'):
-        followups.log(slug, f.get('stage', '')[:20], f.get('contacted')[:10], f.get('what', '')[:300])
+        followups.log(slug, f.get('stage', '')[:20], f.get('contacted')[:10], f.get('what', '')[:500])
     audit('followup_mark', slug, ', '.join(f'{k}={f.get(k)}' for k in ('snooze', 'mark', 'contacted') if f.get(k) is not None))
     nxt = f.get('next', '')
     return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('console.followups_page'))

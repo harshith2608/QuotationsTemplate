@@ -11,7 +11,8 @@ A trial is due for a message when it hasn't been messaged for a couple of days (
 isn't snoozed and isn't marked not interested. The operator sends from their own WhatsApp (wa.me), one after another
 (the queue); each one sent is logged. The daily task also emails the early stages once each (send_stage_emails).
 Kept in the console's database: public.console_followups (the log) and public.console_trial_marks (snooze, hot, not
-interested, a note).
+interested, the latest note). Every note saved is also kept in the log (channel 'note'), so a trial's history has its
+messages, calls and notes, newest first; a note isn't a message, so it doesn't count as being in touch.
 """
 from datetime import datetime, timedelta
 
@@ -27,6 +28,7 @@ DDL = [
         stage   VARCHAR(20),
         channel VARCHAR(10) NOT NULL DEFAULT 'whatsapp',
         note    VARCHAR(300))""",
+    'ALTER TABLE public.console_followups ALTER COLUMN note TYPE VARCHAR(500)',     # notes kept in the log too
     'CREATE INDEX IF NOT EXISTS console_followups_slug ON public.console_followups (slug, at)',
     """CREATE TABLE IF NOT EXISTS public.console_trial_marks (
         slug         VARCHAR(40) PRIMARY KEY,
@@ -84,8 +86,8 @@ def last_contacts(slugs=None):
     """{slug: (at, stage, channel)} for the latest follow-up of each trial."""
     ensure_tables()
     with db.engine.connect() as conn:
-        rows = conn.execute(text('SELECT DISTINCT ON (slug) slug, at, stage, channel FROM public.console_followups '
-                                 'ORDER BY slug, at DESC')).all()
+        rows = conn.execute(text("SELECT DISTINCT ON (slug) slug, at, stage, channel FROM public.console_followups "
+                                 "WHERE channel <> 'note' ORDER BY slug, at DESC")).all()
     return {r[0]: (r[1], r[2], r[3]) for r in rows if slugs is None or r[0] in slugs}
 
 
@@ -146,10 +148,18 @@ def log(slug, stage, channel='whatsapp', note=''):
     ensure_tables()
     with db.engine.begin() as conn:
         conn.execute(text('INSERT INTO public.console_followups (slug, stage, channel, note) VALUES (:s, :st, :c, :n)'),
-                     {'s': slug, 'st': stage, 'c': channel, 'n': (note or '')[:300] or None})
+                     {'s': slug, 'st': stage, 'c': channel, 'n': (note or '')[:500] or None})
 
 
-def history(slug, limit=20):
+def add_note(slug, note, stage=''):
+    """A note: kept in the trial's history and shown as its latest note on the lists."""
+    note = (note or '').strip()[:500]
+    if note:
+        log(slug, stage, 'note', note)
+        set_mark(slug, note=note)
+
+
+def history(slug, limit=100):
     ensure_tables()
     with db.engine.connect() as conn:
         return [dict(r) for r in conn.execute(text(

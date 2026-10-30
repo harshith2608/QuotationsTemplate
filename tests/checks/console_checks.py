@@ -586,6 +586,21 @@ with app.app_context(), app.test_request_context():
     mk = _fu.marks()
 ok('snoozed and not-interested trials drop off the list (with the note kept)', not ({'fu-new', 'fu-set', 'fu-end'} & due)
    and mk['fu-set']['mark'] == 'lost' and mk['fu-set']['note'] == 'wants a call Monday')
+signed.post('/follow-ups/fu-new/mark', data={'note': 'Call him on 30 October', 'stage': 'signin'})
+signed.post('/follow-ups/fu-new/mark', data={'note': 'Called: wants a demo on Monday', 'stage': 'signin'})
+signed.post('/follow-ups/fu-new/mark', data={'note': '   '})
+with app.app_context():
+    _hist = _fu.history('fu-new')
+    _notes = [h['note'] for h in _hist if h['channel'] == 'note']
+    _lc = _fu.last_contacts()
+    _latest = _fu.marks()['fu-new']['note']
+ok('Save note: every note kept in the history, newest first (an empty one ignored); the latest one on the lists',
+   _notes == ['Called: wants a demo on Monday', 'Call him on 30 October']
+   and _latest == 'Called: wants a demo on Monday')
+ok('…a note is not a message: it doesn\'t count as being in touch', 'fu-new' not in _lc)
+tn = signed.get('/trials/fu-new').text
+ok('the trial page lists the notes with their dates', '📝 Note' in tn and 'Call him on 30 October' in tn
+   and 'wants a demo on Monday' in tn)
 tp = signed.get('/trials/fu-end').text
 ok('the trial page shows its stage and what was sent', 'Follow-up' in tp and 'Ending soon' in tp and 'Hi there' in tp)
 # Stage emails (daily task), once each
