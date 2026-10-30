@@ -91,7 +91,7 @@ def record(base, work, password):
         page.fill('input[name=password]', password)
         page.click('button[type=submit]')
         page.wait_for_timeout(800)
-        page.goto(base + '/projects?search=Sneha')
+        page.goto(base + '/projects?q=Sneha')
         quote = base + page.locator('a[href^="/projects/"]', has_text='View').first.get_attribute('href')
         page.goto(quote)
         rec.snap('quote')
