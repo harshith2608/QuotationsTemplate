@@ -30,8 +30,10 @@
   <div class="small"><span class="badge b-reminder">{{ fu.label }}</span> {{ fu.next }}
     {% if fu.mark.mark == 'hot' %}<span class="badge b-reminder">hot</span>{% elif fu.mark.mark == 'lost' %}<span class="badge b-due">not interested</span>{% endif %}
     {% if fu.mark.snooze_until %}<span class="muted">· snoozed to {{ fu.mark.snooze_until.strftime('%d %b') }}</span>{% endif %}</div>
-  {% if fu.history %}<table class="small">{% for h in fu.history[:6] %}
-    <tr><td style="white-space:nowrap">{{ h.at|ist }}</td><td>{{ h.channel }}</td><td class="muted">{{ h.note or '' }}</td></tr>{% endfor %}</table>
+  {% set kinds = {'note': '📝 Note', 'call': '📞 Call', 'whatsapp': '💬 WhatsApp', 'email': '✉️ Email'} %}
+  {% if fu.history %}<div style="max-height:320px;overflow-y:auto"><table class="small">{% for h in fu.history %}
+    <tr><td style="white-space:nowrap">{{ h.at|ist }}</td><td style="white-space:nowrap">{{ kinds.get(h.channel, h.channel) }}</td>
+      <td{% if h.channel != 'note' %} class="muted"{% endif %} style="white-space:pre-line">{{ h.note or '' }}</td></tr>{% endfor %}</table></div>
   {% else %}<p class="muted small" style="margin:0">Not messaged yet.</p>{% endif %}
   {% if sent_emails %}<div class="small"><strong>Emails</strong>
     {% for e in sent_emails[:4] %}<div>{{ e.subject }} <span class="muted">· {{ e.sent_at|ist if e.sent_at else 'by the website' }}</span>
@@ -56,7 +58,8 @@
   <form method="post" action="{{ url_for('console.followups_mark', slug=t.slug) }}" class="row" style="margin:0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="next" value="{{ url_for('console.trial_detail', slug=t.slug) }}#followup">
-    <input type="text" name="note" value="{{ fu.mark.note or '' }}" placeholder="Note, e.g. wants a call Monday" class="grow" maxlength="500">
+    <input type="hidden" name="stage" value="{{ fu.stage }}">
+    <input type="text" name="note" placeholder="Add a note, e.g. call him on 2 November" class="grow" maxlength="500" required>
     <button class="btn btn-sm" type="submit">Save note</button></form>
 </div>
 {% endif %}

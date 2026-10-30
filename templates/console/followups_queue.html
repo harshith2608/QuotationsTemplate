@@ -53,7 +53,8 @@
   <form method="post" action="{{ url_for('console.followups_mark', slug=row.slug) }}" class="row" style="margin:0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="next" value="{{ request.full_path }}">
-    <input type="text" name="note" value="{{ row.mark.note }}" placeholder="Note, e.g. wants a call Monday" class="grow" maxlength="500">
+    <input type="hidden" name="stage" value="{{ row.stage }}">
+    <input type="text" name="note" placeholder="Add a note, e.g. call him on 2 November" class="grow" maxlength="500" required>
     <button class="btn" type="submit">Save note</button></form>
 </div>
 {% endif %}
