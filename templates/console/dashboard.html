@@ -13,16 +13,25 @@
       <option value="ended">Ended</option><option value="unused">Unused (nothing done yet)</option><option value="quoting">Making quotations</option>
     </select></div>
   <span id="tsCount" class="muted small" style="padding-bottom:10px"></span>
+  <nav class="small jump" style="flex-basis:100%">Go to:
+    <a href="#newRequests">New requests</a> · <a href="#allTrials">All trials</a> · <a href="#handled">Handled requests</a> ·
+    <a href="#website">Website &amp; live demo</a> · <a href="#selfServe">Self-serve</a> · <a href="#ai-import">AI import</a> ·
+    <a href="#newTrial">New trial</a></nav>
 </div>
+<style>
+  #newRequests, #allTrials, #handled, #website, #selfServe, #ai-import, #newTrial, [data-pager] { scroll-margin-top: 150px; }
+  .pager { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 10px 0 4px; }
+  .pager[hidden] { display: none; }
+</style>
 
 {% if leads is none %}
   <p class="muted small">Trial requests aren't connected (set <span class="mono">LEADS_DATABASE_URL</span> and <span class="mono">LEADS_DATA_ENCRYPTION_KEY</span>).</p>
 {% else %}
-  <h2>New trial requests {% if new_leads %}<span class="badge b-reminder">{{ new_leads|length }}</span>{% endif %}</h2>
+  <h2 id="newRequests">New trial requests {% if new_leads %}<span class="badge b-reminder">{{ new_leads|length }}</span>{% endif %}</h2>
   {% if not new_leads %}<p class="muted">No new requests.</p>{% endif %}
-  <div class="list">
+  <div class="list" data-pager="10">
   {% for l in new_leads %}
-    <div class="item" data-search="{{ [l.name, l.company_name, l.phone, l.email, l.city, l.business]|select|join(' ')|lower }}" data-kind="lead">
+    <div class="item" data-row data-search="{{ [l.name, l.company_name, l.phone, l.email, l.city, l.business]|select|join(' ')|lower }}" data-kind="lead">
       <div class="item-head">
         <strong>{{ l.company_name or l.name }}</strong>{% if l.company_name %}<span>{{ l.name }}</span>{% endif %}
         <span class="muted">{{ l.business }}</span>
@@ -73,14 +82,14 @@
 <h2 id="allTrials">All trials <span class="muted small">({{ trials|length }}, newest first)</span></h2>
 <p id="tsNone" class="muted" hidden>No trial matches.</p>
 {% if not trials %}<p class="muted">No trials yet.</p>{% endif %}
-<div class="list">
+<div class="list" data-pager="10">
 {% for t in trials %}
   {% set st = t.status_obj %}
   {% set ct = contacts.get(t.slug, {}) %}
   {% set u0 = t.usage or {} %}
   {% set company = ct.company or u0.company_name %}
   {% set state = ('ended' if st.days_left < 0 else 'ending' if st.days_left <= 2 else 'running') if st and st.has_limit else '' %}
-  <div class="item" data-kind="trial"
+  <div class="item" data-row data-kind="trial"
        data-search="{{ [t.slug, company, u0.company_name, ct.name, ct.phone, u0.phone]|select|join(' ')|lower }}"
        data-state="{{ state }}{{ ' unused' if t.usage and not u0.used }}{{ ' quoting' if u0.quotations }}">
     <div class="item-head">
@@ -126,11 +135,11 @@
 {% if leads %}
   {% set done = leads|selectattr('link_status')|list %}
   {% if done %}
-  <h2>Handled requests</h2>
-  <div class="card"><table>
+  <h2 id="handled">Handled requests <span class="muted small">({{ done|length }})</span></h2>
+  <div class="card"><table data-pager="15">
     <tr><th>Request</th><th>Outcome</th><th></th></tr>
     {% for l in done %}
-    <tr data-kind="lead" {% if loop.index > 30 %}data-more="1" hidden{% endif %} data-search="{{ [l.name, l.company_name, l.phone, l.email, l.link_slug]|select|join(' ')|lower }}"><td>{{ l.name }}{% if l.company_name %} ({{ l.company_name }}){% endif %} <span class="muted small">· {{ l.created_at|ist }}</span></td>
+    <tr data-row data-kind="lead" data-search="{{ [l.name, l.company_name, l.phone, l.email, l.link_slug]|select|join(' ')|lower }}"><td>{{ l.name }}{% if l.company_name %} ({{ l.company_name }}){% endif %} <span class="muted small">· {{ l.created_at|ist }}</span></td>
         <td>{% if l.link_status == 'trial' %}trial <a href="{{ url_for('console.trial_detail', slug=l.link_slug) }}">{{ l.link_slug }}</a>{% else %}<span class="muted">not interested</span>{% endif %}</td>
         <td>{% if l.link_status == 'dismissed' %}
           <form method="post" action="{{ url_for('console.restore_lead', lead_id=l.id) }}" style="margin:0">
@@ -142,7 +151,7 @@
 {% endif %}
 
 {% if demo_stats %}
-<h2>Website &amp; live demo</h2>
+<h2 id="website">Website &amp; live demo</h2>
 <div class="card">
   {% if demo_stats.error %}<p class="small" style="color:var(--bad)">Couldn't read the demo numbers: {{ demo_stats.error }}</p>
   {% elif demo_stats.pending %}<p class="muted small">Counting starts after the database update (Updates → Update all).</p>
@@ -164,9 +173,9 @@
   </table>
   {% if demo_stats.days %}
   <details style="margin-top:10px"><summary class="small">By day</summary>
-    <table class="small">
+    <table class="small" data-pager="7">
       <tr><th></th><th>Site</th><th>Demo</th><th>Sample PDF</th><th>Own started</th><th>Quotations</th><th>Own PDFs</th><th>Trial requests</th></tr>
-      {% for d in demo_stats.days %}<tr><td>{{ d.day.strftime('%a %d %b') }}</td><td>{{ d.site_visitors if d.site_visitors is not none else '—' }}</td>
+      {% for d in demo_stats.days %}<tr data-row><td>{{ d.day.strftime('%a %d %b') }}</td><td>{{ d.site_visitors if d.site_visitors is not none else '—' }}</td>
         <td>{{ d.starts }}</td><td>{{ d.sample_pdfs if d.sample_pdfs is not none else '—' }}</td>
         <td>{{ d.tried if d.tried is not none else '—' }}</td><td>{{ d.quotations }}</td><td>{{ d.pdfs }}</td><td>{{ d.requests }}</td></tr>{% endfor %}
     </table>
@@ -184,7 +193,7 @@
 </div>
 {% endif %}
 
-<h2>Self-serve trials</h2>
+<h2 id="selfServe">Self-serve trials</h2>
 <div class="card row" style="align-items:center">
   <div class="grow small">
     {% if self_serve %}Businesses in the trades QuoteRoom is for (all but "Others") who request a trial on the website set up their own app
@@ -225,7 +234,7 @@
   {% endif %}
 </div>
 
-<h2>New trial (without a request)</h2>
+<h2 id="newTrial">New trial (without a request)</h2>
 <div class="card">
   <form method="post" action="{{ url_for('console.create_trial') }}" class="row" data-confirm="Create this trial?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -245,6 +254,29 @@
 
 <script>
 (function () {
+  // Paging: each [data-pager="N"] list shows N of its [data-row]s at a time; rows the search leaves out (data-out) are skipped.
+  const pagers = [...document.querySelectorAll('[data-pager]')].map(box => {
+    const size = +box.dataset.pager, rows = [...box.querySelectorAll('[data-row]')];
+    const bar = document.createElement('div');
+    bar.className = 'pager small';
+    bar.innerHTML = '<button type="button" class="btn btn-sm">← Previous</button><span class="muted"></span><button type="button" class="btn btn-sm">Next →</button>';
+    const [prev, label, next] = bar.children;
+    box.after(bar);
+    let page = 0;
+    function draw() {
+      const match = rows.filter(r => r.dataset.out !== '1'), pages = Math.max(1, Math.ceil(match.length / size));
+      page = Math.min(page, pages - 1);
+      rows.forEach(r => { r.hidden = true; });
+      match.slice(page * size, (page + 1) * size).forEach(r => { r.hidden = false; });
+      bar.hidden = pages <= 1;
+      label.textContent = `${page * size + 1}–${Math.min((page + 1) * size, match.length)} of ${match.length} · page ${page + 1} of ${pages}`;
+      prev.disabled = page === 0; next.disabled = page >= pages - 1;
+    }
+    function go(d) { page += d; draw(); if (box.getBoundingClientRect().top < 0) box.scrollIntoView({block: 'start'}); }
+    prev.addEventListener('click', () => go(-1)); next.addEventListener('click', () => go(1));
+    draw();
+    return {reset() { page = 0; draw(); }};
+  });
   const q = document.getElementById('tsQ'), status = document.getElementById('tsStatus'), count = document.getElementById('tsCount');
   const none = document.getElementById('tsNone');
   const items = [...document.querySelectorAll('[data-search]')];
@@ -257,9 +289,11 @@
       const hay = el.dataset.search, flat = norm(hay);
       const okText = words.every(w => hay.includes(w) || (/\d/.test(w) && flat.includes(norm(w))));
       const okState = !want || (el.dataset.kind === 'trial' && (' ' + el.dataset.state + ' ').includes(' ' + want + ' '));
-      el.hidden = !(okText && (want ? okState : true)) || (!(words.length || want) && el.dataset.more === '1');
-      if (el.dataset.kind === 'trial') { trials++; if (!el.hidden) shown++; }
+      const out = !(okText && (want ? okState : true));
+      el.dataset.out = out ? '1' : '';
+      if (el.dataset.kind === 'trial') { trials++; if (!out) shown++; }
     });
+    pagers.forEach(p => p.reset());
     const filtering = words.length || want;
     count.textContent = filtering ? `${shown} of ${trials} trials` : '';
     if (none) none.hidden = !(filtering && !shown);
