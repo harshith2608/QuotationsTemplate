@@ -543,11 +543,13 @@ def contact_name(slug):
 
 
 def trial_contacts(trials):
-    """{slug: {'name', 'phone', 'company'}} for many trials, in one query to the trial requests (and each trial's own
-    phone and company name where the request didn't have them)."""
+    """{slug: {'name', 'phone', 'company', 'email', 'city', 'business', 'source'}} for many trials, in one query to
+    the trial requests (and each trial's own phone, company name and email where the request didn't have them)."""
     from . import crypto
+    from .marketing import BUSINESS_TYPES
     from .models import Lead
-    out = {t['slug']: {'name': '', 'phone': (t.get('usage') or {}).get('phone') or '', 'company': ''} for t in trials}
+    out = {t['slug']: {'name': '', 'phone': (t.get('usage') or {}).get('phone') or '', 'company': '',
+                       'email': t.get('company_email') or '', 'city': '', 'business': '', 'source': ''} for t in trials}
     with db.engine.connect() as conn:
         links = {r[0]: r[1] for r in conn.execute(text(
             "SELECT DISTINCT ON (slug) slug, lead_id FROM public.console_lead_links WHERE status = 'trial' "
@@ -559,13 +561,18 @@ def trial_contacts(trials):
             lt = Lead.__table__
             with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
                 present = {c['name'] for c in inspect(conn).get_columns('leads')}
-                cols = [lt.c.id, lt.c.name, lt.c.phone] + ([lt.c.company_name] if 'company_name' in present else [])
+                cols = [lt.c.id, lt.c.name, lt.c.phone, lt.c.business_type, lt.c.business_other, lt.c.source] + \
+                    [getattr(lt.c, c) for c in ('company_name', 'city', 'email') if c in present]
                 by_id = {r['id']: r for r in conn.execute(select(*cols).where(lt.c.id.in_(list(links.values())))).mappings()}
             for slug, lead_id in links.items():
                 r = by_id.get(lead_id)
                 if r:
+                    kind = r['business_other'] if r['business_type'] == 'other' and r['business_other'] else \
+                        BUSINESS_TYPES.get(r['business_type'] or '', '')
                     out[slug].update(name=r['name'] or '', phone=r['phone'] or out[slug]['phone'],
-                                     company=r.get('company_name') or '')
+                                     company=r.get('company_name') or '', city=r.get('city') or '',
+                                     email=r.get('email') or out[slug]['email'], business=kind or '',
+                                     source=r['source'] or '')
         except Exception:                       # the leads database being unreachable mustn't break the page
             pass
     return out
@@ -578,11 +585,12 @@ def _followup_trials():
     for t in trials:
         try:
             with tenancy.tenant_context(t['slug'], t['schema_name']):
-                s = AppSetting.get_many(['company_mobile', 'company_name'])
+                s = AppSetting.get_many(['company_mobile', 'company_name', 'company_email'])
             t.setdefault('usage', {})
             if t['usage'] is not None:
                 t['usage']['phone'] = ''.join(ch for ch in s['company_mobile'] if ch.isdigit())
             t['company_name'] = s['company_name'] or ''
+            t['company_email'] = s['company_email'] or ''
         except Exception:
             t['company_name'] = ''
     contacts = trial_contacts(trials)
@@ -887,6 +895,101 @@ def followups_whatsapp(slug):
     followups.log(slug, request.form.get('stage', '')[:20], 'whatsapp', message[:300])
     audit('followup_whatsapp', slug, request.form.get('stage', ''))
     return redirect(_wa_link(phone, message))
+
+
+# ── Sales calls: every running trial on one page, to phone them ─────────────
+
+CALL_VIEWS = [('to_call', 'To call'), ('callbacks', 'Call-backs due'), ('never', 'Never called'), ('hot', 'Hot'),
+              ('ending', 'Ending soon'), ('all', 'All running')]
+
+
+def _call_rows(view, q=''):
+    """(rows for the view, counts) for Sales calls: the follow-up board plus history, talking points, phone and QR."""
+    from . import followups
+    trials, contacts = _followup_trials()
+    cl = followups.call_list(followups.board(trials, contacts)['rows'])
+    keep = {'to_call': lambda r: r['to_call'], 'callbacks': lambda r: r['callback_due'],
+            'never': lambda r: not r['calls'] and r['mark'].get('mark') != 'lost',
+            'hot': lambda r: r['mark'].get('mark') == 'hot', 'ending': lambda r: r['stage'] in ('ending', 'ended'),
+            'all': lambda r: True}.get(view, lambda r: r['to_call'])
+    needle = q.strip().lower()
+    rows = [r for r in cl['rows'] if keep(r) and (not needle or needle in ' '.join(
+        str(x) for x in (r['slug'], r.get('company_name'), *r['contact'].values())).lower())]
+    for r in rows:
+        digits = re.sub(r'\D', '', r['contact'].get('phone') or '')
+        r['phone'] = '91' + digits if len(digits) == 10 else digits
+        r['phone_shown'] = f"+{r['phone'][:2]} {r['phone'][2:7]} {r['phone'][7:]}" if len(r['phone']) == 12 else r['phone']
+    return rows, cl['counts']
+
+
+def _call_qr(phone):
+    """A QR code (inline SVG) that dials `phone` when scanned with a phone's camera: call from the phone while the
+    details are on the laptop. Made here, so the number goes nowhere else."""
+    if not phone:
+        return ''
+    import segno
+    return segno.make(f'tel:+{phone}', error='m').svg_inline(scale=4, border=2, dark='#1f4d3f')
+
+
+def _call_dates():
+    """The call-back date picker: from tomorrow, two days ahead to start with."""
+    today = plan_mod.today()
+    return {'tomorrow': today + timedelta(days=1), 'callback_default': today + timedelta(days=2)}
+
+
+@console_bp.route('/calls')
+@login_required
+def calls_page():
+    from . import followups
+    view = request.args.get('show', 'to_call')
+    q = request.args.get('q', '')
+    rows, counts = _call_rows(view, q)
+    for r in rows[:150]:
+        r['message'] = _followup_message(r)
+        r['qr'] = _call_qr(r['phone'])
+    return render_template('console/calls.html', rows=rows, counts=counts, view=view, q=q, views=CALL_VIEWS,
+                           outcomes=followups.OUTCOMES, stages=followups.STAGES, **_call_dates())
+
+
+@console_bp.route('/calls/next')
+@login_required
+def calls_mode():
+    """Call mode: one trial at a time (the same order as the list), with the number as a QR code to dial from a phone."""
+    from . import followups
+    view = request.args.get('show', 'to_call')
+    skip = request.args.getlist('skip')
+    rows, counts = _call_rows(view)
+    left = [r for r in rows if r['slug'] not in skip]
+    row = left[0] if left else None
+    if row:
+        row['message'] = _followup_message(row)
+        row['qr'] = _call_qr(row['phone'])
+    return render_template('console/calls_mode.html', row=row, left=len(left), skip=skip, view=view,
+                           views=dict(CALL_VIEWS), outcomes=followups.OUTCOMES, stages=followups.STAGES,
+                           **_call_dates())
+
+
+@console_bp.route('/calls/<slug>/log', methods=['POST'])
+@login_required
+def calls_log(slug):
+    """How a call went: logged with its outcome and note (interested → hot, call back → that date, not interested)."""
+    from . import followups
+    _trial_or_404(slug)
+    f = request.form
+    when = None
+    if f.get('outcome') == 'callback' and f.get('callback_on'):
+        try:
+            when = datetime.strptime(f['callback_on'], '%Y-%m-%d').date()
+        except ValueError:
+            when = None
+    try:
+        followups.log_call(slug, f.get('outcome', ''), f.get('note', ''), when, f.get('stage', '')[:20])
+        audit('call_logged', slug, f.get('outcome', ''))
+        flash(f'Call logged: {followups.OUTCOMES[f["outcome"]]}.', 'ok')
+    except ValueError as exc:
+        flash(str(exc), 'error')
+    nxt = f.get('next', '')
+    return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('console.calls_page'))
 
 
 # ── Messages: every draft and email text, editable ───────────────────────────

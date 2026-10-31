@@ -1,0 +1,23 @@
+<style>
+.call-card { gap: 10px; }
+.call-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.call-top > .grow { flex: 1 1 260px; }
+.call-name { font-size: 1.1rem; font-weight: 700; }
+.call-name-big { font-size: 1.5rem; font-weight: 800; }
+.call-contact { flex: 0 1 auto; }
+.call-phone { font-size: 1.05rem; font-weight: 700; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.call-phone-big { font-size: 1.7rem; font-weight: 800; display: flex; gap: 10px; align-items: center; letter-spacing: .5px; white-space: nowrap; }
+.call-phone a, .call-phone-big a { text-decoration: none; }
+.call-qr { text-align: center; }
+.call-qr svg { width: 170px; height: 170px; background: #fff; border-radius: 10px; padding: 4px; }
+.call-qr-small summary { cursor: pointer; }
+.call-progress { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.call-progress .ok { color: var(--good); font-weight: 600; }
+.call-progress .no { color: var(--muted); }
+.call-talk { background: var(--pine-soft); border-radius: 10px; padding: 8px 12px; }
+.call-outcome { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px;
+                padding: 6px 12px; cursor: pointer; font-weight: 600; }
+.call-outcome:has(input:checked) { background: var(--pine); color: var(--on-pine); border-color: var(--pine); }
+.call-log summary { list-style: none; }
+.call-log summary::-webkit-details-marker { display: none; }
+</style>

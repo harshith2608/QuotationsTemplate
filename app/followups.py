@@ -13,6 +13,10 @@ isn't snoozed and isn't marked not interested. The operator sends from their own
 Kept in the console's database: public.console_followups (the log) and public.console_trial_marks (snooze, hot, not
 interested, the latest note). Every note saved is also kept in the log (channel 'note'), so a trial's history has its
 messages, calls and notes, newest first; a note isn't a message, so it doesn't count as being in touch.
+
+Sales calls (console → Sales calls): every running trial with its contact details, how far it got, a talking point and
+its history, for phoning them one after another. A call is logged with its outcome (OUTCOMES): interested marks it
+hot, call back on a date snoozes it until then (it comes back as a call-back due), not interested marks it lost.
 """
 from datetime import datetime, timedelta
 
@@ -178,6 +182,110 @@ def set_mark(slug, **fields):
             "(now() AT TIME ZONE 'utc')) ON CONFLICT (slug) DO UPDATE SET snooze_until = :z, mark = :m, note = :n, "
             "updated_at = (now() AT TIME ZONE 'utc')"),
             {'s': slug, 'z': cur['snooze_until'], 'm': (cur['mark'] or '')[:20], 'n': (cur['note'] or '')[:500]})
+
+
+def histories(slugs, limit=30):
+    """{slug: [{'at', 'stage', 'channel', 'note'}, …]} newest first, for many trials in one query."""
+    ensure_tables()
+    out = {s: [] for s in slugs}
+    if not out:
+        return out
+    with db.engine.connect() as conn:
+        for r in conn.execute(text('SELECT slug, at, stage, channel, note FROM public.console_followups '
+                                   'ORDER BY at DESC')).mappings():
+            if r['slug'] in out and len(out[r['slug']]) < limit:
+                out[r['slug']].append(dict(r))
+    return out
+
+
+# outcome key: (label, what it does)
+OUTCOMES = {'interested': 'Interested', 'callback': 'Call back', 'no_answer': 'No answer',
+            'not_interested': 'Not interested'}
+
+
+def log_call(slug, outcome, note='', callback_on=None, stage=''):
+    """A phone call and how it went. Interested → hot; call back → snoozed to that date (a call-back due then);
+    not interested → lost. The note joins the history with the call (and is the trial's latest note)."""
+    if outcome not in OUTCOMES:
+        raise ValueError('Choose how the call went.')
+    note = (note or '').strip()[:500]
+    from . import plan as plan_mod
+    if outcome == 'callback':
+        callback_on = callback_on or plan_mod.today() + timedelta(days=2)
+        if callback_on <= plan_mod.today():
+            raise ValueError('Choose a call-back date after today.')
+    label = OUTCOMES[outcome] + (f" on {callback_on.strftime('%d %b')}" if outcome == 'callback' else '')
+    log(slug, stage, 'call', label + (f': {note}' if note else ''))
+    fields = {}
+    if note:
+        fields['note'] = note
+    if outcome == 'interested':
+        fields['mark'] = 'hot'
+    elif outcome == 'not_interested':
+        fields['mark'] = 'lost'
+    elif outcome == 'callback':
+        fields['snooze_until'] = callback_on
+    if fields:
+        set_mark(slug, **fields)
+
+
+def talking_point(row):
+    """What to talk about on the call, from what the app can see of the trial."""
+    u, st, stage = row.get('usage') or {}, row.get('status_obj'), row.get('stage')
+    q = u.get('quotations') or 0
+    if stage == 'ended':
+        return 'Trial ended. Ask what stopped them, and offer a plan (₹4,999 for 6 months, ₹8,999 for 12).'
+    if stage == 'signin':
+        return 'Never signed in. Check they got the login link, and offer to set it up together on the call.'
+    if stage == 'details':
+        return 'Signed in, nothing set up. Offer to add their company details and logo for them (ask them to WhatsApp the logo).'
+    if stage == 'firstquote':
+        return ('Set up, no quotation yet. Offer to set up their items and rates from an old quotation they have '
+                'sent: they can upload it, or WhatsApp it to you.')
+    if stage == 'ending':
+        days = st.days_left if st else 0
+        when = 'today' if days <= 0 else 'tomorrow' if days == 1 else f'in {days} days'
+        return (f'Trial ends {when} with {q} quotation{"s" if q != 1 else ""}. Ask how it went, then the plans and '
+                'the payment link.')
+    seen = u.get('last_seen_at')
+    quiet = seen and (datetime.utcnow() - seen.replace(tzinfo=None)).days
+    if quiet and quiet >= QUIET_DAYS:
+        return (f'Made {q} quotation{"s" if q != 1 else ""}, quiet for {quiet} days. Ask what got in the way, and '
+                'if anything is missing.')
+    return f'Using it: {q} quotation{"s" if q != 1 else ""}. Ask what they like, what is missing, and if they have questions.'
+
+
+def call_list(board_rows, now=None):
+    """The board's rows for Sales calls: each with its history, calls made, call-back date and talking point, and
+    {'rows', 'counts'}. To call: not lost, not waiting for a call-back date, not called in the last 2 days."""
+    from . import plan as plan_mod
+    now = now or datetime.utcnow()
+    today = plan_mod.today()
+    hist = histories([r['slug'] for r in board_rows])
+    counts = {'to_call': 0, 'callbacks': 0, 'never': 0, 'week': 0, 'hot': 0}
+    for r in board_rows:
+        h = r['history'] = hist.get(r['slug'], [])
+        calls = [x for x in h if x['channel'] == 'call']
+        r['last_call'] = calls[0] if calls else None
+        r['calls'] = len(calls)
+        snooze = (r.get('mark') or {}).get('snooze_until')
+        r['callback_due'] = bool(snooze and snooze <= today and calls and calls[0]['note']
+                                 and calls[0]['note'].startswith('Call back'))
+        r['waiting'] = bool(snooze and snooze > today)
+        recent = calls and (now - calls[0]['at']).total_seconds() < 2 * 86400
+        lost = (r.get('mark') or {}).get('mark') == 'lost'
+        r['to_call'] = not lost and not r['waiting'] and (r['callback_due'] or not recent)
+        r['talk'] = talking_point(r)
+        counts['to_call'] += r['to_call']
+        counts['callbacks'] += r['callback_due']
+        counts['never'] += not calls and not lost
+        counts['week'] += bool(calls and (now - calls[0]['at']).days < 7)
+        counts['hot'] += (r.get('mark') or {}).get('mark') == 'hot'
+    # call-backs due first, then hot, then the board's own order (ending soon before the early stages)
+    order = {r['slug']: i for i, r in enumerate(board_rows)}
+    rows = sorted(board_rows, key=lambda r: (not r['to_call'], not r['callback_due'],
+                                             (r.get('mark') or {}).get('mark') != 'hot', order[r['slug']]))
+    return {'rows': rows, 'counts': counts}
 
 
 def snooze(slug, days):

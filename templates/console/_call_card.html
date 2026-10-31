@@ -1,0 +1,74 @@
+{# One trial on Sales calls (list and call mode): who, how far they got, contact, what to talk about, history, actions.
+   Needs: r (a row from _call_rows), back (where forms return), big (call mode). #}
+{% set u = r.usage or {} %}
+{% set kinds = {'note': '📝 Note', 'call': '📞 Call', 'whatsapp': '💬 WhatsApp', 'email': '✉️ Email'} %}
+<div class="card stack call-card" id="t-{{ r.slug }}">
+  <div class="call-top">
+    <div class="grow">
+      <div class="{{ 'call-name-big' if big else 'call-name' }}">{{ r.contact.company or r.company_name or r.slug }}
+        {% if r.mark.mark == 'hot' %}<span class="badge b-reminder">🔥 hot</span>{% elif r.mark.mark == 'lost' %}<span class="badge b-due">not interested</span>{% endif %}
+        {% if r.callback_due %}<span class="badge b-reminder">call back today</span>{% elif r.waiting %}<span class="badge b-other">call back {{ r.mark.snooze_until.strftime('%d %b') }}</span>{% endif %}</div>
+      <div>{{ r.contact.name or 'No name' }}{% if r.contact.city %} · {{ r.contact.city }}{% endif %}{% if r.contact.business %} · {{ r.contact.business }}{% endif %}</div>
+      <div class="muted small">Trial {{ 'ended' if r.stage == 'ended' else 'started' }}{% if r.created_at %} {{ r.created_at.strftime('%d %b') }}{% endif %}{% if r.status_obj and r.status_obj.has_limit and r.stage != 'ended' %} · {{ r.status_obj.days_left }} day{{ '' if r.status_obj.days_left == 1 else 's' }} left{% endif %}{% if r.contact.source %} · from {{ r.contact.source }}{% endif %}
+        · <a href="{{ url_for('console.trial_detail', slug=r.slug) }}" target="_blank" rel="noopener">trial page</a></div>
+    </div>
+    <div class="call-contact">
+      {% if r.phone %}<div class="{{ 'call-phone-big' if big else 'call-phone' }}"><a href="tel:+{{ r.phone }}">{{ r.phone_shown }}</a>
+        <button class="btn btn-sm" type="button" data-copy-text="+{{ r.phone }}">Copy</button></div>{% else %}<div class="muted">No phone number</div>{% endif %}
+      {% if r.contact.email %}<div class="small"><a href="mailto:{{ r.contact.email }}">{{ r.contact.email }}</a></div>{% else %}<div class="muted small">No email</div>{% endif %}
+    </div>
+    {% if r.qr %}
+    {% if big %}<div class="call-qr" title="Scan with your phone's camera to call">{{ r.qr|safe }}<div class="muted small">Scan to call</div></div>
+    {% else %}<details class="call-qr-small"><summary class="small">📱 Scan to call</summary><div class="call-qr">{{ r.qr|safe }}</div></details>{% endif %}
+    {% endif %}
+  </div>
+
+  <div class="call-progress small">
+    <span class="badge {{ 'b-active' if r.stage == 'quoting' else 'b-reminder' if r.stage in ('ending', 'ended') else 'b-other' }}">{{ r.stage_label }}</span>
+    {% for ok, label in [(u.last_login_at, 'signed in'), (u.company_set, 'company details'), (u.logo_set, 'logo'), (u.quotations, (u.quotations ~ ' quotation' ~ ('' if u.quotations == 1 else 's')) if u.quotations else 'a quotation')] %}
+    <span class="{{ 'ok' if ok else 'no' }}">{{ '✓' if ok else '✗' }} {{ label }}</span>{% endfor %}
+    <span class="muted">· last seen {{ u.last_seen_at|ist if u.last_seen_at else 'never' }}</span>
+  </div>
+
+  <div class="call-talk">💡 {{ r.talk }}</div>
+
+  {% if r.mark.note %}<div class="small">📝 <strong>Latest note:</strong> {{ r.mark.note }}</div>{% endif %}
+  {% if r.history %}
+  <details class="small" {{ 'open' if big }}><summary>History: {{ r.calls }} call{{ '' if r.calls == 1 else 's' }}, {{ r.history|length }} in all{% if r.history[0] %} · last {{ r.history[0].at|ist }}{% endif %}</summary>
+    <table class="small">{% for h in r.history %}
+      <tr><td style="white-space:nowrap">{{ h.at|ist }}</td><td style="white-space:nowrap">{{ kinds.get(h.channel, h.channel) }}</td>
+        <td style="white-space:pre-line">{{ h.note or '' }}</td></tr>{% endfor %}</table></details>
+  {% else %}<div class="muted small">No calls or messages yet.</div>{% endif %}
+
+  <div class="row" style="gap:8px">
+    {% if r.phone %}<a class="btn btn-primary" href="tel:+{{ r.phone }}">📞 Call</a>
+    <form method="post" action="{{ url_for('console.followups_whatsapp', slug=r.slug) }}" target="_blank" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="stage" value="{{ r.stage }}"><input type="hidden" name="phone" value="{{ r.phone }}">
+      <input type="hidden" name="message" value="{{ r.message }}">
+      <button class="btn btn-wa" type="submit" title="Opens WhatsApp with their stage's message (logged)">💬 WhatsApp</button></form>{% endif %}
+    <a class="btn" href="{{ url_for('console.email_compose', slug=r.slug) }}">✉️ Email</a>
+    <form method="post" action="{{ url_for('console.followups_mark', slug=r.slug) }}" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="mark" value="{{ '' if r.mark.mark == 'hot' else 'hot' }}">
+      <input type="hidden" name="next" value="{{ back }}">
+      <button class="btn" type="submit">{{ 'Not hot' if r.mark.mark == 'hot' else '🔥 Hot' }}</button></form>
+  </div>
+
+  <details class="call-log" {{ 'open' if big }}>
+    <summary class="btn btn-sm" style="width:fit-content">📞 How did the call go?</summary>
+    <form method="post" action="{{ url_for('console.calls_log', slug=r.slug) }}" class="stack" style="margin-top:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="stage" value="{{ r.stage }}"><input type="hidden" name="next" value="{{ after_log or back }}">
+      <div class="row" style="gap:6px">
+        {% for key, label in outcomes.items() %}
+        <label class="call-outcome"><input type="radio" name="outcome" value="{{ key }}" required
+          onchange="this.form.querySelector('.cb-date').hidden = this.value !== 'callback'"> {{ label }}</label>{% endfor %}
+      </div>
+      <label class="cb-date small" hidden>Call back on
+        <input type="date" name="callback_on" min="{{ tomorrow }}" value="{{ callback_default }}"></label>
+      <textarea name="note" rows="{{ 3 if big else 2 }}" maxlength="500" placeholder="What did they say? e.g. wants a demo for his partner on Monday"></textarea>
+      <div class="row"><button class="btn btn-primary" type="submit">Save{{ ' and next →' if big else '' }}</button></div>
+    </form>
+  </details>
+</div>

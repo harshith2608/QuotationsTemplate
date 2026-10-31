@@ -603,6 +603,53 @@ ok('the trial page lists the notes with their dates', '📝 Note' in tn and 'Cal
    and 'wants a demo on Monday' in tn)
 tp = signed.get('/trials/fu-end').text
 ok('the trial page shows its stage and what was sent', 'Follow-up' in tp and 'Ending soon' in tp and 'Hi there' in tp)
+# Sales calls: every running trial on one page, to phone them; a call logged with how it went
+sc = signed.get('/calls?show=all').text
+ok('Sales calls: every running trial with its email, how far it got, a talking point, history and a QR code to call',
+   'Sales calls' in sc and 'id="t-fu-end"' in sc and 'id="t-fu-new"' in sc and 'fu-end@x.example' in sc
+   and 'Trial ends tomorrow' in sc and 'Never signed in' in sc and '<svg' in sc and 'Scan to call' in sc
+   and 'Call him on 30 October' in sc and 'How did the call go?' in sc and 'href="tel:+' in sc)
+tc = signed.get('/calls').text
+ok('…"To call": not the one marked not interested, nor the snoozed one; the one ending soon is',
+   'id="t-fu-end"' in tc and 'id="t-fu-set"' not in tc and 'id="t-fu-new"' not in tc)
+ok('…search finds a trial by its email', 'id="t-fu-end"' in signed.get('/calls?show=all&q=fu-end@x').text
+   and 'id="t-fu-new"' not in signed.get('/calls?show=all&q=fu-end@x').text)
+_cm = signed.get('/calls/next').text
+ok('call mode: one trial at a time, with "how did it go" open and Save and next', _cm.count('class="card stack call-card"') == 1
+   and 'Save and next' in _cm and 'to go' in _cm)
+r = signed.post('/calls/fu-end/log', data={'outcome': 'interested', 'note': 'Liked it, wants the 12-month plan',
+                                           'stage': 'ending', 'next': '/calls?show=hot'})
+with app.app_context():
+    _c = [h for h in _fu.history('fu-end') if h['channel'] == 'call']
+    _m = _fu.marks()['fu-end']
+ok('a call: interested → logged with the note, marked hot, the note is its latest', r.status_code == 302
+   and r.headers['Location'].endswith('/calls?show=hot') and _c and _c[0]['note'] == 'Interested: Liked it, wants the 12-month plan'
+   and _m['mark'] == 'hot' and _m['note'] == 'Liked it, wants the 12-month plan')
+ok('…then it\'s off "To call" (just called) and on "Hot"', 'id="t-fu-end"' not in signed.get('/calls').text
+   and 'id="t-fu-end"' in signed.get('/calls?show=hot').text)
+_cb = _plm.today() + _td(days=3)
+signed.post('/calls/fu-end/log', data={'outcome': 'callback', 'callback_on': _cb.isoformat(), 'note': 'In a meeting'})
+with app.app_context():
+    _c = [h for h in _fu.history('fu-end') if h['channel'] == 'call']
+    _m = _fu.marks()['fu-end']
+ok('call back on a date → logged with the date, waiting until then', _c[0]['note'] == f"Call back on {_cb.strftime('%d %b')}: In a meeting"
+   and _m['snooze_until'] == _cb and f"call back {_cb.strftime('%d %b')}" in signed.get('/calls?show=all').text)
+with app.app_context():
+    _fu.set_mark('fu-end', snooze_until=_plm.today())          # the day comes
+cbd = signed.get('/calls?show=callbacks').text
+ok('…on the day: a call-back due, at the top of "To call"', 'id="t-fu-end"' in cbd and 'call back today' in cbd
+   and signed.get('/calls').text.index('id="t-') == signed.get('/calls').text.index('id="t-fu-end"'))
+n_before = len(_c)
+signed.post('/calls/fu-end/log', data={'outcome': 'maybe'})
+signed.post('/calls/fu-end/log', data={'outcome': 'callback', 'callback_on': _plm.today().isoformat()})
+with app.app_context():
+    _c = [h for h in _fu.history('fu-end') if h['channel'] == 'call']
+ok('no outcome, or a call-back date that isn\'t after today: nothing logged', len(_c) == n_before)
+signed.post('/calls/fu-end/log', data={'outcome': 'not_interested', 'note': 'Went with another app'})
+with app.app_context():
+    _m = _fu.marks()['fu-end']
+ok('not interested → marked lost, off every list but All', _m['mark'] == 'lost' and 'id="t-fu-end"' not in signed.get('/calls').text
+   and 'Not interested: Went with another app' in signed.get('/calls?show=all').text)
 # Stage emails (daily task), once each
 import glob as _glob, email as _em
 _box = tempfile.mkdtemp(); os.environ['MAIL_OUTBOX_DIR'] = _box
