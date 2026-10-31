@@ -12,7 +12,7 @@ from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
 from .pdf_utils import DEFAULT_TERMS
 from .catalog import WORK_TYPES, STAGES
-from . import branding
+from . import branding, pdf_look
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -1084,6 +1084,7 @@ def settings():
             if 'about_us' in request.form:          # presentation pages (shown when turned on from the console)
                 from . import presentation
                 presentation.save_texts(request.form.get('about_us'), request.form.get('next_steps'))
+            pdf_look.save(request.form)
             if 'boq_rate_shown' in request.form:     # the BOQ's Rate column (only offered with the BOQ layout)
                 shown = '1' in request.form.getlist('boq_rate_shown')
                 AppSetting.set(layout.HIDE_RATE_KEY, '' if shown else '1')
@@ -1135,6 +1136,7 @@ def settings():
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
+                           pdf_colours=pdf_look.colours() if tab == 'documents' else None, pdf_colour_choices=pdf_look.COLOURS,
                            presentation=_presentation_texts() if tab == 'documents' else None,
                            section_variables=layout.VARIABLES,
                            saved=saved, defaults=defaults, options=branding.ui_options(),

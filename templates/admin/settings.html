@@ -409,6 +409,20 @@
       {% endif %}
     </div>
   </div>
+  <div class="card shadow-sm border-0 mb-3" id="pdfLook">
+    <div class="card-header ki-card-header"><i class="bi bi-palette me-2"></i>How your PDF looks</div>
+    <div class="card-body">
+      <div class="fw-semibold mb-1">Colours</div>
+      {% for key, label in pdf_colour_choices.items() %}
+      <div class="form-check mb-1">
+        <input class="form-check-input" type="radio" name="pdf_colours" id="pc_{{ key }}" value="{{ key }}" {{ 'checked' if pdf_colours == key }}>
+        <label class="form-check-label" for="pc_{{ key }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+      <div class="form-text">For your quotations, revisions and invoices. Black &amp; white prints and photocopies cleanly;
+        your logo and photos stay as they are. Your app keeps its colours.</div>
+    </div>
+  </div>
   {% if presentation %}
   <div class="card shadow-sm border-0 mb-3" id="presentation">
     <div class="card-header ki-card-header"><i class="bi bi-journal-richtext me-2"></i>Presentation pages</div>

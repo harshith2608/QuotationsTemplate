@@ -55,10 +55,15 @@ def _money(value, spec=',.2f'):
 
 
 def _build(doc, elements):
-    """Build the PDF, adding the demo notice and watermark on every page when DEMO_MODE is on."""
+    """Build the PDF, adding the demo notice and watermark on every page when DEMO_MODE is on, in black & white when the
+    business chose it (app/pdf_look.py)."""
     from .demo import demo_enabled, demo_notice_flowable, watermark_canvas_class
+    from . import pdf_look
     if demo_enabled():
-        doc.build([demo_notice_flowable(doc.width)] + list(elements), canvasmaker=watermark_canvas_class())
+        elements = [demo_notice_flowable(doc.width)] + list(elements)
+    canvas = pdf_look.canvas_class(watermark_canvas_class() if demo_enabled() else None)
+    if canvas:
+        doc.build(elements, canvasmaker=canvas)
     else:
         doc.build(elements)
 
