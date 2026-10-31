@@ -1,0 +1,5 @@
+# Not needed by the running app (the build-skip script tools/vercel_ignore_build.sh stays: vercel.json uses it)
+tools/ad_video/
+tools/tutorials/
+docs/
+tests/
