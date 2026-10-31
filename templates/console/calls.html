@@ -16,6 +16,8 @@
   <div class="card" style="min-width:130px"><div class="muted small">Called this week</div><div style="font-size:1.5rem;font-weight:700">{{ counts.week }}</div></div>
 </div>
 
+<div style="margin-top:14px">{% set open_answers = false %}{% include "console/_call_answers.html" %}</div>
+
 <form method="get" class="row" style="margin-top:14px">
   <div class="grow"><label for="callQ">Search</label>
     <input type="search" id="callQ" name="q" value="{{ q }}" placeholder="Name, firm, city, phone or email"></div>

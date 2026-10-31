@@ -20,4 +20,13 @@
 .call-outcome:has(input:checked) { background: var(--pine); color: var(--on-pine); border-color: var(--pine); }
 .call-log summary { list-style: none; }
 .call-log summary::-webkit-details-marker { display: none; }
+.call-answers summary { cursor: pointer; }
+.call-answers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; margin-top: 10px; }
+.call-answer { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--card); }
+.call-answer[open] { grid-column: 1 / -1; background: var(--pine-soft); }
+.call-answer summary { font-weight: 700; }
+.call-answer div { margin-top: 6px; }
+@media (min-width: 1100px) { .call-mode-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+  .call-mode-grid .call-answers { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+  .call-mode-grid .call-answers-grid { grid-template-columns: 1fr; } }
 </style>

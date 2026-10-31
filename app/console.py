@@ -931,6 +931,13 @@ def _call_qr(phone):
     return segno.make(f'tel:+{phone}', error='m').svg_inline(scale=4, border=2, dark='#1f4d3f')
 
 
+def _call_answers(name=''):
+    """The quick answers for calls (console → Messages → Sales calls), with their first name and yours filled in."""
+    from . import texts
+    return [(texts.TEXTS[k][1], texts.render(k, name=_first_name(name) or 'there',
+                                             sender=_env('CONSOLE_SENDER_NAME', 'Harshith'))[1]) for k in texts.CALL_KEYS]
+
+
 def _call_dates():
     """The call-back date picker: from tomorrow, two days ahead to start with."""
     today = plan_mod.today()
@@ -948,7 +955,8 @@ def calls_page():
         r['message'] = _followup_message(r)
         r['qr'] = _call_qr(r['phone'])
     return render_template('console/calls.html', rows=rows, counts=counts, view=view, q=q, views=CALL_VIEWS,
-                           outcomes=followups.OUTCOMES, stages=followups.STAGES, **_call_dates())
+                           outcomes=followups.OUTCOMES, stages=followups.STAGES, answers=_call_answers(),
+                           **_call_dates())
 
 
 @console_bp.route('/calls/next')
@@ -965,6 +973,7 @@ def calls_mode():
         row['message'] = _followup_message(row)
         row['qr'] = _call_qr(row['phone'])
     return render_template('console/calls_mode.html', row=row, left=len(left), skip=skip, view=view,
+                           answers=_call_answers(row['contact'].get('name') if row else ''),
                            views=dict(CALL_VIEWS), outcomes=followups.OUTCOMES, stages=followups.STAGES,
                            **_call_dates())
 

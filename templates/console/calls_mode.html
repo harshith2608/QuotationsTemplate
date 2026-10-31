@@ -12,9 +12,14 @@
 {% set r = row %}{% set big = true %}
 {% set back = request.full_path %}
 {% set after_log = url_for('console.calls_mode', show=view, skip=skip + [row.slug]) %}
-{% include "console/_call_card.html" %}
-<div class="row" style="gap:8px;margin-top:12px">
-  <a class="btn" href="{{ url_for('console.calls_mode', show=view, skip=skip + [row.slug]) }}">Skip for now →</a>
+<div class="call-mode-grid">
+  <div>
+    {% include "console/_call_card.html" %}
+    <div class="row" style="gap:8px;margin-top:12px">
+      <a class="btn" href="{{ url_for('console.calls_mode', show=view, skip=skip + [row.slug]) }}">Skip for now →</a>
+    </div>
+  </div>
+  {% set open_answers = true %}{% include "console/_call_answers.html" %}
 </div>
 {% endif %}
 {% endblock %}
