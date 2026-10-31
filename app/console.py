@@ -26,7 +26,7 @@ import struct
 import time
 from datetime import datetime, timedelta
 from functools import wraps
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request, session,
                    url_for)
@@ -903,11 +903,16 @@ CALL_VIEWS = [('to_call', 'To call'), ('callbacks', 'Call-backs due'), ('never',
               ('ending', 'Ending soon'), ('all', 'All running')]
 
 
-def _call_rows(view, q=''):
-    """(rows for the view, counts) for Sales calls: the follow-up board plus history, talking points, phone and QR."""
+def _call_rows(view, q='', with_all=False):
+    """(rows for the view, counts) for Sales calls: the follow-up board plus history, talking points, phone and QR.
+    with_all: also every running trial's row (for the schedule)."""
     from . import followups
     trials, contacts = _followup_trials()
     cl = followups.call_list(followups.board(trials, contacts)['rows'])
+    for r in cl['rows']:
+        digits = re.sub(r'\D', '', r['contact'].get('phone') or '')
+        r['phone'] = '91' + digits if len(digits) == 10 else digits
+        r['phone_shown'] = f"+{r['phone'][:2]} {r['phone'][2:7]} {r['phone'][7:]}" if len(r['phone']) == 12 else r['phone']
     keep = {'to_call': lambda r: r['to_call'], 'callbacks': lambda r: r['callback_due'],
             'never': lambda r: not r['calls'] and r['mark'].get('mark') != 'lost',
             'hot': lambda r: r['mark'].get('mark') == 'hot', 'ending': lambda r: r['stage'] in ('ending', 'ended'),
@@ -915,11 +920,7 @@ def _call_rows(view, q=''):
     needle = q.strip().lower()
     rows = [r for r in cl['rows'] if keep(r) and (not needle or needle in ' '.join(
         str(x) for x in (r['slug'], r.get('company_name'), *r['contact'].values())).lower())]
-    for r in rows:
-        digits = re.sub(r'\D', '', r['contact'].get('phone') or '')
-        r['phone'] = '91' + digits if len(digits) == 10 else digits
-        r['phone_shown'] = f"+{r['phone'][:2]} {r['phone'][2:7]} {r['phone'][7:]}" if len(r['phone']) == 12 else r['phone']
-    return rows, cl['counts']
+    return (rows, cl['counts'], cl['rows']) if with_all else (rows, cl['counts'])
 
 
 def _call_qr(phone):
@@ -938,10 +939,62 @@ def _call_answers(name=''):
                                              sender=_env('CONSOLE_SENDER_NAME', 'Harshith'))[1]) for k in texts.CALL_KEYS]
 
 
+def _calendar_link(a, row):
+    """Google Calendar, with the event filled in (the operator saves it there and gets the reminder)."""
+    from . import followups
+    end = a['at'] + timedelta(minutes=30)
+    c = row['contact'] if row else {}
+    who = c.get('company') or (row or {}).get('company_name') or a['slug']
+    details = '\n'.join(x for x in (
+        f"{c.get('name') or ''} · +{row['phone']}" if row and row.get('phone') else c.get('name'),
+        f"{followups.MODES[a['mode']]}" + (f": {a['link']}" if a.get('link') else ''), a.get('note'),
+        url_for('console.calls_page', show='all', q=a['slug'], _external=True)) if x)
+    return 'https://calendar.google.com/calendar/render?' + urlencode({
+        'action': 'TEMPLATE', 'text': f'QuoteRoom demo: {who}',
+        'dates': f"{a['at']:%Y%m%dT%H%M%SZ}/{end:%Y%m%dT%H%M%SZ}", 'details': details})
+
+
+def _demo_confirm(a, row):
+    """The customer's WhatsApp confirmation of a booked demo (console → Messages)."""
+    from . import followups, texts
+    how = (f"on a video call: {a['link']}" if a.get('link') else 'on a video call (I\'ll send the link before we start)') \
+        if a['mode'] == 'video' else 'on this number'
+    body = texts.render('call_demo_confirm', name=_first_name(row['contact'].get('name')) or 'there',
+                        when=followups.when_text(a['at']), how=how, sender=_env('CONSOLE_SENDER_NAME', 'Harshith'))[1]
+    return _wa_link(row.get('phone'), body)
+
+
+def _schedule(rows):
+    """Booked demos and call-backs for the next 7 days, by day, each with what's needed to call (and the links)."""
+    from . import followups
+    by_slug = {r['slug']: r for r in rows}
+    items = []
+    for a in followups.appointments(days=7):
+        r = by_slug.get(a['slug'])
+        if not r:
+            continue
+        items.append(dict(kind='demo', a=a, r=r, at=a['at'] + followups.IST, missed=a['missed'],
+                          calendar=_calendar_link(a, r), confirm=_demo_confirm(a, r) if r.get('phone') else ''))
+    today = plan_mod.today()
+    for r in rows:
+        snooze = r['mark'].get('snooze_until')
+        if r['last_call'] and (r['last_call']['note'] or '').startswith('Call back') and snooze \
+                and snooze <= today + timedelta(days=7):
+            items.append(dict(kind='callback', r=r, at=datetime.combine(snooze, datetime.min.time()),
+                              missed=snooze < today))
+    items.sort(key=lambda i: (i['at'].date(), i['kind'] == 'callback', i['at']))
+    days = {}
+    for i in items:
+        d = max(i['at'].date(), today)                      # missed ones show under today
+        days.setdefault(d, []).append(i)
+    return [(d, days[d]) for d in sorted(days)]
+
+
 def _call_dates():
     """The call-back date picker: from tomorrow, two days ahead to start with."""
     today = plan_mod.today()
-    return {'tomorrow': today + timedelta(days=1), 'callback_default': today + timedelta(days=2)}
+    return {'tomorrow': today + timedelta(days=1), 'callback_default': today + timedelta(days=2), 'today_ist': today,
+            'ist_offset': timedelta(hours=5, minutes=30)}
 
 
 @console_bp.route('/calls')
@@ -950,11 +1003,16 @@ def calls_page():
     from . import followups
     view = request.args.get('show', 'to_call')
     q = request.args.get('q', '')
-    rows, counts = _call_rows(view, q)
+    rows, counts, every = _call_rows(view, q, with_all=True)
+    schedule = _schedule(every)
     for r in rows[:150]:
         r['message'] = _followup_message(r)
         r['qr'] = _call_qr(r['phone'])
+    for _, items in schedule:
+        for i in items:
+            i['r'].setdefault('qr', _call_qr(i['r']['phone']))
     return render_template('console/calls.html', rows=rows, counts=counts, view=view, q=q, views=CALL_VIEWS,
+                           schedule=schedule, modes=followups.MODES,
                            outcomes=followups.OUTCOMES, stages=followups.STAGES, answers=_call_answers(),
                            **_call_dates())
 
@@ -972,7 +1030,7 @@ def calls_mode():
     if row:
         row['message'] = _followup_message(row)
         row['qr'] = _call_qr(row['phone'])
-    return render_template('console/calls_mode.html', row=row, left=len(left), skip=skip, view=view,
+    return render_template('console/calls_mode.html', row=row, left=len(left), skip=skip, view=view, modes=followups.MODES,
                            answers=_call_answers(row['contact'].get('name') if row else ''),
                            views=dict(CALL_VIEWS), outcomes=followups.OUTCOMES, stages=followups.STAGES,
                            **_call_dates())
@@ -985,6 +1043,22 @@ def calls_log(slug):
     from . import followups
     _trial_or_404(slug)
     f = request.form
+    nxt = f.get('next', '')
+    back = nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('console.calls_page')
+    if f.get('outcome') == 'demo':
+        try:
+            at = datetime.strptime(f'{f.get("demo_on", "")} {f.get("demo_time", "")}', '%Y-%m-%d %H:%M')
+        except ValueError:
+            at = None
+        try:
+            followups.book(slug, at, f.get('mode', 'call'), f.get('note', ''), f.get('link', ''), f.get('stage', '')[:20])
+            audit('demo_booked', slug, f'{f.get("demo_on")} {f.get("demo_time")}')
+            flash(f'Demo booked for {followups.when_text(at - followups.IST)}. It\'s on the schedule: add it to your '
+                  'calendar and confirm it on WhatsApp from there.', 'ok')
+            return redirect(url_for('console.calls_page') + '#schedule')
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(back)
     when = None
     if f.get('outcome') == 'callback' and f.get('callback_on'):
         try:
@@ -997,8 +1071,33 @@ def calls_log(slug):
         flash(f'Call logged: {followups.OUTCOMES[f["outcome"]]}.', 'ok')
     except ValueError as exc:
         flash(str(exc), 'error')
-    nxt = f.get('next', '')
-    return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else url_for('console.calls_page'))
+    return redirect(back)
+
+
+@console_bp.route('/calls/demo/<int:aid>', methods=['POST'])
+@login_required
+def calls_demo(aid):
+    """A booked demo: done (with how it went), moved to another time, or cancelled."""
+    from . import followups
+    f = request.form
+    action = f.get('action')
+    try:
+        if action == 'move':
+            try:
+                at = datetime.strptime(f'{f.get("demo_on", "")} {f.get("demo_time", "")}', '%Y-%m-%d %H:%M')
+            except ValueError:
+                raise ValueError('Choose the new day and time.')
+            a = followups.move_appointment(aid, at)
+            flash(f'Moved to {followups.when_text(at - followups.IST)}. Update it in your calendar too.', 'ok')
+        elif action in ('done', 'cancel'):
+            a = followups.finish_appointment(aid, action == 'done', f.get('note', ''))
+            flash('Demo done and logged.' if action == 'done' else 'Demo cancelled.', 'ok')
+        else:
+            abort(400)
+        audit(f'demo_{action}', a['slug'], str(aid))
+    except ValueError as exc:
+        flash(str(exc), 'error')
+    return redirect(url_for('console.calls_page') + '#schedule')
 
 
 # ── Messages: every draft and email text, editable ───────────────────────────
