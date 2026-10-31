@@ -26,7 +26,7 @@ grey = lambda cs: all(r == g == b for r, g, b in cs)
 with app.app_context():
     p = next(x for x in Project.query.filter(Project.status != 'draft').all() if x.final_total > 0)
     inv = Invoice.query.first()
-    pid, inv_url = p.id, f'/projects/{inv.project_id}/invoices/{inv.id}/pdf'
+    pid, inv_url, cname, ctotal = p.id, f'/projects/{inv.project_id}/invoices/{inv.id}/pdf', p.customer_name, p.final_total
     presentation.set_enabled(True); db.session.commit()
 urls = [f'/projects/{pid}/pdf/customer', f'/projects/{pid}/pdf', inv_url]
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms',
@@ -34,14 +34,16 @@ c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms
 
 s = c.get('/admin/settings?tab=documents').text
 ok('Settings → Quotation PDFs: "How your PDF looks" with brand colours chosen by default',
-   'How your PDF looks' in s and 'id="pc_brand" value="brand" checked' in s and 'id="pc_bw" value="bw" ' in s)
+   'How your PDF looks' in s and 'id="pdf_colours_brand" value="brand" checked' in s and 'id="pdf_colours_bw" value="bw" ' in s
+   and 'id="pdf_font_modern" value="modern" checked' in s and 'id="pdf_header_centre" value="centre" checked' in s
+   and '/pdf/customer" target="_blank"' in s)
 before = {u: colours(u) for u in urls}
 ok('brand colours: the PDFs have colour (customer, full, invoice)', all(not grey(cs) for cs in before.values()))
 
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'pdf_colours': 'bw'})
 with app.app_context():
     ok('black & white saved', pdf_look.colours() == pdf_look.BW)
-ok('the choice shows as chosen', 'id="pc_bw" value="bw" checked' in c.get('/admin/settings?tab=documents').text)
+ok('the choice shows as chosen', 'id="pdf_colours_bw" value="bw" checked' in c.get('/admin/settings?tab=documents').text)
 after = {u: colours(u) for u in urls}
 ok('black & white: every colour in the customer PDF (with presentation pages and rich text colours), the full PDF and '
    'the invoice is black or grey', all(cs and grey(cs) for cs in after.values()))
@@ -57,3 +59,45 @@ with app.app_context():
     ok('an unknown choice is ignored', pdf_look.colours() == pdf_look.BW)
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'pdf_colours': 'brand'})
 ok('back to brand colours: colour again', not grey(colours(urls[0])))
+
+# Font: modern (Helvetica) by default, classic (Times) for every font on the page
+FONT = re.compile(rb'/BaseFont /([A-Za-z-]+)')
+def fonts(url):
+    out = set()
+    for page in PdfReader(io.BytesIO(c.get(url).data)).pages:
+        for f in (page.get('/Resources') or {}).get('/Font', {}).values():
+            out.add(f.get_object()['/BaseFont'].lstrip('/'))
+    return out
+ok('modern font: Helvetica', all(f.startswith('Helvetica') for u in urls for f in fonts(u)))
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'pdf_font': 'classic'})
+with app.app_context():
+    ok('classic font saved', pdf_look.font() == pdf_look.CLASSIC)
+ok('classic font: every font in the customer PDF, the full PDF and the invoice is Times (regular and bold)',
+   all(fonts(u) and all(f.startswith('Times') for f in fonts(u)) for u in urls) and {'Times-Roman', 'Times-Bold'} <= fonts(urls[0]))
+text = lambda u: re.sub(r'\s+', ' ', ' '.join(p.extract_text() for p in PdfReader(io.BytesIO(c.get(u).data)).pages))
+ok('classic font: the quotation still reads the same (customer name and total)', cname in text(urls[0])
+   and f'{ctotal:,.2f}' in text(urls[0]))
+
+# Header: centred by default, or the logo on the left and the details on the right
+first = lambda u: PdfReader(io.BytesIO(c.get(u).data)).pages
+def name_x(url):
+    """Where the company name starts on page 1 (of the quotation, after the presentation title page)."""
+    pages = first(url)
+    page = pages[1] if len(pages) > 2 and 'CUSTOMER QUOTATION' not in pages[0].extract_text() else pages[0]
+    xs = []
+    page.extract_text(visitor_text=lambda t, cm, tm, fd, fs: xs.append(round(cm[0] * tm[4] + cm[4], 1)) if 'Demo Interiors' in t else None)
+    return xs[0] if xs else None
+with app.app_context():
+    presentation.set_enabled(False); db.session.commit()
+x_centre = name_x(urls[0])
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'pdf_header': 'left'})
+with app.app_context():
+    ok('header saved', pdf_look.header() == pdf_look.LEFT)
+x_left = name_x(urls[0]); x_inv = name_x(inv_url)
+ok(f'details on the right: the company name moves right on the quotation and the invoice ({x_centre} → {x_left}, {x_inv})',
+   x_centre and x_left and x_inv and x_left > x_centre + 60 and x_inv > x_centre + 60)
+ok('every choice can go back to the default', c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms',
+   'pdf_colours': 'brand', 'pdf_font': 'modern', 'pdf_header': 'centre'}).status_code == 302)
+with app.app_context():
+    from app.models import AppSetting
+    ok('defaults are stored as empty', [AppSetting.get(k, '') for k in (pdf_look.COLOURS_KEY, pdf_look.FONT_KEY, pdf_look.HEADER_KEY)] == ['', '', ''])

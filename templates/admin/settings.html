@@ -412,15 +412,19 @@
   <div class="card shadow-sm border-0 mb-3" id="pdfLook">
     <div class="card-header ki-card-header"><i class="bi bi-palette me-2"></i>How your PDF looks</div>
     <div class="card-body">
-      <div class="fw-semibold mb-1">Colours</div>
-      {% for key, label in pdf_colour_choices.items() %}
+      {% for field, title, opts, chosen in pdf_look %}
+      <div class="fw-semibold mb-1{{ ' mt-3' if not loop.first }}">{{ title }}</div>
+      {% for key, label in opts.items() %}
       <div class="form-check mb-1">
-        <input class="form-check-input" type="radio" name="pdf_colours" id="pc_{{ key }}" value="{{ key }}" {{ 'checked' if pdf_colours == key }}>
-        <label class="form-check-label" for="pc_{{ key }}">{{ label }}</label>
+        <input class="form-check-input" type="radio" name="{{ field }}" id="{{ field }}_{{ key }}" value="{{ key }}" {{ 'checked' if chosen == key }}>
+        <label class="form-check-label" for="{{ field }}_{{ key }}">{{ label }}</label>
       </div>
       {% endfor %}
-      <div class="form-text">For your quotations, revisions and invoices. Black &amp; white prints and photocopies cleanly;
-        your logo and photos stay as they are. Your app keeps its colours.</div>
+      {% endfor %}
+      <div class="form-text mt-2">For your quotations, revisions and invoices. Black &amp; white prints and photocopies
+        cleanly; your logo and photos stay as they are. Your app keeps its own colours and font.
+        {% if preview_pid %}<a href="{{ url_for('projects.download_customer_pdf', project_id=preview_pid) }}" target="_blank" rel="noopener">See a quotation PDF
+        <i class="bi bi-box-arrow-up-right"></i></a> (save first).{% endif %}</div>
     </div>
   </div>
   {% if presentation %}

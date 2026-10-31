@@ -50,6 +50,31 @@ def ft_in(decimal_ft):
 GREY_BG = colors.HexColor('#f5f5f5')
 
 
+class _Fonts:
+    """The business's PDF font (app/pdf_look.py), read when each PDF is made: _F.r regular, _F.b bold, _F.i italic."""
+    r = property(lambda self: self._font('r'))
+    b = property(lambda self: self._font('b'))
+    i = property(lambda self: self._font('i'))
+
+    @staticmethod
+    def _font(k):
+        from . import pdf_look
+        return pdf_look.fonts()[k]
+
+
+_F = _Fonts()
+
+
+def _styles():
+    """reportlab's sample styles in the business's PDF font."""
+    from . import pdf_look
+    styles = getSampleStyleSheet()
+    for st in styles.byName.values():
+        if hasattr(st, 'fontName'):              # (list styles have none)
+            st.fontName = pdf_look.font_for(st.fontName)
+    return styles
+
+
 def _money(value, spec=',.2f'):
     return format(value, spec)
 
@@ -124,19 +149,37 @@ def _logo_flowable(brand, max_height=2 * cm, max_width=6 * cm):
 def _header_elements(title_style, subtitle_style, accent):
     """Logo, company name, contact line and accent rule shared by both PDFs."""
     brand = get_brand()
-    elements = []
-    logo = _logo_flowable(brand)
-    if logo:
-        elements += [logo, Spacer(1, 4)]
-    elements.append(Paragraph(escape(brand['name']), title_style))
     parts = []
     if brand['address']: parts.append(brand['address'].replace('\n', ', '))
     if brand['phone']:   parts.append(f"Ph: {brand['phone']}")
     if brand['email']:   parts.append(brand['email'])
-    subtitle = '  |  '.join(parts) if parts else brand['tagline']
-    elements.append(Paragraph(escape(subtitle), subtitle_style))
+    lines = ['  |  '.join(parts) if parts else brand['tagline']]
     if brand['gstin']:
-        elements.append(Paragraph(f"GSTIN: {escape(brand['gstin'])}", subtitle_style))
+        lines.append(f"GSTIN: {brand['gstin']}")
+    return _letterhead(brand['name'], lines, title_style, subtitle_style, accent)
+
+
+def _letterhead(name, lines, title_style, subtitle_style, accent):
+    """The top of the quotation and invoice PDFs: logo, name and contact lines (centred, or with the logo on the left and
+    the details on the right: Settings → Quotation PDFs → How your PDF looks), then the accent rule."""
+    from . import pdf_look
+    logo = _logo_flowable(get_brand())
+    lines = [l for l in lines if l]
+    if pdf_look.header() == pdf_look.LEFT:
+        right = lambda st: ParagraphStyle(st.name + 'R', parent=st, alignment=TA_RIGHT)
+        lines = [part for l in lines for part in l.split('  |  ')]          # one detail per line, none split mid-number
+        details = [Paragraph(escape(name), right(title_style))] + [Paragraph(escape(l), right(subtitle_style)) for l in lines]
+        if logo:
+            logo.hAlign = 'LEFT'
+        page_width = A4[0] - 3 * cm
+        top = Table([[logo or '', details]], colWidths=[page_width * 0.4, page_width * 0.6])
+        top.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (0, 0), 0),
+                                 ('RIGHTPADDING', (1, 0), (1, 0), 0)]))
+        elements = [top]
+    else:
+        elements = [logo, Spacer(1, 4)] if logo else []
+        elements.append(Paragraph(escape(name), title_style))
+        elements += [Paragraph(escape(l), subtitle_style) for l in lines]
     elements.append(HRFlowable(width='100%', thickness=2, color=accent, spaceAfter=8))
     return elements
 
@@ -167,7 +210,7 @@ def _section_elements(styles, dark, project=None, rooms=None):
     (Settings → Quotation PDFs): each a numbered list, empty ones left out."""
     from . import layout
     head = ParagraphStyle('SecHead', parent=styles['Normal'], fontSize=9, textColor=dark,
-                          fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+                          fontName=_F.b, spaceBefore=4, spaceAfter=4)
     body = ParagraphStyle('SecBody', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#333333'),
                           leading=12, leftIndent=12, firstLineIndent=-12, spaceAfter=1.5)
     settings = AppSetting.get_many([k for k, _ in layout.SECTION_KEYS])
@@ -202,13 +245,13 @@ def _room_rows_elements(project, page_width, palette, styles, snap=None):
     from . import item_images
     photos = item_images.data_for(it.get('image_id') for r in rows for it in r['items'])
     small = ParagraphStyle('RR', parent=styles['Normal'], fontSize=8, leading=10)
-    bold = ParagraphStyle('RRB', parent=small, fontName='Helvetica-Bold')
+    bold = ParagraphStyle('RRB', parent=small, fontName=_F.b)
     muted = ParagraphStyle('RRM', parent=small, textColor=colors.HexColor('#455a64'))
     cw = [page_width * f for f in (0.05, 0.15, 0.21, 0.22, 0.10, 0.10, 0.06, 0.11)]
     head = Table([['#', 'Room', 'Material Description', 'Item', 'Length', 'Width', "No's", 'Amount (Rs.)']], colWidths=cw)
     head.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, -1), TABLE_HEADER_FG),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('FONTNAME', (0, 0), (-1, -1), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('ALIGN', (4, 0), (-1, -1), 'CENTER'), ('ALIGN', (7, 0), (7, 0), 'RIGHT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd'))]))
@@ -229,7 +272,7 @@ def _room_rows_elements(project, page_width, palette, styles, snap=None):
         cmds = [('FONTSIZE', (0, 0), (-1, -1), 8), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('VALIGN', (0, 0), (2, -1), 'TOP'), ('ALIGN', (0, 0), (0, -1), 'CENTER'),
                 ('ALIGN', (4, 0), (6, -1), 'CENTER'), ('ALIGN', (7, 0), (7, -1), 'RIGHT'),
-                ('FONTNAME', (7, 0), (7, -1), 'Helvetica-Bold'), ('PADDING', (0, 0), (-1, -1), 5),
+                ('FONTNAME', (7, 0), (7, -1), _F.b), ('PADDING', (0, 0), (-1, -1), 5),
                 ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
                 ('LINEBEFORE', (1, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
                 ('LINEBELOW', (3, 0), (6, -2), 0.25, colors.HexColor('#e0e0e0'))]
@@ -248,13 +291,13 @@ def _totals_elements(snap, page_width, palette):
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
     tot = [['Basic Total', f'Rs. {_money(snap["subtotal"])}']]
     cmds = [('FONTSIZE', (0, 0), (-1, -1), 10), ('ALIGN', (0, 0), (-1, -1), 'RIGHT'), ('PADDING', (0, 0), (-1, -1), 7),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('BACKGROUND', (0, 0), (-1, 0), BRAND_LIGHT),
+            ('FONTNAME', (0, 0), (-1, 0), _F.b), ('BACKGROUND', (0, 0), (-1, 0), BRAND_LIGHT),
             ('TEXTCOLOR', (0, 0), (-1, 0), BRAND_DARK)]
     disc = snap['discount']
     if disc.get('amount'):
         label = f"Discount ({disc['value']:g}%)" if disc.get('type') == 'percentage' else 'Discount'
         tot.append([label, f'- Rs. {_money(disc["amount"])}'])
-        cmds += [('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#b91c1c')), ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold')]
+        cmds += [('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#b91c1c')), ('FONTNAME', (0, 1), (-1, 1), _F.b)]
     if snap.get('gst'):                        # GST on quotations: Total, GST, then the grand total with GST
         tot.append(['Total', f'Rs. {_money(snap["total"])}'])
         tot.append([f"GST @ {snap['gst_rate']:g}%", f'Rs. {_money(snap["gst"])}'])
@@ -263,7 +306,7 @@ def _totals_elements(snap, page_width, palette):
         tot.append(['TOTAL', f'Rs. {_money(snap["total"])}'])
     k = len(tot) - 1
     cmds += [('BACKGROUND', (0, k), (-1, k), TOTAL_ROW_BG), ('TEXTCOLOR', (0, k), (-1, k), TABLE_HEADER_FG),
-             ('FONTNAME', (0, k), (-1, k), 'Helvetica-Bold'), ('FONTSIZE', (0, k), (-1, k), 12)]
+             ('FONTNAME', (0, k), (-1, k), _F.b), ('FONTSIZE', (0, k), (-1, k), 12)]
     tt = Table(tot, colWidths=[page_width * 0.72, page_width * 0.28])
     tt.setStyle(TableStyle(cmds))
     return [Spacer(1, 6), KeepTogether([tt])]             # Basic Total, discount and Total on one page
@@ -277,7 +320,7 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
     snap = snap or billing.quotation_snapshot(project)
     small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
-    title = ParagraphStyle('BQT', parent=small, fontName='Helvetica-Bold')
+    title = ParagraphStyle('BQT', parent=small, fontName=_F.b)
     sections = layout.boq_rows(snap)
     from . import item_images
     photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
@@ -293,7 +336,7 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     data = [heads]
     last = len(heads) - 1
     cmds = [('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('FONTNAME', (0, 0), (-1, 0), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 8),
             ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (last - 1, -1), 'CENTER'),
             ('ALIGN', (last, 0), (last, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
@@ -306,7 +349,7 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
         # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
         data.append([sec['letter'], Paragraph(head, title)] + [''] * (last - 2) + [_money(sec['total']) if sec['total'] else ''])
         cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-2, k)),
-                 ('FONTNAME', (0, k), (0, k), 'Helvetica-Bold'), ('FONTNAME', (-1, k), (-1, k), 'Helvetica-Bold'),
+                 ('FONTNAME', (0, k), (0, k), _F.b), ('FONTNAME', (-1, k), (-1, k), _F.b),
                  ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
         if sec['lines']:
             cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
@@ -346,28 +389,28 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         bottomMargin=2 * cm
     )
 
-    styles = getSampleStyleSheet()
+    styles = _styles()
     elements = []
 
     # --- Custom Styles ---
     title_style = ParagraphStyle(
         'Title', parent=styles['Title'],
-        fontSize=22, fontName='Helvetica-Bold',
+        fontSize=22, fontName=_F.b,
         textColor=BRAND_DARK, alignment=TA_CENTER, spaceAfter=2
     )
     subtitle_style = ParagraphStyle(
         'Subtitle', parent=styles['Normal'],
-        fontSize=11, fontName='Helvetica',
+        fontSize=11, fontName=_F.r,
         textColor=colors.HexColor('#546e7a'), alignment=TA_CENTER, spaceAfter=4
     )
     section_style = ParagraphStyle(
         'Section', parent=styles['Normal'],
-        fontSize=10, fontName='Helvetica-Bold',
+        fontSize=10, fontName=_F.b,
         textColor=BRAND_DARK
     )
     normal_style = ParagraphStyle(
         'NormalCustom', parent=styles['Normal'],
-        fontSize=9, fontName='Helvetica'
+        fontSize=9, fontName=_F.r
     )
     right_style = ParagraphStyle(
         'Right', parent=styles['Normal'],
@@ -375,7 +418,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     )
     total_style = ParagraphStyle(
         'Total', parent=styles['Normal'],
-        fontSize=13, fontName='Helvetica-Bold',
+        fontSize=13, fontName=_F.b,
         textColor=BRAND_DARK, alignment=TA_RIGHT
     )
 
@@ -393,8 +436,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ('BACKGROUND', (1, 0), (1, 0), BRAND_LIGHT),
         ('TEXTCOLOR', (0, 0), (0, 0), ON_BRAND),
         ('TEXTCOLOR', (1, 0), (1, 0), BRAND_DARK),
-        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, 0), 'Helvetica'),
+        ('FONTNAME', (0, 0), (0, 0), _F.b),
+        ('FONTNAME', (1, 0), (1, 0), _F.r),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
@@ -422,9 +465,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     cust_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
         ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _F.r),
+        ('FONTNAME', (0, 0), (0, -1), _F.b),
+        ('FONTNAME', (2, 0), (2, -1), _F.b),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
         ('PADDING', (0, 0), (-1, -1), 7),
@@ -503,10 +546,10 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             rows.append(['Rates for reference, not added to the total' if rates_only else 'Section Total', '', '', '',
                          '—' if rates_only else f'Rs. {_money(room_total_cost)}'])
             total_cmds = [('SPAN', (0, -1), (3, -1)), ('ALIGN', (0, -1), (3, -1), 'RIGHT' if not rates_only else 'LEFT'),
-                          ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'), ('ALIGN', (1, 1), (3, -2), 'CENTER'),
+                          ('FONTNAME', (0, -1), (-1, -1), _F.b), ('ALIGN', (1, 1), (3, -2), 'CENTER'),
                           ('ALIGN', (4, 1), (4, -1), 'RIGHT'), ('ALIGN', (3, 2), (3, -2), 'RIGHT')]
             if rates_only:
-                total_cmds += [('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Oblique'), ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#546e7a'))]
+                total_cmds += [('FONTNAME', (0, -1), (-1, -1), _F.i), ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#546e7a'))]
             section_totals.append((room, room_total_cost))
         else:
             widths = col_widths
@@ -544,7 +587,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                     f'{_money(subtotal)}'
                 ])
             rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
-            total_cmds = [('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'), ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            total_cmds = [('FONTNAME', (3, -1), (-1, -1), _F.b), ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
                           ('ALIGN', (5, 1), (5, -1), 'RIGHT')]
 
         item_table = Table(rows, colWidths=widths, repeatRows=2)
@@ -557,10 +600,10 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             # Column headings
             ('BACKGROUND', (0, 1), (-1, 1), TABLE_HEADER_BG),
             ('TEXTCOLOR', (0, 1), (-1, 1), TABLE_HEADER_FG),
-            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 1), (-1, 1), _F.b),
             ('ALIGN', (1, 1), (-1, 1), 'CENTER'),
             # Data rows
-            ('FONTNAME', (0, 2), (-1, -2), 'Helvetica'),
+            ('FONTNAME', (0, 2), (-1, -2), _F.r),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (0, 2), (0, -1), 'LEFT'),
             ('ROWBACKGROUNDS', (0, 2), (-1, -2), [colors.white, colors.HexColor('#fafafa')]),
@@ -620,13 +663,13 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     combo_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), _F.b),
         ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+        ('FONTNAME', (0, 1), (-1, -2), _F.r),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
         ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, -1), (-1, -1), _F.b),
         ('TEXTCOLOR', (1, -1), (-1, -1), BRAND_DARK),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
@@ -652,7 +695,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         total_style_cmds += [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
             ('TEXTCOLOR', (2, 0), (-1, 0), colors.HexColor('#b91c1c')),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), _F.b),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('ALIGN', (2, 0), (-1, 0), 'RIGHT'),
             ('PADDING', (0, 0), (-1, 0), 7),
@@ -671,7 +714,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
         ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
-        ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
+        ('FONTNAME', (0, fi), (-1, fi), _F.b),
         ('FONTSIZE', (0, fi), (-1, fi), 12),
         ('ALIGN', (0, fi), (1, fi), 'LEFT'),
         ('ALIGN', (2, fi), (-1, fi), 'RIGHT'),
@@ -736,9 +779,9 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             pay_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
                 ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, -1), _F.r),
+                ('FONTNAME', (0, 0), (0, -1), _F.b),
+                ('FONTNAME', (2, 0), (2, -1), _F.b),
                 ('FONTSIZE', (0, 0), (-1, -1), 9),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
                 ('PADDING', (0, 0), (-1, -1), 7),
@@ -765,7 +808,7 @@ def _summary_from_snapshot(snap, page_width, palette):
         rows.append([snap.get('boq_label') or BOQ_ITEMS_LABEL, _money(snap['boq_total'])])
     t = Table(rows, colWidths=[page_width * 0.6, page_width * 0.4])
     t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-                           ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 10),
+                           ('FONTNAME', (0, 0), (-1, 0), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 10),
                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, BRAND_LIGHT]),
                            ('ALIGN', (1, 0), (1, -1), 'RIGHT'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
                            ('PADDING', (0, 0), (-1, -1), 8)]))
@@ -794,29 +837,29 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         bottomMargin=2 * cm
     )
 
-    styles = getSampleStyleSheet()
+    styles = _styles()
     elements = []
     page_width = A4[0] - 3 * cm
 
     # --- Styles (same as main PDF) ---
     title_style = ParagraphStyle(
         'Title2', parent=styles['Title'],
-        fontSize=22, fontName='Helvetica-Bold',
+        fontSize=22, fontName=_F.b,
         textColor=BRAND_DARK, alignment=TA_CENTER, spaceAfter=2
     )
     subtitle_style = ParagraphStyle(
         'Subtitle2', parent=styles['Normal'],
-        fontSize=11, fontName='Helvetica',
+        fontSize=11, fontName=_F.r,
         textColor=colors.HexColor('#546e7a'), alignment=TA_CENTER, spaceAfter=4
     )
     section_style = ParagraphStyle(
         'Section2', parent=styles['Normal'],
-        fontSize=10, fontName='Helvetica-Bold',
+        fontSize=10, fontName=_F.b,
         textColor=BRAND_DARK
     )
     normal_style = ParagraphStyle(
         'NormalCustom2', parent=styles['Normal'],
-        fontSize=9, fontName='Helvetica'
+        fontSize=9, fontName=_F.r
     )
 
     ref = _quote_ref(project) if rsnap is None else (
@@ -844,8 +887,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         ('BACKGROUND', (1, 0), (1, 0), BRAND_LIGHT),
         ('TEXTCOLOR', (0, 0), (0, 0), ON_BRAND),
         ('TEXTCOLOR', (1, 0), (1, 0), BRAND_DARK),
-        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, 0), 'Helvetica'),
+        ('FONTNAME', (0, 0), (0, 0), _F.b),
+        ('FONTNAME', (1, 0), (1, 0), _F.r),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
@@ -873,9 +916,9 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     cust_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
         ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _F.r),
+        ('FONTNAME', (0, 0), (0, -1), _F.b),
+        ('FONTNAME', (2, 0), (2, -1), _F.b),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
         ('PADDING', (0, 0), (-1, -1), 7),
@@ -954,13 +997,13 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         cost_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
             ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), _F.b),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTNAME', (0, 1), (-1, -2), _F.r),
             ('FONTSIZE', (0, 1), (-1, -1), 10),
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
             ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (0, -1), (-1, -1), _F.b),
             ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
             ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
             ('ALIGN', (0, 0), (0, -1), 'LEFT'),
@@ -984,7 +1027,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
             total_style_cmds += [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#b91c1c')),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, 0), _F.b),
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
                 ('ALIGN', (1, 0), (-1, 0), 'RIGHT'),
                 ('PADDING', (0, 0), (-1, 0), 8),
@@ -1003,7 +1046,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         total_style_cmds += [
             ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
             ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
-            ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
+            ('FONTNAME', (0, fi), (-1, fi), _F.b),
             ('FONTSIZE', (0, fi), (-1, fi), 12),
             ('ALIGN', (1, fi), (-1, fi), 'RIGHT'),
             ('PADDING', (0, fi), (-1, fi), 9),
@@ -1048,9 +1091,9 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
             pay_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
                 ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, -1), _F.r),
+                ('FONTNAME', (0, 0), (0, -1), _F.b),
+                ('FONTNAME', (2, 0), (2, -1), _F.b),
                 ('FONTSIZE', (0, 0), (-1, -1), 9),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
                 ('PADDING', (0, 0), (-1, -1), 7),
@@ -1075,11 +1118,11 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.5 * cm, leftMargin=1.5 * cm,
                             topMargin=1.5 * cm, bottomMargin=2 * cm)
-    styles = getSampleStyleSheet()
+    styles = _styles()
     page_width = A4[0] - 3 * cm
     small = ParagraphStyle('InvSmall', parent=styles['Normal'], fontSize=8.5, leading=11)
-    small_b = ParagraphStyle('InvSmallB', parent=small, fontName='Helvetica-Bold', textColor=BRAND_DARK)
-    title_style = ParagraphStyle('InvTitle', parent=styles['Title'], fontSize=20, fontName='Helvetica-Bold',
+    small_b = ParagraphStyle('InvSmallB', parent=small, fontName=_F.b, textColor=BRAND_DARK)
+    title_style = ParagraphStyle('InvTitle', parent=styles['Title'], fontSize=20, fontName=_F.b,
                                  textColor=BRAND_DARK, alignment=TA_CENTER, spaceAfter=2)
     subtitle_style = ParagraphStyle('InvSub', parent=styles['Normal'], fontSize=10,
                                     textColor=colors.HexColor('#546e7a'), alignment=TA_CENTER, spaceAfter=3)
@@ -1087,19 +1130,11 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
     elements = []
 
     # Seller (as it was when the invoice was issued)
-    logo = _logo_flowable(get_brand())
-    if logo:
-        elements += [logo, Spacer(1, 4)]
-    elements.append(Paragraph(escape(seller['name']), title_style))
     parts = [p for p in (seller['address'].replace('\n', ', '), seller['phone'] and f"Ph: {seller['phone']}",
                          seller['email']) if p]
-    if parts:
-        elements.append(Paragraph(escape('  |  '.join(parts)), subtitle_style))
-    if seller['gstin']:
-        elements.append(Paragraph(escape(f"GSTIN: {seller['gstin']}"
-                                         + (f"  |  State: {seller['state']} ({seller['state_code']})" if seller['state'] else '')),
-                                  subtitle_style))
-    elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
+    gstin = seller['gstin'] and (f"GSTIN: {seller['gstin']}"
+                                 + (f"  |  State: {seller['state']} ({seller['state_code']})" if seller['state'] else ''))
+    elements += _letterhead(seller['name'], ['  |  '.join(parts), gstin], title_style, subtitle_style, BRAND_ACCENT)
 
     issued = _date.fromisoformat(data['issued_on'])
     head = Table([[data['title'] + ('  (CANCELLED)' if invoice.status == 'cancelled' else ''),
@@ -1108,7 +1143,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
     head.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), BRAND_DARK), ('BACKGROUND', (1, 0), (1, 0), BRAND_LIGHT),
         ('TEXTCOLOR', (0, 0), (0, 0), ON_BRAND), ('TEXTCOLOR', (1, 0), (1, 0), BRAND_DARK),
-        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTNAME', (0, 0), (0, 0), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 8),
     ]))
@@ -1146,7 +1181,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
         rows.append([f'{name} total'] + [''] * (ncols - 2) + [_money(amount)])
         r = len(rows) - 1
         extra_style.extend([('SPAN', (0, r), (ncols - 2, r)), ('ALIGN', (0, r), (-1, r), 'RIGHT'),
-                            ('FONTNAME', (0, r), (-1, r), 'Helvetica-Bold'), ('TEXTCOLOR', (0, r), (-1, r), BRAND_DARK),
+                            ('FONTNAME', (0, r), (-1, r), _F.b), ('TEXTCOLOR', (0, r), (-1, r), BRAND_DARK),
                             ('BACKGROUND', (0, r), (-1, r), BRAND_LIGHT)])
     current, room_sum = None, 0.0
     for l in data['lines']:
@@ -1158,7 +1193,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
             rows.append([room.upper()] + [''] * (ncols - 1))
             r = len(rows) - 1
             extra_style.extend([('SPAN', (0, r), (-1, r)), ('BACKGROUND', (0, r), (-1, r), ROOM_HEADER_BG),
-                                ('TEXTCOLOR', (0, r), (-1, r), TABLE_HEADER_FG), ('FONTNAME', (0, r), (-1, r), 'Helvetica-Bold'),
+                                ('TEXTCOLOR', (0, r), (-1, r), TABLE_HEADER_FG), ('FONTNAME', (0, r), (-1, r), _F.b),
                                 ('ALIGN', (0, r), (-1, r), 'LEFT')])
         n += 1
         room_sum += l['amount']
@@ -1173,7 +1208,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
     lines_table = Table(rows, colWidths=[page_width * w for w in widths], repeatRows=1)
     lines_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('FONTNAME', (0, 0), (-1, 0), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 8.5),
         ('ALIGN', (2, 0), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')), ('PADDING', (0, 0), (-1, -1), 5),
@@ -1200,7 +1235,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
         ('FONTSIZE', (0, 0), (-1, -1), 9), ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
         ('PADDING', (0, 0), (-1, -1), 5), ('LINEBELOW', (0, 0), (-1, -1), 0.3, colors.HexColor('#e0e0e0')),
         ('BACKGROUND', (0, ti), (-1, ti), TOTAL_ROW_BG), ('TEXTCOLOR', (0, ti), (-1, ti), TABLE_HEADER_FG),
-        ('FONTNAME', (0, ti), (-1, ti), 'Helvetica-Bold'), ('FONTSIZE', (0, ti), (-1, ti), 11),
+        ('FONTNAME', (0, ti), (-1, ti), _F.b), ('FONTSIZE', (0, ti), (-1, ti), 11),
     ]))
     elements += [totals, Spacer(1, 6)]
     elements.append(Paragraph(f"<b>Amount in words:</b> {escape(data['total_words'])}", small))
@@ -1230,7 +1265,7 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     brand = get_brand()
     center = lambda name, size, color=BRAND_DARK, bold=False, space=6, leading=None: ParagraphStyle(
         name, parent=styles['Normal'], fontSize=size, leading=leading or size * 1.25, textColor=color, alignment=TA_CENTER,
-        fontName='Helvetica-Bold' if bold else 'Helvetica', spaceAfter=space)
+        fontName=_F.b if bold else _F.r, spaceAfter=space)
     out = [Spacer(1, 2.2 * cm)]
     logo = _logo_flowable(brand, max_height=3.2 * cm, max_width=8 * cm)
     if logo:
@@ -1273,7 +1308,7 @@ def _rich_flowables(html, dark, styles):
         al = align.get(b['align'], TA_LEFT)
         if b['kind'] in heads:
             size, after = heads[b['kind']]
-            st = ParagraphStyle(f'Rt{b["kind"]}', parent=body, fontName='Helvetica-Bold', fontSize=size, leading=size * 1.3,
+            st = ParagraphStyle(f'Rt{b["kind"]}', parent=body, fontName=_F.b, fontSize=size, leading=size * 1.3,
                                 textColor=dark, spaceBefore=6, spaceAfter=after, alignment=al)
             out.append(Paragraph(b['markup'] or '&nbsp;', st))
             counters.clear()
@@ -1307,7 +1342,7 @@ def _about_page(page_width, palette, styles):
         return []
     dark = palette[0]
     brand = get_brand()
-    head = ParagraphStyle('AbH', parent=styles['Normal'], fontSize=20, leading=26, textColor=dark, fontName='Helvetica-Bold',
+    head = ParagraphStyle('AbH', parent=styles['Normal'], fontSize=20, leading=26, textColor=dark, fontName=_F.b,
                           spaceAfter=6)
     body = ParagraphStyle('AbB', parent=styles['Normal'], fontSize=10.5, leading=16, textColor=colors.HexColor('#263238'),
                           spaceAfter=10)
@@ -1335,9 +1370,9 @@ def _closing_page(page_width, palette, styles):
      TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND) = palette
     brand = get_brand()
     head = ParagraphStyle('NxH', parent=styles['Normal'], fontSize=20, leading=26, textColor=BRAND_DARK,
-                          fontName='Helvetica-Bold', spaceAfter=6)
+                          fontName=_F.b, spaceAfter=6)
     body = ParagraphStyle('NxB', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=colors.HexColor('#263238'))
-    num = ParagraphStyle('NxN', parent=body, fontName='Helvetica-Bold', textColor=ON_BRAND, alignment=TA_CENTER)
+    num = ParagraphStyle('NxN', parent=body, fontName=_F.b, textColor=ON_BRAND, alignment=TA_CENTER)
     content = presentation.content()
     if content['steps_html']:                     # formatted in the editor: as they wrote it
         t = _rich_flowables(content['steps_html'], BRAND_DARK, styles)
