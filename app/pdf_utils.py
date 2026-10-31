@@ -247,7 +247,9 @@ def _room_rows_elements(project, page_width, palette, styles, snap=None):
     small = ParagraphStyle('RR', parent=styles['Normal'], fontSize=8, leading=10)
     bold = ParagraphStyle('RRB', parent=small, fontName=_F.b)
     muted = ParagraphStyle('RRM', parent=small, textColor=colors.HexColor('#455a64'))
-    cw = [page_width * f for f in (0.05, 0.15, 0.21, 0.22, 0.10, 0.10, 0.06, 0.11)]
+    centred = ParagraphStyle('RRC', parent=small, alignment=TA_CENTER)
+    # No's holds a count ("2") or, for BOQ lines, a quantity with its unit ("1,995 Sq.ft/ R.ft"): wide enough, and wrapping
+    cw = [page_width * f for f in (0.04, 0.14, 0.20, 0.22, 0.085, 0.085, 0.10, 0.13)]
     head = Table([['#', 'Room', 'Material Description', 'Item', 'Length', 'Width', "No's", 'Amount (Rs.)']], colWidths=cw)
     head.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, -1), TABLE_HEADER_FG),
@@ -266,7 +268,7 @@ def _room_rows_elements(project, page_width, palette, styles, snap=None):
                          ([Paragraph(escape(it['name']), small), item_images.pdf_image(photos[it['image_id']], 2.0, 2.0)]
                           if photos.get(it.get('image_id')) else Paragraph(escape(it['name']), small)),
                          size(it['length']), size(it['width']),
-                         layout.count_text(it['count']), _money(r['amount']) if i == 0 else ''])
+                         Paragraph(escape(layout.count_text(it['count'])), centred), _money(r['amount']) if i == 0 else ''])
         n = len(data)
         t = Table(data, colWidths=cw)
         cmds = [('FONTSIZE', (0, 0), (-1, -1), 8), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
