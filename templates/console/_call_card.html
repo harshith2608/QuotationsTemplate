@@ -7,7 +7,8 @@
     <div class="grow">
       <div class="{{ 'call-name-big' if big else 'call-name' }}">{{ r.contact.company or r.company_name or r.slug }}
         {% if r.mark.mark == 'hot' %}<span class="badge b-reminder">🔥 hot</span>{% elif r.mark.mark == 'lost' %}<span class="badge b-due">not interested</span>{% endif %}
-        {% if r.callback_due %}<span class="badge b-reminder">call back today</span>{% elif r.waiting %}<span class="badge b-other">call back {{ r.mark.snooze_until.strftime('%d %b') }}</span>{% endif %}</div>
+        {% if r.demo %}<span class="badge {{ 'b-due' if r.demo.missed else 'b-reminder' }}">📅 demo {{ (r.demo.at + ist_offset).strftime('%a %-d %b, %-I:%M %p') }}</span>
+        {% elif r.callback_due %}<span class="badge b-reminder">call back today</span>{% elif r.waiting %}<span class="badge b-other">call back {{ r.mark.snooze_until.strftime('%d %b') }}</span>{% endif %}</div>
       <div>{{ r.contact.name or 'No name' }}{% if r.contact.city %} · {{ r.contact.city }}{% endif %}{% if r.contact.business %} · {{ r.contact.business }}{% endif %}</div>
       <div class="muted small">Trial {{ 'ended' if r.stage == 'ended' else 'started' }}{% if r.created_at %} {{ r.created_at.strftime('%d %b') }}{% endif %}{% if r.status_obj and r.status_obj.has_limit and r.stage != 'ended' %} · {{ r.status_obj.days_left }} day{{ '' if r.status_obj.days_left == 1 else 's' }} left{% endif %}{% if r.contact.source %} · from {{ r.contact.source }}{% endif %}
         · <a href="{{ url_for('console.trial_detail', slug=r.slug) }}" target="_blank" rel="noopener">trial page</a></div>
@@ -63,10 +64,18 @@
       <div class="row" style="gap:6px">
         {% for key, label in outcomes.items() %}
         <label class="call-outcome"><input type="radio" name="outcome" value="{{ key }}" required
-          onchange="this.form.querySelector('.cb-date').hidden = this.value !== 'callback'"> {{ label }}</label>{% endfor %}
+          onchange="this.form.querySelector('.cb-date').hidden = this.value !== 'callback';
+                    this.form.querySelector('.demo-when').hidden = this.value !== 'demo'"> {{ '📅 ' if key == 'demo' }}{{ label }}</label>{% endfor %}
       </div>
       <label class="cb-date small" hidden>Call back on
         <input type="date" name="callback_on" min="{{ tomorrow }}" value="{{ callback_default }}"></label>
+      <div class="demo-when row small" hidden>
+        <label>Day <input type="date" name="demo_on" min="{{ today_ist }}" value="{{ tomorrow }}"></label>
+        <label>Time <input type="time" name="demo_time" value="17:00" step="900"></label>
+        <label>How <select name="mode">{% for k, l in modes.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></label>
+        <label class="grow">Video call link <span class="muted">(optional)</span>
+          <input type="url" name="link" placeholder="https://meet.google.com/…"></label>
+      </div>
       <textarea name="note" rows="{{ 3 if big else 2 }}" maxlength="500" placeholder="What did they say? e.g. wants a demo for his partner on Monday"></textarea>
       <div class="row"><button class="btn btn-primary" type="submit">Save{{ ' and next →' if big else '' }}</button></div>
     </form>

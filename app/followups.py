@@ -17,6 +17,8 @@ messages, calls and notes, newest first; a note isn't a message, so it doesn't c
 Sales calls (console → Sales calls): every running trial with its contact details, how far it got, a talking point and
 its history, for phoning them one after another. A call is logged with its outcome (OUTCOMES): interested marks it
 hot, call back on a date snoozes it until then (it comes back as a call-back due), not interested marks it lost.
+A demo (or any meeting) is booked for a day and time (public.console_appointments, times in UTC, typed in India time):
+it marks the trial hot and shows on the schedule until it's done, moved or cancelled.
 """
 from datetime import datetime, timedelta
 
@@ -40,6 +42,16 @@ DDL = [
         mark         VARCHAR(20),                 -- 'hot' / 'lost' (not interested) / ''
         note         VARCHAR(500),
         updated_at   TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'))""",
+    """CREATE TABLE IF NOT EXISTS public.console_appointments (
+        id         SERIAL PRIMARY KEY,
+        slug       VARCHAR(40) NOT NULL,
+        at         TIMESTAMP NOT NULL,                -- UTC
+        mode       VARCHAR(10) NOT NULL DEFAULT 'call',   -- 'call' / 'video'
+        link       VARCHAR(300),                      -- a video call link (Google Meet…), if any
+        note       VARCHAR(500),
+        status     VARCHAR(12) NOT NULL DEFAULT 'booked', -- 'booked' / 'done' / 'cancelled'
+        created_at TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc'))""",
+    'CREATE INDEX IF NOT EXISTS console_appointments_at ON public.console_appointments (status, at)',
 ]
 
 # key: (label, what to do next, follow-up draft key, days between messages)
@@ -199,14 +211,88 @@ def histories(slugs, limit=30):
 
 
 # outcome key: (label, what it does)
-OUTCOMES = {'interested': 'Interested', 'callback': 'Call back', 'no_answer': 'No answer',
+OUTCOMES = {'interested': 'Interested', 'demo': 'Demo booked', 'callback': 'Call back', 'no_answer': 'No answer',
             'not_interested': 'Not interested'}
+MODES = {'call': 'Phone call', 'video': 'Video call'}
+IST = timedelta(hours=5, minutes=30)
+
+
+def when_text(at_utc):
+    """'Mon 3 Nov, 5:00 PM' in India time."""
+    t = at_utc + IST
+    return t.strftime('%a %-d %b, %-I:%M %p')
+
+
+def book(slug, at_ist, mode='call', note='', link='', stage=''):
+    """Book a demo / meeting at `at_ist` (India time, naive). Logged with the trial's calls, marks it hot. Returns its id."""
+    if not isinstance(at_ist, datetime):
+        raise ValueError('Choose the day and time of the demo.')
+    at = at_ist - IST
+    if at <= datetime.utcnow():
+        raise ValueError('Choose a time that is still to come.')
+    mode = mode if mode in MODES else 'call'
+    note, link = (note or '').strip()[:500], (link or '').strip()[:300]
+    if link and not link.startswith(('https://', 'http://')):
+        link = 'https://' + link
+    ensure_tables()
+    with db.engine.begin() as conn:
+        aid = conn.execute(text('INSERT INTO public.console_appointments (slug, at, mode, link, note) VALUES '
+                                '(:s, :a, :m, :l, :n) RETURNING id'),
+                           {'s': slug, 'a': at, 'm': mode, 'l': link or None, 'n': note or None}).scalar()
+    log(slug, stage, 'call', f'Demo booked for {when_text(at)} ({MODES[mode].lower()})' + (f': {note}' if note else ''))
+    set_mark(slug, mark='hot', **({'note': note} if note else {}))
+    return aid
+
+
+def appointment(aid):
+    ensure_tables()
+    with db.engine.connect() as conn:
+        r = conn.execute(text('SELECT * FROM public.console_appointments WHERE id = :i'), {'i': aid}).mappings().first()
+    return dict(r) if r else None
+
+
+def appointments(days=7, now=None):
+    """Booked demos from any missed ones up to `days` days ahead, soonest first."""
+    ensure_tables()
+    now = now or datetime.utcnow()
+    with db.engine.connect() as conn:
+        rows = conn.execute(text("SELECT * FROM public.console_appointments WHERE status = 'booked' AND at < :until "
+                                 'ORDER BY at'), {'until': now + timedelta(days=days)}).mappings().all()
+    return [dict(r, missed=r['at'] < now - timedelta(minutes=30)) for r in rows]
+
+
+def finish_appointment(aid, done=True, note=''):
+    """Done (logged with how it went) or cancelled."""
+    a = appointment(aid)
+    if not a or a['status'] != 'booked':
+        raise ValueError('That demo is no longer on the schedule.')
+    with db.engine.begin() as conn:
+        conn.execute(text('UPDATE public.console_appointments SET status = :st WHERE id = :i'),
+                     {'st': 'done' if done else 'cancelled', 'i': aid})
+    note = (note or '').strip()[:500]
+    log(a['slug'], '', 'call', ('Demo done' if done else f"Demo on {when_text(a['at'])} cancelled") + (f': {note}' if note else ''))
+    if note:
+        set_mark(a['slug'], note=note)
+    return a
+
+
+def move_appointment(aid, at_ist):
+    a = appointment(aid)
+    if not a or a['status'] != 'booked':
+        raise ValueError('That demo is no longer on the schedule.')
+    at = at_ist - IST
+    if at <= datetime.utcnow():
+        raise ValueError('Choose a time that is still to come.')
+    with db.engine.begin() as conn:
+        conn.execute(text('UPDATE public.console_appointments SET at = :a WHERE id = :i'), {'a': at, 'i': aid})
+    log(a['slug'], '', 'call', f"Demo moved from {when_text(a['at'])} to {when_text(at)}")
+    return a
 
 
 def log_call(slug, outcome, note='', callback_on=None, stage=''):
     """A phone call and how it went. Interested → hot; call back → snoozed to that date (a call-back due then);
     not interested → lost. The note joins the history with the call (and is the trial's latest note)."""
-    if outcome not in OUTCOMES:
+    if outcome not in OUTCOMES or outcome == 'demo':          # a demo is booked with book()
         raise ValueError('Choose how the call went.')
     note = (note or '').strip()[:500]
     from . import plan as plan_mod
@@ -262,8 +348,12 @@ def call_list(board_rows, now=None):
     now = now or datetime.utcnow()
     today = plan_mod.today()
     hist = histories([r['slug'] for r in board_rows])
+    booked = {}
+    for a in appointments(days=366, now=now):
+        booked.setdefault(a['slug'], a)                       # the soonest one
     counts = {'to_call': 0, 'callbacks': 0, 'never': 0, 'week': 0, 'hot': 0}
     for r in board_rows:
+        r['demo'] = booked.get(r['slug'])
         h = r['history'] = hist.get(r['slug'], [])
         calls = [x for x in h if x['channel'] == 'call']
         r['last_call'] = calls[0] if calls else None
@@ -271,7 +361,7 @@ def call_list(board_rows, now=None):
         snooze = (r.get('mark') or {}).get('snooze_until')
         r['callback_due'] = bool(snooze and snooze <= today and calls and calls[0]['note']
                                  and calls[0]['note'].startswith('Call back'))
-        r['waiting'] = bool(snooze and snooze > today)
+        r['waiting'] = bool(snooze and snooze > today) or bool(r['demo'] and not r['demo']['missed'])
         recent = calls and (now - calls[0]['at']).total_seconds() < 2 * 86400
         lost = (r.get('mark') or {}).get('mark') == 'lost'
         r['to_call'] = not lost and not r['waiting'] and (r['callback_due'] or not recent)

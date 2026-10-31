@@ -1,0 +1,48 @@
+{# Sales calls → Schedule: booked demos (with time) and call-backs (by day) for the next 7 days; missed ones under today. #}
+<div class="card stack" id="schedule">
+  <div><strong>📅 Schedule</strong> <span class="muted small">demos and call-backs, next 7 days · book a demo from
+    "How did the call go?" → Demo booked</span></div>
+  {% if not schedule %}<p class="muted small" style="margin:0">Nothing booked yet.</p>{% endif %}
+  {% for day, items in schedule %}
+  <div>
+    <div class="sched-day">{{ 'Today' if day == today_ist else 'Tomorrow' if day == tomorrow else day.strftime('%A %-d %b') }}</div>
+    {% for i in items %}{% set r = i.r %}
+    <div class="sched-item {{ 'missed' if i.missed }}">
+      <div class="sched-time">{% if i.kind == 'demo' %}{{ i.at.strftime('%-I:%M %p') }}{% else %}Call back{% endif %}
+        {% if i.missed %}<div class="small">{{ 'missed' if i.kind == 'demo' else 'overdue' }}</div>{% endif %}</div>
+      <div class="grow">
+        <strong>{{ r.contact.company or r.company_name or r.slug }}</strong> · {{ r.contact.name or 'no name' }}
+        {% if r.phone %}· <a href="tel:+{{ r.phone }}">{{ r.phone_shown }}</a>{% endif %}
+        {% if i.kind == 'demo' %}<div class="small">{{ '📹 ' if i.a.mode == 'video' else '📞 ' }}{{ modes[i.a.mode] }}{% if i.a.link %} · <a href="{{ i.a.link }}" target="_blank" rel="noopener">{{ i.a.link }}</a>{% endif %}{% if i.a.note %} · {{ i.a.note }}{% endif %}</div>
+        {% elif r.last_call %}<div class="small muted">{{ r.last_call.note }}</div>{% endif %}
+        <div class="row" style="gap:6px;margin-top:6px">
+          {% if r.phone %}<a class="btn btn-sm btn-primary" href="tel:+{{ r.phone }}">📞 Call</a>{% endif %}
+          {% if r.qr %}<details class="call-qr-small"><summary class="btn btn-sm">📱 Scan to call</summary><div class="call-qr">{{ r.qr|safe }}</div></details>{% endif %}
+          {% if i.kind == 'demo' %}
+          <a class="btn btn-sm" href="{{ i.calendar }}" target="_blank" rel="noopener">🗓️ Add to Google Calendar</a>
+          {% if i.confirm %}<a class="btn btn-sm btn-wa" href="{{ i.confirm }}" target="_blank" rel="noopener">💬 Confirm on WhatsApp</a>{% endif %}
+          <details class="sched-act"><summary class="btn btn-sm">✓ Done</summary>
+            <form method="post" action="{{ url_for('console.calls_demo', aid=i.a.id) }}" class="row" style="margin-top:6px">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="done">
+              <input class="grow" name="note" maxlength="500" placeholder="How did it go? e.g. liked it, will pay on Friday">
+              <button class="btn btn-sm btn-primary" type="submit">Save</button></form></details>
+          <details class="sched-act"><summary class="btn btn-sm">Move</summary>
+            <form method="post" action="{{ url_for('console.calls_demo', aid=i.a.id) }}" class="row" style="margin-top:6px">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="move">
+              <input type="date" name="demo_on" min="{{ today_ist }}" value="{{ i.at.date() }}" required>
+              <input type="time" name="demo_time" value="{{ i.at.strftime('%H:%M') }}" step="900" required>
+              <button class="btn btn-sm btn-primary" type="submit">Move</button></form></details>
+          <form method="post" action="{{ url_for('console.calls_demo', aid=i.a.id) }}" style="margin:0"
+                data-confirm="Cancel the demo with {{ r.contact.company or r.slug }}?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="cancel">
+            <button class="btn btn-sm" type="submit">Cancel</button></form>
+          {% else %}
+          <a class="btn btn-sm" href="{{ url_for('console.calls_page', show='callbacks') }}#t-{{ r.slug }}">Open</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>

@@ -626,6 +626,51 @@ ok('…and editable in Messages, like every other text', 'Sales calls: quick ans
 signed.post('/messages/call_price', data={'body': 'Our own answer on price.'})
 ok('…an edited answer is what Sales calls shows', 'Our own answer on price.' in signed.get('/calls?show=all').text)
 signed.post('/messages/call_price/reset')
+# Booking a demo from a call: on the schedule, with a Google Calendar link and a WhatsApp confirmation; done / move / cancel
+_tm = _plm.today() + _td(days=1)
+r = signed.post('/calls/fu-new/log', data={'outcome': 'demo', 'demo_on': _tm.isoformat(), 'demo_time': '17:00',
+                                           'mode': 'video', 'link': 'meet.google.com/abc-defg-hij',
+                                           'note': 'Show by-item pricing, partner joins', 'stage': 'signin'})
+sch = signed.get('/calls').text
+with app.app_context():
+    _a = _fu.appointments(days=7)
+    _c = [h for h in _fu.history('fu-new') if h['channel'] == 'call']
+ok('demo booked → on the schedule tomorrow at 5:00 PM (India time; kept in UTC), hot, logged with the call',
+   r.status_code == 302 and r.headers['Location'].endswith('/calls#schedule') and len(_a) == 1
+   and _a[0]['at'] == datetime.combine(_tm, datetime.min.time()) + _td(hours=17) - _td(hours=5, minutes=30)
+   and _a[0]['link'] == 'https://meet.google.com/abc-defg-hij' and 'Tomorrow' in sch and '5:00 PM' in sch
+   and _c[0]['note'].startswith('Demo booked for ') and '5:00 PM (video call): Show by-item pricing' in _c[0]['note'])
+ok('…with Add to Google Calendar (the time in UTC) and Confirm on WhatsApp (the message, their number)',
+   'calendar.google.com/calendar/render?action=TEMPLATE' in sch and f"{_tm:%Y%m%d}T113000Z" in sch
+   and 'https://wa.me/' in sch and 'Confirming+our+demo' in sch.replace('%20', '+') and 'meet.google.com' in sch)
+ok('…the trial shows its demo, and it\'s not on "To call" until then', '📅 demo' in signed.get('/calls?show=all').text
+   and 'id="t-fu-new"' not in signed.get('/calls').text)
+r = signed.post('/calls/fu-new/log', data={'outcome': 'demo', 'demo_on': _plm.today().isoformat(), 'demo_time': '00:00'})
+with app.app_context():
+    _n = len(_fu.appointments(days=7))
+ok('a time already gone: not booked', _n == 1)
+_aid = _a[0]['id']
+signed.post(f'/calls/demo/{_aid}', data={'action': 'move', 'demo_on': (_tm + _td(days=1)).isoformat(), 'demo_time': '18:30'})
+sch = signed.get('/calls').text
+with app.app_context():
+    _a = _fu.appointments(days=7)
+ok('moved: the new time on the schedule (6:30 PM India time, 13:00 UTC)', '6:30 PM' in sch
+   and _a[0]['at'].strftime('%H:%M') == '13:00')
+signed.post(f'/calls/demo/{_aid}', data={'action': 'done', 'note': 'Liked it, will pay on Friday'})
+with app.app_context():
+    _a = _fu.appointments(days=7)
+    _c = [h for h in _fu.history('fu-new') if h['channel'] == 'call']
+ok('done: off the schedule, logged with how it went', not _a and _c[0]['note'] == 'Demo done: Liked it, will pay on Friday'
+   and any((h['note'] or '').startswith('Demo moved from') for h in _c))
+signed.post('/calls/fu-new/log', data={'outcome': 'demo', 'demo_on': _tm.isoformat(), 'demo_time': '11:15', 'mode': 'call'})
+with app.app_context():
+    _aid = _fu.appointments(days=7)[0]['id']
+signed.post(f'/calls/demo/{_aid}', data={'action': 'cancel'})
+with app.app_context():
+    _a = _fu.appointments(days=7)
+    _c = [h for h in _fu.history('fu-new') if h['channel'] == 'call']
+ok('cancelled: off the schedule, logged', not _a and 'cancelled' in _c[0]['note'])
+ok('the WhatsApp confirmation is editable in Messages', 'Demo booked: confirm on WhatsApp' in signed.get('/messages').text)
 r = signed.post('/calls/fu-end/log', data={'outcome': 'interested', 'note': 'Liked it, wants the 12-month plan',
                                            'stage': 'ending', 'next': '/calls?show=hot'})
 with app.app_context():
@@ -773,6 +818,6 @@ with app.app_context():
 with app.app_context(), db.engine.begin() as conn:
     for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups', 'console_followups',
                   'console_trial_marks', 'plan_reminders', 'platform_payments', 'console_emails', 'console_emails_since',
-                  'console_texts'):
+                  'console_texts', 'console_appointments'):
         conn.execute(text(f'DROP TABLE IF EXISTS public.{tname}'))
     conn.execute(text('DELETE FROM public.tenants'))

@@ -8,7 +8,9 @@
   <strong>call back</strong> brings it back on that date, <strong>not interested</strong> takes it off the list.
   Working from the laptop? Scan the QR code with your phone to call.</p>
 
-<div class="row" style="gap:10px;flex-wrap:wrap">
+{% include "console/_call_schedule.html" %}
+
+<div class="row" style="gap:10px;flex-wrap:wrap;margin-top:14px">
   {% for key, label, n in [('to_call', 'To call', counts.to_call), ('callbacks', 'Call-backs due', counts.callbacks), ('never', 'Never called', counts.never), ('hot', 'Hot', counts.hot)] %}
   <a class="card" href="{{ url_for('console.calls_page', show=key) }}" style="text-decoration:none;min-width:130px{% if view == key %};outline:2px solid var(--pine){% endif %}">
     <div class="muted small">{{ label }}</div><div style="font-size:1.5rem;font-weight:700">{{ n }}</div></a>

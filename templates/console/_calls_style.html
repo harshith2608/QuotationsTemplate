@@ -29,4 +29,13 @@
 @media (min-width: 1100px) { .call-mode-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
   .call-mode-grid .call-answers { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
   .call-mode-grid .call-answers-grid { grid-template-columns: 1fr; } }
+.sched-day { font-weight: 800; margin: 6px 0 4px; }
+.sched-item { display: flex; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; }
+.sched-item.missed { border-color: var(--warn); background: var(--warn-bg); }
+.sched-time { min-width: 86px; font-weight: 800; font-size: 1.05rem; }
+.sched-act > summary, .call-qr-small > summary.btn { list-style: none; }
+.sched-act > summary::-webkit-details-marker, .call-qr-small > summary::-webkit-details-marker { display: none; }
+.demo-when label { display: flex; flex-direction: column; gap: 4px; }
+.demo-when label.grow input { width: 100%; }
+#callQ { width: 100%; }
 </style>

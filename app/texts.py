@@ -226,6 +226,12 @@ for _k, _label, _body in _CALLS:
     TEXTS[f'call_{_k}'] = ('Sales calls: quick answers', _label, 'On screen while you call (not sent)', None, _body,
                            CALL_FIELDS)
 CALL_KEYS = [f'call_{k}' for k, _, _ in _CALLS]
+TEXTS['call_demo_confirm'] = ('Sales calls: demos', 'Demo booked: confirm on WhatsApp', 'WhatsApp, from the schedule',
+                              None, "Hi {name}, this is {sender} from QuoteRoom. Confirming our demo on {when}, {how}. "
+                              "I'll show you how your own quotations would work in QuoteRoom. If the time doesn't suit "
+                              "you, just reply here and we'll move it.",
+                              {'name': 'their first name', 'when': 'day and time, e.g. Mon 3 Nov, 5:00 PM',
+                               'how': '"on this number", or the video call link', 'sender': 'your name'})
 GROUPS = list(dict.fromkeys(v[0] for v in TEXTS.values()))
 FIELD_RE = re.compile(r'\{([a-z_0-9]+)\}')
 
