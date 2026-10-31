@@ -68,7 +68,7 @@ t = c.get('/').text
 flat = re.sub(r'\s+', ' ', t)
 row = lambda label, *cells: f'<td>{label}</td> ' + ' '.join(cells) + '</tr>'
 ok('funnel: site visitors → demo → sample PDF → own started → quotations → PDFs, and trial requests, with % (today, 7 and 30 days)',
-   '<h2>Website &amp; live demo</h2>' in t
+   '<h2 id="website">Website &amp; live demo</h2>' in t
    and row('Today', '<td><strong>40</strong></td>', '<td><strong>4</strong><span class="muted small"> · 10%</span></td>',
            '<td>3<span class="muted small"> · 75%</span></td>', '<td>2<span class="muted small"> · 50%</span></td>',
            '<td>2<span class="muted small"> · 50%</span></td>', '<td>3<span class="muted small"> · 75%</span></td>',
@@ -276,7 +276,10 @@ c.post(f'/leads/{spam_id}/dismiss')
 t = c.get('/').text
 ok('"Not interested" moves a request to handled, with Undo', 'not interested' in t and f'/leads/{spam_id}/restore' in t)
 c.post(f'/leads/{spam_id}/restore')
-ok('Undo brings it back', 'Spam Person' in c.get('/').text.split('Handled requests')[0])
+t = c.get('/').text
+ok('Undo brings it back', 'Spam Person' in t.split('<h2 id="handled">')[0].split('id="newRequests"')[1])
+ok('dashboard: long lists page (requests, trials, handled, by day) and a jump bar to each section',
+   all(f'data-pager="{n}"' in t for n in (10, 15)) and t.count('data-row') >= 3 and 'href="#handled"' in t and 'href="#website"' in t)
 
 # Tutorials for the marketing site (in the demo database)
 t = c.get('/tutorials').text
