@@ -82,6 +82,7 @@ code, .mono { font-family: ui-monospace, Menlo, monospace; }
   <a class="brand" href="{{ url_for('console.dashboard') }}">QuoteRoom <span>ops</span></a>
   <nav>
     <a href="{{ url_for('console.dashboard') }}">Trials</a>
+    <a href="{{ url_for('console.calls_page') }}">Sales calls</a>
     <a href="{{ url_for('console.followups_page') }}">Follow-ups</a>
     <a href="{{ url_for('console.email_compose') }}">Email</a>
     <a href="{{ url_for('console.messages_page') }}">Messages</a>
@@ -109,6 +110,10 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
   const el = document.querySelector(b.dataset.copy);
   try { await navigator.clipboard.writeText(el.value || el.textContent); b.textContent = 'Copied'; }
   catch (e) { el.select && el.select(); }
+}));
+// Copy a text: <button data-copy-text="+919800000000">
+document.querySelectorAll('[data-copy-text]').forEach(b => b.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copyText); b.textContent = 'Copied'; } catch (e) {}
 }));
 // Buttons that need a second look: <form data-confirm="Sure?">
 document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener('submit', e => {

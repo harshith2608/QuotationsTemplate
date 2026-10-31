@@ -3,7 +3,7 @@ import os, re
 from werkzeug.security import generate_password_hash
 from app import create_app, db
 from app.models import AppSetting, User
-for k in ['DEMO_MODE', 'MARKETING_SITE']: os.environ.pop(k, None)
+for k in ['DEMO_MODE', 'MARKETING_SITE', 'AI_IMPORT', 'ANTHROPIC_API_KEY']: os.environ.pop(k, None)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 
@@ -13,6 +13,17 @@ ok('first sign-in of a new business\'s admin opens the setup guide', r.status_co
 t = c.get('/admin/setup').text
 ok('guide lists the steps, none done, with Start', '0 of 8 done' in t and 'Start: Your company details' in t
    and 'Your rates, materials &amp; plywood' in t and 'Optional, when you need them' in t)
+ok('…with starting quotations among the optional steps; no quick way while bring your old quotation is off',
+   'Your starting quotations' in t and 'Save as template' in t and 'The quick way' not in t and 'step-import' not in t)
+os.environ['AI_IMPORT'], os.environ['ANTHROPIC_API_KEY'] = '1', 'test-key-not-real'
+t = c.get('/admin/setup').text
+ok('bring your old quotation on: the quick way comes first, not counted among the steps', 'id="step-import"' in t
+   and t.index('step-import') < t.index('step-company') and 'Quick way' in t and 'Upload a quotation' in t
+   and '0 of 8 done' in t and 'Start: Your company details' in t)
+r = c.get('/admin/setup/import/open')
+ok('…Open → the upload page, with the guide\'s banner', r.headers['Location'].endswith('/admin/import')
+   and 'Setup guide · the quick way' in c.get('/admin/import').text and 'Not now, next step' in c.get('/admin/import').text)
+c.post('/admin/setup/stop')
 c.get('/logout')
 r = c.post('/login', data={'username': 'owner', 'password': 'owner-pass-123'})
 ok('later sign-ins go to the quotations as usual', r.status_code == 302 and r.headers['Location'].endswith('/projects'))
@@ -54,9 +65,13 @@ with app.app_context():
     db.session.add(Project(customer_name='First Customer', mobile='9000000001', created_by=u.id, grand_total=1000,
                            discount_type='none', discount_value=0, status='complete'))
     db.session.commit()
+    from app import quote_templates
+    quote_templates.put('2 BHK', [{'name': 'Kitchen', 'items': []}])
+    db.session.commit()
 t = c.get('/admin/setup').text
-ok('done from what the app sees: payments, first quotation (and the optional team step)', '4 of 8 done' in t
-   and re.search(r'id="step-team".*?bi-check-lg', t, re.S) is not None)
+ok('done from what the app sees: payments, first quotation (and the optional team and starting quotation steps)',
+   '4 of 8 done' in t and re.search(r'id="step-team".*?bi-check-lg', t, re.S) is not None
+   and re.search(r'id="step-templates".*?bi-check-lg', t, re.S) is not None)
 
 # Hide / show the card; the guide stays in the menu
 c.post('/admin/setup/hide')

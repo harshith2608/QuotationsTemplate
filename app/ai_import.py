@@ -457,6 +457,9 @@ def set_up(data):
     from . import price_list as PL
     from .models import Project
     result = PL.apply(PL.parse(json.dumps(price_list(data)).encode()), remove_starter=True, replace_settings=False)
+    from . import setup_guide
+    for key in ('import', 'rates'):            # the setup guide: set up the quick way (how you price: by apply)
+        setup_guide.mark(key)
     made = None
     if result['quotations']:
         name = result['quotations'][0]

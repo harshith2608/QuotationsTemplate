@@ -1,0 +1,38 @@
+{% extends "console/_layout.html" %}
+{% block title %}Sales calls{% endblock %}
+{% block content %}
+{% include "console/_calls_style.html" %}
+<h1>Sales calls</h1>
+<p class="muted small">Every running trial, to phone them one by one: how far they got, their number and email, what to
+  talk about, and everything said so far. After a call, note how it went: <strong>interested</strong> marks it hot,
+  <strong>call back</strong> brings it back on that date, <strong>not interested</strong> takes it off the list.
+  Working from the laptop? Scan the QR code with your phone to call.</p>
+
+<div class="row" style="gap:10px;flex-wrap:wrap">
+  {% for key, label, n in [('to_call', 'To call', counts.to_call), ('callbacks', 'Call-backs due', counts.callbacks), ('never', 'Never called', counts.never), ('hot', 'Hot', counts.hot)] %}
+  <a class="card" href="{{ url_for('console.calls_page', show=key) }}" style="text-decoration:none;min-width:130px{% if view == key %};outline:2px solid var(--pine){% endif %}">
+    <div class="muted small">{{ label }}</div><div style="font-size:1.5rem;font-weight:700">{{ n }}</div></a>
+  {% endfor %}
+  <div class="card" style="min-width:130px"><div class="muted small">Called this week</div><div style="font-size:1.5rem;font-weight:700">{{ counts.week }}</div></div>
+</div>
+
+<form method="get" class="row" style="margin-top:14px">
+  <div class="grow"><label for="callQ">Search</label>
+    <input type="search" id="callQ" name="q" value="{{ q }}" placeholder="Name, firm, city, phone or email"></div>
+  <div><label for="callShow">Show</label>
+    <select id="callShow" name="show" onchange="this.form.submit()">
+      {% for key, label in views %}<option value="{{ key }}" {{ 'selected' if key == view }}>{{ label }}</option>{% endfor %}</select></div>
+  <button class="btn" type="submit">Find</button>
+  {% if rows %}<a class="btn btn-primary" href="{{ url_for('console.calls_mode', show=view) }}">Start calling: one at a time →</a>{% endif %}
+</form>
+
+<h2>{{ dict(views)[view] if view in dict(views) else 'To call' }} <span class="muted small">{{ rows|length }}</span></h2>
+{% if not rows %}<p class="muted">{{ 'Nobody matches that.' if q else 'Nobody here right now. 🎉' }}</p>{% endif %}
+<div class="stack">
+{% for r in rows %}
+  {% set back = url_for('console.calls_page', show=view, q=q or None) ~ '#t-' ~ r.slug %}
+  {% set big = false %}{% set after_log = none %}
+  {% include "console/_call_card.html" %}
+{% endfor %}
+</div>
+{% endblock %}
