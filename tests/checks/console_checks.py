@@ -617,6 +617,15 @@ ok('…search finds a trial by its email', 'id="t-fu-end"' in signed.get('/calls
 _cm = signed.get('/calls/next').text
 ok('call mode: one trial at a time, with "how did it go" open and Save and next', _cm.count('class="card stack call-card"') == 1
    and 'Save and next' in _cm and 'to go' in _cm)
+ok('quick answers for objections on Sales calls (price, monthly, Excel, set-up time…), closed until tapped',
+   'Quick answers' in sc and '₹8,999' in sc and '₹750 a month' in sc and 'No monthly plan' in sc and 'Send me one of your old quotations' in sc
+   and '<details class="card call-answers" >' in sc)
+ok('…open beside the trial in call mode, with their name and yours in the opening line', 'Quick answers' in _cm
+   and 'call-answers" open' in _cm and 'this is Harshith from QuoteRoom' in _cm)
+ok('…and editable in Messages, like every other text', 'Sales calls: quick answers' in signed.get('/messages').text)
+signed.post('/messages/call_price', data={'body': 'Our own answer on price.'})
+ok('…an edited answer is what Sales calls shows', 'Our own answer on price.' in signed.get('/calls?show=all').text)
+signed.post('/messages/call_price/reset')
 r = signed.post('/calls/fu-end/log', data={'outcome': 'interested', 'note': 'Liked it, wants the 12-month plan',
                                            'stage': 'ending', 'next': '/calls?show=hot'})
 with app.app_context():

@@ -1,0 +1,10 @@
+{# Quick answers while on a call (console → Messages → "Sales calls: quick answers"): one tap opens an answer. #}
+<details class="card call-answers" {{ 'open' if open_answers }}>
+  <summary><strong>📋 Quick answers</strong> <span class="muted small">for common objections: tap one to open it ·
+    <a href="{{ url_for('console.messages_page') }}#g-sales-calls-quick-answers">edit them</a></span></summary>
+  <div class="call-answers-grid">
+    {% for label, body in answers %}
+    <details class="call-answer"><summary>{{ label }}</summary><div class="small" style="white-space:pre-line">{{ body }}</div></details>
+    {% endfor %}
+  </div>
+</details>

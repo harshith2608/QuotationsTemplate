@@ -160,6 +160,72 @@ TEXTS.update({
                      'business': 'business name', 'app': 'their app address', 'plan_start': 'plan start',
                      'plan_end': 'plan end', 'receipt_no': 'receipt number'}),
 })
+# Sales calls: what to say when a trial pushes back (shown on Sales calls and in call mode; for the operator, not sent)
+_CALLS = [
+    ('opening', 'Opening the call',
+     "Hi {name}, this is {sender} from QuoteRoom. You started a free trial a few days ago, so I'm calling to see how "
+     "it's going and if I can help with anything. Is this a good time for 2 minutes?\n\n"
+     "Then ask, and listen:\n• How do you make quotations today? (Excel, Word, by hand, software?)\n"
+     "• How many quotations a month? Who makes them?\n• What takes the most time, or goes wrong most often?"),
+    ('price', '"It\'s too expensive"',
+     "• 12 months is ₹8,999: about ₹750 a month, ₹25 a day. 6 months is ₹4,999.\n"
+     "• One price for the whole team: every staff member gets a login at no extra cost.\n"
+     "• One job won because the quotation went out the same day, in your brand, pays for the whole year.\n"
+     "• It also saves the hours spent typing and re-checking totals in Excel, every quotation.\n"
+     "• Ask: \"How much is one 2 BHK job worth to you?\" Then compare."),
+    ('monthly', '"Can I pay monthly?" / "Lifetime?"',
+     "• No monthly plan: 6 months (₹4,999) is the shortest, about ₹833 a month.\n"
+     "• No lifetime plan: the app runs on servers we pay for every month (hosting, backups, updates), and you get every "
+     "new feature as it comes.\n• Start with 6 months and see; renewing keeps everything as it is."),
+    ('later', '"I\'ll think about it" / "Later"',
+     "• Sure. What would you like to think over: the price, or whether it fits how you work?\n"
+     "• Everything you set up in the trial stays when you continue: rates, logo, quotations.\n"
+     "• Offer: \"Shall I call you on [day] after you've tried one real quotation?\" Then log Call back with that date."),
+    ('excel', '"I already use Excel / my own format"',
+     "• Excel works, but every quotation is a copy-paste, totals can break, and versions get mixed up "
+     "(final.pdf, final_v2.pdf…).\n• Here: pick a starting quotation, type the sizes, and the totals and PDF are done.\n"
+     "• Customer changes their mind? Edit it: every version is kept, and you can go back to any one.\n"
+     "• Bring your old quotation: upload one PDF or Excel file and your items, rates and terms are set up from it."),
+    ('time', '"No time to set it up"',
+     "• Send me one of your old quotations on WhatsApp; I'll set up your items, rates and terms for you.\n"
+     "• Or upload it yourself: Bring your old quotation does it in about a minute.\n"
+     "• Offer a 10-minute call to set it up together, screen by screen."),
+    ('format', '"My customers expect my format"',
+     "• The PDF has your logo, colours, company details, terms, payment terms and bank/UPI details.\n"
+     "• Layouts: room by room, by material, or a bill of quantities (Sr. No., Description, Qty, Unit, Rate, Amount).\n"
+     "• Optional cover page, About us and Next steps pages.\n• Send me your current quotation and I'll match it as closely as I can."),
+    ('pricing_way', '"I price differently"',
+     "• By material: a rate per area for each material and work type, with fittings (Magic Corner, drawers…).\n"
+     "• By item: each item with its own rate, per sqft, running ft, number or lump sum.\n"
+     "• Sizes in your own unit: ft & in, mm, cm or inches.\n• Ask how they price, then show them that way."),
+    ('apps', '"I\'m not good with apps" / "My staff can\'t"',
+     "• It works on the phone like a website: no download; add it to the home screen for one tap.\n"
+     "• There are short video tutorials for every step, and the setup guide walks through it.\n"
+     "• Offer to show them on a call, and to set up their staff logins."),
+    ('feature', '"Does it have …?" (something missing)',
+     "• Don't promise. Ask: \"What would you use it for? How do you do it today?\"\n"
+     "• Note it in the call note, word for word.\n• Say: \"Let me check and come back to you\", and log a call-back."),
+    ('safety', '"Is my data safe?"',
+     "• Only your team can see your quotations: each firm has its own login and its own data.\n"
+     "• Your data is never shared with other firms.\n• If you stop, your data is kept for 30 days after the plan "
+     "ends, so you can come back, then deleted."),
+    ('other_app', '"I use another software" / "There are free apps"',
+     "• Ask what they like and what's missing in it.\n• QuoteRoom is made for interior and construction quotations: "
+     "sizes and areas, materials and fittings, versions, online approval, GST invoices and payments, in one place.\n"
+     "• One price for the whole team, not per user."),
+    ('no_work', '"Not many projects right now"',
+     "• That's the best time to set it up, so the next enquiry gets a quotation the same day.\n"
+     "• A quotation that goes out faster, in your brand, helps win the next job."),
+    ('close', 'Closing: asking for the plan',
+     "• \"Shall I send you the payment link? 6 months or 12 months?\"\n"
+     "• Pay by UPI, card or net banking. The trial becomes the paid plan with everything kept: same address, same login.\n"
+     "• Not ready? Agree a date and log Call back."),
+]
+CALL_FIELDS = {'name': 'their first name', 'sender': 'your name'}
+for _k, _label, _body in _CALLS:
+    TEXTS[f'call_{_k}'] = ('Sales calls: quick answers', _label, 'On screen while you call (not sent)', None, _body,
+                           CALL_FIELDS)
+CALL_KEYS = [f'call_{k}' for k, _, _ in _CALLS]
 GROUPS = list(dict.fromkeys(v[0] for v in TEXTS.values()))
 FIELD_RE = re.compile(r'\{([a-z_0-9]+)\}')
 

@@ -12,7 +12,7 @@
 </div>
 
 {% for group, items in groups %}
-<h2 id="g-{{ loop.index }}">{{ group }}</h2>
+<h2 id="g-{{ loop.index }}">{{ group }}<span id="g-{{ group|lower|replace(':', '')|replace(' ', '-') }}"></span></h2>
 {% for m in items %}
 <form method="post" action="{{ url_for('console.messages_save', key=m.key) }}" class="card stack wa-card" id="m-{{ m.key }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
