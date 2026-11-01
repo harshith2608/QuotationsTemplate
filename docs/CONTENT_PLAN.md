@@ -444,18 +444,21 @@ Console → Tutorials → Add a tutorial: title `13 · On your home screen`, len
 
 Extra tags: `quotation template, BOQ, turnkey interiors`.
 
-The reel as a YouTube Short (`reel-jobs-9x16.mp4`): title *Where is every job right now? 5 sites, one screen #Shorts*
-> Your partner asks if the kitchen is confirmed. Your supervisor asks which site is next. A customer asks when work starts. And the answers are in a diary, on sticky notes, in your head.
+The reel as a YouTube Short (`reel-jobs-9x16.mp4`), worded for what people search ("quotation and billing software",
+"turnkey projects interior designing", "how to make interior quotation"): title
+*Quotation and billing software for interior designers: track every turnkey project #Shorts*
+> Running turnkey projects in interior designing? Your partner asks if the kitchen is confirmed, your supervisor asks which site is next, a customer asks when work starts, and the answers are in a diary and on sticky notes.
 >
-> QuoteRoom shows every job on one screen, by stage: awaiting confirmation, confirmed, ongoing, on hold, completed. Tap a stage to see only those jobs, move a job along with a note for your team, and see who did what, and when. The bell tells you when a customer accepts, asks for changes or pays.
+> QuoteRoom is quotation and billing software for interior designers and modular furniture firms. Every project is on one screen, by stage: awaiting confirmation, confirmed, ongoing, on hold, completed. Tap a stage to see only those jobs, move a job along with a note for your team, and see who did what, and when. The bell tells you when a customer accepts a quotation, asks for changes or pays.
 >
-> QuoteRoom is a quotation app for interior designers and modular furniture firms: branded quotations, online approval, GST invoices and payments, for your whole team.
+> New to it? Learn how to make an interior quotation in minutes: rooms, sizes in your own unit, your rates, a branded PDF your customer accepts online, then GST invoices and payments.
 >
 > 👉 Free 7-day trial, no payment to start: https://www.quote-room.co.in
 >
-> #interiordesign #interiordesigner #modularfurniture #interiorbusiness #projectmanagement #quoteroom #Shorts
+> #interiordesign #interiordesigner #turnkeyinteriors #interiorquotation #billingsoftware #interiorbusiness #quoteroom #Shorts
 
-Extra tags: `interior project tracking, site management, job tracking`.
+Tags: `quotation and billing software, turnkey projects interior designing, how to make interior quotation, interior quotation
+software, interior project tracking, interior design business, QuoteRoom`.
 
 The reel as a YouTube Short (`reel-templates-9x16.mp4`): title *Still typing every quotation from scratch? #Shorts*
 > Your 2 BHK quotations look almost the same every time, so why type them from scratch? With QuoteRoom, start from your usual quotation: every room, item and rate is already filled in. Just type the sizes and the total works itself out, then send a clean PDF or a link your customer accepts online.
