@@ -63,7 +63,9 @@ def ai_import():
         except AI.ImportProblem as exc:
             flash(str(exc), 'danger')
             return redirect(url_for('admin.ai_import'))
-        return render_template('admin/import_review.html', title='Check your quotation', data=data,
+        return render_template('admin/import_review.html', data=data,
+                               title='Check your rates' if data['rate_list'] else 'Check your quotation',
+                               mat=AI.by_material(data) if data['pricing'] == 'material' else None,
                                left=AI.left()[0], gst_rates=quote_gst.RATES)
     return render_template('admin/import.html', title='Bring your old quotation', left=left, limit=limit)
 
@@ -83,8 +85,19 @@ def ai_import_set_up():
         db.session.rollback()
         flash(f'Your app couldn\'t be set up from it: {exc}', 'danger')
         return redirect(url_for('admin.ai_import'))
-    flash(f'Your app is set up from your quotation: {result["added"] + result["updated"]} items with their rates, '
-          f'the starting quotation "{data["job_title"]}", and your quotation rebuilt below.', 'success')
+    if data['pricing'] == 'material':
+        flash(f'Your app is set up by material: {result["materials"]} material{"" if result["materials"] == 1 else "s"} '
+              f'with their rates, {result["fittings"]} fitting{"" if result["fittings"] == 1 else "s"}'
+              + ('' if data['rate_list'] else f', and the starting quotation "{data["job_title"]}"') + '. Check them below.',
+              'success')
+        return redirect(url_for('admin.rates'))
+    if data['rate_list']:
+        flash(f'Your rates are set up: {result["added"] + result["updated"]} items with their rates. Check them below.',
+              'success')
+        return redirect(url_for('admin.rates'))
+    else:
+        flash(f'Your app is set up from your quotation: {result["added"] + result["updated"]} items with their rates, '
+              f'the starting quotation "{data["job_title"]}", and your quotation rebuilt below.', 'success')
     return redirect(url_for('projects.view_project', project_id=project_id) if project_id
                     else url_for('projects.list_projects'))
 

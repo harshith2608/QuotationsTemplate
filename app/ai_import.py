@@ -1,6 +1,7 @@
-"""Bring your old quotation: a firm uploads one quotation it has sent before (PDF or Excel) and its app is set up from
-it: its items and rates (saved lines), a starting quotation (template), its payment terms and notes, and the quotation
-itself rebuilt in QuoteRoom.
+"""Bring your old quotation: a firm uploads one quotation it has sent before (PDF or Excel), or the Excel format it
+makes its quotations from (its rate list: every item with its rate, usually no quantities), and its app is set up from
+it: its items and rates (saved lines), a starting quotation (template), its payment terms and notes, and, for a
+quotation, the quotation itself rebuilt in QuoteRoom.
 
     1. upload (admins)   the text is taken out of the file here: PDF text (a scan has none, so it's refused) or the
                          Excel sheets' cells. Only that text goes to the AI; the file itself is never stored.
@@ -22,7 +23,8 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import List, Optional
+from collections import Counter
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -228,7 +230,7 @@ def _excel_text(raw):
             out.append(f'Sheet: {sheet.title}\n' + '\n'.join(rows))
     body = '\n\n'.join(out)
     if len(body.strip()) < MIN_TEXT:
-        raise ImportProblem('This Excel file has almost nothing in it. Upload the sheet with your quotation.')
+        raise ImportProblem('This Excel file has almost nothing in it. Upload the sheet with your quotation or your rates.')
     return body[:MAX_TEXT]
 
 
@@ -242,6 +244,8 @@ class Line(BaseModel):
     quantity: Optional[float]
     rate: Optional[float]
     amount: Optional[float]
+    material: str = ''
+    work_type: str = ''
 
 
 class Section(BaseModel):
@@ -255,6 +259,9 @@ class Charge(BaseModel):
 
 
 class Quote(BaseModel):
+    is_rate_list: bool = False
+    pricing: Literal['material', 'item', 'unsure'] = 'unsure'
+    pricing_reason: str = ''
     job_title: str
     sections: List[Section]
     charges: List[Charge]
@@ -267,14 +274,23 @@ class Quote(BaseModel):
 
 
 PROMPT = """This is the text of a quotation (BOQ) that a business (interiors, furniture, kitchens, windows, glass work…)
-sent to a customer, taken from a PDF or an Excel sheet, so table columns may be run together.
+sent to a customer, or of the format it makes its quotations from (its rate list: items with their rates, quantities
+and amounts usually left empty), taken from a PDF or an Excel sheet, so table columns may be run together.
 Read it into the structure:
-- sections: the rooms or section headings, in order, each with its priced lines.
+- is_rate_list: true for a rate list or a blank quotation format (rates, but no job's quantities filled in), false for
+  a quotation made for a job.
+- sections: the rooms, categories or section headings, in order, each with its priced lines.
 - each line: the item's name as written, without its serial number ("TV Unit Base Drawers", not "1.1 TV Unit Base
   Drawers"; keep the words that tell similar items apart); the specification or description as written ('' if none);
   the size as written ('' if none); the unit as written (sqft, rft, nos, LS…); quantity = what the rate is
   multiplied by to give the amount (the area or length when the rate is per sqft or rft, else the count); rate and
-  amount exactly as printed.
+  amount exactly as printed; material = the material or finish the line's rate depends on, as written ("Laminate",
+  "Acrylic", "Veneer", "PU"…), '' if it names none; work_type = "Box Work" or "Frame Work" only when the file prices
+  the same material differently for box work (carcass, cabinets) and frame work (shutters, panels), else ''.
+- pricing: "material" when the rate depends on the material (and work type), not on the item: every laminate line at
+  one rate per sqft and every acrylic line at another, whatever the item. "item" when items have their own rates (a
+  wardrobe and a TV unit in the same material at different rates, lump sums). "unsure" if you can't tell.
+  pricing_reason: one short sentence for the business owner, with an example from the file.
 - charges: fees or extra amounts added after the lines, such as a design fee, contingency or transport. Not taxes.
 - subtotal (total of the lines, before discount, charges and tax), discount, gst_percent, grand_total: as printed.
 - job_title: what the job is, in 2–4 words ("3 BHK interiors", "Pharmacy interiors", "Kitchen and wardrobes").
@@ -297,7 +313,7 @@ def read(body):
     if r.stop_reason == 'max_tokens':
         raise ImportProblem('This quotation is too long to read in one go. Upload a shorter one (one job).')
     if r.stop_reason == 'refusal' or r.parsed_output is None:
-        raise ImportProblem("This file couldn't be read as a quotation.")
+        raise ImportProblem("This file couldn't be read as a quotation or a rate list.")
     return r.parsed_output, {'in': r.usage.input_tokens, 'out': r.usage.output_tokens}
 
 
@@ -316,7 +332,8 @@ def read_upload(filename, raw):
     lines = sum(len(s['lines']) for s in data['sections'])
     if not lines:
         _log(kind, False, tokens_in=used['in'], tokens_out=used['out'], note='no lines')
-        raise ImportProblem("No priced lines were found in this file. Is it a quotation with items and amounts?")
+        raise ImportProblem("No priced lines were found in this file. Is it a quotation or a rate list, with items "
+                            "and rates?")
     _count()
     _log(kind, True, lines, used['in'], used['out'])
     return data
@@ -348,10 +365,18 @@ def _num(value):
     return int(n) if n is not None and n == int(n) else n
 
 
+def _work(value):
+    """'Box Work' / 'Frame Work' (the app's work types) from what the file or the form says, else ''."""
+    v = str(value or '').lower()
+    return 'Box Work' if 'box' in v else 'Frame Work' if 'frame' in v else ''
+
+
 def tidy(quote):
     """The reading as plain data for the review page: names without serial numbers, units in the app's words, a
-    rate worked out from amount ÷ quantity when only the amount is printed, the size kept in the description."""
+    rate worked out from amount ÷ quantity when only the amount is printed, the size kept in the description. A rate
+    list (said so, or no line has a quantity or an amount) is checked as rates only: no totals."""
     from . import boq
+    rate_list = quote.is_rate_list or all(l.quantity is None and l.amount is None for s in quote.sections for l in s.lines)
     sections = []
     for s in quote.sections:
         lines = []
@@ -371,13 +396,15 @@ def tidy(quote):
                 desc = (desc + ' · ' if desc else '') + 'Size: ' + ' '.join(l.size.split())
             lines.append({'name': name, 'description': desc[:500], 'unit': boq.clean_unit(l.unit),
                           'quantity': qty, 'rate': rate, 'amount': amount,
-                          'no_amount': amount is None and rate is not None})   # maybe not in their total
+                          'material': ' '.join(l.material.split())[:60], 'work': _work(l.work_type),
+                          'no_amount': amount is None and rate is not None and not rate_list})   # maybe not in their total
         if lines:
             sections.append({'name': _section(s.name) or 'Items', 'lines': lines})
     charges = [{'name': _name(c.name), 'amount': _num(c.amount)} for c in quote.charges
                if _name(c.name) and (_num(c.amount) or 0) > 0]
-    return {'job_title': ' '.join(quote.job_title.split())[:60] or 'My quotation', 'sections': sections,
-            'charges': charges, 'subtotal': _num(quote.subtotal), 'discount': abs(_num(quote.discount) or 0),   # "- 10,000"
+    return {'rate_list': rate_list, 'pricing': quote.pricing, 'pricing_reason': ' '.join(quote.pricing_reason.split())[:300],
+            'job_title': ' '.join(quote.job_title.split())[:60] or 'My quotation',
+            'sections': sections, 'charges': charges, 'subtotal': _num(quote.subtotal), 'discount': abs(_num(quote.discount) or 0),   # "- 10,000"
             'gst_percent': _num(quote.gst_percent), 'grand_total': _num(quote.grand_total),
             'payment_terms': quote.payment_terms.strip()[:3000], 'notes': quote.notes_and_terms.strip()[:5000]}
 
@@ -393,25 +420,93 @@ def from_form(form):
                 continue
             lines.append({'name': _name(form.get(p + 'name')), 'description': (form.get(p + 'description') or '').strip()[:500],
                           'unit': (form.get(p + 'unit') or '').strip(), 'quantity': _num(form.get(p + 'quantity')),
-                          'rate': _num(form.get(p + 'rate'))})
+                          'rate': _num(form.get(p + 'rate')),
+                          'material': ' '.join((form.get(p + 'material') or '').split())[:60], 'work': _work(form.get(p + 'work'))})
         if lines:
             sections.append({'name': _section(form.get(f's{i}_name')) or 'Items', 'lines': lines})
     charges = []
     for k in range(min(int(form.get('charges') or 0), 20)):
         if form.get(f'c{k}_keep') and _name(form.get(f'c{k}_name')) and _num(form.get(f'c{k}_amount')):
             charges.append({'name': _name(form.get(f'c{k}_name')), 'amount': _num(form.get(f'c{k}_amount'))})
-    return {'job_title': ' '.join((form.get('job_title') or '').split())[:60] or 'My quotation', 'sections': sections,
+    return {'rate_list': form.get('rate_list') == '1', 'pricing': 'material' if form.get('pricing') == 'material' else 'item',
+            'job_title': ' '.join((form.get('job_title') or '').split())[:60] or 'My quotation', 'sections': sections,
             'charges': charges, 'discount': abs(_num(form.get('discount')) or 0), 'gst': _num(form.get('gst')),
             'payment_terms': (form.get('payment_terms') or '').strip()[:3000], 'notes': (form.get('notes') or '').strip()[:5000]}
 
 
 # ── 4. Set up ────────────────────────────────────────────────────────────────
 
+def by_material(data):
+    """The reviewed lines the way a business that prices by material keeps them: a line measured in sqft (or sq m) is an
+    item in a material (one rate per material, or per material and work type when the file has both box and frame
+    work; an area line with no material is a material of its own, like Glass); anything else (pieces, running feet,
+    lump sums, the charges) is a fitting with its price. Where one material comes at several rates, the most common
+    one is taken and the others are listed in 'mixed'.
+    → {'materials': [{'name', 'rates': {work: rate}}], 'fittings': [{'name', 'price', 'unit'}],
+       'rooms': [{'name', 'items': [template items]}], 'mixed': ["Laminate: ₹1,650 (Kitchen base unit)"]}"""
+    from . import boq
+    names, seen, fits, rooms = {}, {}, {}, []
+    sections = data['sections'] + ([{'name': 'Other charges', 'lines': [
+        {'name': c['name'], 'unit': 'lump sum', 'rate': c['amount'], 'material': '', 'work': ''}
+        for c in data['charges']]}] if data['charges'] else [])
+    for s in sections:
+        items = []
+        for l in s['lines']:
+            rate, unit = l['rate'] or 0, boq.clean_unit(l['unit'])
+            if unit in boq.AREA_UNITS:
+                mat = l.get('material') or l['name']
+                mat = names.setdefault(mat.lower(), mat[:60])
+                seen.setdefault(mat, []).append((l.get('work') or '', rate, l['name']))
+                items.append({'name': l['name'], 'material': mat, 'work': l.get('work') or ''})
+                continue
+            name, n = l['name'], 1
+            while name.lower() in fits and fits[name.lower()]['price'] != rate:          # same name, another price
+                n += 1
+                name = (f"{l['name']} ({s['name']})" if n == 2 else f"{l['name']} ({s['name']} {n - 1})")[:100]
+            fits.setdefault(name.lower(), {'name': name, 'price': rate, 'unit': unit})
+            items.append({'name': name, 'type': 'fitting'})
+        rooms.append({'name': s['name'], 'items': items})
+    materials, mixed, split = [], [], set()
+    for mat, rows in seen.items():
+        works = {w for w, _, _ in rows if w}
+        both = len(works) == 2                              # box and frame work at their own rates
+        if not both:
+            split.add(mat)
+        rates = {}
+        for work in (('Box Work', 'Frame Work') if both else ('',)):
+            mine = [(r, item) for w, r, item in rows if (not both or (w or 'Box Work') == work)]
+            rate = Counter(r for r, _ in mine).most_common(1)[0][0]
+            rates[work] = rate
+            mixed += [f"{mat}{' ' + work if work else ''}: ₹{r:,.0f} ({item})" for r, item in mine if r != rate]
+        materials.append({'name': mat, 'rates': rates})
+    for r in rooms:            # one rate for the material: no work type on its items; with both, unsaid is box work
+        for it in r['items']:
+            if it.get('material') in split:
+                it['work'] = ''
+            elif it.get('material'):
+                it['work'] = it['work'] or 'Box Work'
+    return {'materials': materials, 'fittings': list(fits.values()), 'rooms': rooms, 'mixed': mixed,
+            'work_types': any(len(m['rates']) > 1 for m in materials)}
+
+
 def price_list(data):
     """The reviewed data as a price list file (app/price_list.py): saved lines (one per item name; the same name at
     another rate gets its section's name added), a starting quotation with those sections, the quotation rebuilt,
-    payment terms and notes, and GST if it was on."""
+    payment terms and notes, and GST if it was on. A rate list (no quantities: just their rates) gives only the rates
+    and those settings: no starting quotation, nothing rebuilt. By material (see by_material): materials, fittings and
+    the starting quotation; the quotation isn't rebuilt either."""
     from . import boq, quote_gst
+    if data.get('pricing') == 'material':
+        m = by_material(data)
+        out = {'pricing': 'material',
+               'materials': [{'name': x['name'], **({'rates': x['rates']} if '' not in x['rates'] else {'rate': x['rates']['']})}
+                             for x in m['materials']],
+               'fittings': m['fittings'],
+               'templates': [] if data.get('rate_list') else [{'name': data['job_title'], 'rooms': m['rooms']}],
+               'settings': {k: v for k, v in (('payment_terms', data['payment_terms']), ('important_notes', data['notes'])) if v}}
+        if data.get('gst') in quote_gst.RATES:
+            out['options'] = {'gst': data['gst']}
+        return out
     lines, by_name = [], {}
 
     def line_for(l, section):
@@ -442,9 +537,9 @@ def price_list(data):
         rooms.append({'name': s['name'], 'items': names})
         quote_rooms.append({'name': s['name'], 'items': items})
     out = {'pricing': 'item', 'lines': lines,
-           'templates': [{'name': data['job_title'], 'rooms': rooms}],
-           'quotations': [{'customer_name': f"{data['job_title']} (your old quotation)", 'discount': data['discount'],
-                           'rooms': quote_rooms}],
+           'templates': [] if data.get('rate_list') else [{'name': data['job_title'], 'rooms': rooms}],
+           'quotations': [] if data.get('rate_list') else [{'customer_name': f"{data['job_title']} (your old quotation)",
+                                                            'discount': data['discount'], 'rooms': quote_rooms}],
            'settings': {k: v for k, v in (('payment_terms', data['payment_terms']), ('important_notes', data['notes'])) if v}}
     if data.get('gst') in quote_gst.RATES:
         out['options'] = {'gst': data['gst']}
@@ -456,7 +551,8 @@ def set_up(data):
     Returns (summary, the rebuilt quotation's id or None). Raises price_list.PriceListError."""
     from . import price_list as PL
     from .models import Project
-    result = PL.apply(PL.parse(json.dumps(price_list(data)).encode()), remove_starter=True, replace_settings=False)
+    result = PL.apply(PL.parse(json.dumps(price_list(data)).encode()), remove_starter=True, replace_settings=False,
+                      hide_starter_rates=data.get('pricing') == 'material')
     from . import setup_guide
     for key in ('import', 'rates'):            # the setup guide: set up the quick way (how you price: by apply)
         setup_guide.mark(key)

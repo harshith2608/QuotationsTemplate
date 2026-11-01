@@ -3,7 +3,7 @@ quotation PDF, how customers pay, the first quotation), for the admin, then opti
 team, invoices, email).
 
 The quick way: when "Bring your old quotation" (app/ai_import.py) is on, a step offers to set the app up from one
-quotation the business has sent before. It isn't counted among the steps (it's a shortcut), and setting up from it
+quotation the business has sent before, or from the Excel format with all its rates. It isn't counted among the steps (it's a shortcut), and setting up from it
 also completes "how you price" and "your rates".
 
 A step is done when the app can see it (a logo uploaded, a quotation made…), when its page has been saved (noted by
@@ -65,9 +65,10 @@ class Step:
 
 
 STEPS = [
-    Step('import', 'The quick way: bring your old quotation', 'Upload a quotation you have sent before (PDF or Excel). '
-         'Your items and rates, payment terms and notes are read from it, and the quotation is rebuilt and saved as a '
-         'starting quotation. You check every line before anything is saved.', 'admin.ai_import',
+    Step('import', 'The quick way: bring your old quotation or your Excel rates', 'Upload a quotation you have sent '
+         'before (PDF or Excel), or the Excel file you make your quotations from, with all your rates in it. Your items '
+         'and rates, payment terms and notes are read from it (an old quotation is also saved as a starting quotation). '
+         'You check every line before anything is saved.', 'admin.ai_import',
          saved='admin.ai_import_set_up', quick=True),
     Step('company', 'Your company details', 'Name, phone, address and GSTIN: they go on every quotation, invoice and '
          'WhatsApp message.', 'admin.settings', {'tab': 'company'}, saved='admin.settings:company'),

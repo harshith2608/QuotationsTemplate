@@ -23,6 +23,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "Got an old quotation? Your app is set up." (Bring your old quotation, AI import, on a laptop) | Reel 39 s, 9:16, music | **Ready** (28 Oct) | `reel-import-9x16.mp4`, `-frames.png`; tutorial 15 (57 s) `tutorials/quoteroom-tutorial-15-bring-your-old-quotation.mp4` | `tools/ad_video/reel_import.py` (screens: `tools/tutorials/import_walkthrough.py`, old quotation: `import_sample_pdf.py`) |
 | "Customer changed their mind?" (quotation revisions: the final_v2.pdf mess → edit, Rev 2 with what changed → same link → restore Rev 1 → accepted, on a laptop) | Reel 42 s, 9:16, music | **Ready** (30 Oct) | `reel-revisions-9x16.mp4`, `-frames.png`; longer: tutorial 7 | `tools/ad_video/reel_revisions.py` (screens: `tools/tutorials/revisions_reel_screens.py`) |
 | "Every firm prices differently. Which way is yours?" (pricing by material or by item: Settings choice, sizes & materials with fittings, each line with its own rate, PDF room by room or as a bill of quantities, on a laptop) | Reel 45 s, 9:16, music | **Ready** (30 Oct) | `reel-pricing-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_pricing.py` (screens: `tools/tutorials/pricing_reel_screens.py`) |
+| "Where is every job right now?" (track every job: partner, supervisor and customers asking → sticky notes → the pipeline by stage → only the jobs on site → move a job to Ongoing with a note → who did what, and when → the bell, on a laptop) | Reel 40 s, 9:16, lo-fi music | **Ready** (1 Nov) | `reel-jobs-9x16.mp4`, `-frames.png`; longer: tutorial 8 | `tools/ad_video/reel_jobs.py` (screens: `tools/tutorials/jobs_reel_screens.py`) |
 | "Does your quotation have all 6?" | Single image 4:5 | **Posted** (by 23 Oct) | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
@@ -209,7 +210,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
   SF (₹) and Arial Unicode (→, ✓). Use these helpers for any text containing them.
 - **Music:** `tools/ad_video/music.py` composes tracks in code (free to use), in five styles so reels don't all sound
   the same: `pop` (tape-to-invoice), `funk` (Excel vs QuoteRoom), `tropical` (payments), `cinematic` (profit), and
-  `lofi` (unused, for the next reel). Pick a style no recent reel used. Reels mix it with loudnorm −16 LUFS.
+  `lofi` (where is every job). `render()` in `reel_templates.py` takes the style. Pick a style no recent reel used. Reels mix it with loudnorm −16 LUFS.
 - **Screens:** real app screenshots of a fictional business, **Nest & Grain Interiors** (Hyderabad, fictional Telangana GSTIN),
   stored in `static/ads/` (01–08: list, add item, stage, room totals, initial PDF, full PDF, approval accepted, GST invoice).
   New screenshots come from a local app started with the "ad-shots" preview config (demo data renamed to Nest & Grain).
@@ -442,6 +443,22 @@ Console → Tutorials → Add a tutorial: title `13 · On your home screen`, len
 > 👉 Free 7-day trial: https://www.quote-room.co.in
 
 Extra tags: `quotation template, BOQ, turnkey interiors`.
+
+The reel as a YouTube Short (`reel-jobs-9x16.mp4`), worded for what people search ("quotation and billing software",
+"turnkey projects interior designing", "how to make interior quotation"): title
+*Quotation and billing software for interior designers: track every turnkey project #Shorts*
+> Running turnkey projects in interior designing? Your partner asks if the kitchen is confirmed, your supervisor asks which site is next, a customer asks when work starts, and the answers are in a diary and on sticky notes.
+>
+> QuoteRoom is quotation and billing software for interior designers and modular furniture firms. Every project is on one screen, by stage: awaiting confirmation, confirmed, ongoing, on hold, completed. Tap a stage to see only those jobs, move a job along with a note for your team, and see who did what, and when. The bell tells you when a customer accepts a quotation, asks for changes or pays.
+>
+> New to it? Learn how to make an interior quotation in minutes: rooms, sizes in your own unit, your rates, a branded PDF your customer accepts online, then GST invoices and payments.
+>
+> 👉 Free 7-day trial, no payment to start: https://www.quote-room.co.in
+>
+> #interiordesign #interiordesigner #turnkeyinteriors #interiorquotation #billingsoftware #interiorbusiness #quoteroom #Shorts
+
+Tags: `quotation and billing software, turnkey projects interior designing, how to make interior quotation, interior quotation
+software, interior project tracking, interior design business, QuoteRoom`.
 
 The reel as a YouTube Short (`reel-templates-9x16.mp4`): title *Still typing every quotation from scratch? #Shorts*
 > Your 2 BHK quotations look almost the same every time, so why type them from scratch? With QuoteRoom, start from your usual quotation: every room, item and rate is already filled in. Just type the sizes and the total works itself out, then send a clean PDF or a link your customer accepts online.
