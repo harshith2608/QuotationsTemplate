@@ -62,7 +62,8 @@ os.environ['AI_IMPORT'] = '1'
 ok('switched on but no API key: still off', admin.get('/admin/import').status_code == 404)
 os.environ['ANTHROPIC_API_KEY'] = 'test-key-not-real'
 t = admin.get('/admin/import').text
-ok('on: the upload page (PDF or Excel), the menu item and the setup guide card', 'Read my quotation' in t
+ok('on: the upload page (PDF or Excel), the menu item and the setup guide card', 'Read my file' in t
+   and 'the Excel file you make your quotations' in t and 'or your Excel rates' in admin.get('/admin/setup').text
    and 'accept=".pdf,.xlsx' in t and 'Import a quotation' in admin.get('/projects').text
    and 'bring your old quotation' in admin.get('/admin/setup').text
    and ('5 imports left (5 during your free trial)' in t or '20 imports left (20 a month)' in t))
@@ -136,6 +137,42 @@ ok(f'…their quotation rebuilt, no customer details, with the discount ({p.gran
    p is not None and abs(p.grand_total - expect) < 0.01 and p.discount_value == 5000 and not p.mobile
    and not p.address and r.status_code == 302 and r.headers['Location'].endswith(f'/projects/{p.id}'))
 ok('…payment terms saved (they had none)', pay and pay.startswith('50% advance'))
+
+# The Excel format they quote from (a rate list): rates only, no totals, nothing rebuilt
+RATES = AI.Quote(
+    is_rate_list=True, job_title='Interiors rate list',
+    sections=[AI.Section(name='Kitchen', lines=[
+                  AI.Line(name='Base unit', description='BWP ply, acrylic', size='', unit='rft', quantity=None, rate=2600, amount=None),
+                  AI.Line(name='Loft shutter', description='', size='', unit='sqft', quantity=None, rate=1100, amount=None)]),
+              AI.Section(name='Bedroom', lines=[
+                  AI.Line(name='Sliding wardrobe', description='', size='', unit='sqft', quantity=None, rate=1650, amount=None)])],
+    charges=[], subtotal=None, discount=None, gst_percent=None, grand_total=None, payment_terms='', notes_and_terms='')
+READING, saved_reading = RATES, READING
+t = upload(QUOTE, 'rates.xlsx').text
+ok('a rate list: "Check your rates", no "No amount" warnings and no lines total', 'Check your rates' in t
+   and 'No amount in your file' not in t and 'id="linesTotal"' not in t and 'name="rate_list" value="1"' in t)
+with app.app_context():
+    plain = AI.tidy(AI.Quote(job_title='x', sections=RATES.sections, charges=[], subtotal=None, discount=None,
+                             gst_percent=None, grand_total=None, payment_terms='', notes_and_terms=''))
+ok('…also taken as a rate list when no line has a quantity or an amount', plain['rate_list'])
+with app.app_context():
+    n_projects = Project.query.count()
+r = admin.post('/admin/import/set-up', data={
+    'rate_list': '1', 'job_title': 'Interiors rate list', 'discount': '', 'gst': '', 'sections': '2', 'charges': '0',
+    's0_name': 'Kitchen', 's0_lines': '2',
+    's0_0_keep': '1', 's0_0_name': 'Base unit', 's0_0_unit': 'rft', 's0_0_quantity': '', 's0_0_rate': '2600',
+    's0_1_keep': '1', 's0_1_name': 'Loft shutter', 's0_1_unit': 'sqft', 's0_1_quantity': '', 's0_1_rate': '1100',
+    's1_name': 'Bedroom', 's1_lines': '1',
+    's1_0_keep': '1', 's1_0_name': 'Sliding wardrobe', 's1_0_unit': 'sqft', 's1_0_quantity': '', 's1_0_rate': '1650',
+    'payment_terms': '', 'notes': ''}, follow_redirects=True)
+with app.app_context():
+    lines = {b.name: b for b in BoqItem.query.all()}
+    tpl = next((quote_templates.get(t_['id']) for t_ in quote_templates.all_templates() if t_['name'] == 'Interiors rate list'), None)
+    made = Project.query.count() - n_projects
+ok('…set up: every item with its rate and a starting quotation with all of them; no quotation rebuilt',
+   lines.get('Base unit') and lines['Base unit'].rate == 2600 and lines.get('Sliding wardrobe') and tpl is not None
+   and [rm['name'] for rm in tpl['rooms']] == ['Kitchen', 'Bedroom'] and made == 0 and 'set up from your rates' in r.text)
+READING = saved_reading
 
 # The limit
 with app.app_context():

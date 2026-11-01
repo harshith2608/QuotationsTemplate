@@ -1,6 +1,7 @@
-"""Bring your old quotation: a firm uploads one quotation it has sent before (PDF or Excel) and its app is set up from
-it: its items and rates (saved lines), a starting quotation (template), its payment terms and notes, and the quotation
-itself rebuilt in QuoteRoom.
+"""Bring your old quotation: a firm uploads one quotation it has sent before (PDF or Excel), or the Excel format it
+makes its quotations from (its rate list: every item with its rate, usually no quantities), and its app is set up from
+it: its items and rates (saved lines), a starting quotation (template), its payment terms and notes, and, for a
+quotation, the quotation itself rebuilt in QuoteRoom.
 
     1. upload (admins)   the text is taken out of the file here: PDF text (a scan has none, so it's refused) or the
                          Excel sheets' cells. Only that text goes to the AI; the file itself is never stored.
@@ -228,7 +229,7 @@ def _excel_text(raw):
             out.append(f'Sheet: {sheet.title}\n' + '\n'.join(rows))
     body = '\n\n'.join(out)
     if len(body.strip()) < MIN_TEXT:
-        raise ImportProblem('This Excel file has almost nothing in it. Upload the sheet with your quotation.')
+        raise ImportProblem('This Excel file has almost nothing in it. Upload the sheet with your quotation or your rates.')
     return body[:MAX_TEXT]
 
 
@@ -255,6 +256,7 @@ class Charge(BaseModel):
 
 
 class Quote(BaseModel):
+    is_rate_list: bool = False
     job_title: str
     sections: List[Section]
     charges: List[Charge]
@@ -267,9 +269,12 @@ class Quote(BaseModel):
 
 
 PROMPT = """This is the text of a quotation (BOQ) that a business (interiors, furniture, kitchens, windows, glass work…)
-sent to a customer, taken from a PDF or an Excel sheet, so table columns may be run together.
+sent to a customer, or of the format it makes its quotations from (its rate list: items with their rates, quantities
+and amounts usually left empty), taken from a PDF or an Excel sheet, so table columns may be run together.
 Read it into the structure:
-- sections: the rooms or section headings, in order, each with its priced lines.
+- is_rate_list: true for a rate list or a blank quotation format (rates, but no job's quantities filled in), false for
+  a quotation made for a job.
+- sections: the rooms, categories or section headings, in order, each with its priced lines.
 - each line: the item's name as written, without its serial number ("TV Unit Base Drawers", not "1.1 TV Unit Base
   Drawers"; keep the words that tell similar items apart); the specification or description as written ('' if none);
   the size as written ('' if none); the unit as written (sqft, rft, nos, LS…); quantity = what the rate is
@@ -297,7 +302,7 @@ def read(body):
     if r.stop_reason == 'max_tokens':
         raise ImportProblem('This quotation is too long to read in one go. Upload a shorter one (one job).')
     if r.stop_reason == 'refusal' or r.parsed_output is None:
-        raise ImportProblem("This file couldn't be read as a quotation.")
+        raise ImportProblem("This file couldn't be read as a quotation or a rate list.")
     return r.parsed_output, {'in': r.usage.input_tokens, 'out': r.usage.output_tokens}
 
 
@@ -316,7 +321,8 @@ def read_upload(filename, raw):
     lines = sum(len(s['lines']) for s in data['sections'])
     if not lines:
         _log(kind, False, tokens_in=used['in'], tokens_out=used['out'], note='no lines')
-        raise ImportProblem("No priced lines were found in this file. Is it a quotation with items and amounts?")
+        raise ImportProblem("No priced lines were found in this file. Is it a quotation or a rate list, with items "
+                            "and rates?")
     _count()
     _log(kind, True, lines, used['in'], used['out'])
     return data
@@ -350,8 +356,10 @@ def _num(value):
 
 def tidy(quote):
     """The reading as plain data for the review page: names without serial numbers, units in the app's words, a
-    rate worked out from amount ÷ quantity when only the amount is printed, the size kept in the description."""
+    rate worked out from amount ÷ quantity when only the amount is printed, the size kept in the description. A rate
+    list (said so, or no line has a quantity or an amount) is checked as rates only: no totals."""
     from . import boq
+    rate_list = quote.is_rate_list or all(l.quantity is None and l.amount is None for s in quote.sections for l in s.lines)
     sections = []
     for s in quote.sections:
         lines = []
@@ -371,13 +379,13 @@ def tidy(quote):
                 desc = (desc + ' · ' if desc else '') + 'Size: ' + ' '.join(l.size.split())
             lines.append({'name': name, 'description': desc[:500], 'unit': boq.clean_unit(l.unit),
                           'quantity': qty, 'rate': rate, 'amount': amount,
-                          'no_amount': amount is None and rate is not None})   # maybe not in their total
+                          'no_amount': amount is None and rate is not None and not rate_list})   # maybe not in their total
         if lines:
             sections.append({'name': _section(s.name) or 'Items', 'lines': lines})
     charges = [{'name': _name(c.name), 'amount': _num(c.amount)} for c in quote.charges
                if _name(c.name) and (_num(c.amount) or 0) > 0]
-    return {'job_title': ' '.join(quote.job_title.split())[:60] or 'My quotation', 'sections': sections,
-            'charges': charges, 'subtotal': _num(quote.subtotal), 'discount': abs(_num(quote.discount) or 0),   # "- 10,000"
+    return {'rate_list': rate_list, 'job_title': ' '.join(quote.job_title.split())[:60] or 'My quotation',
+            'sections': sections, 'charges': charges, 'subtotal': _num(quote.subtotal), 'discount': abs(_num(quote.discount) or 0),   # "- 10,000"
             'gst_percent': _num(quote.gst_percent), 'grand_total': _num(quote.grand_total),
             'payment_terms': quote.payment_terms.strip()[:3000], 'notes': quote.notes_and_terms.strip()[:5000]}
 
@@ -400,7 +408,8 @@ def from_form(form):
     for k in range(min(int(form.get('charges') or 0), 20)):
         if form.get(f'c{k}_keep') and _name(form.get(f'c{k}_name')) and _num(form.get(f'c{k}_amount')):
             charges.append({'name': _name(form.get(f'c{k}_name')), 'amount': _num(form.get(f'c{k}_amount'))})
-    return {'job_title': ' '.join((form.get('job_title') or '').split())[:60] or 'My quotation', 'sections': sections,
+    return {'rate_list': form.get('rate_list') == '1',
+            'job_title': ' '.join((form.get('job_title') or '').split())[:60] or 'My quotation', 'sections': sections,
             'charges': charges, 'discount': abs(_num(form.get('discount')) or 0), 'gst': _num(form.get('gst')),
             'payment_terms': (form.get('payment_terms') or '').strip()[:3000], 'notes': (form.get('notes') or '').strip()[:5000]}
 
@@ -410,7 +419,7 @@ def from_form(form):
 def price_list(data):
     """The reviewed data as a price list file (app/price_list.py): saved lines (one per item name; the same name at
     another rate gets its section's name added), a starting quotation with those sections, the quotation rebuilt,
-    payment terms and notes, and GST if it was on."""
+    payment terms and notes, and GST if it was on. A rate list isn't a job, so nothing is rebuilt from it."""
     from . import boq, quote_gst
     lines, by_name = [], {}
 
@@ -443,8 +452,8 @@ def price_list(data):
         quote_rooms.append({'name': s['name'], 'items': items})
     out = {'pricing': 'item', 'lines': lines,
            'templates': [{'name': data['job_title'], 'rooms': rooms}],
-           'quotations': [{'customer_name': f"{data['job_title']} (your old quotation)", 'discount': data['discount'],
-                           'rooms': quote_rooms}],
+           'quotations': [] if data.get('rate_list') else [{'customer_name': f"{data['job_title']} (your old quotation)",
+                                                            'discount': data['discount'], 'rooms': quote_rooms}],
            'settings': {k: v for k, v in (('payment_terms', data['payment_terms']), ('important_notes', data['notes'])) if v}}
     if data.get('gst') in quote_gst.RATES:
         out['options'] = {'gst': data['gst']}
