@@ -167,6 +167,21 @@ _CALLS = [
      "it's going and if I can help with anything. Is this a good time for 2 minutes?\n\n"
      "Then ask, and listen:\n• How do you make quotations today? (Excel, Word, by hand, software?)\n"
      "• How many quotations a month? Who makes them?\n• What takes the most time, or goes wrong most often?"),
+    ('what', '"What is QuoteRoom?" / "How does it help me?"',
+     "In one breath: \"QuoteRoom is a quotation app for interior designers and furniture makers. You measure each "
+     "room in your own unit, it applies your rates and gives you a quotation in your brand to send on WhatsApp in "
+     "minutes. Then it helps you get the job confirmed, invoiced and paid.\"\n\n"
+     "How it helps (pick what fits what they told you):\n"
+     "• Faster quotations: pick your usual quotation, type the sizes, the totals and PDF are done. Send it before "
+     "you leave the site, while the customer is still keen.\n"
+     "• No mistakes: area, rates, fittings, discount and GST worked out for you, the same way for every staff member.\n"
+     "• Looks professional: your logo, colours, terms and bank/UPI details on every PDF.\n"
+     "• Customer accepts online: one link, no app or login for them; changes are new versions, nothing retyped.\n"
+     "• Get paid: payments, balances, reminders and GST invoices in the same place.\n"
+     "• Every job in one list: awaiting, confirmed, ongoing, on hold, completed, with notes for your team.\n"
+     "• Know your profit on every quotation, once you add what things cost you.\n"
+     "• One price for the whole team, on phone or laptop, nothing to install.\n\n"
+     "Then ask: \"Which of these would help you most?\" and show that one."),
     ('price', '"It\'s too expensive"',
      "• 12 months is ₹8,999: about ₹750 a month, ₹25 a day. 6 months is ₹4,999.\n"
      "• One price for the whole team: every staff member gets a login at no extra cost.\n"

@@ -623,6 +623,9 @@ ok('call mode: one trial at a time, with "how did it go" open and Save and next'
 ok('quick answers for objections on Sales calls (price, monthly, Excel, set-up time…), closed until tapped',
    'Quick answers' in sc and '₹8,999' in sc and '₹750 a month' in sc and 'No monthly plan' in sc and 'Send me one of your old quotations' in sc
    and '<details class="card call-answers" >' in sc)
+ok('…including what QuoteRoom is and how it helps, right after the opening',
+   sc.index('Opening the call') < sc.index('What is QuoteRoom?') < sc.index('It&#39;s too expensive')
+   and 'How it helps' in sc)
 ok('…open beside the trial in call mode, with their name and yours in the opening line', 'Quick answers' in _cm
    and 'call-answers" open' in _cm and 'this is Harshith from QuoteRoom' in _cm)
 ok('…and editable in Messages, like every other text', 'Sales calls: quick answers' in signed.get('/messages').text)
