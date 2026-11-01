@@ -225,9 +225,9 @@ def make_frame_at(SC):
     return frame_at, acc, starts
 
 
-def render(frame_at, total, path, fmt):
+def render(frame_at, total, path, fmt, style='pop'):
     size = (1080, 1920) if fmt == '9x16' else (1080, 1350)
-    music = make_music(total + 0.5, os.path.join(OUT, 'music-reel.wav'))
+    music = make_music(total + 0.5, os.path.join(OUT, 'music-reel.wav'), style)
     cmd = [FFMPEG, '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}',
            '-r', str(FPS), '-i', '-', '-i', music,
            '-filter_complex', '[1:a]volume=0.9,loudnorm=I=-16:TP=-1.5,aresample=48000[a]',
