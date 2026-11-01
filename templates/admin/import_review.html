@@ -6,8 +6,8 @@
   <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-list-check me-2 text-primary"></i>{{ 'Check your rates' if data.rate_list else 'Check your quotation' }}</h4>
   <p class="text-muted mb-2">We found <strong>{{ n_lines }} items</strong> in {{ data.sections | length }}
     section{{ '' if data.sections | length == 1 else 's' }}. Correct anything that's wrong, untick what you don't want,
-    then set up your app. Nothing is saved until you do.{% if data.rate_list %} Quantities are typed on each
-    quotation, so they can stay empty here.{% endif %}</p>
+    then set up your app. Nothing is saved until you do.{% if data.rate_list %} This is your rate list, so only
+    your rates and terms are saved (no quotation is made from it); quantities can stay empty.{% endif %}</p>
   <div class="alert alert-warning py-2 small" id="sumWarn" hidden></div>
   <div class="alert alert-success py-2 small" id="sumOk" hidden></div>
 </div>
@@ -61,6 +61,8 @@
 
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-body row g-3">
+      {% if data.rate_list %}<input type="hidden" name="job_title" value="{{ data.job_title }}">
+      <input type="hidden" name="discount" value="0">{% else %}
       <div class="col-md-6">
         <label class="form-label fw-semibold small mb-1" for="jobTitle">Name for the starting quotation</label>
         <input class="form-control" id="jobTitle" name="job_title" value="{{ data.job_title }}" maxlength="60" required>
@@ -69,7 +71,7 @@
       <div class="col-md-3">
         <label class="form-label fw-semibold small mb-1" for="discount">Discount (₹)</label>
         <input class="form-control" id="discount" name="discount" type="number" step="0.01" min="0" value="{{ data.discount or 0 }}">
-      </div>
+      </div>{% endif %}
       <div class="col-md-3">
         <label class="form-label fw-semibold small mb-1" for="gst">GST on quotations</label>
         <select class="form-select" id="gst" name="gst">

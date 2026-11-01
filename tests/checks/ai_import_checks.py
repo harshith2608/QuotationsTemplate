@@ -169,9 +169,10 @@ with app.app_context():
     lines = {b.name: b for b in BoqItem.query.all()}
     tpl = next((quote_templates.get(t_['id']) for t_ in quote_templates.all_templates() if t_['name'] == 'Interiors rate list'), None)
     made = Project.query.count() - n_projects
-ok('…set up: every item with its rate and a starting quotation with all of them; no quotation rebuilt',
-   lines.get('Base unit') and lines['Base unit'].rate == 2600 and lines.get('Sliding wardrobe') and tpl is not None
-   and [rm['name'] for rm in tpl['rooms']] == ['Kitchen', 'Bedroom'] and made == 0 and 'set up from your rates' in r.text)
+ok('…set up: just their rates (grouped by section): no starting quotation, no quotation rebuilt; on to Rates',
+   lines.get('Base unit') and lines['Base unit'].rate == 2600 and lines['Base unit'].category == 'Kitchen'
+   and lines.get('Sliding wardrobe') and tpl is None and made == 0 and 'Your rates are set up' in r.text
+   and 'Name for the starting quotation' not in t)
 READING = saved_reading
 
 # By material: the AI thinks they price by material; the review offers it; set up into Rates and fittings

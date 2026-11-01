@@ -492,15 +492,17 @@ def by_material(data):
 def price_list(data):
     """The reviewed data as a price list file (app/price_list.py): saved lines (one per item name; the same name at
     another rate gets its section's name added), a starting quotation with those sections, the quotation rebuilt,
-    payment terms and notes, and GST if it was on. A rate list isn't a job, so nothing is rebuilt from it. By material
-    (see by_material): materials, fittings and the starting quotation; the quotation isn't rebuilt either."""
+    payment terms and notes, and GST if it was on. A rate list (no quantities: just their rates) gives only the rates
+    and those settings: no starting quotation, nothing rebuilt. By material (see by_material): materials, fittings and
+    the starting quotation; the quotation isn't rebuilt either."""
     from . import boq, quote_gst
     if data.get('pricing') == 'material':
         m = by_material(data)
         out = {'pricing': 'material',
                'materials': [{'name': x['name'], **({'rates': x['rates']} if '' not in x['rates'] else {'rate': x['rates']['']})}
                              for x in m['materials']],
-               'fittings': m['fittings'], 'templates': [{'name': data['job_title'], 'rooms': m['rooms']}],
+               'fittings': m['fittings'],
+               'templates': [] if data.get('rate_list') else [{'name': data['job_title'], 'rooms': m['rooms']}],
                'settings': {k: v for k, v in (('payment_terms', data['payment_terms']), ('important_notes', data['notes'])) if v}}
         if data.get('gst') in quote_gst.RATES:
             out['options'] = {'gst': data['gst']}
@@ -535,7 +537,7 @@ def price_list(data):
         rooms.append({'name': s['name'], 'items': names})
         quote_rooms.append({'name': s['name'], 'items': items})
     out = {'pricing': 'item', 'lines': lines,
-           'templates': [{'name': data['job_title'], 'rooms': rooms}],
+           'templates': [] if data.get('rate_list') else [{'name': data['job_title'], 'rooms': rooms}],
            'quotations': [] if data.get('rate_list') else [{'customer_name': f"{data['job_title']} (your old quotation)",
                                                             'discount': data['discount'], 'rooms': quote_rooms}],
            'settings': {k: v for k, v in (('payment_terms', data['payment_terms']), ('important_notes', data['notes'])) if v}}

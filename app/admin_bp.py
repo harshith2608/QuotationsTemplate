@@ -87,12 +87,14 @@ def ai_import_set_up():
         return redirect(url_for('admin.ai_import'))
     if data['pricing'] == 'material':
         flash(f'Your app is set up by material: {result["materials"]} material{"" if result["materials"] == 1 else "s"} '
-              f'with their rates, {result["fittings"]} fitting{"" if result["fittings"] == 1 else "s"}, and the starting '
-              f'quotation "{data["job_title"]}". Check them below.', 'success')
+              f'with their rates, {result["fittings"]} fitting{"" if result["fittings"] == 1 else "s"}'
+              + ('' if data['rate_list'] else f', and the starting quotation "{data["job_title"]}"') + '. Check them below.',
+              'success')
         return redirect(url_for('admin.rates'))
     if data['rate_list']:
-        flash(f'Your app is set up from your rates: {result["added"] + result["updated"]} items with their rates, and '
-              f'the starting quotation "{data["job_title"]}" with all of them.', 'success')
+        flash(f'Your rates are set up: {result["added"] + result["updated"]} items with their rates. Check them below.',
+              'success')
+        return redirect(url_for('admin.rates'))
     else:
         flash(f'Your app is set up from your quotation: {result["added"] + result["updated"]} items with their rates, '
               f'the starting quotation "{data["job_title"]}", and your quotation rebuilt below.', 'success')
