@@ -17,6 +17,47 @@
   <input type="hidden" name="sections" value="{{ data.sections | length }}">
   <input type="hidden" name="charges" value="{{ data.charges | length }}">
   {% if data.rate_list %}<input type="hidden" name="rate_list" value="1">{% endif %}
+  {% if not mat %}<input type="hidden" name="pricing" value="item">{% endif %}
+
+  {% if mat %}
+  <div class="card shadow-sm border-0 mb-3 border-start border-primary border-4" id="pricingCard">
+    <div class="card-body">
+      <div class="fw-bold mb-1"><i class="bi bi-lightbulb me-1 text-primary"></i>It looks like you price by material</div>
+      {% if data.pricing_reason %}<p class="small text-muted mb-2">{{ data.pricing_reason }}</p>{% endif %}
+      <div class="form-check mb-1">
+        <input class="form-check-input" type="radio" name="pricing" id="pricingMaterial" value="material" checked>
+        <label class="form-check-label" for="pricingMaterial"><strong>Set up by material</strong>: a rate per
+          {{ units.area_label() }} for each material{{ ' and work type' if mat.work_types }},
+          and items like drawers and hinges in your fittings list. You type each item's size on the quotation.</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="pricing" id="pricingItem" value="item">
+        <label class="form-check-label" for="pricingItem"><strong>Set up by item</strong>: each item with its own
+          rate{{ '' if data.rate_list else ', and your quotation rebuilt here' }}.</label>
+      </div>
+      <div id="matPreview" class="mt-3 small">
+        <div class="fw-semibold mb-1">From your file:</div>
+        <table class="table table-sm mb-2" style="max-width:520px">
+          <thead><tr><th>Material</th><th>Work</th><th class="text-end">Rate</th></tr></thead>
+          <tbody>
+          {% for m in mat.materials %}{% for w, r in m.rates.items() %}
+            <tr><td>{{ m.name }}</td><td class="text-muted">{{ w or '–' }}</td><td class="text-end">₹{{ '{:,.0f}'.format(r) }}</td></tr>
+          {% endfor %}{% endfor %}
+          </tbody>
+        </table>
+        <div class="text-muted">And {{ mat.fittings | length }} fitting{{ '' if mat.fittings | length == 1 else 's' }}
+          (priced per piece, running foot or as a lump sum).{% if not data.rate_list %} Your old quotation isn't
+          rebuilt this way; the starting quotation has all its items, ready for sizes.{% endif %}
+          Changes you make to the lines below are used when you set up.</div>
+        {% if mat.mixed %}
+        <div class="alert alert-warning py-2 mt-2 mb-0">One material at more than one rate in your file. The most common
+          rate is used; these were different: {{ mat.mixed | join('; ') }}. Change the material on those lines (for
+          example "Laminate premium") to keep both.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-body row g-3">
@@ -59,6 +100,16 @@
               <div class="col-3"><input class="form-control form-control-sm {{ 'is-invalid' if l.rate is none }}" name="{{ p }}rate" type="number" step="any" min="0" value="{{ l.rate if l.rate is not none }}" placeholder="Rate" aria-label="Rate" data-rate></div>
               <div class="col-3 small text-end pt-1 fw-semibold" data-amount></div>
             </div>
+            {% if mat %}
+            <div class="row g-1 mt-1" data-matfields>
+              <div class="col-6"><div class="input-group input-group-sm"><span class="input-group-text">Material</span>
+                <input class="form-control" name="{{ p }}material" value="{{ l.material }}" maxlength="60" placeholder="Its own" aria-label="Material"></div></div>
+              <div class="col-6"><div class="input-group input-group-sm"><span class="input-group-text">Work</span>
+                <select class="form-select" name="{{ p }}work" aria-label="Work type">
+                {% for w in ['', 'Box Work', 'Frame Work'] %}<option value="{{ w }}" {{ 'selected' if l.work == w }}>{{ w or 'One rate' }}</option>{% endfor %}
+              </select></div></div>
+            </div>
+            {% endif %}
             {% if l.rate is none %}<div class="small text-danger mt-1">No rate in your file: type it, or untick the line.</div>
             {% elif l.no_amount %}<div class="small text-warning-emphasis mt-1">No amount in your file: was it counted in your total? If not, untick it.</div>{% endif %}
           </div>
@@ -126,7 +177,20 @@
       else ok.innerHTML = `<i class="bi bi-check-circle me-1"></i>Your lines add up to ${fmt(total)}, the same as your quotation.`;
     }
   }
+  const pm = document.getElementById('pricingMaterial');
+  function pricing() {                       // by material: the material fields and the preview; by item: neither
+    const on = !pm || pm.checked;
+    form.querySelectorAll('[data-matfields]').forEach(el => {     // only lines measured by area have a material
+      const unit = el.closest('[data-line]').querySelector('input[name$="unit"]').value.trim().toLowerCase().replace(/[ .]/g, '');
+      el.hidden = !pm || !on || !['sqft', 'sft', 'sqm'].includes(unit);
+    });
+    const pv = document.getElementById('matPreview');
+    if (pv) pv.hidden = !on;
+  }
+  form.querySelectorAll('input[name=pricing]').forEach(r => r.addEventListener('change', pricing));
+  pricing();
   form.addEventListener('input', sum);
+  form.addEventListener('input', e => { if (e.target.name && e.target.name.endsWith('unit')) pricing(); });
   form.addEventListener('change', sum);
   form.addEventListener('submit', () => {
     const b = document.getElementById('setUpGo');

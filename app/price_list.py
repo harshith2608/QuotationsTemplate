@@ -276,10 +276,12 @@ def _template_rooms(template, saved, fittings, combos):
     return rooms, missing
 
 
-def apply(parsed, remove_starter=True, replace_settings=False):
+def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rates=False):
     """Load a parsed price list into the business open now (call inside its tenant context; commits).
     Lines are added or updated by name (other saved lines stay); remove_starter also removes the starter lines the
-    business never changed. Starting quotations replace any with the same name. Settings: only ones never saved,
+    business never changed; hide_starter_rates (a business setting up by material from its own file) also hides the
+    starter materials and removes the starter fittings it never changed and doesn't list. Starting quotations replace
+    any with the same name. Settings: only ones never saved,
     unless replace_settings. BOQ lines are turned on (with the BOQ layout). Returns a summary dict."""
     from sqlalchemy import func
     from . import boq, materials as M, quote_templates
@@ -309,6 +311,7 @@ def apply(parsed, remove_starter=True, replace_settings=False):
             row = Material(name=m['name'], uses_work_types='' not in m['rates'], active=True, sort_order=top + 1)
             db.session.add(row)
         row.active = True
+        row.uses_work_types = '' not in m['rates']          # the file says: per work type, or one rate
         for work, rate in m['rates'].items():
             r = have_rates.get((row.name, work))
             if r is None:
@@ -316,6 +319,21 @@ def apply(parsed, remove_starter=True, replace_settings=False):
             else:
                 r.rate_per_sqft = rate
         mats += 1
+    if hide_starter_rates and parsed['materials']:
+        from .catalog import DEFAULT_MATERIALS, DEFAULT_PRICE_LIST, WORK_TYPES
+        mine = {m['name'].lower() for m in parsed['materials']}
+        for name, uses_work, rate in DEFAULT_MATERIALS:
+            row = have_mats.get(name.lower())
+            same = all(getattr(have_rates.get((name, w)), 'rate_per_sqft', None) == rate
+                       for w in (WORK_TYPES if uses_work else ['']))
+            if row is not None and name.lower() not in mine and same:
+                row.active = False
+        mine = {f['name'].lower() for f in parsed['fittings']}
+        for name, price, unit in DEFAULT_PRICE_LIST:
+            row = have_fits.get(name.lower())
+            if row is not None and name.lower() not in mine and row.price == price and row.unit == unit:
+                db.session.delete(row)
+                del have_fits[name.lower()]
     for f in parsed['fittings']:
         row = have_fits.get(f['name'].lower())
         if row is None:

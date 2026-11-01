@@ -65,6 +65,7 @@ def ai_import():
             return redirect(url_for('admin.ai_import'))
         return render_template('admin/import_review.html', data=data,
                                title='Check your rates' if data['rate_list'] else 'Check your quotation',
+                               mat=AI.by_material(data) if data['pricing'] == 'material' else None,
                                left=AI.left()[0], gst_rates=quote_gst.RATES)
     return render_template('admin/import.html', title='Bring your old quotation', left=left, limit=limit)
 
@@ -84,6 +85,11 @@ def ai_import_set_up():
         db.session.rollback()
         flash(f'Your app couldn\'t be set up from it: {exc}', 'danger')
         return redirect(url_for('admin.ai_import'))
+    if data['pricing'] == 'material':
+        flash(f'Your app is set up by material: {result["materials"]} material{"" if result["materials"] == 1 else "s"} '
+              f'with their rates, {result["fittings"]} fitting{"" if result["fittings"] == 1 else "s"}, and the starting '
+              f'quotation "{data["job_title"]}". Check them below.', 'success')
+        return redirect(url_for('admin.rates'))
     if data['rate_list']:
         flash(f'Your app is set up from your rates: {result["added"] + result["updated"]} items with their rates, and '
               f'the starting quotation "{data["job_title"]}" with all of them.', 'success')

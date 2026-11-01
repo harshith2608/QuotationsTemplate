@@ -174,6 +174,85 @@ ok('…set up: every item with its rate and a starting quotation with all of the
    and [rm['name'] for rm in tpl['rooms']] == ['Kitchen', 'Bedroom'] and made == 0 and 'set up from your rates' in r.text)
 READING = saved_reading
 
+# By material: the AI thinks they price by material; the review offers it; set up into Rates and fittings
+MATS = AI.Quote(
+    pricing='material', pricing_reason='Every laminate item is ₹1,450 per sqft, whatever the item.',
+    job_title='3 BHK interiors',
+    sections=[AI.Section(name='Kitchen', lines=[
+                  AI.Line(name='Base unit', description='', size='', unit='sqft', quantity=30, rate=1850, amount=55500,
+                          material='Acrylic', work_type='Box work'),
+                  AI.Line(name='Shutters', description='', size='', unit='sqft', quantity=20, rate=1500, amount=30000,
+                          material='Acrylic', work_type='Frame work (shutters)'),
+                  AI.Line(name='Tall unit', description='', size='', unit='sqft', quantity=12, rate=1850, amount=22200,
+                          material='acrylic'),
+                  AI.Line(name='Tandem drawer', description='Hettich', size='', unit='Nos', quantity=4, rate=4500, amount=18000)]),
+              AI.Section(name='Bedroom', lines=[
+                  AI.Line(name='Wardrobe', description='', size='', unit='sqft', quantity=50, rate=1450, amount=72500,
+                          material='Laminate', work_type='Box Work'),
+                  AI.Line(name='Loft', description='', size='', unit='sqft', quantity=16, rate=1450, amount=23200,
+                          material='Laminate'),
+                  AI.Line(name='Dresser', description='', size='', unit='sqft', quantity=10, rate=1650, amount=16500,
+                          material='Laminate'),
+                  AI.Line(name='False ceiling', description='', size='', unit='sqft', quantity=120, rate=120, amount=14400)])],
+    charges=[AI.Charge(name='Design fee', amount=10000)],
+    subtotal=252300, discount=None, gst_percent=None, grand_total=None, payment_terms='', notes_and_terms='')
+READING = MATS
+t = upload(QUOTE, 'mats.xlsx').text
+ok('by material: the review says so, with their reason, and offers by material (chosen) or by item',
+   'It looks like you price by material' in t and 'whatever the item' in t
+   and 'id="pricingMaterial" value="material" checked' in t and 'id="pricingItem" value="item"' in t)
+ok('…a preview of the materials and rates: Acrylic box and frame work, Laminate at its most common rate, the '
+   'false ceiling as a material of its own', '<td>Acrylic</td><td class="text-muted">Box Work</td><td class="text-end">₹1,850</td>' in t
+   and '<td>Acrylic</td><td class="text-muted">Frame Work</td><td class="text-end">₹1,500</td>' in t
+   and '<td>Laminate</td><td class="text-muted">–</td><td class="text-end">₹1,450</td>' in t and '<td>False ceiling</td>' in t)
+ok('…the line at another rate is pointed out; each line shows its material and work type to correct',
+   'Laminate: ₹1,650 (Dresser)' in t and 'name="s0_0_material" value="Acrylic"' in t
+   and '<option value="Frame Work" selected>' in t)
+with app.app_context():
+    m = AI.by_material(AI.tidy(MATS))
+    rooms = {r['name']: r['items'] for r in m['rooms']}
+ok('…the template: area items in their material (unsaid work type is box work; one-rate materials none), the rest '
+   'as fittings, the charges too', rooms['Kitchen'][2] == {'name': 'Tall unit', 'material': 'Acrylic', 'work': 'Box Work'}
+   and rooms['Bedroom'][0] == {'name': 'Wardrobe', 'material': 'Laminate', 'work': ''}
+   and rooms['Kitchen'][3] == {'name': 'Tandem drawer', 'type': 'fitting'} and rooms['Other charges'][0]['type'] == 'fitting')
+
+form = {'pricing': 'material', 'job_title': '3 BHK interiors', 'discount': '', 'gst': '', 'sections': '2', 'charges': '1',
+        'c0_keep': '1', 'c0_name': 'Design fee', 'c0_amount': '10000', 'payment_terms': '', 'notes': ''}
+for i, sec in enumerate(MATS.sections):
+    form[f's{i}_name'], form[f's{i}_lines'] = sec.name, str(len(sec.lines))
+    for j, l in enumerate(sec.lines):
+        p = f's{i}_{j}_'
+        form.update({p + 'keep': '1', p + 'name': l.name, p + 'unit': l.unit, p + 'quantity': str(l.quantity),
+                     p + 'rate': str(l.rate), p + 'material': l.material, p + 'work': l.work_type})
+form['s1_2_material'] = 'Laminate premium'          # the admin keeps the dresser's own rate
+with app.app_context():
+    n_projects = Project.query.count()
+r = admin.post('/admin/import/set-up', data=form)
+with app.app_context():
+    from app import boq
+    from app.models import ItemRate, Material, PriceListItem
+    mats = {x.name: x for x in Material.query.all()}
+    rates = {(x.wood_type, x.work_type): x.rate_per_sqft for x in ItemRate.query.all()}
+    fits = {x.name.lower(): x for x in PriceListItem.query.all()}
+    tpl = next((quote_templates.get(t_['id']) for t_ in quote_templates.all_templates() if t_['name'] == '3 BHK interiors'), None)
+    items = {it['name']: it for rm in (tpl or {}).get('rooms', []) for it in rm['items']}
+    by_item, made = boq.enabled(), Project.query.count() - n_projects
+ok('…set up: pricing by material, Acrylic per work type, Laminate and Laminate premium at one rate each, false ceiling',
+   not by_item and mats['Acrylic'].uses_work_types and rates[('Acrylic', 'Box Work')] == 1850
+   and rates[('Acrylic', 'Frame Work')] == 1500 and not mats['Laminate'].uses_work_types and rates[('Laminate', '')] == 1450
+   and rates[('Laminate premium', '')] == 1650 and rates[('False ceiling', '')] == 120)
+ok('…fittings with their prices (the design fee as a lump sum); starter materials and fittings they never changed '
+   'hidden or removed', fits['tandem drawer'].price == 4500 and fits['design fee'].unit == 'lump sum'
+   and not mats['Veneer'].active and not mats['Glass'].active and 'pull-out basket' not in fits)
+ok('…a starting quotation of measured items and fittings; no quotation rebuilt; on to Rates',
+   items.get('Wardrobe', {}).get('wood_type') == 'Laminate' and items.get('Shutters', {}).get('work_type') == 'Frame Work'
+   and items.get('Dresser', {}).get('wood_type') == 'Laminate premium' and items.get('Tandem drawer', {}).get('type') == 'fixed'
+   and made == 0 and r.status_code == 302 and r.headers['Location'].endswith('/admin/rates'))
+READING = saved_reading
+t = upload(QUOTE, 'again-item.pdf').text
+ok('a file the AI thinks is priced by item: no by-material card, set up by item as before',
+   'It looks like you price by material' not in t and 'name="pricing" value="item"' in t)
+
 # The limit
 with app.app_context():
     AppSetting.set(AI.USAGE_KEY, '{"trial": 5, "' + __import__('datetime').datetime.utcnow().strftime('%Y-%m') + '": 20}')
