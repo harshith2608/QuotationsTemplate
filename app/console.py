@@ -710,13 +710,14 @@ def dashboard():
         ai = {'on': ai_import.console_switch(), 'recent': ai_import.recent(10)}
     except Exception:
         ai = {'on': False, 'recent': []}
-    from . import material_list, platform_switch
+    from . import ai_tools, material_list, platform_switch
     try:
         mat_on = platform_switch.console_value(material_list.SWITCH_KEY)
+        helpers = {k: platform_switch.console_value(f['switch']) for k, f in ai_tools.FEATURES.items()}
     except Exception:
-        mat_on = False
+        mat_on, helpers = False, {k: False for k in ai_tools.FEATURES}
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           ai=ai, mat_on=mat_on,
+                           ai=ai, mat_on=mat_on, helpers=helpers,
                            lead_wa=texts.get('lead_whatsapp')[1],
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
@@ -747,6 +748,21 @@ def material_list_switch():
     flash('Material list is ' + ('on for every trial and customer (within a minute).' if on else
                                  'off for every trial and customer (within a minute).'), 'ok')
     return redirect(url_for('console.dashboard') + '#material-list')
+
+
+@console_bp.route('/features/ai-<feature>', methods=['POST'])
+@login_required
+def ai_helper_switch(feature):
+    """An AI helper on quotations (app/ai_tools.py: draft, check): on or off for every trial and customer."""
+    from . import ai_tools, platform_switch
+    if feature not in ai_tools.FEATURES:
+        abort(404)
+    on = request.form.get('on') == '1'
+    f = ai_tools.FEATURES[feature]
+    platform_switch.set_switch(f['switch'], on)
+    audit(f['switch'], None, 'on' if on else 'off')
+    flash(f'{f["label"]} is ' + ('on' if on else 'off') + ' for every trial and customer (within a minute).', 'ok')
+    return redirect(url_for('console.dashboard') + '#ai-helpers')
 
 
 @console_bp.route('/spares', methods=['POST'])

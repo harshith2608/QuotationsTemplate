@@ -234,6 +234,27 @@
   {% endif %}
 </div>
 
+<h2 id="ai-helpers">AI helpers on quotations</h2>
+<div class="card">
+  {% set texts = {'photos': 'On the same page, the firm takes up to 3 photos of its handwritten site notes and gets the draft from them (photos shrunk, read and never stored). Counted per photo: 15 in a trial, 60 a month.',
+                  'draft': 'The firm pastes a customer\'s WhatsApp message or its site notes and gets the new quotation filled in with its own items and rates (sizes not given are left to fill in, with questions to ask the customer). 10 in a trial, 60 a month.',
+                  'check': 'A "Check before sending" button on each quotation: missing sizes or quantities, rates different from their own, a bigger discount than usual, and what the AI notices (missing usual items, odd sizes, spelling). 20 in a trial, 150 a month.'} %}
+  {% for key, label in [('draft', 'Draft from a message'), ('photos', 'Draft from photos of site notes'), ('check', 'Check before sending')] %}
+  <div class="row" style="align-items:center{% if not loop.first %};border-top:1px solid var(--line);padding-top:10px;margin-top:10px{% endif %}">
+    <div class="grow small">
+      <strong>{{ label }}</strong> · <strong>{{ 'On' if helpers[key] else 'Off' }}</strong> for every trial and paying
+      customer in the shared app. {{ texts[key] }} Uses <span class="mono">ANTHROPIC_API_KEY</span>; calls are listed
+      under Bring your old quotation's recent imports. Own-app customers: <span class="mono">AI_{{ key|upper }}=1</span>.
+    </div>
+    <form method="post" action="{{ url_for('console.ai_helper_switch', feature=key) }}"
+          data-confirm="{{ ('Turn ' ~ label ~ ' off for every trial and customer?') if helpers[key] else ('Turn ' ~ label ~ ' on for every trial and customer?') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="on" value="{{ '0' if helpers[key] else '1' }}">
+      <button class="btn btn-sm" type="submit">{{ 'Turn off' if helpers[key] else 'Turn on' }}</button></form>
+  </div>
+  {% endfor %}
+</div>
+
 <h2 id="material-list">Material list</h2>
 <div class="card">
   <div class="row" style="align-items:center">

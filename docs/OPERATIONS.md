@@ -637,6 +637,25 @@ API key (console.anthropic.com → API keys; set a monthly spend limit there too
 switch has no effect. Customers with their own Vercel app get it only with `AI_IMPORT=1` and the key on their
 project. It's always off in the public demo.
 
+### AI helpers on quotations (Draft from a message, Check before sending)
+
+- **Draft from a message:** on the new quotation form, the firm pastes a customer's WhatsApp message or its site
+  notes; the form is filled in with **its own** items, materials, fittings and lines. The AI only picks items, sizes
+  and quantities: every rate comes from the firm's rates. Sizes that weren't given are left highlighted to fill in,
+  and it lists questions to ask the customer. 10 in a trial, 60 a month.
+- **Draft from photos of site notes** (its own switch): on the same page, up to 3 photos of handwritten notebook
+  pages (shrunk on the phone, turned upright, read, never stored; shown small next to the draft for checking).
+  Counted per photo: 15 in a trial, 60 a month. A one-page draft used about 4,800 tokens in and 2,200 out in testing.
+- **Check before sending:** a button on each quotation. Exact checks (no size or quantity, a rate different from the
+  firm's own, a bigger discount than usual, the same line twice) plus the AI's (what such rooms usually need, sizes
+  that look wrong, an item in the wrong room, spelling). The customer's name and number aren't sent. 20 in a trial,
+  150 a month. If the AI can't answer, the exact checks still show.
+
+**A switch each, off until you turn it on:** console dashboard → **AI helpers on quotations** → Turn on / Turn off.
+Takes effect for every trial and shared-hosting customer within a minute. Uses the same `ANTHROPIC_API_KEY` as Bring
+your old quotation (without it they stay off); calls are listed in that card's recent imports (kind draft / check).
+About ₹0.10–0.30 a call. Own-app customers: `AI_DRAFT=1` / `AI_PHOTOS=1` / `AI_CHECK=1` with the key. Always off in the public demo.
+
 ### Material list
 
 Each quotation gets a **Material list** button: everything to buy for the job, with wastage, by group (Wood, Hardware,

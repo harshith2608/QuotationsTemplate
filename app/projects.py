@@ -415,12 +415,12 @@ def list_projects():
 @projects_bp.route('/projects/new', methods=['GET', 'POST'])
 @login_required
 def create_project():
-    master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
-    master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
-    item_rates = _get_item_rates()
     form_cat = _form_catalog(None)
 
     if request.method == 'POST':
+        master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
+        master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
+        item_rates = _get_item_rates()
         customer_name  = request.form.get('customer_name', '').strip()
         mobile         = request.form.get('mobile', '').strip()
         email          = request.form.get('email', '').strip()
@@ -544,17 +544,26 @@ def create_project():
             if tpl.get('plywood') and _ply.known(tpl['plywood']):
                 form_cat['plywood_form']['selected'] = tpl['plywood']
             started_from = f'the "{tpl["name"]}" template'
+    return render_new_form(start, started_from, form_data, form_cat)
+
+
+def render_new_form(start=None, started_from=None, form_data=None, form_cat=None, ai_draft=None):
+    """The new quotation form, filled in from `start` (a quotation, template or AI draft: rooms_json, discount,
+    plywood) when given. ai_draft: what the AI says to check (app/ai_tools.py)."""
+    from . import ai_tools, quote_templates as QT
+    form_data = form_data or {}
     return render_template('projects/form.html',
                            title='New Quotation',
-                           master_rooms=master_rooms,
-                           master_items=master_items,
-                           **form_cat,
-                           item_rates=item_rates,
+                           master_rooms=[r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()],
+                           master_items=[i.name for i in MasterItem.query.order_by(MasterItem.name).all()],
+                           **(form_cat or _form_catalog(None)),
+                           item_rates=_get_item_rates(),
                            price_list=_get_price_list(),
-                           form_data={**form_data, 'plywood_thickness': start['plywood_thickness']} if start else {},
+                           form_data={**form_data, 'plywood_thickness': start['plywood_thickness']} if start else form_data,
                            rooms_json=start['rooms_json'] if start else '[]',
                            start=start, started_from=started_from, templates=QT.all_templates(),
                            chosen_template=request.args.get('template', ''),
+                           ai_draft=ai_draft, ai_draft_on=ai_tools.available('draft') or ai_tools.available('photos'),
                            project=None)
 
 
@@ -689,6 +698,7 @@ def view_project(project_id):
                            can_change_stage=_can_change_stage(project),
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            material_list_on=__import__('app.material_list', fromlist=['available']).available(),
+                           ai_check_on=__import__('app.ai_tools', fromlist=['available']).available('check'),
                            title=f'Quotation – {project.customer_name}')
 
 

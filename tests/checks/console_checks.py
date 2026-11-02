@@ -126,6 +126,22 @@ with app.app_context():
     os.environ.pop('TENANT_MODE')
 ok('…Turn on: on for the shared app, audited; Turn off: off again', ml_on and ml_off
    and 'Material list is on for every trial' in r.text and 'material list' in c.get('/activity').text)
+# AI helpers on quotations: a switch each (app/ai_tools.py)
+from app import ai_tools as _at
+ok('AI helpers: both off at first', 'id="ai-helpers"' in t and 'action="/features/ai-draft"' in t
+   and 'action="/features/ai-check"' in t)
+r = c.post('/features/ai-check', data={'on': '1'}, follow_redirects=True)
+with app.app_context():
+    os.environ['TENANT_MODE'] = '1'
+    for k in _at.FEATURES:
+        _ps.forget(_at.FEATURES[k]['switch'])
+    one_on = _at.switched_on('check') and not _at.switched_on('draft')
+    c.post('/features/ai-check', data={'on': '0'})
+    _ps.forget(_at.FEATURES['check']['switch'])
+    one_off = not _at.switched_on('check')
+    os.environ.pop('TENANT_MODE')
+ok('…each turns on and off on its own, audited', one_on and one_off and 'Check before sending is on' in r.text
+   and c.post('/features/ai-nothing', data={'on': '1'}).status_code == 404)
 ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
    and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
    and 'name="company" value="Kumar Woodcraft" maxlength="80"' in t)

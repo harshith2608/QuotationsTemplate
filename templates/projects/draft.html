@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Draft from a message{% endblock %}
+{% block content %}
+<div class="mt-3 mb-3" style="max-width:760px">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">Quotations</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('projects.create_project') }}" class="text-decoration-none">New quotation</a></li>
+      <li class="breadcrumb-item active">Draft {{ 'from a message' if text_on else 'from your notes' }}</li>
+    </ol>
+  </nav>
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-chat-text me-2 text-primary"></i>Draft {{ 'from a message' if text_on else 'from your site notes' }}</h4>
+  <p class="text-muted mb-3">
+    {% if text_on %}Paste what the customer sent you (their WhatsApp message) or your notes from the site visit{% if photos_on %}, or take photos of your notebook pages{% endif %}.
+    {% else %}Take photos of your notebook pages from the site visit.{% endif %}
+    We draft the quotation with <strong>your own items and your rates</strong>: you then check it, type the sizes that
+    weren't given and save it as usual.</p>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <form method="post" id="draftForm" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if photos_on %}
+        <label class="form-label fw-semibold" for="draftPhotos"><i class="bi bi-camera me-1"></i>Photos of your site notes</label>
+        <input class="form-control" type="file" id="draftPhotos" name="photos" accept="image/*" multiple>
+        <div class="form-text">Up to {{ photo_max }} pages, one page per photo, flat and in good light. Handwriting is
+          fine: sizes like 10'6 x 2'9 or 2400 x 600 and short forms like W/R, OHC and MBR are understood.
+          {{ photos_left[0] }} photo{{ '' if photos_left[0] == 1 else 's' }} left ({{ photos_left[1] }}).</div>
+        <div id="photoPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
+        <div id="photoData"></div>
+        {% endif %}
+        {% if text_on %}
+        <label class="form-label fw-semibold {{ 'mt-3' if photos_on }}" for="draftMessage">{{ 'Or the' if photos_on else 'The' }} customer's requirements{{ ' (or anything to add to the photos)' if photos_on }}</label>
+        <textarea class="form-control" id="draftMessage" name="message" rows="{{ 5 if photos_on else 9 }}" maxlength="6000"
+                  placeholder="e.g. 3 BHK at Kondapur. Wardrobes in both bedrooms with lofts, master one 9 x 7 ft in acrylic. L-shaped modular kitchen with tandem drawers. TV unit in the hall. False ceiling in hall and master bedroom.">{{ message }}</textarea>
+        <div class="form-text">Any language mix is fine. Sizes in your own unit (ft, mm, cm or inches) are picked up
+          for the items they belong to; a room's size isn't used as an item's size.
+          {{ left[0] }} draft{{ '' if left[0] == 1 else 's' }} from a message left ({{ left[1] }}).</div>
+        {% endif %}
+        <button type="submit" class="btn btn-primary ki-btn-primary mt-3" id="draftGo">
+          <i class="bi bi-stars me-1"></i>Draft the quotation</button>
+        <div class="small text-muted mt-2">Takes about 10–30 seconds. Nothing is saved until you save the quotation.</div>
+      </form>
+    </div>
+  </div>
+
+  <div class="small text-muted mt-3"><i class="bi bi-shield-check me-1"></i>The message{{ ' and photos are' if photos_on else ' is' }}
+    read by our AI provider (Anthropic) and {{ 'aren\'t' if photos_on else 'isn\'t' }} stored or used to train AI. Rates always come from your
+    own rates, never from the AI.</div>
+</div>
+<script>
+(function () {
+  const form = document.getElementById('draftForm');
+  const input = document.getElementById('draftPhotos');
+  const MAX = {{ photo_max }}, SIDE = 1600;
+  // Photos are shrunk here before upload (a phone photo is 3–6 MB; this sends ~300 KB each)
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, SIDE / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(img.src);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  if (input) input.addEventListener('change', async () => {
+    const box = document.getElementById('photoData'), preview = document.getElementById('photoPreview');
+    box.innerHTML = ''; preview.innerHTML = '';
+    const files = [...input.files].slice(0, MAX);
+    if (input.files.length > MAX) alert(`Up to ${MAX} photos at a time: the first ${MAX} are used.`);
+    for (const f of files) {
+      try {
+        const url = await shrink(f);
+        const h = document.createElement('input'); h.type = 'hidden'; h.name = 'photo_data'; h.value = url; box.appendChild(h);
+        const im = document.createElement('img'); im.src = url; im.alt = ''; im.className = 'rounded border';
+        im.style.height = '90px'; preview.appendChild(im);
+      } catch (e) { /* the file itself is sent instead */ }
+    }
+  });
+  form.addEventListener('submit', (ev) => {
+    const msg = document.getElementById('draftMessage');
+    const shrunk = document.querySelectorAll('input[name=photo_data]').length;
+    if (!shrunk && !(input && input.files.length) && !(msg && msg.value.trim())) {
+      ev.preventDefault(); alert('{{ "Add photos of your notes or paste the message." if photos_on and text_on else ("Add photos of your notes." if photos_on else "Paste the customer\'s message or your notes.") }}'); return;
+    }
+    if (shrunk && input) input.disabled = true;      // send the shrunk copies, not the originals
+    const b = document.getElementById('draftGo');
+    setTimeout(() => { b.disabled = true; }, 0);
+    b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Drafting your quotation…';
+  });
+})();
+</script>
+{% endblock %}
