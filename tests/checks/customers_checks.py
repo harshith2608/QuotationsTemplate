@@ -528,6 +528,7 @@ again = c.post("/plan/paid", json={"razorpay_order_id": o["order_id"], "razorpay
                                     "razorpay_signature": sig}, **H).get_json()
 out["again_ok"] = again.get("ok")
 t = c.get(r["redirect"], **H); out["thanks"] = t.status_code; out["moving_note"] = "own private database" in t.text
+out["addon_thanks"] = "Your AI uses are added" in t.text and "AI uses</strong> left" in t.text
 pid = int(r["redirect"].rsplit("/", 1)[1])
 rc = c.get(f"/plan/receipt/{pid}", **H); out["receipt"] = rc.status_code == 200 and rc.data[:4] == b"%PDF"
 print("RESULT " + json.dumps(out))
@@ -602,6 +603,30 @@ with app.app_context():
         st3 = _pm.load_status(on=_pm.today())
 ok(f'a moved customer renews in the app: 6 more months added to the end date {o2.get("paid") or err2}',
    (o2.get('paid') or {}).get('ok') and st3.ends_on == _pm.add_length(st2.ends_on, '6m') and not o2.get('moving_note'))
+
+# More AI uses (₹99 for 40): added to what they have, the plan's dates untouched, its own receipt email
+o3, err3 = run_app('payer', 'payer-pass-123', 'ai40', 'C')
+with app.app_context():
+    with cust.open_customer('payer'):
+        from app.models import AppSetting as _AS
+        credits = _AS.get('ai_credits'); st4 = _pm.load_status(on=_pm.today())
+    addon_row = subs.get_by_order(o3['order']['order_id']) if o3.get('order') else {}
+addon_mail = [m for m in outbox() if 'more AI uses' in (m['Subject'] or '')]
+ok(f'buying 40 AI uses for ₹99: added to the business, plan unchanged, thank-you says so {o3.get("paid") or err3}',
+   (o3.get('paid') or {}).get('ok') and o3['order']['amount'] == 9900 and credits == '40' and st4.ends_on == st3.ends_on
+   and st4.plan == st3.plan and o3.get('addon_thanks') and not o3.get('moving_note') and addon_row['plan_end'] is None
+   and addon_mail and 'Payment received: 40 more AI uses' == addon_mail[-1]['Subject'])
+with app.app_context():
+    ok('…an add-on payment never counts as a trial to move', 'payer' not in subs.paid_trials())
+# A plan with AI: ₹9,999 for 12 months, then renewing from the console keeps it with AI
+o4, err4 = run_app('payer', 'payer-pass-123', '1y_ai', 'D')
+with app.app_context():
+    with cust.open_customer('payer'):
+        st5 = _pm.load_status(on=_pm.today())
+    st6 = cust.renew('payer', '6m')
+ok(f'the 12-month plan with AI (₹9,999): added on, now with AI; renewing by 6 months keeps AI {o4.get("paid") or err4}',
+   (o4.get('paid') or {}).get('ok') and o4['order']['amount'] == 999900 and st5.plan == '1y_ai'
+   and st5.ends_on == _pm.add_length(st4.ends_on, '1y') and st6.plan == '6m_ai')
 
 t = c.get('/payments').text
 ok('console Payments: every payment with its receipt and totals', 'Payer Interiors' in t and 'Closer Interiors' in t

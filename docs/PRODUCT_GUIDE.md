@@ -45,6 +45,12 @@ branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed
 | Free trial | ₹0 for 7 days | every feature, real use |
 | 6 months | **₹4,999** (paid once) | about ₹833 a month |
 | 12 months | **₹8,999** (paid once) — best value, saves ₹999 | about ₹750 a month |
+| 6 months with AI | **₹5,999** (paid once) | about ₹1,000 a month |
+| 12 months with AI | **₹9,999** (paid once) | about ₹833 a month |
+| More AI uses | **₹99** for 40 (on a paid plan) | kept until used |
+
+- **AI uses:** drafting a quotation from a customer's WhatsApp message, from a photo of site notes (each photo is one
+  use), and Check before sending. 10 in the free trial, **20 a month** on every plan, **100 a month** on a plan with AI.
 
 - **One price for the whole business:** unlimited staff logins, unlimited quotations. No per-user fees, no setup fee.
 - **Included:** hosting, updates, new features, support, their own branding and web address.

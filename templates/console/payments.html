@@ -41,8 +41,7 @@
         <select id="m_slug" name="slug" required>{% for slug, kind in businesses %}<option value="{{ slug }}">{{ slug }}.{{ base_domain }} ({{ kind }})</option>{% endfor %}</select></div>
       <div><label for="m_plan">Plan</label>
         <select id="m_plan" name="plan" onchange="document.getElementById('m_amount').value = this.selectedOptions[0].dataset.price">
-          <option value="6m" data-price="{{ prices['6m'] }}">6 months</option>
-          <option value="1y" data-price="{{ prices['1y'] }}" selected>12 months</option></select></div>
+          {% for k in ['1y', '6m', '1y_ai', '6m_ai', 'ai40'] %}<option value="{{ k }}" data-price="{{ prices[k] }}" {% if k == '1y' %}selected{% endif %}>{{ k|plan_short }}</option>{% endfor %}</select></div>
       <div><label for="m_amount">Amount (₹)</label>
         <input type="number" id="m_amount" name="amount" value="{{ prices['1y'] }}" min="1" step="0.01" required style="width:120px"></div>
     </div>
@@ -70,7 +69,7 @@
   <tr><th>Paid</th><th>Business</th><th>Plan</th><th>Amount</th><th>Until</th><th>Receipt</th><th>Via</th><th></th></tr>
   {% for r in rows %}
   <tr><td class="small">{{ r.paid_at|ist }}</td><td>{{ r.business_name or r.slug }}{% if r.payer_name %} · {{ r.payer_name }}{% endif %} <span class="muted small">{{ r.slug }}</span></td>
-      <td>{{ '6 months' if r.plan == '6m' else '12 months' }}</td><td>₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}</td>
+      <td>{{ r.plan|plan_short }}</td><td>₹{{ '{:,.0f}'.format(r.amount_paise / 100) }}</td>
       <td class="small">{{ r.plan_end.strftime('%d %b %Y') if r.plan_end else '—' }}</td>
       <td><a href="{{ url_for('console.payment_receipt', payment_id=r.id) }}" target="_blank" rel="noopener">{{ r.receipt_no }}</a></td>
       <td class="small muted">{{ r.paid_by if r.source == 'manual' else r.source }}{% if r.source == 'manual' and r.payment_id %} · {{ r.payment_id }}{% endif %}</td>

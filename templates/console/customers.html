@@ -43,7 +43,7 @@
       <div class="grow"><label for="phone">WhatsApp number <span class="muted">(optional)</span></label>
         <input id="phone" type="text" name="phone" inputmode="numeric" placeholder="919876543210"></div>
       <div><label for="plan">Plan</label>
-        <select id="plan" name="plan">{% for p in plans %}<option value="{{ p }}" {% if p == '1y' %}selected{% endif %}>{{ '6 months' if p == '6m' else '12 months' }}</option>{% endfor %}</select></div>
+        <select id="plan" name="plan">{% for p in plans %}<option value="{{ p }}" {% if p == '1y' %}selected{% endif %}>{{ p|plan_short }}</option>{% endfor %}</select></div>
     </div>
     <div class="row">
       <label style="font-weight:500;display:flex;gap:6px;align-items:center;margin:0">

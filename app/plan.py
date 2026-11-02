@@ -23,9 +23,28 @@ PLANS = {
     'trial':  'Free trial',
     '6m':     '6-month plan',
     '1y':     '12-month plan',
+    '6m_ai':  '6-month plan with AI',
+    '1y_ai':  '12-month plan with AI',
+    'ai40':   '40 AI uses',            # the add-on (not a plan): ADDON_USES more AI uses, kept until used
     'custom': 'Plan',
 }
-DEFAULT_LENGTH = {'trial': '7d', '6m': '6m', '1y': '1y'}
+DEFAULT_LENGTH = {'trial': '7d', '6m': '6m', '1y': '1y', '6m_ai': '6m', '1y_ai': '1y'}
+PAID = ('6m', '1y', '6m_ai', '1y_ai')    # the plans a business can buy, in the order they're offered
+AI_PLANS = ('6m_ai', '1y_ai')            # plans with the bigger AI allowance (app/ai_tools.py)
+ADDON, ADDON_USES = 'ai40', 40           # bought on its own, on a paid plan: more AI uses
+
+
+def length_of(plan):
+    """'6m' / '1y' for a paid plan (with or without AI), else None."""
+    return DEFAULT_LENGTH.get(plan) if plan in PAID else None
+
+
+def short(plan):
+    """'6 months', '12 months with AI', '40 AI uses': a payment's plan in a few words."""
+    if plan == ADDON:
+        return f'{ADDON_USES} AI uses'
+    months = {'6m': '6 months', '1y': '12 months'}.get(length_of(plan) or '', PLANS.get(plan, plan))
+    return months + (' with AI' if plan in AI_PLANS else '')
 
 REMIND_DAYS = 15        # paid plans: reminder banner this many days before the end
 GRACE_DAYS = 7          # paid plans: full access this many days after the end
@@ -150,15 +169,19 @@ def save_plan(plan, started_on, ends_on):
 
 def renew(length, plan_name=None):
     """Add 6m / 1y / 7d… to this deployment's plan. On time (within grace) it extends from the end date,
-    so no days are lost; late or with no plan it starts from today. 6m / 1y renewals become that plan
-    (this is also how a trial becomes paid); other lengths keep the current plan. Returns the new status.
+    so no days are lost; late or with no plan it starts from today. 6m / 1y renewals become that plan (with AI if
+    it was a plan with AI; plan_name says which: this is also how a trial becomes paid); other lengths keep the
+    current plan. Returns the new status.
     Caller commits."""
     parse_length(length)                     # raises ValueError for bad input
     status = load_status(on=today())
     start = today()
     base = status.ends_on if status.has_limit and start <= status.grace_until else start
     key = length.strip().lower()
-    new_plan = plan_name or {'6m': '6m', '1y': '1y', '12m': '1y'}.get(key) or status.plan or 'custom'
+    new_plan = {'6m': '6m', '1y': '1y', '12m': '1y'}.get(key)
+    if new_plan and status.plan in AI_PLANS:
+        new_plan += '_ai'                    # renewing keeps the AI plan
+    new_plan = plan_name or new_plan or status.plan or 'custom'
     save_plan(new_plan, base, add_length(base, length))
     if has_app_context():
         g.pop('plan_status', None)

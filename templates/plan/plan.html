@@ -9,31 +9,55 @@
   </p>
 </div>
 
-<div class="row g-3 mb-4" id="planOptions">
-  {% for key, head, note in [('6m', '6 months', 'Pay for 6 months'), ('1y', '12 months', 'Save ₹' ~ '{:,}'.format(prices['6m'] * 2 - prices['1y']) ~ ' a year')] %}
+{% set when = 'Starts when your trial ends: no days lost' if status.is_trial and status.days_left is not none and status.days_left >= 0
+              else 'Added to your current plan: no days lost' if status.has_limit and status.state in ('active', 'reminder', 'grace')
+              else 'Starts today' %}
+{% for group, ai in [('Standard', false), ('With AI', true)] if ai_on or not ai %}
+{% if ai_on %}<h6 class="fw-bold mt-2 mb-2">{{ group }} <span class="text-muted fw-normal small">· {{ ai_allowance['ai' if ai else 'standard'] }} AI uses a month{{ ' (drafts from a message or photos, checks before sending)' if ai }}</span></h6>{% endif %}
+<div class="row g-3 mb-4" id="planOptions{{ '' if not ai else 'AI' }}">
+  {% for length, head in [('6m', '6 months'), ('1y', '12 months')] %}{% set key = length ~ ('_ai' if ai else '') %}
   <div class="col-12 col-md-6">
-    <div class="card shadow-sm border-0 h-100 {{ 'border border-2 border-primary' if key == '1y' }}">
+    <div class="card shadow-sm border-0 h-100 {{ 'border border-2 border-primary' if key == '1y_ai' }}">
       <div class="card-body d-flex flex-column">
         <div class="d-flex align-items-center justify-content-between">
-          <span class="fw-bold fs-5">{{ head }}</span>
-          {% if key == '1y' %}<span class="badge bg-primary">Best value</span>{% endif %}
+          <span class="fw-bold fs-5">{{ head }}{{ ' with AI' if ai }}</span>
+          {% if key == '1y' %}<span class="badge text-bg-light border">Best value</span>{% elif key == '1y_ai' %}<span class="badge bg-primary">Most AI</span>{% endif %}
+          {% if status.plan == key and not status.is_trial %}<span class="badge text-bg-success">Your plan</span>{% endif %}
         </div>
         <div class="display-6 fw-bold my-2">₹{{ '{:,}'.format(prices[key]) }}</div>
-        <div class="small text-muted mb-3">{{ note }} · your whole team · all features · no GST</div>
+        <div class="small text-muted mb-3">{{ 'Pay for 6 months' if length == '6m' else 'Save ₹' ~ '{:,}'.format(prices['6m' ~ ('_ai' if ai else '')] * 2 - prices[key]) ~ ' a year' }}
+          · your whole team · all features · no GST</div>
         <ul class="small mb-3 ps-3">
           <li>Unlimited quotations, staff logins and customers</li>
-          <li>Your logo and colours on every PDF</li>
-          <li>{{ 'Starts when your trial ends: no days lost' if status.is_trial and status.days_left is not none and status.days_left >= 0
-                 else 'Added to your current plan: no days lost' if status.has_limit and status.state in ('active', 'reminder', 'grace')
-                 else 'Starts today' }}</li>
+          {% if ai_on %}<li>{{ ai_allowance['ai' if ai else 'standard'] }} AI uses a month{{ ', more whenever you need them' if not ai else '' }}</li>{% endif %}
+          <li>{{ when }}</li>
         </ul>
-        <button type="button" class="btn {{ 'btn-primary' if key == '1y' else 'btn-outline-primary' }} mt-auto fw-semibold"
+        <button type="button" class="btn {{ 'btn-primary' if key == '1y_ai' else 'btn-outline-primary' }} mt-auto fw-semibold"
                 onclick="buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>Pay ₹{{ '{:,}'.format(prices[key]) }}</button>
       </div>
     </div>
   </div>
   {% endfor %}
 </div>
+{% endfor %}
+
+{% if ai_on %}
+<div class="card shadow-sm border-0 mb-4" id="aiUses">
+  <div class="card-body d-flex flex-wrap gap-3 align-items-center">
+    <div class="flex-grow-1">
+      <div class="fw-bold"><i class="bi bi-stars me-1 text-primary"></i>AI uses: {{ ai_pool.left }} left</div>
+      <div class="small text-muted">{{ ai_pool.used if ai_pool.used <= ai_pool.allowance else ai_pool.allowance }} of
+        {{ ai_pool.words }} used{{ ' this month' if ai_pool.tier != 'trial' }}. A draft from a message, each photo of your
+        site notes and each check before sending is one use{% if ai_pool.tier != 'trial' %}; your plan's uses are used
+        first, and bought ones are kept until you use them{% endif %}.</div>
+    </div>
+    {% if ai_pool.can_buy %}
+    <button type="button" class="btn btn-outline-primary fw-semibold" onclick="buyPlan('{{ addon }}', this)">
+      <i class="bi bi-plus-lg me-1"></i>Buy {{ addon_uses }} AI uses · ₹{{ '{:,}'.format(prices[addon]) }}</button>
+    {% elif ai_pool.tier == 'trial' %}<span class="small text-muted">Choose a plan for more.</span>{% endif %}
+  </div>
+</div>
+{% endif %}
 <div id="payAlert" class="alert d-none"></div>
 <p class="small text-muted"><i class="bi bi-shield-check me-1"></i>Secure payment by Razorpay: UPI, cards, net banking or wallets.
   You get a receipt straight away.</p>
@@ -45,7 +69,7 @@
   <thead class="table-light"><tr><th>Date</th><th>Plan</th><th class="text-end">Amount</th><th>Receipt</th></tr></thead>
   <tbody>
   {% for p in payments %}
-    <tr><td>{{ p.paid_at.strftime('%d %b %Y') }}</td><td>{{ '6 months' if p.plan == '6m' else '12 months' }}</td>
+    <tr><td>{{ p.paid_at.strftime('%d %b %Y') }}</td><td>{{ p.plan|plan_short }}</td>
         <td class="text-end">₹{{ '{:,.0f}'.format(p.amount_paise / 100) }}</td>
         <td><a href="{{ url_for('plan.receipt', payment_id=p.id) }}" target="_blank" rel="noopener">{{ p.receipt_no }}</a></td></tr>
   {% endfor %}

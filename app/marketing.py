@@ -84,10 +84,22 @@ def _context():
         has_tutorials=bool(tutorials()),
         business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items()],
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
+        ai_plans=ai_plans(), plan_names=PLAN_NAMES, plan_values=PLAN_VALUES,
     )
 
 
-PLAN_NAMES = {'6m': ('6-month plan', '₹4,999'), '1y': ('12-month plan', '₹8,999')}   # as on the pricing cards
+PLAN_NAMES = {'6m': ('6-month plan', '₹4,999'), '1y': ('12-month plan', '₹8,999'),    # as on the pricing cards
+              '6m_ai': ('6-month plan with AI', '₹5,999'), '1y_ai': ('12-month plan with AI', '₹9,999')}
+PLAN_VALUES = {'6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999}                    # for the ads' InitiateCheckout
+
+
+def ai_plans():
+    """The pricing cards offer the plans with AI too (AI_PLANS=1 on the website: once the AI helpers are on)."""
+    return _env('AI_PLANS').lower() in ('1', 'true', 'yes', 'on')
+
+
+def _plan_ok(plan, ctx):
+    return ctx['sells'] and plan in PLAN_NAMES and (ctx['ai_plans'] or not plan.endswith('_ai'))
 
 
 # ── Tutorials (videos hosted on YouTube, so the site stays light) ────────────
@@ -266,7 +278,7 @@ def free_trial():
     form = {k: request.args.get(k, '')[:60] for k in ('utm_source', 'utm_campaign')}
     form['page'] = '/free-trial'
     ctx = _context()
-    form['plan'] = request.args.get('plan') if ctx['sells'] and request.args.get('plan') in PLAN_NAMES else ''
+    form['plan'] = request.args.get('plan') if _plan_ok(request.args.get('plan'), ctx) else ''
     return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, form=form, **ctx)
 
 
@@ -280,7 +292,7 @@ def trial_request():
     wants_json = request.accept_mimetypes.best == 'application/json'
     ctx = _context()
     data, errors = _validate_lead(request.form)
-    plan = request.form.get('plan') if ctx['sells'] and request.form.get('plan') in PLAN_NAMES else None   # buying
+    plan = request.form.get('plan') if _plan_ok(request.form.get('plan'), ctx) else None   # buying
 
     if request.form.get('website'):                      # honeypot filled in → a bot; pretend it worked
         errors = {}

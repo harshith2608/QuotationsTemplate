@@ -443,7 +443,7 @@ def _wa_link(phone, message):
 # Drafts for the trial page's "Message on WhatsApp" card. {name} is filled in on the page (it can be edited there);
 # the rest when the page is built. The message opens in the operator's own WhatsApp (wa.me): nothing is sent from here.
 
-PLAN_PRICES = '6 months ₹4,999 or 12 months ₹8,999, one price for your whole team'
+PLAN_PRICES = '6 months ₹4,999 or 12 months ₹8,999 (with more AI: ₹5,999 / ₹9,999), one price for your whole team'
 
 def _follow_up_texts():
     """[(key, label, text)] for the WhatsApp drafts (console → Messages can change them)."""
@@ -728,7 +728,10 @@ def features_page():
         helpers = {k: platform_switch.console_value(f['switch']) for k, f in ai_tools.FEATURES.items()}
     except Exception:
         mat_on, helpers = False, {k: False for k in ai_tools.FEATURES}
-    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers)
+    from . import subscription
+    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers,
+                           allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
+                           addon_price=subscription.prices()[plan_mod.ADDON])
 
 
 @console_bp.route('/features/ai-import', methods=['POST'])

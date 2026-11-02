@@ -159,6 +159,14 @@ TEXTS.update({
                     {'hello': '"Hello Ravi" (or "Hello")', 'amount': 'the amount', 'plan': 'the plan',
                      'business': 'business name', 'app': 'their app address', 'plan_start': 'plan start',
                      'plan_end': 'plan end', 'receipt_no': 'receipt number'}),
+    'pay_addon': ('Payments', 'AI uses bought (with the receipt)', 'Email, when they buy more AI uses',
+                  'Payment received: {uses} more AI uses',
+                  "{hello},\n\nThank you! We've received {amount} for {uses} more AI uses in QuoteRoom.\n\n"
+                  "Business: {business}\nYour app: {app}\nReceipt: {receipt_no} (attached)\n\nThey're ready to use now "
+                  "and are kept until you use them: your plan's own AI uses each month are used first.\n\nQuestions? "
+                  "Just reply to this email.\n\nQuoteRoom\n",
+                  {'hello': '"Hello Ravi" (or "Hello")', 'amount': 'the amount', 'uses': 'how many AI uses',
+                   'business': 'business name', 'app': 'their app address', 'receipt_no': 'receipt number'}),
 })
 # Sales calls: what to say when a trial pushes back (shown on Sales calls and in call mode; for the operator, not sent)
 _CALLS = [
@@ -184,6 +192,8 @@ _CALLS = [
      "Then ask: \"Which of these would help you most?\" and show that one."),
     ('price', '"It\'s too expensive"',
      "• 12 months is ₹8,999: about ₹750 a month, ₹25 a day. 6 months is ₹4,999.\n"
+     "• With AI (drafts from a WhatsApp message or a photo of site notes, checks before sending: 100 uses a month) "
+     "it's ₹9,999 a year or ₹5,999 for 6 months. Every plan gets 20 AI uses a month.\n"
      "• One price for the whole team: every staff member gets a login at no extra cost.\n"
      "• One job won because the quotation went out the same day, in your brand, pays for the whole year.\n"
      "• It also saves the hours spent typing and re-checking totals in Excel, every quotation.\n"

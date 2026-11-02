@@ -49,7 +49,7 @@
   {% elif ready and just_paid %}
     <div class="tick">✓</div>
     <h1>Payment received. Thank you!</h1>
-    <p class="lead">Your {{ '12-month' if plan == '1y' else '6-month' }} plan is active on <strong>{{ ready }}.{{ base }}</strong>.
+    <p class="lead">Your {{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }} is active on <strong>{{ ready }}.{{ base }}</strong>.
       Sign in with the username and password you chose. Your receipt is on its way to your email.</p>
     <a class="btn" href="https://{{ ready }}.{{ base }}/login">Open my app</a>
     <p class="hint" style="text-align:center;margin-top:14px">Bookmark it, or add it to your phone's home screen.
@@ -63,7 +63,7 @@
   {% elif ready and plan and not paid %}
     <h1>{{ 'Payment not completed' if request.endpoint == 'console.start_paid' else 'Your app is ready' }}</h1>
     <p class="lead">Your app is at <strong>{{ ready }}.{{ base }}</strong>. Pay for the
-      {{ '12-month' if plan == '1y' else '6-month' }} plan to keep it running after the 7 free days.</p>
+      {{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }} to keep it running after the 7 free days.</p>
     <form method="post" action="{{ url_for('console.start_pay') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="t" value="{{ token }}">
@@ -84,7 +84,7 @@
   {% else %}
     <h1>Set up your app</h1>
     {% if plan %}
-    <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ '12-month' if plan == '1y' else '6-month' }} plan,
+    <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }},
       ₹{{ '{:,}'.format(price) }}</strong>. Check your company name and choose a password, then pay.</p>
     {% else %}
     <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>

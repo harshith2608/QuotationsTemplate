@@ -35,7 +35,8 @@ SHARED_STEPS = ['database', 'data', 'switch']                         # "shared"
 STEP_LABELS = {'database': 'Create database', 'data': 'Set up data and plan', 'project': 'Create Vercel project',
                'deploy': 'Start first build', 'domain': 'Connect address', 'switch': 'Switch the address to it'}
 HOSTING = ('shared', 'own')
-PLANS = ('6m', '1y')
+PLANS = plan_mod.PAID                     # 6 or 12 months, with or without AI
+RENEW_LENGTHS = ('6m', '1y')
 
 REGISTRY_DDL = """
 CREATE TABLE IF NOT EXISTS public.customers (
@@ -229,7 +230,7 @@ def start(slug, name, plan, source_trial=None, admin_username='admin', phone='',
     except tenancy.TenantError as exc:
         raise CustomerError(str(exc))
     if plan not in PLANS:
-        raise CustomerError('Choose the 6-month or 12-month plan.')
+        raise CustomerError('Choose a plan.')
     name = (name or '').strip()[:120] or slug
     ensure_registry()
     existing = get(slug)
@@ -267,7 +268,7 @@ def create_pending(slug, name, plan, admin_username='admin', phone='', hosting='
     except tenancy.TenantError as exc:
         raise CustomerError(str(exc))
     if plan not in PLANS:
-        raise CustomerError('Choose the 6-month or 12-month plan.')
+        raise CustomerError('Choose a plan.')
     ensure_registry()
     existing = get(slug)
     if existing and existing['status'] != 'deleted':
@@ -383,7 +384,7 @@ def _step_data(row, log):
         with customer_app(s['direct_url'], s['data_key']):
             bootstrap(username=s.get('admin_username') or 'admin', password=password)
             start_on = plan_mod.today()
-            end = plan_mod.add_length(start_on, row['plan'])
+            end = plan_mod.add_length(start_on, plan_mod.length_of(row['plan']) or row['plan'])
             plan_mod.save_plan(row['plan'], start_on, end)
             db.session.commit()
         s['pending_password'] = password                  # shown once on the customer page, then removed
@@ -485,7 +486,7 @@ def live_status(slug):
 
 
 def renew(slug, length):
-    if length not in PLANS:
+    if length not in RENEW_LENGTHS:
         raise CustomerError('Renew by 6 months or 12 months.')
     with open_customer(slug):
         st = plan_mod.renew(length)

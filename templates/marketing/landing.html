@@ -179,7 +179,15 @@
            GST invoices, online approval, payment tracking, your own branding, hosting, updates and support.
            A one-time quotation website typically costs ₹30,000–40,000 and still needs hosting and fixes.</p>
       </div>
-      <div class="plans">
+      {% if ai_plans %}
+      <div class="tier-switch" role="group" aria-label="Plans">
+        <button type="button" data-tier="std" aria-pressed="true">Standard</button>
+        <button type="button" data-tier="ai" aria-pressed="false">With AI</button>
+      </div>
+      <p class="tier-note tier-ai-note" hidden>With AI: draft a quotation from a customer's WhatsApp message or a photo of
+        your site notes, and check it before sending, 100 times a month. Every plan gets 20 a month; more any time: 40 for ₹99.</p>
+      {% endif %}
+      <div class="plans" data-plans data-tier="std">
         <div class="plan">
           <h3>Free trial</h3>
           <div class="price"><span class="amount">₹0</span><span class="per">for 7 days</span></div>
@@ -187,31 +195,30 @@
           <ul><li>Full app, all features</li><li>Use it on real jobs</li><li>Keep everything if you subscribe</li></ul>
           <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Start free trial</a>
         </div>
-        <div class="plan">
-          <h3>6 months</h3>
-          <div class="price"><span class="amount">₹4,999</span><span class="per">/6 months</span></div>
-          <p class="sub">About ₹833 a month for your whole team, paid once.</p>
-          <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li><li>Renewal reminders, no auto-charge</li></ul>
+        {% for key, head, price, per, sub, badge in [('6m', '6 months', '₹4,999', '/6 months', 'About ₹833 a month for your whole team, paid once.', ''),
+                                                    ('1y', '12 months', '₹8,999', '/year', 'About ₹750 a month for your whole team, paid once.', 'Best value · save ₹999')] %}
+        <div class="plan{{ ' featured' if key == '1y' }}">
+          {% if badge %}<span class="badge tier-std">{{ badge }}</span>{% if ai_plans %}<span class="badge tier-ai">Best value · save ₹1,999</span>{% endif %}{% endif %}
+          <h3>{{ head }}</h3>
+          {% for k in ([key, key ~ '_ai'] if ai_plans else [key]) %}{% set ai = k.endswith('_ai') %}
+          <div class="tier-{{ 'ai' if ai else 'std' }}">
+            <div class="price"><span class="amount">{{ plan_names[k][1] }}</span><span class="per">{{ per }}</span></div>
+            <p class="sub">{{ sub if not ai else ('About ₹1,000 a month' if key == '6m' else 'About ₹833 a month') ~ ' for your whole team, paid once.' }}</p>
+          </div>
+          {% endfor %}
+          <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li>
+            {% if ai_plans %}<li class="tier-std">AI drafts &amp; checks: 20 a month</li><li class="tier-ai">AI drafts &amp; checks: 100 a month</li>{% endif %}
+            <li>{{ 'Priority support' if key == '1y' else 'Renewal reminders, no auto-charge' }}</li></ul>
+          {% for k in ([key, key ~ '_ai'] if ai_plans else [key]) %}{% set ai = k.endswith('_ai') %}
           {% if sells %}
-          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial', plan='6m') }}" data-trial data-plan="6m"
-             data-plan-title="6-month plan · ₹4,999">Choose 6 months</a>
+          <a class="btn {{ 'btn-primary' if key == '1y' else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="{{ url_for('marketing.free_trial', plan=k) }}" data-trial data-plan="{{ k }}"
+             data-plan-title="{{ plan_names[k][0] }} · {{ plan_names[k][1] }}">Choose {{ head }}{{ ' with AI' if ai }}</a>
           {% else %}
-          <a class="btn btn-ghost" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27m%20interested%20in%20the%20{{ product|urlencode }}%206-month%20plan" target="_blank" rel="noopener" data-cta>Choose 6 months</a>
+          <a class="btn {{ 'btn-primary' if key == '1y' else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="https://wa.me/{{ wa_number }}?text={{ ('Hi, I\'m interested in the ' ~ product ~ ' ' ~ plan_names[k][0])|urlencode }}" target="_blank" rel="noopener" data-cta>Choose {{ head }}{{ ' with AI' if ai }}</a>
           {% endif %}
+          {% endfor %}
         </div>
-        <div class="plan featured">
-          <span class="badge">Best value · save ₹999</span>
-          <h3>12 months</h3>
-          <div class="price"><span class="amount">₹8,999</span><span class="per">/year</span></div>
-          <p class="sub">About ₹750 a month for your whole team, paid once.</p>
-          <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li><li>Priority support</li></ul>
-          {% if sells %}
-          <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1y') }}" data-trial data-plan="1y"
-             data-plan-title="12-month plan · ₹8,999">Choose 12 months</a>
-          {% else %}
-          <a class="btn btn-primary" href="https://wa.me/{{ wa_number }}?text=Hi%2C%20I%27m%20interested%20in%20the%20{{ product|urlencode }}%2012-month%20plan" target="_blank" rel="noopener" data-cta>Choose 12 months</a>
-          {% endif %}
-        </div>
+        {% endfor %}
       </div>
       <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.</p>
     </div>
@@ -255,6 +262,13 @@
 
 {% block scripts %}
 <script>
+// Pricing: Standard / With AI (AI_PLANS=1)
+document.querySelectorAll('.tier-switch button').forEach(b => b.addEventListener('click', () => {
+  const plans = document.querySelector('[data-plans]'), ai = b.dataset.tier === 'ai';
+  plans.dataset.tier = b.dataset.tier;
+  document.querySelectorAll('.tier-switch button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  document.querySelector('.tier-ai-note').hidden = !ai;
+}));
 // The demo video: load the YouTube player only when someone taps play (privacy-enhanced mode)
 document.querySelectorAll('.hero-video .yt').forEach(b => b.addEventListener('click', () => {
   const f = document.createElement('iframe');

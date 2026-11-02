@@ -36,10 +36,14 @@
 </div>
 
 <h2 id="ai-helpers">AI helpers on quotations</h2>
+<p class="small muted">All three share one allowance of AI uses per business: {{ allowance.trial }} in a free trial,
+  {{ allowance.standard }} a month on the 6- or 12-month plan, {{ allowance.ai }} a month on a plan with AI. On a paid
+  plan they can buy 40 more for ₹{{ addon_price }} on Your plan (kept until used). The website shows the plans with AI
+  once <span class="mono">AI_PLANS=1</span> is set on it.</p>
 <div class="card">
-  {% set texts = {'photos': 'On the same page, the firm takes up to 3 photos of its handwritten site notes and gets the draft from them (photos shrunk, read and never stored). Counted per photo: 15 in a trial, 60 a month.',
-                  'draft': 'The firm pastes a customer\'s WhatsApp message or its site notes and gets the new quotation filled in with its own items and rates (sizes not given are left to fill in, with questions to ask the customer). 10 in a trial, 60 a month.',
-                  'check': 'A "Check before sending" button on each quotation: missing sizes or quantities, rates different from their own, a bigger discount than usual, and what the AI notices (missing usual items, odd sizes, spelling). 20 in a trial, 150 a month.'} %}
+  {% set texts = {'photos': 'On the same page, the firm takes up to 3 photos of its handwritten site notes and gets the draft from them (photos shrunk, read and never stored). Each photo is one AI use.',
+                  'draft': 'The firm pastes a customer\'s WhatsApp message or its site notes and gets the new quotation filled in with its own items and rates (sizes not given are left to fill in, with questions to ask the customer). One AI use.',
+                  'check': 'A "Check before sending" button on each quotation: missing sizes or quantities, rates different from their own, a bigger discount than usual, and what the AI notices (missing usual items, odd sizes, spelling). One AI use.'} %}
   {% for key, label in [('draft', 'Draft from a message'), ('photos', 'Draft from photos of site notes'), ('check', 'Check before sending')] %}
   <div class="row" style="align-items:center{% if not loop.first %};border-top:1px solid var(--line);padding-top:10px;margin-top:10px{% endif %}">
     <div class="grow small">

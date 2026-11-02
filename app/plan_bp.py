@@ -20,8 +20,11 @@ def _guard():
 @admin_required
 def plan_page():
     _guard()
+    from . import ai_tools, plan as plan_mod
     status = load_status()
     return render_template('plan/plan.html', title='Your plan', status=status, prices=subscription.prices(),
+                           ai_pool=ai_tools.pool(), ai_allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
+                           addon=plan_mod.ADDON, addon_uses=plan_mod.ADDON_USES, ai_on=any(ai_tools.available(f) for f in ai_tools.FEATURES),
                            payments=subscription.history(tenancy.current_slug()),
                            key_id=subscription._env('PLATFORM_RAZORPAY_KEY_ID'))
 
@@ -31,8 +34,11 @@ def plan_page():
 @admin_required
 def order():
     _guard()
+    from . import ai_tools, plan as plan_mod
     from .branding import get_brand
     plan = (request.get_json(silent=True) or {}).get('plan') or request.form.get('plan')
+    if plan == plan_mod.ADDON and not ai_tools.pool()['can_buy']:
+        return jsonify({'ok': False, 'error': 'More AI uses can be bought on a paid plan: choose a plan first.'}), 400
     brand = get_brand()
     try:
         row = subscription.create_order(tenancy.current_slug(), plan, brand['name'], current_user.username,
@@ -41,7 +47,7 @@ def order():
         return jsonify({'ok': False, 'error': str(exc)}), 400
     return jsonify({'ok': True, 'order_id': row['order_id'], 'amount': row['amount_paise'], 'currency': 'INR',
                     'key_id': subscription._env('PLATFORM_RAZORPAY_KEY_ID'),
-                    'description': f'QuoteRoom {"6-month" if plan == "6m" else "12-month"} plan',
+                    'description': f'QuoteRoom: {plan_mod.short(plan)}',
                     'prefill': {'name': brand['name'], 'email': brand.get('email') or '',
                                 'contact': ''.join(ch for ch in (brand.get('phone') or '') if ch.isdigit())[-12:]}})
 
@@ -75,8 +81,11 @@ def thanks(payment_id):
     row = subscription.get(payment_id)
     if not row or row['slug'] != tenancy.current_slug() or row['status'] != 'paid':
         abort(404)
+    from . import ai_tools, plan as plan_mod
+    addon = row['plan'] == plan_mod.ADDON
     return render_template('plan/thanks.html', title='Thank you', row=row, status=load_status(),
-                           moving=bool(tenancy.current_schema()))
+                           moving=bool(tenancy.current_schema()), addon=addon,
+                           ai_left=ai_tools.pool()['left'] if addon else None)
 
 
 @plan_bp.route('/plan/receipt/<int:payment_id>')
