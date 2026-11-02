@@ -705,23 +705,30 @@ def dashboard():
         email_since = emails.tracking_since() if new_leads else None
     except Exception:
         email_seen, email_since = {}, None
-    from . import ai_import, texts
+    from . import texts
+    return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
+                           lead_wa=texts.get('lead_whatsapp')[1],
+                           email_seen=email_seen, email_since=email_since, contacts=contacts,
+                           extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
+                           spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+
+
+@console_bp.route('/features')
+@login_required
+def features_page():
+    """The switches for every trial and customer in the shared app: Bring your old quotation, the AI helpers on
+    quotations and the material list (each a switch in the trials database, app/platform_switch.py)."""
+    from . import ai_import, ai_tools, material_list, platform_switch
     try:
         ai = {'on': ai_import.console_switch(), 'recent': ai_import.recent(10)}
     except Exception:
         ai = {'on': False, 'recent': []}
-    from . import ai_tools, material_list, platform_switch
     try:
         mat_on = platform_switch.console_value(material_list.SWITCH_KEY)
         helpers = {k: platform_switch.console_value(f['switch']) for k, f in ai_tools.FEATURES.items()}
     except Exception:
         mat_on, helpers = False, {k: False for k in ai_tools.FEATURES}
-    return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           ai=ai, mat_on=mat_on, helpers=helpers,
-                           lead_wa=texts.get('lead_whatsapp')[1],
-                           email_seen=email_seen, email_since=email_since, contacts=contacts,
-                           extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
-                           spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers)
 
 
 @console_bp.route('/features/ai-import', methods=['POST'])
@@ -734,7 +741,7 @@ def ai_import_switch():
     audit('ai_import', None, 'on' if on else 'off')
     flash('Bring your old quotation is ' + ('on for every trial and customer (within a minute).' if on else
                                             'off for every trial and customer (within a minute).'), 'ok')
-    return redirect(url_for('console.dashboard') + '#ai-import')
+    return redirect(url_for('console.features_page') + '#ai-import')
 
 
 @console_bp.route('/features/material-list', methods=['POST'])
@@ -747,7 +754,7 @@ def material_list_switch():
     audit('material_list', None, 'on' if on else 'off')
     flash('Material list is ' + ('on for every trial and customer (within a minute).' if on else
                                  'off for every trial and customer (within a minute).'), 'ok')
-    return redirect(url_for('console.dashboard') + '#material-list')
+    return redirect(url_for('console.features_page') + '#material-list')
 
 
 @console_bp.route('/features/ai-<feature>', methods=['POST'])
@@ -762,7 +769,7 @@ def ai_helper_switch(feature):
     platform_switch.set_switch(f['switch'], on)
     audit(f['switch'], None, 'on' if on else 'off')
     flash(f'{f["label"]} is ' + ('on' if on else 'off') + ' for every trial and customer (within a minute).', 'ok')
-    return redirect(url_for('console.dashboard') + '#ai-helpers')
+    return redirect(url_for('console.features_page') + '#ai-helpers')
 
 
 @console_bp.route('/spares', methods=['POST'])

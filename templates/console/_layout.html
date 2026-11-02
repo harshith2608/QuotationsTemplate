@@ -29,8 +29,29 @@ a { color: var(--pine); }
   padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px; display: flex; align-items: center; gap: 12px; }
 .top .brand { font-weight: 800; text-decoration: none; color: var(--ink); }
 .top .brand span { color: var(--muted); font-weight: 500; }
-.top nav { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; align-items: center; font-size: .92rem; }
-.top nav a { text-decoration: none; color: var(--muted); }
+.top { flex-wrap: wrap; }
+.top .main { display: flex; gap: 4px; margin-left: auto; font-size: .92rem; }
+.top .main a, .top .more summary { text-decoration: none; color: var(--muted); padding: 6px 10px; border-radius: 999px;
+  white-space: nowrap; font-weight: 500; }
+.top .main a:hover, .top .more summary:hover { color: var(--ink); background: var(--pine-soft); }
+.top .main a.on, .top .more summary.on { color: var(--pine); background: var(--pine-soft); font-weight: 700; }
+.top .more { position: relative; font-size: .92rem; }
+.top .more summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.top .more summary::-webkit-details-marker { display: none; }
+.top .more summary::after { content: '▾'; font-size: .8em; }
+.top .more .menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 190px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12); z-index: 10; }
+.top .more .menu a, .top .more .menu button { display: block; width: 100%; text-align: left; padding: 8px 12px;
+  border-radius: 8px; text-decoration: none; color: var(--ink); background: none; border: 0; font: inherit; cursor: pointer; }
+.top .more .menu a:hover, .top .more .menu button:hover { background: var(--pine-soft); }
+.top .more .menu a.on { color: var(--pine); font-weight: 700; }
+.top .more .menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
+@media (max-width: 760px) {
+  .top { row-gap: 6px; }
+  .top .more { margin-left: auto; }
+  .top .main { order: 3; flex-basis: 100%; margin: 0 -16px; padding: 0 12px; overflow-x: auto; scrollbar-width: none; }
+  .top .main::-webkit-scrollbar { display: none; }
+}
 .wrap { max-width: 980px; margin: 0 auto; padding: 18px 16px 64px; }
 h1 { font-size: 1.45rem; margin: 0 0 4px; }
 h2 { font-size: 1.1rem; margin: 26px 0 10px; }
@@ -80,22 +101,29 @@ code, .mono { font-family: ui-monospace, Menlo, monospace; }
 {% if session.get('console_at') %}
 <header class="top">
   <a class="brand" href="{{ url_for('console.dashboard') }}">QuoteRoom <span>ops</span></a>
-  <nav>
-    <a href="{{ url_for('console.dashboard') }}">Trials</a>
-    <a href="{{ url_for('console.calls_page') }}">Sales calls</a>
-    <a href="{{ url_for('console.followups_page') }}">Follow-ups</a>
-    <a href="{{ url_for('console.email_compose') }}">Email</a>
-    <a href="{{ url_for('console.messages_page') }}">Messages</a>
-    <a href="{{ url_for('console.customers_list') }}">Customers</a>
-    <a href="{{ url_for('console.payments') }}">Payments</a>
-    <a href="{{ url_for('console.tutorials') }}">Tutorials</a>
-    <a href="{{ url_for('console.updates') }}">Updates</a>
-    <a href="{{ url_for('console.activity') }}">Activity</a>
-    <form method="post" action="{{ url_for('console.logout') }}" style="margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-sm" type="submit">Sign out</button>
-    </form>
+  {% set ep = request.endpoint or '' %}
+  {% set main = [('console.dashboard', 'Trials', ['console.dashboard', 'console.trial_detail']),
+                 ('console.calls_page', 'Sales calls', ['console.calls_page', 'console.calls_mode']),
+                 ('console.followups_page', 'Follow-ups', ['console.followups_page', 'console.followups_queue']),
+                 ('console.customers_list', 'Customers', ['console.customers_list', 'console.customer_detail', 'console.customer_reveal', 'console.customer_diagnose']),
+                 ('console.payments', 'Payments', ['console.payments', 'console.payment_link', 'console.payment_link_create'])] %}
+  {% set more = [('console.features_page', 'Features'), ('console.email_compose', 'Email'),
+                 ('console.messages_page', 'Messages'), ('console.tutorials', 'Tutorials'),
+                 ('console.updates', 'Updates'), ('console.activity', 'Activity')] %}
+  <nav class="main" aria-label="Console">
+    {% for e, label, eps in main %}<a href="{{ url_for(e) }}" class="{{ 'on' if ep in eps }}">{{ label }}</a>{% endfor %}
   </nav>
+  <details class="more">
+    <summary class="{{ 'on' if ep in more|map('first')|list }}">More</summary>
+    <div class="menu">
+      {% for e, label in more %}<a href="{{ url_for(e) }}" class="{{ 'on' if ep == e }}">{{ label }}</a>{% endfor %}
+      <hr>
+      <form method="post" action="{{ url_for('console.logout') }}" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Sign out</button>
+      </form>
+    </div>
+  </details>
 </header>
 {% endif %}
 <main class="wrap">
@@ -105,6 +133,10 @@ code, .mono { font-family: ui-monospace, Menlo, monospace; }
   {% block content %}{% endblock %}
 </main>
 <script>
+// The More menu closes on a click outside it
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.more[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
 // Copy buttons: <button data-copy="#id">
 document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
   const el = document.querySelector(b.dataset.copy);
