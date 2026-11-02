@@ -75,14 +75,19 @@
 {% endif %}
 {% if ai_draft_on and not project and not started_from and not ai_draft %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
-  <i class="bi bi-chat-text text-primary"></i><span>Have the customer's requirements on WhatsApp?</span>
-  <a class="btn btn-sm btn-outline-primary fw-semibold" href="{{ url_for('ai_tools.draft') }}"><i class="bi bi-stars me-1"></i>Draft from a message</a>
+  <i class="bi bi-chat-text text-primary"></i><span>Have the customer's requirements on WhatsApp, or notes from the site?</span>
+  <a class="btn btn-sm btn-outline-primary fw-semibold" href="{{ url_for('ai_tools.draft') }}"><i class="bi bi-stars me-1"></i>Draft from a message or notes</a>
 </div>
 {% endif %}
 {% if ai_draft %}
 <div class="alert alert-info py-2 small" id="aiDraftNotes">
-  <div class="fw-semibold mb-1"><i class="bi bi-stars me-1"></i>Drafted from the message{% if ai_draft.title %}: {{ ai_draft.title }}{% endif %}.
-    Check every line, enter the customer, and save.</div>
+  <div class="fw-semibold mb-1"><i class="bi bi-stars me-1"></i>Drafted from {{ 'your notes' if ai_draft.photos else 'the message' }}{% if ai_draft.title %}: {{ ai_draft.title }}{% endif %}.
+    Check every line{{ ' against the photos' if ai_draft.photos }}, enter the customer, and save.</div>
+  {% if ai_draft.photos %}
+  <div class="d-flex flex-wrap gap-2 my-2">
+    {% for src in ai_draft.photos %}<a href="{{ src }}" target="_blank" rel="noopener" title="Open the photo"><img src="{{ src }}" alt="Site notes, page {{ loop.index }}" class="rounded border" style="height:110px"></a>{% endfor %}
+  </div>
+  {% endif %}
   <ul class="mb-0 ps-3">
     {% if ai_draft.waiting %}<li>{{ ai_draft.waiting }} line{{ 's are' if ai_draft.waiting != 1 else ' is' }} waiting for a size or quantity (highlighted).</li>{% endif %}
     {% if ai_draft.no_rate %}<li>Not in your rates, so no price yet: {{ ai_draft.no_rate|join(', ') }}.</li>{% endif %}

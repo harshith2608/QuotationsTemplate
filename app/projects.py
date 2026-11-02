@@ -563,7 +563,7 @@ def render_new_form(start=None, started_from=None, form_data=None, form_cat=None
                            rooms_json=start['rooms_json'] if start else '[]',
                            start=start, started_from=started_from, templates=QT.all_templates(),
                            chosen_template=request.args.get('template', ''),
-                           ai_draft=ai_draft, ai_draft_on=ai_tools.available('draft'),
+                           ai_draft=ai_draft, ai_draft_on=ai_tools.available('draft') or ai_tools.available('photos'),
                            project=None)
 
 

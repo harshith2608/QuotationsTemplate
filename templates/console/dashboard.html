@@ -236,9 +236,10 @@
 
 <h2 id="ai-helpers">AI helpers on quotations</h2>
 <div class="card">
-  {% set texts = {'draft': 'The firm pastes a customer\'s WhatsApp message or its site notes and gets the new quotation filled in with its own items and rates (sizes not given are left to fill in, with questions to ask the customer). 10 in a trial, 60 a month.',
+  {% set texts = {'photos': 'On the same page, the firm takes up to 3 photos of its handwritten site notes and gets the draft from them (photos shrunk, read and never stored). Counted per photo: 15 in a trial, 60 a month.',
+                  'draft': 'The firm pastes a customer\'s WhatsApp message or its site notes and gets the new quotation filled in with its own items and rates (sizes not given are left to fill in, with questions to ask the customer). 10 in a trial, 60 a month.',
                   'check': 'A "Check before sending" button on each quotation: missing sizes or quantities, rates different from their own, a bigger discount than usual, and what the AI notices (missing usual items, odd sizes, spelling). 20 in a trial, 150 a month.'} %}
-  {% for key, label in [('draft', 'Draft from a message'), ('check', 'Check before sending')] %}
+  {% for key, label in [('draft', 'Draft from a message'), ('photos', 'Draft from photos of site notes'), ('check', 'Check before sending')] %}
   <div class="row" style="align-items:center{% if not loop.first %};border-top:1px solid var(--line);padding-top:10px;margin-top:10px{% endif %}">
     <div class="grow small">
       <strong>{{ label }}</strong> · <strong>{{ 'On' if helpers[key] else 'Off' }}</strong> for every trial and paying

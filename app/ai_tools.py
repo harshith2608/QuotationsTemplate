@@ -6,6 +6,9 @@ for a single-business deployment), and always off in the public demo:
            quotation form filled in with the business's OWN items, materials, fittings and lines. The AI only picks
            items, sizes and quantities; every rate comes from the business's rates, never from the AI. Lines without a
            size or quantity are left for the business to fill in; the AI lists what to ask the customer.
+  * photos the same from photos of handwritten site notes (up to PHOTO_MAX pages; its own switch, AI_PHOTOS=1, and
+           its own limit, counted per photo). Each photo is turned upright, shrunk and re-encoded here (only pixels
+           go to the AI), read and discarded: never stored. The draft shows them small, from the page, for checking.
   * check  "Check before sending": a quotation is checked by rules here (no size or quantity, a rate different from
            the business's own, a bigger discount than usual, the same line twice) and by the AI (what such rooms
            usually need, sizes that look wrong, an item in the wrong room, spelling the customer will read).
@@ -30,7 +33,12 @@ FEATURES = {
               'label': 'Draft from a message'},
     'check': {'switch': 'ai_check', 'env': 'AI_CHECK', 'usage': 'ai_check_usage', 'trial': 20, 'month': 150,
               'label': 'Check before sending'},
+    'photos': {'switch': 'ai_photos', 'env': 'AI_PHOTOS', 'usage': 'ai_photos_usage', 'trial': 15, 'month': 60,
+               'label': 'Draft from photos of site notes', 'unit': 'photo'},
 }
+PHOTO_MAX = 3
+PHOTO_BYTES = 10 * 1024 * 1024          # each, as uploaded (shrunk on the phone first, so usually ~300 KB)
+PHOTO_SIDE = 1568                       # px, the longest side: what the AI reads at full detail
 RATE_DIFF = 0.15               # a line's rate this far from the business's own rate is pointed out
 BIG_SIZE_FT = 20               # a measured item longer or wider than this is pointed out
 
@@ -76,21 +84,30 @@ def left(feature):
     return max(f['month'] - _usage(feature).get(period, 0), 0), f'{f["month"]} a month'
 
 
-def _count(feature):
+def _count(feature, n=1):
     from .models import AppSetting
     use = _usage(feature)
     period = _period()
-    use[period] = use.get(period, 0) + 1
+    use[period] = use.get(period, 0) + n
     AppSetting.set(FEATURES[feature]['usage'], json.dumps(use))
     db.session.commit()
 
 
-def _ask(feature, prompt, schema, max_tokens):
-    """Claude's answer as `schema`, within the limit (counted and logged). Raises AIProblem."""
+def limit_text(feature):
+    return (f'You\'ve used all of "{FEATURES[feature]["label"]}" ({left(feature)[1]}). Message us on WhatsApp if you '
+            'need more.')
+
+
+def _ask(feature, prompt, schema, max_tokens, n=1):
+    """Claude's answer as `schema`, within the limit (counted, n uses). prompt: text, or content blocks (photos and
+    text). Raises AIProblem."""
     import anthropic
-    if left(feature)[0] <= 0:
-        raise AIProblem(f'You\'ve used all of "{FEATURES[feature]["label"]}" ({left(feature)[1]}). Message us on '
-                        'WhatsApp if you need more.')
+    if left(feature)[0] < n:
+        unit = FEATURES[feature].get('unit')
+        if unit and left(feature)[0] > 0:
+            raise AIProblem(f'You have {left(feature)[0]} {unit}{"" if left(feature)[0] == 1 else "s"} left '
+                            f'({left(feature)[1]}): choose fewer.')
+        raise AIProblem(limit_text(feature))
     client = anthropic.Anthropic(api_key=ai_import.api_key(), timeout=TIMEOUT, max_retries=1)
     try:
         r = client.messages.parse(model=MODEL, max_tokens=max_tokens, output_format=schema,
@@ -102,7 +119,7 @@ def _ask(feature, prompt, schema, max_tokens):
         ai_import._log(feature, False, tokens_in=r.usage.input_tokens, tokens_out=r.usage.output_tokens,
                        note=str(r.stop_reason))
         raise AIProblem('The AI couldn\'t work this one out. Try again, or with a shorter message.')
-    _count(feature)
+    _count(feature, n)
     return r.parsed_output, {'in': r.usage.input_tokens, 'out': r.usage.output_tokens}
 
 
@@ -156,6 +173,36 @@ site visit. Draft a quotation for this business, using only the business's own i
   many), in plain words. Never ask about the business's own terms or methods (work types, plywood, how it prices).
 - job_title: 2–4 words ("3 BHK interiors", "Kitchen and wardrobes").
 There are no prices in your answer: the business's own rates are used."""
+
+
+PHOTO_PROMPT = """The requirements are in the photos: pages of handwritten notes from a site visit, read in order.
+Designers write sizes like 10'6 x 2'9 (10 ft 6 in by 2 ft 9 in), 7x8, 2400 x 600 (mm) and use short forms: W/R or WR =
+wardrobe, OHC or O/H = overhead cabinet, BC or base = base cabinet, TV = TV unit, L = loft, KT or K = kitchen, MBR =
+master bedroom, BR = bedroom, LR or hall = living room, nos = number of pieces. Copy only what you can read: a size you
+can't read clearly is left null and asked about. Crossed-out writing is ignored. Sketches only help to tell which room
+an item is in."""
+
+
+def prepare_photo(raw):
+    """An uploaded photo → JPEG bytes the AI reads: turned upright, at most PHOTO_SIDE px, plain pixels only."""
+    import io
+    from PIL import Image, ImageOps
+    if not raw:
+        raise AIProblem('One of the photos was empty. Choose it again.')
+    if len(raw) > PHOTO_BYTES:
+        raise AIProblem('A photo is larger than 10 MB. Take it again or choose a smaller one.')
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)
+        img = img.convert('RGB')
+    except Exception:
+        raise AIProblem('A photo couldn\'t be opened. Use a JPG or PNG photo of the notes.')
+    if min(img.size) < 200:
+        raise AIProblem('A photo is too small to read. Take it closer, filling the screen with the page.')
+    img.thumbnail((PHOTO_SIDE, PHOTO_SIDE))
+    out = io.BytesIO()
+    img.save(out, 'JPEG', quality=85)
+    return out.getvalue()
 
 
 def _catalog():
@@ -254,21 +301,34 @@ def to_form(draft, cat):
     return rooms, no_rate
 
 
-def draft(message):
-    """A customer's message → {'rooms_json', 'title', 'questions', 'no_rate', 'waiting'}. Raises AIProblem."""
+def draft(message, photos=()):
+    """A customer's message and/or photos of site notes (prepare_photo'd JPEG bytes) → {'rooms_json', 'title',
+    'questions', 'no_rate', 'waiting'}. Photos count against their own limit, one use each. Raises AIProblem."""
+    import base64
     message = (message or '').strip()
-    if len(message) < 15:
+    photos = list(photos)[:PHOTO_MAX]
+    if not photos and len(message) < 15:
         raise AIProblem('Paste the customer\'s message or your notes: which rooms and what they want in each.')
     cat = _catalog()
-    prompt = (f'{DRAFT_PROMPT}\n\n<business_items>\n{cat["text"]}\n</business_items>\n\n'
-              f'<requirements>\n{message[:MESSAGE_MAX]}\n</requirements>')
-    answer, used = _ask('draft', prompt, Draft, 6000)
+    text_part = (f'{DRAFT_PROMPT}\n\n' + (f'{PHOTO_PROMPT}\n\n' if photos else '') +
+                 f'<business_items>\n{cat["text"]}\n</business_items>' +
+                 (f'\n\n<requirements>\n{message[:MESSAGE_MAX]}\n</requirements>' if message else ''))
+    feature = 'photos' if photos else 'draft'
+    if photos:
+        prompt = [{'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg',
+                                               'data': base64.b64encode(p).decode()}} for p in photos]
+        prompt.append({'type': 'text', 'text': text_part})
+    else:
+        prompt = text_part
+    answer, used = _ask(feature, prompt, Draft, 6000, n=max(len(photos), 1))
     rooms, no_rate = to_form(answer, cat)
     if not rooms:
-        ai_import._log('draft', False, tokens_in=used['in'], tokens_out=used['out'], note='nothing to quote')
-        raise AIProblem('No rooms or items could be found in that. Mention the rooms and what goes in each.')
+        ai_import._log(feature, False, tokens_in=used['in'], tokens_out=used['out'], note='nothing to quote')
+        raise AIProblem('No rooms or items could be read from that. ' + (
+            'Take the photos closer, one page at a time, in good light.' if photos else
+            'Mention the rooms and what goes in each.'))
     lines = sum(len(r['items']) for r in rooms)
-    ai_import._log('draft', True, lines=lines, tokens_in=used['in'], tokens_out=used['out'])
+    ai_import._log(feature, True, lines=lines, tokens_in=used['in'], tokens_out=used['out'])
     return {'rooms_json': json.dumps(rooms), 'title': ' '.join(answer.job_title.split())[:60],
             'questions': [q.strip() for q in answer.questions if q.strip()][:6], 'no_rate': no_rate[:10],
             'waiting': sum(1 for r in rooms for i in r['items'] if i.get('pending'))}

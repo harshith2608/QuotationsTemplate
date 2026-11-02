@@ -147,6 +147,8 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
   *(Off until you turn it on in the console: dashboard → Material list, one switch for everyone.)*
 - **★ Draft from a message (AI):** paste the customer's WhatsApp requirements or site notes → the quotation is
   filled in with the firm's own items and rates; sizes not given are highlighted, with questions to ask the customer.
+  **★ Or from photos of their handwritten site notes** (up to 3 pages): "W/R 7'6 x 8 acrylic", "OHC 10'6 x 2",
+  "tandem 4 nos" are read into the quotation; the photos show next to the draft to check against, and aren't stored.
 - **★ Check before sending (AI):** one tap before sending: missing sizes or quantities, rates different from their
   own, a bigger discount than usual, lines twice, plus what such rooms usually need, odd sizes and spelling.
   *(Each AI helper is off until turned on in the console: dashboard → AI helpers on quotations.)*

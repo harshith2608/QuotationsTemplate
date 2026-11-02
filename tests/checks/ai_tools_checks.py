@@ -1,7 +1,8 @@
 """AI helpers on quotations (app/ai_tools.py): off unless switched on (AI_DRAFT=1 / AI_CHECK=1 here; the console's
 switches in the shared app) with the API key. Draft from a message: the AI's answer becomes the new quotation form with
 the business's own rates (never the AI's), lines without a size waiting to be filled in, the questions to ask; by-item
-businesses get their own lines. Check before sending: exact checks (size, rate vs their own, discount, twice) plus
+businesses get their own lines. Photos of site notes: their own switch and limit (per photo), turned upright, shrunk, re-encoded and sent as
+pixels, shown back small, never stored. Check before sending: exact checks (size, rate vs their own, discount, twice) plus
 the AI's, without the customer's details; the limit per business. The AI is replaced by a fake client, so no request
 leaves the machine."""
 import json
@@ -16,7 +17,7 @@ from app import create_app, db, boq, ai_tools as T
 from app.models import AppSetting, BoqItem, PriceListItem, Project
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
-for k in ('AI_DRAFT', 'AI_CHECK', 'ANTHROPIC_API_KEY', 'DEMO_MODE'):
+for k in ('AI_DRAFT', 'AI_CHECK', 'AI_PHOTOS', 'ANTHROPIC_API_KEY', 'DEMO_MODE'):
     os.environ.pop(k, None)
 
 calls, answers = [], []
@@ -134,6 +135,68 @@ with app.app_context():
 n = len(calls)
 r = c.post('/projects/draft', data={'message': 'Wardrobe 9 x 7 in the master bedroom, acrylic finish please'})
 ok('limit reached: said so, AI not called', len(calls) == n and 'used all of' in r.text)
+
+# ── Photos of site notes ──
+import base64, io
+from PIL import Image
+
+
+def photo(w=3000, h=2000, orientation=None, fmt='JPEG'):
+    img = Image.new('RGB', (w, h), 'white')
+    buf = io.BytesIO()
+    if orientation:
+        exif = Image.Exif(); exif[0x0112] = orientation
+        img.save(buf, fmt, exif=exif)
+    else:
+        img.save(buf, fmt)
+    return buf.getvalue()
+
+
+def data_url(raw, kind='jpeg'):
+    return f'data:image/{kind};base64,' + base64.b64encode(raw).decode()
+
+
+ok('photos: off until switched on (their own switch)', 'id="draftPhotos"' not in c.get('/projects/draft').text)
+os.environ['AI_PHOTOS'] = '1'
+page = c.get('/projects/draft').text
+ok('on: take photos of the notes, with the photos left', 'id="draftPhotos"' in page and re.search(r'\d+ photos left', page))
+answers.append(D(job_title='Kitchen and wardrobe', questions=['Loft size?'], rooms=[
+    R(name='Kitchen', items=[I(kind='measured', name='Base Cabinet', length_ft=10.5, width_ft=2.75, material='Laminates', work_type='Box Work')])]))
+with app.app_context():
+    before_p, before_d = T.left('photos')[0], T.left('draft')[0]
+r = c.post('/projects/draft', data={'message': '', 'photo_data': [data_url(photo(orientation=6)), data_url(photo(800, 600, fmt='PNG'), 'png')]})
+blocks = calls[-1]['messages'][0]['content']
+imgs = [b for b in blocks if b['type'] == 'image']
+sizes = [Image.open(io.BytesIO(base64.b64decode(b['source']['data']))).size for b in imgs]
+ok('photos only (no message): the AI reads the photos, then the instructions for handwritten notes',
+   len(imgs) == 2 and blocks[-1]['type'] == 'text' and 'handwritten notes' in blocks[-1]['text']
+   and '<requirements>' not in blocks[-1]['text'])
+ok('each photo turned upright and shrunk to 1568 px, sent as JPEG', sizes[0] == (1045, 1568) and sizes[1] == (800, 600)
+   and all(b['source']['media_type'] == 'image/jpeg' for b in imgs))
+items = {i['name']: i for room in rooms_of(r.text) for i in room['items']}
+ok('the draft from the notes, with the photos shown small to check against', items['Base Cabinet']['length'] == 10.5
+   and 'Drafted from your notes' in r.text and r.text.count('alt="Site notes, page') == 2)
+with app.app_context():
+    ok('counted per photo, on the photos\' own limit', T.left('photos')[0] == before_p - 2 and T.left('draft')[0] == before_d)
+n = len(calls)
+r = c.post('/projects/draft', data={'photo_data': [data_url(photo())] * 4})
+ok('more than 3 photos: said so, AI not called', len(calls) == n and 'Up to 3 photos' in r.text)
+r = c.post('/projects/draft', data={'photo_data': [data_url(b'not a picture at all, just text')]})
+ok('not a picture: said so, AI not called', len(calls) == n and 'couldn&#39;t be opened' in r.text)
+r = c.post('/projects/draft', data={'photo_data': [data_url(photo(150, 100))]})
+ok('too small to read: said so', len(calls) == n and 'too small to read' in r.text)
+answers.append(D(job_title='Wardrobe', questions=[], rooms=[R(name='Bedroom', items=[I(kind='measured', name='Wardrobe')])]))
+r = c.post('/projects/draft', data={'photos': [(io.BytesIO(photo(1200, 900)), 'notes.jpg')]}, content_type='multipart/form-data')
+ok('without the phone shrinking it, the photo file itself works too', len(calls) == n + 1 and 'Drafted from your notes' in r.text)
+with app.app_context():
+    AppSetting.set(T.FEATURES['photos']['usage'], json.dumps({'trial': 14, __import__('datetime').datetime.utcnow().strftime('%Y-%m'): 59}))
+    db.session.commit()
+r = c.post('/projects/draft', data={'photo_data': [data_url(photo())] * 2})
+ok('1 photo left, 2 sent: asked to choose fewer', len(calls) == n + 1 and 'You have 1 photo left' in r.text)
+os.environ['AI_PHOTOS'] = ''
+r = c.post('/projects/draft', data={'message': 'Wardrobe 9 x 7 in the master bedroom', 'photo_data': [data_url(photo())]})
+ok('photos switched off: photos ignored, the message goes the message\'s way (its limit here)', len(calls) == n + 1
+   and 'used all of &#34;Draft from a message&#34;' in r.text)
 
 # ── Check before sending ──
 q = json.dumps([
