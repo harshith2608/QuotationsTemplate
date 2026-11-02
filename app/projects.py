@@ -688,6 +688,7 @@ def view_project(project_id):
                            quote_gst_rate=__import__('app.quote_gst', fromlist=['rate']).rate(),
                            can_change_stage=_can_change_stage(project),
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
+                           material_list_on=__import__('app.material_list', fromlist=['ready']).ready(),
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -925,6 +926,8 @@ def delete_project(project_id):
     if billing.invoices(project):
         flash('This quotation has invoices, so it can\'t be deleted (invoices must be kept for your records).', 'danger')
         return redirect(url_for('projects.view_project', project_id=project.id))
+    from . import material_list
+    material_list.delete_for(project)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')

@@ -96,7 +96,9 @@ def create_app(config_name='default'):
     from .share import share_bp
     from .billing_bp import billing_bp
     from .plan_bp import plan_bp
+    from .material_list_bp import material_list_bp
     app.register_blueprint(share_bp)
+    app.register_blueprint(material_list_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(plan_bp)
     app.before_request(block_demo_writes)

@@ -795,6 +795,59 @@ class PlywoodOption(db.Model):
         return f'<PlywoodOption {self.name}>'
 
 
+class MaterialRule(db.Model):
+    """A rule for the material list (app/material_list.py): every sqft of a measured item in these materials (and
+    work type) needs `per_sqft` of an item to buy (sheets, metres, kg…), plus wastage. Managed in Admin → Material
+    rules; the starting rules are estimates the business adjusts."""
+    __tablename__ = 'material_rules'
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(100), nullable=False)          # may use {material} and {plywood}
+    category   = db.Column(db.String(60), nullable=False)
+    materials  = db.Column(db.Text, nullable=True)                  # JSON list of material names; empty = every material
+    work_type  = db.Column(db.String(50), nullable=True)            # '' / None = any work type
+    per_sqft   = db.Column(db.Float, nullable=False, default=0.0)
+    unit       = db.Column(db.String(30), nullable=True)
+    wastage    = db.Column(db.Float, nullable=False, default=0.0)   # %
+    round_up   = db.Column(db.Boolean, nullable=False, default=True)
+    active     = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<MaterialRule {self.name}>'
+
+
+class MaterialList(db.Model):
+    """A quotation's material list: built from its lines and the rules, then edited by the business."""
+    __tablename__ = 'material_lists'
+    id         = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, unique=True)
+    signature  = db.Column(db.String(64), nullable=True)     # the quotation's lines when the list was built
+    built_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    lines      = db.relationship('MaterialListLine', backref='list', lazy='dynamic', cascade='all, delete-orphan',
+                                 order_by='MaterialListLine.sort_order')
+
+
+class MaterialListLine(db.Model):
+    """A line on a material list. kind: 'rule' / 'fitting' / 'boq' (built; `key` matches it on a rebuild) or 'manual'
+    (added by hand, kept on a rebuild). A built line changed by hand keeps its quantity on a rebuild (edited);
+    one removed by hand stays removed (removed)."""
+    __tablename__ = 'material_list_lines'
+    id         = db.Column(db.Integer, primary_key=True)
+    list_id    = db.Column(db.Integer, db.ForeignKey('material_lists.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind       = db.Column(db.String(10), nullable=False, default='manual')
+    key        = db.Column(db.String(200), nullable=True)
+    category   = db.Column(db.String(60), nullable=False)
+    name       = db.Column(db.String(150), nullable=False)
+    quantity   = db.Column(db.Float, nullable=True)
+    unit       = db.Column(db.String(30), nullable=True)
+    source     = db.Column(db.Text, nullable=True)            # where it comes from: "Wardrobe (Master Bedroom), …"
+    edited     = db.Column(db.Boolean, nullable=False, default=False)
+    removed    = db.Column(db.Boolean, nullable=False, default=False)
+    ordered    = db.Column(db.Boolean, nullable=False, default=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+
 from sqlalchemy import event as _event                     # noqa: E402
 from sqlalchemy.orm import Session as _Session             # noqa: E402
 

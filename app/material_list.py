@@ -1,0 +1,495 @@
+"""The material list of a quotation: what to buy for the job, with wastage, by group (Wood, Hardware, Electrical…), to
+copy or send on WhatsApp to each supplier. No prices anywhere on it.
+
+Built from the quotation's lines:
+  * measured items, by the rules (Admin → Material rules): every sqft of an item in these materials (and work type)
+    needs so much of an item to buy, e.g. 0.11 sheets of plywood per sqft of Box Work, plus wastage %. The starting
+    rules are estimates for the business to adjust. A rule's name may use {material} and {plywood} (the line's).
+  * fittings, as they are (their quantity, plus the spare % in Admin → Material rules); services (a 'job' or a lump
+    sum) are left out.
+  * BOQ lines, as they are (quantity and unit); lump sums are left out.
+Lines with the same name and unit add up; quantities from rules round up to whole units (sheets, rolls…).
+
+Groups are the business's own (add, rename, remove). A fitting or BOQ line goes to the group the business last put it
+in (remembered by name when they move it on a list, or set in Admin → Material rules), else one guessed from its name.
+
+The list is saved per quotation and edited there (quantities, units, groups, lines added or removed). When the
+quotation changes, Rebuild works it out again and keeps the edits: lines added by hand, quantities changed by hand and
+lines removed by hand. Needs the database update that adds the material_* tables (ready()).
+"""
+import hashlib
+import json
+import math
+import re
+from datetime import datetime
+
+from flask import g, has_app_context
+
+from . import db
+
+GROUPS_KEY = 'material_list_groups'          # JSON list of the business's groups, in order
+ITEM_GROUPS_KEY = 'material_list_items'      # JSON {item name lower-case: group, or '' = leave off the list}
+SPARE_KEY = 'material_list_spare'            # % added to fittings
+SEEDED_KEY = 'material_rules_seeded'
+DEFAULT_GROUPS = ['Wood', 'Hardware', 'Electrical', 'Paint', 'Other']
+NAME_MAX = 150
+GROUP_MAX = 60
+UNIT_MAX = 30
+SERVICE_UNITS = {'job', 'lump sum', 'ls'}
+
+# Words that suggest a group, for a fitting or BOQ line the business hasn't put in one yet
+GUESS = [
+    ('Electrical', r'electric|wire|wiring|switch|socket|light|led\b|lamp|fan\b|points?\b|mcb|cable|conduit|bulb|'
+                   r'chandelier|db\b'),
+    ('Paint', r'paint|putty|primer|polish|emulsion|texture|enamel|distemper|duco|\bpu\b'),
+    ('Hardware', r'hinge|channel|handle|drawer|basket|lock|knob|tandem|corner|pull-?out|mechanism|lift|runner|'
+                 r'screw|bracket|profile'),
+    ('Wood', r'ply|laminate|veneer|board|mdf|hdf|wood|carpentry|wardrobe|cabinet|shutter'),
+]
+NOT_BOARD = re.compile(r'glass|mirror|wallpaper|paint|fabric|stone|granite|quartz|marble|tile|metal|steel', re.I)
+
+# Starting rules (estimates): name, group, work type ('' = any), per sqft of the item, unit, wastage %, round up,
+# 'board' (materials made on plywood) / 'other' (the rest)
+STARTER_RULES = [
+    ('Plywood ({plywood})', 'Wood', 'Box Work', 0.11, 'sheets (8×4)', 10, True, 'board'),
+    ('Plywood ({plywood})', 'Wood', 'Frame Work', 0.06, 'sheets (8×4)', 10, True, 'board'),
+    ('Back panel plywood 8 mm', 'Wood', 'Box Work', 0.032, 'sheets (8×4)', 10, True, 'board'),
+    ('{material} (outer finish)', 'Wood', '', 0.036, 'sheets (8×4)', 10, True, 'board'),
+    ('Inner liner laminate 0.8 mm', 'Wood', 'Box Work', 0.12, 'sheets (8×4)', 10, True, 'board'),
+    ('Inner liner laminate 0.8 mm', 'Wood', 'Frame Work', 0.04, 'sheets (8×4)', 10, True, 'board'),
+    ('Edge banding tape', 'Wood', '', 1.0, 'm', 10, True, 'board'),
+    ('Wood adhesive', 'Wood', '', 0.04, 'kg', 5, True, 'board'),
+    ('Screws (box of 100)', 'Hardware', '', 0.025, 'boxes', 0, True, 'board'),
+    ('{material}', 'Other', '', 1.0, 'sqft', 10, True, 'other'),
+]
+
+_ready_forever = {}
+
+
+def ready():
+    """False until the database update that adds the material list tables has run (checked once per request)."""
+    from . import tenancy
+    schema = tenancy.current_schema()
+    if _ready_forever.get(schema):
+        return True
+    if has_app_context() and '_matlist_ready' in g:
+        return g._matlist_ready
+    from sqlalchemy import inspect
+    try:
+        found = inspect(db.session.connection()).has_table('material_list_lines', schema=schema)
+    except Exception:
+        found = False
+    if found:
+        _ready_forever[schema] = True
+    if has_app_context():
+        g._matlist_ready = found
+    return found
+
+
+# ── Settings: groups, remembered items, spare ────────────────────────────────
+
+def _json_setting(key, default):
+    from .models import AppSetting
+    try:
+        value = json.loads(AppSetting.get(key, '') or 'null')
+    except ValueError:
+        value = None
+    return value if isinstance(value, type(default)) else default
+
+
+def clean_text(raw, limit):
+    return ' '.join(str(raw or '').split())[:limit]
+
+
+def groups():
+    found = [clean_text(x, GROUP_MAX) for x in _json_setting(GROUPS_KEY, list(DEFAULT_GROUPS))]
+    return [x for i, x in enumerate(found) if x and x.lower() not in {y.lower() for y in found[:i]}] or ['Other']
+
+
+def fallback_group(names=None):
+    names = names or groups()
+    return next((x for x in names if x.lower() == 'other'), names[-1])
+
+
+def _raw_item_groups():
+    return {clean_text(k, NAME_MAX): clean_text(v, GROUP_MAX) for k, v in _json_setting(ITEM_GROUPS_KEY, {}).items()
+            if clean_text(k, NAME_MAX)}
+
+
+def item_groups():
+    """{item name lower-case: group, or '' = leave off}."""
+    return {k.lower(): v for k, v in _raw_item_groups().items()}
+
+
+def item_group_rows():
+    """[(item name as typed, group)] for Admin → Material rules."""
+    return sorted(_raw_item_groups().items(), key=lambda kv: kv[0].lower())
+
+
+def _save_item_groups(found):
+    from .models import AppSetting
+    AppSetting.set(ITEM_GROUPS_KEY, json.dumps(found))
+
+
+def remember(name, group):
+    """Put this fitting / BOQ line in `group` on every list from now on ('' = leave it off)."""
+    name = clean_text(name, NAME_MAX)
+    found = {k: v for k, v in _raw_item_groups().items() if k.lower() != name.lower()}
+    found[name] = group
+    _save_item_groups(found)
+
+
+def forget(name):
+    name = clean_text(name, NAME_MAX).lower()
+    _save_item_groups({k: v for k, v in _raw_item_groups().items() if k.lower() != name})
+
+
+def spare():
+    from .models import AppSetting
+    try:
+        return max(float(AppSetting.get(SPARE_KEY, '') or 0), 0.0)
+    except ValueError:
+        return 0.0
+
+
+def save_groups(rows):
+    """rows: [(old name or '', new name, remove)] in order. Renames / removes them everywhere (rules, lists,
+    remembered items); what was in a removed group moves to Other (or the last group)."""
+    from .models import AppSetting, MaterialListLine, MaterialRule
+    kept, renames, removed = [], {}, []
+    for old, new, remove in rows:
+        new = clean_text(new, GROUP_MAX)
+        if remove or not new:
+            if old:
+                removed.append(old)
+            continue
+        if new.lower() in {k.lower() for k in kept}:
+            continue
+        kept.append(new)
+        if old and old != new:
+            renames[old] = new
+    kept = kept or ['Other']
+    fallback = fallback_group(kept)
+    moves = dict(renames, **{r: fallback for r in removed})
+    for old, new in moves.items():
+        MaterialRule.query.filter_by(category=old).update({'category': new})
+        MaterialListLine.query.filter_by(category=old).update({'category': new})
+    _save_item_groups({k: moves.get(v, v) for k, v in _raw_item_groups().items()})
+    AppSetting.set(GROUPS_KEY, json.dumps(kept))
+    return kept
+
+
+def guess_group(name, default, names=None):
+    names = names or groups()
+    lower = {x.lower(): x for x in names}
+    text = (name or '').lower()
+    for group, pattern in GUESS:
+        if group.lower() in lower and re.search(pattern, text):
+            return lower[group.lower()]
+    return lower.get(default.lower()) or fallback_group(names)
+
+
+# ── Rules ────────────────────────────────────────────────────────────────────
+
+def _board_materials(names):
+    from . import plywood
+    on_ply = plywood.context()['materials']
+    return [n for n in names if (n in on_ply if on_ply else not NOT_BOARD.search(n))]
+
+
+def seed_rules():
+    """The starting rules, once per business (deleting them all later doesn't bring them back)."""
+    from . import units
+    from .models import AppSetting, Material, MaterialRule
+    if AppSetting.get(SEEDED_KEY) or MaterialRule.query.first():
+        return
+    names = [m.name for m in Material.query.filter_by(active=True).order_by(Material.sort_order, Material.id)]
+    board = _board_materials(names)
+    other = [n for n in names if n not in board]
+    known = {x.lower() for x in groups()}
+    for i, (name, group, work, per, unit, wastage, up, kind) in enumerate(STARTER_RULES):
+        mats = board if kind == 'board' else other
+        if not mats:
+            continue
+        if unit == 'sqft' and units.area_unit() == 'sqm':
+            unit = 'sq m'
+            per = per * units.SQM_PER_SQFT
+        db.session.add(MaterialRule(name=name, category=group if group.lower() in known else fallback_group(),
+                                    materials=json.dumps(mats), work_type=work, per_sqft=per, unit=unit,
+                                    wastage=wastage, round_up=up, sort_order=i))
+    AppSetting.set(SEEDED_KEY, '1')
+    db.session.commit()
+
+
+def rules():
+    from .models import MaterialRule
+    return MaterialRule.query.order_by(MaterialRule.sort_order, MaterialRule.id).all()
+
+
+def rule_materials(rule):
+    try:
+        found = json.loads(rule.materials or '[]')
+    except ValueError:
+        found = []
+    return [m for m in found if isinstance(m, str)]
+
+
+def render_name(template, material='', plywood=''):
+    name = (template or '').replace('{material}', material or '').replace('{plywood}', plywood or '')
+    name = re.sub(r'\(\s*\)|\[\s*\]', '', name)
+    return clean_text(name.strip(' -–,'), NAME_MAX)
+
+
+# ── Building ─────────────────────────────────────────────────────────────────
+
+def signature(project, rooms=None):
+    """What the list is built from (the quotation's lines), to tell when the quotation changed."""
+    from . import plywood
+    rows = []
+    ply = plywood.project_plywood(project) or ''
+    for room in (rooms if rooms is not None else project.rooms_with_items()):
+        for i in room.item_list:
+            rows.append([room.name, i.name, i.item_type, i.wood_type, i.work_type, round(i.area or 0, 3),
+                         round(i.quantity or 0, 3), i.unit_text if i.is_boq else '', plywood.item_plywood(i) or ply])
+    return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+
+
+def _qty(value, up):
+    if up:
+        return float(math.ceil(round(value, 6)))
+    return round(value, 2)
+
+
+def build(project, rooms=None):
+    """The lines of a fresh list: [{'key', 'kind', 'category', 'name', 'quantity', 'unit', 'source'}] in group order."""
+    from . import boq, plywood
+    from .models import PriceListItem
+    rooms = rooms if rooms is not None else project.rooms_with_items()
+    names = groups()
+    lower = {x.lower(): x for x in names}
+    remembered = item_groups()
+    fittings_unit = {p.name.lower(): (p.unit or '') for p in PriceListItem.query.all()}
+    extra = 1 + spare() / 100
+    ply = plywood.project_plywood(project) or ''
+    active = [r for r in rules() if r.active and r.per_sqft]
+    rule_mats = {r.id: rule_materials(r) for r in active}
+    out = {}
+
+    def group_for(name, default):
+        if name.lower() in remembered:
+            group = remembered[name.lower()]
+            return lower.get(group.lower(), fallback_group(names)) if group else None
+        return default
+
+    def add(key, kind, category, name, qty, unit, source, up=False):
+        line = out.setdefault(key, {'key': key, 'kind': kind, 'category': category, 'name': name, 'raw': 0.0,
+                                    'unit': unit, 'sources': [], 'up': up})
+        line['raw'] += qty or 0
+        if source not in line['sources']:
+            line['sources'].append(source)
+
+    for room in rooms:
+        for i in room.item_list:
+            source = f'{i.name} ({room.name})'
+            if i.is_boq:
+                if ((i.unit if boq.ready() else '') or '') == boq.LUMP_SUM:
+                    continue
+                unit = i.unit_text
+                name = clean_text(i.display_name, NAME_MAX)
+                group = group_for(name, guess_group(name, 'Other', names))
+                if group:
+                    add(f'boq|{name.lower()}|{unit.lower()}', 'boq', group, name, i.quantity, unit, source)
+            elif i.is_fitting:
+                unit = fittings_unit.get(i.name.lower(), '')
+                if unit.lower() in SERVICE_UNITS:
+                    continue
+                unit = 'nos' if unit.lower() in ('', 'piece', 'pieces', 'nos', 'no') else unit
+                name = clean_text(i.name, NAME_MAX)
+                group = group_for(name, guess_group(name, 'Hardware', names))
+                if group:
+                    add(f'fitting|{name.lower()}|{unit.lower()}', 'fitting', group, name, (i.quantity or 0) * extra,
+                        unit, source, up=extra != 1)
+            else:
+                item_ply = plywood.item_plywood(i) or ply
+                for r in active:
+                    if rule_mats[r.id] and i.wood_type not in rule_mats[r.id]:
+                        continue
+                    if r.work_type and r.work_type != i.work_type:
+                        continue
+                    name = render_name(r.name, i.wood_type, item_ply)
+                    if not name:
+                        continue
+                    unit = clean_text(r.unit, UNIT_MAX)
+                    group = group_for(name, lower.get((r.category or '').lower(), fallback_group(names)))
+                    if group:
+                        add(f'rule|{name.lower()}|{unit.lower()}', 'rule', group, name,
+                            (i.area or 0) * r.per_sqft * (1 + (r.wastage or 0) / 100), unit, source, up=r.round_up)
+    order = {x: n for n, x in enumerate(names)}
+    lines = sorted(out.values(), key=lambda x: order.get(x['category'], len(order)))
+    for line in lines:
+        line['quantity'] = _qty(line.pop('raw'), line.pop('up'))
+        line['source'] = source_text(line.pop('sources'))
+    return lines
+
+
+def source_text(sources):
+    if len(sources) <= 3:
+        return ', '.join(sources)
+    return ', '.join(sources[:3]) + f' and {len(sources) - 3} more'
+
+
+# ── The saved list ───────────────────────────────────────────────────────────
+
+def get(project):
+    from .models import MaterialList
+    return MaterialList.query.filter_by(project_id=project.id).first()
+
+
+def delete_for(project):
+    """With the quotation (the database also does it, but not every database enforces it)."""
+    if ready():
+        lst = get(project)
+        if lst is not None:
+            db.session.delete(lst)
+
+
+def create(project):
+    from .models import MaterialList, MaterialListLine
+    rooms = project.rooms_with_items()
+    lst = MaterialList(project_id=project.id, signature=signature(project, rooms))
+    db.session.add(lst)
+    db.session.flush()
+    for n, line in enumerate(build(project, rooms)):
+        db.session.add(MaterialListLine(list_id=lst.id, sort_order=n, **line))
+    db.session.commit()
+    return lst
+
+
+def changed(lst, project):
+    return lst.signature != signature(project)
+
+
+def rebuild(lst, project):
+    """Work the list out again from the quotation, keeping the edits. Returns {'added', 'gone', 'changed'}: names."""
+    from .models import MaterialListLine
+    rooms = project.rooms_with_items()
+    fresh = build(project, rooms)
+    old = {ln.key: ln for ln in lst.lines if ln.kind != 'manual'}
+    report = {'added': [], 'gone': [], 'changed': []}
+    order = {x: n for n, x in enumerate(groups())}
+    for n, line in enumerate(fresh):
+        row = old.pop(line['key'], None)
+        if row is None:
+            db.session.add(MaterialListLine(list_id=lst.id, sort_order=n, **line))
+            report['added'].append(line['name'])
+            continue
+        row.source, row.sort_order = line['source'], n
+        if not row.edited and not row.removed and row.quantity != line['quantity']:
+            row.quantity, row.unit = line['quantity'], line['unit']
+            report['changed'].append(row.name)
+    for row in old.values():
+        if not row.removed:
+            report['gone'].append(row.name)
+        db.session.delete(row)
+    manual_at = len(fresh)
+    for row in lst.lines.filter_by(kind='manual'):
+        row.sort_order = manual_at + order.get(row.category, len(order))
+    lst.signature, lst.built_at = signature(project, rooms), datetime.utcnow()
+    lst.updated_at = lst.built_at
+    db.session.commit()
+    return report
+
+
+def by_group(lst, removed=False):
+    """[(group, [lines])] in the business's group order; a group no longer in the list comes last."""
+    names = groups()
+    found = {}
+    for ln in lst.lines:
+        if bool(ln.removed) == removed:
+            found.setdefault(ln.category, []).append(ln)
+    ordered = [g_ for g_ in names if g_ in found] + [g_ for g_ in found if g_ not in names]
+    return [(g_, sorted(found[g_], key=lambda ln: (ln.kind == 'manual', ln.sort_order, ln.id))) for g_ in ordered]
+
+
+def number(raw):
+    try:
+        value = float(str(raw).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return None
+    return round(value, 3) if value >= 0 and math.isfinite(value) else None
+
+
+def save(lst, form):
+    """Save the list page: each line's name, quantity, unit, group, ordered / removed / restored, and new lines.
+    A built line moved to another group puts that item in the group from now on (remember)."""
+    from .models import MaterialListLine
+    names = groups()
+    for ln in lst.lines.all():
+        p = f'{ln.id}_'
+        if form.get(p + 'restore'):
+            ln.removed = False
+            continue
+        if ln.removed:
+            continue
+        if form.get(p + 'remove'):
+            if ln.kind == 'manual':
+                db.session.delete(ln)
+            else:
+                ln.removed = True
+            continue
+        if p + 'qty' not in form:
+            continue
+        qty = number(form.get(p + 'qty'))
+        unit = clean_text(form.get(p + 'unit'), UNIT_MAX)
+        name = clean_text(form.get(p + 'name'), NAME_MAX) or ln.name
+        if ln.kind != 'manual' and (qty != ln.quantity or unit != (ln.unit or '') or name != ln.name):
+            ln.edited = True
+        ln.quantity, ln.unit, ln.name = qty, unit, name
+        group = clean_text(form.get(p + 'group'), GROUP_MAX)
+        if group in names and group != ln.category:
+            ln.category = group
+            if ln.kind != 'manual':
+                remember(ln.name, group)
+        ln.ordered = bool(form.get(p + 'ordered'))
+    top = max([ln.sort_order for ln in lst.lines] or [0])
+    for n, (name, qty, unit, group) in enumerate(zip(form.getlist('new_name'), form.getlist('new_qty'),
+                                                     form.getlist('new_unit'), form.getlist('new_group'))):
+        name = clean_text(name, NAME_MAX)
+        if not name:
+            continue
+        db.session.add(MaterialListLine(list_id=lst.id, kind='manual', name=name, quantity=number(qty),
+                                        unit=clean_text(unit, UNIT_MAX),
+                                        category=group if group in names else fallback_group(names),
+                                        sort_order=top + 1 + n))
+    lst.updated_at = datetime.utcnow()
+    db.session.commit()
+
+
+# ── Sending ──────────────────────────────────────────────────────────────────
+
+def qty_text(qty):
+    if qty is None:
+        return ''
+    return f'{qty:,.2f}'.rstrip('0').rstrip('.')
+
+
+def line_text(ln):
+    amount = ' '.join(x for x in (qty_text(ln.quantity), ln.unit or '') if x)
+    return f'{ln.name} – {amount}' if amount else ln.name
+
+
+def text(lst, project, group=None):
+    """The list for WhatsApp / copying: one group, or every group with its heading. No prices."""
+    from .branding import get_brand
+    parts = [p for p in (project.customer_name, ' '.join((project.address or '').split())) if p]
+    title = f'{group} list' if group else 'Material list'
+    out = [f'*{get_brand()["name"]}* – {title}', 'For: ' + ', '.join(parts), '']
+    for name, lines in by_group(lst):
+        if group and name != group:
+            continue
+        if not group:
+            out.append(f'*{name}*')
+        out += [f'{n}. {line_text(ln)}' for n, ln in enumerate(lines, 1)]
+        if not group:
+            out.append('')
+    return '\n'.join(out).strip()

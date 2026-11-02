@@ -31,6 +31,12 @@
        title="A new quotation with all these rooms and lines (enter the new customer)">
       <i class="bi bi-files me-1"></i>Duplicate
     </a>
+    {% if material_list_on and project.status != 'draft' %}
+    <a href="{{ url_for('materials_list.view', project_id=project.id) }}" class="btn btn-outline-secondary btn-sm fw-semibold"
+       title="Everything to buy for this job, with wastage, by group: copy it or send it on WhatsApp">
+      <i class="bi bi-card-checklist me-1"></i>Material list
+    </a>
+    {% endif %}
     {% if current_user.is_admin %}
     <form method="post" action="{{ url_for('projects.save_as_template', project_id=project.id) }}" class="d-inline"
           onsubmit="const n = prompt('Save as a template for new quotations. Name it, e.g. 2 BHK turnkey:'); if (!n) return false; this.name.value = n;">

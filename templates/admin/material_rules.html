@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Material rules{% endblock %}
+
+{% macro group_select(name, current, leave_off=False) %}
+<select class="form-select form-select-sm" name="{{ name }}" aria-label="Group">
+  {% for g in groups %}<option value="{{ g }}" {{ 'selected' if g == current }}>{{ g }}</option>{% endfor %}
+  {% if leave_off %}<option value="" {{ 'selected' if current == '' }}>Leave off the list</option>
+  <option value="__forget">Forget (guess again)</option>{% endif %}
+</select>
+{% endmacro %}
+
+{% macro rule_row(p, r, mats, per) %}
+<tr>
+  <td><input class="form-control form-control-sm" name="{{ p }}name" value="{{ r.name if r else '' }}" maxlength="100"
+             placeholder="{{ 'New rule, e.g. Hinges' if not r }}" aria-label="Item to buy"></td>
+  <td>{{ group_select(p ~ 'group', r.category if r else groups[0]) }}</td>
+  <td>
+    <details class="ki-mat-pick">
+      <summary class="small">{% if not mats %}Every material{% else %}{{ mats|join(', ') }}{% endif %}</summary>
+      <label class="form-check small mt-1"><input class="form-check-input" type="checkbox" name="{{ p }}allmat" {{ 'checked' if not mats }}> Every material</label>
+      {% for m in materials %}
+      <label class="form-check small"><input class="form-check-input" type="checkbox" name="{{ p }}mat" value="{{ m }}" {{ 'checked' if m in mats }}> {{ m }}</label>
+      {% endfor %}
+    </details>
+  </td>
+  <td><select class="form-select form-select-sm" name="{{ p }}work" aria-label="Work type">
+    <option value="">Any</option>
+    {% for w in work_types %}<option value="{{ w }}" {{ 'selected' if r and r.work_type == w }}>{{ w }}</option>{% endfor %}
+  </select></td>
+  <td><input class="form-control form-control-sm" name="{{ p }}per" inputmode="decimal" value="{{ '{:g}'.format(per) if r else '' }}" aria-label="Quantity per {{ area_label }}"></td>
+  <td><input class="form-control form-control-sm" name="{{ p }}unit" value="{{ r.unit if r and r.unit else '' }}" maxlength="30" placeholder="sheets" aria-label="Unit"></td>
+  <td><input class="form-control form-control-sm" name="{{ p }}wastage" inputmode="decimal" value="{{ '{:g}'.format(r.wastage) if r else '10' }}" aria-label="Wastage %"></td>
+  <td class="text-center"><input class="form-check-input" type="checkbox" name="{{ p }}up" {{ 'checked' if not r or r.round_up }} aria-label="Round up"></td>
+  <td class="text-center"><input class="form-check-input" type="checkbox" name="{{ p }}active" {{ 'checked' if not r or r.active }} aria-label="On"></td>
+  <td class="text-center">{% if r %}<label class="btn btn-sm btn-outline-danger py-0 px-1 mb-0" title="Delete this rule">
+    <input type="checkbox" class="d-none" name="{{ p }}remove" data-remove><i class="bi bi-trash"></i></label>{% endif %}</td>
+</tr>
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mt-3 mb-3 gap-2">
+  <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-card-checklist me-2 text-primary"></i>Material rules</h4>
+  <a href="{{ url_for('admin.rates') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-currency-rupee me-1"></i>Rates</a>
+</div>
+
+<div class="alert alert-info py-2 small">
+  <i class="bi bi-info-circle me-1"></i>
+  Each quotation has a <strong>Material list</strong>: everything to buy for the job, by group, to send to your suppliers.
+  These rules work out the board, laminate, edge banding and so on from each item's area: for example
+  <em>0.11 sheets of plywood for every {{ area_label }} of Box Work</em>, plus wastage. <strong>The starting numbers are
+  estimates</strong>: check them once with your carpenter and change them to how you work. Fittings and BOQ lines go on
+  the list as they are on the quotation.
+</div>
+
+<div class="card shadow-sm border-0 mb-3" id="rules">
+  <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>Rules for measured items</div>
+  <form method="POST" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="section" value="rules">
+    <div class="card-body pb-0">
+      <p class="small text-muted mb-2">An item's name can use <code>{material}</code> (the line's material, e.g. Laminates)
+        and <code>{plywood}</code> (its plywood). Lines with the same item and unit add up across the quotation.
+        <strong>Round up</strong> gives whole sheets, rolls or boxes.</p>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="small text-muted"><tr>
+          <th style="min-width:14rem">Item to buy</th><th style="min-width:8rem">Group</th><th style="min-width:10rem">For these materials</th>
+          <th style="min-width:7rem">Work type</th><th style="min-width:6rem">Per {{ area_label }}</th><th style="min-width:7rem">Unit</th>
+          <th style="min-width:5rem">Wastage %</th><th>Round up</th><th>On</th><th></th>
+        </tr></thead>
+        <tbody>
+          {% for row in rows %}{{ rule_row('r' ~ row.rule.id ~ '_', row.rule, row.materials, row.per) }}{% endfor %}
+          {{ rule_row('new_', None, [], 0) }}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body"><button class="btn btn-sm btn-primary" type="submit">Save rules</button></div>
+  </form>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm border-0 h-100" id="groups">
+      <div class="card-header ki-card-header"><i class="bi bi-collection me-2"></i>Groups</div>
+      <form method="POST" class="card-body" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="section" value="groups">
+        <p class="small text-muted mb-2">How the list is split, one group per supplier. Renaming a group renames it
+          everywhere; what's in a removed group moves to {{ 'Other' if 'Other' in groups else groups[-1] }}.</p>
+        {% for g in groups %}
+        <div class="input-group input-group-sm mb-2">
+          <input type="hidden" name="group_old" value="{{ g }}">
+          <input class="form-control" name="group_new" value="{{ g }}" maxlength="60" aria-label="Group name">
+          <label class="input-group-text"><input class="form-check-input mt-0 me-1" type="checkbox" name="group_remove" value="{{ loop.index0 }}"> Remove</label>
+        </div>
+        {% endfor %}
+        <input class="form-control form-control-sm mb-2" name="group_add" maxlength="60" placeholder="Add a group, e.g. Plumbing" aria-label="New group">
+        <button class="btn btn-sm btn-primary" type="submit">Save groups</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm border-0 h-100" id="items">
+      <div class="card-header ki-card-header"><i class="bi bi-tags me-2"></i>Fittings and BOQ lines</div>
+      <form method="POST" class="card-body" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="section" value="items">
+        <div class="row g-2 align-items-center mb-3">
+          <label class="col-auto small" for="spare">Spare on fittings</label>
+          <div class="col-auto"><div class="input-group input-group-sm" style="width:7rem">
+            <input class="form-control" id="spare" name="spare" inputmode="decimal" value="{{ '{:g}'.format(spare) }}"><span class="input-group-text">%</span></div></div>
+          <div class="col small text-muted">e.g. 5% more hinges than on the quotation. Rounded up.</div>
+        </div>
+        <p class="small text-muted mb-2">Each one goes to a group guessed from its name. When you move one to another
+          group on a list, it's remembered here for every list after that.</p>
+        {% if items %}
+        <table class="table table-sm align-middle mb-2">
+          <tbody>
+          {% for name, group in items %}
+            <tr><td class="small">{{ name }}<input type="hidden" name="item_name" value="{{ name }}"></td>
+              <td style="width:13rem">{{ group_select('item_group', group, True) }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<p class="small text-muted mb-2"><em>Nothing remembered yet.</em></p>{% endif %}
+        <button class="btn btn-sm btn-primary" type="submit">Save</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-remove]').forEach(box => box.addEventListener('change', () => {
+  box.closest('tr').classList.toggle('opacity-25', box.checked);
+}));
+</script>
+{% endblock %}
