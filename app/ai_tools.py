@@ -156,16 +156,14 @@ DRAFT_PROMPT = """Below is what a customer wants done (often a WhatsApp message)
 site visit. Draft a quotation for this business, using only the business's own items listed below.
 - rooms: in the order they come up, with clear names (Living Room, Master Bedroom, Kids Room, Kitchen…).
 - items, by kind:
-  measured: furniture priced by its area (wardrobes, kitchen cabinets, lofts, TV units, panelling, beds, study tables…),
-    only if the business has measured items below. length_ft and width_ft: the two sizes it is priced by (the width and
-    height of a wardrobe's front; the run and height of a kitchen cabinet), in feet (1 ft = 12 in = 30.48 cm =
-    304.8 mm), ONLY when the text gives that item's size. A room's size ("kitchen 10x8", "hall 15x12") is not an
-    item's size: leave the sizes null. material and work_type: from the business's list, the one asked for, else ''; a
-    finish asked for an item also goes on what belongs with it (a wardrobe's loft).
-  fitting: one of the business's fittings and accessories, by its exact name; quantity if given, or 1 for "a" / "an"
-    (a pantry pull-out).
+{measured}  fitting: one of the business's fittings and accessories, by its exact name, only when that fitting itself is asked
+    for (a loft is furniture, not a loft lift-up mechanism); quantity if given, or 1 for "a" / "an" (a pantry
+    pull-out).
   line: one of the business's own lines, by its exact name; quantity in its unit if given (sqft of false ceiling,
-    number of electrical points…); for a line priced by area or length, length_ft and width_ft if the text gives them.
+    number of electrical points…); for a line priced by area or length, length_ft and width_ft if the text gives them;
+    material: the finish asked for, if the business lists finishes.
+- sizes (length_ft, width_ft): in feet (1 ft = 12 in = 30.48 cm = 304.8 mm), ONLY when the text gives that item's
+  size. A room's size ("kitchen 10x8", "hall 15x12") is not an item's size: leave the sizes null.
 - name: the business's own name for the item when one matches ("Wardrobe" for "almirah"), else a short clear name.
 - count: how many of the same item ("wardrobes in both bedrooms" = one in each room; "2 lofts" = count 2).
 - Only what the text asks for. Don't add extras; if something is usually needed and not mentioned, ask instead.
@@ -173,6 +171,13 @@ site visit. Draft a quotation for this business, using only the business's own i
   many), in plain words. Never ask about the business's own terms or methods (work types, plywood, how it prices).
 - job_title: 2–4 words ("3 BHK interiors", "Kitchen and wardrobes").
 There are no prices in your answer: the business's own rates are used."""
+
+# only for a business that prices by material (one pricing by item has no measured items)
+MEASURED_RULE = """  measured: furniture priced by its area (wardrobes, kitchen cabinets, lofts, TV units, panelling, beds, study
+    tables…). length_ft and width_ft: the two sizes it is priced by (the width and height of a wardrobe's front; the
+    run and height of a kitchen cabinet). material and work_type: from the business's list, the one asked for, else
+    ''; a finish asked for an item also goes on what belongs with it (a wardrobe's loft).
+"""
 
 
 PHOTO_PROMPT = """The requirements are in the photos: pages of handwritten notes from a site visit, read in order.
@@ -207,8 +212,8 @@ def prepare_photo(raw):
 
 def _catalog():
     """The business's own items for the AI (text) and for matching its answer: {'text', 'by_item', 'fittings',
-    'lines', 'combos'}."""
-    from . import boq, materials as M
+    'lines', 'combos', 'finishes'}."""
+    from . import boq, finishes, materials as M
     from .models import MasterItem, PriceListItem
     by_item = boq.enabled()
     combos = M.combos()
@@ -228,12 +233,25 @@ def _catalog():
         if names:
             out.append('Their usual measured item names: ' + ', '.join(names))
     else:
-        out.append('This business prices by item: no measured items, use its lines.')
+        out.append('This business prices by item: there are no measured items, everything is a line (furniture too). '
+                   'Use its own line when one matches. Anything asked for that has no line of its own (a wardrobe, '
+                   'loft, kitchen cabinet, TV unit…) still goes in as a line, with a short clear name and its usual '
+                   'unit (sqft for furniture priced by area, rft by length, nos by the piece): the business prices it.')
+    opts = finishes.options() if by_item else []
+    if opts:
+        out.append('Finishes (put the one asked for in material): ' + ', '.join(o['name'] for o in opts))
     if fittings:
         out.append('Fittings and accessories (per piece): ' + ', '.join(p.name for p in fittings.values()))
     if lines:
         out.append('Their own lines: ' + '; '.join(f'{b["name"]} [{b["unit"]}]' for b in lines.values()))
-    return {'text': '\n'.join(out), 'by_item': by_item, 'fittings': fittings, 'lines': lines, 'combos': combos}
+    return {'text': '\n'.join(out), 'by_item': by_item, 'fittings': fittings, 'lines': lines, 'combos': combos,
+            'finishes': {o['name'].lower(): o for o in opts}}
+
+
+def _finish(material, cat):
+    """The business's finish asked for ('laminate finish' → Laminate), or None."""
+    key = ' '.join((material or '').lower().replace('finish', ' ').split())
+    return (cat.get('finishes') or {}).get(key) if key else None
 
 
 def _size(value):
@@ -270,9 +288,14 @@ def to_form(draft, cat):
                     row.update(length=length, width=width or 0, count=count)
                 elif qty is None and unit == boq.LUMP_SUM:
                     qty = 1
+                elif qty is None and not mode and unit == 'nos':
+                    qty = count                                     # "a TV unit", "wardrobes in both bedrooms"
                 row['quantity'] = qty if qty is not None else ''
+                fin = _finish(it.material, cat) if (line is None or line.get('finish')) else None
+                if fin and fin['extra']:
+                    row['finish'] = fin['name']                     # the base finish prints nothing extra
                 if line:
-                    row['unit_price'] = line['rate']
+                    row['unit_price'] = round(line['rate'] * (1 + (fin['extra'] if fin else 0) / 100), 2)
                 else:
                     row['tbc'] = True
                     no_rate.append(name)
@@ -310,7 +333,8 @@ def draft(message, photos=()):
     if not photos and len(message) < 15:
         raise AIProblem('Paste the customer\'s message or your notes: which rooms and what they want in each.')
     cat = _catalog()
-    text_part = (f'{DRAFT_PROMPT}\n\n' + (f'{PHOTO_PROMPT}\n\n' if photos else '') +
+    rules = DRAFT_PROMPT.replace('{measured}', '' if cat['by_item'] else MEASURED_RULE)
+    text_part = (f'{rules}\n\n' + (f'{PHOTO_PROMPT}\n\n' if photos else '') +
                  f'<business_items>\n{cat["text"]}\n</business_items>' +
                  (f'\n\n<requirements>\n{message[:MESSAGE_MAX]}\n</requirements>' if message else ''))
     feature = 'photos' if photos else 'draft'
