@@ -688,7 +688,7 @@ def view_project(project_id):
                            quote_gst_rate=__import__('app.quote_gst', fromlist=['rate']).rate(),
                            can_change_stage=_can_change_stage(project),
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
-                           material_list_on=__import__('app.material_list', fromlist=['ready']).ready(),
+                           material_list_on=__import__('app.material_list', fromlist=['available']).available(),
                            title=f'Quotation – {project.customer_name}')
 
 

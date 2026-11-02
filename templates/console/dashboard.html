@@ -234,6 +234,24 @@
   {% endif %}
 </div>
 
+<h2 id="material-list">Material list</h2>
+<div class="card">
+  <div class="row" style="align-items:center">
+    <div class="grow small">
+      <strong>{{ 'On' if mat_on else 'Off' }}</strong> for every trial and paying customer in the shared app.
+      When on, every quotation has a Material list button: everything to buy for the job with wastage, by group, to
+      copy or send on WhatsApp, and admins get Rates → Material rules. Turning it off hides it everywhere within a
+      minute; lists and rules already made are kept. Needs the latest database update (Updates → Update all). A
+      business on its own app (not the shared one) turns it on with <span class="mono">MATERIAL_LIST=1</span>.
+    </div>
+    <form method="post" action="{{ url_for('console.material_list_switch') }}"
+          data-confirm="{{ 'Turn the material list off for every trial and customer?' if mat_on else 'Turn the material list on for every trial and customer?' }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="on" value="{{ '0' if mat_on else '1' }}">
+      <button class="btn btn-sm" type="submit">{{ 'Turn off' if mat_on else 'Turn on' }}</button></form>
+  </div>
+</div>
+
 <h2 id="newTrial">New trial (without a request)</h2>
 <div class="card">
   <form method="post" action="{{ url_for('console.create_trial') }}" class="row" data-confirm="Create this trial?">

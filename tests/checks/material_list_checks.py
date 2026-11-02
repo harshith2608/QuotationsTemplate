@@ -1,16 +1,29 @@
 """The material list (app/material_list.py): built from a quotation by the rules (wastage, rounded up to whole sheets),
 fittings and BOQ lines as they are (services and lump sums left out), grouped; edited (quantities, removed and added
 lines, a line moved to another group is remembered); Rebuild keeps the edits; per-group WhatsApp text with no prices;
-Admin → Material rules (rules, groups renamed or removed, the business's area unit); who may see and change it."""
+Admin → Material rules (rules, groups renamed or removed, the business's area unit); who may see and change it.
+Off until switched on for every business."""
 import json
+import os
 from urllib.parse import unquote
 from app import create_app, db, boq, plywood
 from app import material_list as ML
 from app.models import AppSetting, MaterialList, MaterialRule, Project, User
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
+os.environ.pop('MATERIAL_LIST', None)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
+
+# ── Off until switched on, for every business (MATERIAL_LIST=1 here; the console's switch in the shared app) ──
+with app.app_context():
+    first = Project.query.first().id
+ok('off: no Material list button, no Material rules link', '/materials' not in c.get(f'/projects/{first}').text
+   and 'material-rules' not in c.get('/admin/rates').text)
+ok('off: its pages are not there', c.get(f'/projects/{first}/materials').status_code == 404
+   and c.get('/admin/material-rules').status_code == 404)
+os.environ['MATERIAL_LIST'] = '1'
+ok('on: the Material rules link on Rates', 'material-rules' in c.get('/admin/rates').text)
 
 with app.app_context():
     ok('database ready for material lists', ML.ready())

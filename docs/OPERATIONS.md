@@ -637,6 +637,18 @@ API key (console.anthropic.com → API keys; set a monthly spend limit there too
 switch has no effect. Customers with their own Vercel app get it only with `AI_IMPORT=1` and the key on their
 project. It's always off in the public demo.
 
+### Material list
+
+Each quotation gets a **Material list** button: everything to buy for the job, with wastage, by group (Wood, Hardware,
+Electrical, Paint, Other: the firm's own), to copy or send on WhatsApp to each supplier. Board, laminate, edge banding
+and so on come from the firm's rules (Admin → Rates → **Material rules**; the starting numbers are estimates); fittings
+and BOQ lines go on as they are. No prices on it.
+
+**One switch for everyone, off until you turn it on:** console dashboard → **Material list** → Turn on / Turn off.
+It takes effect in every trial and shared-hosting customer within a minute; turning it off hides it everywhere (lists
+and rules already made are kept). It needs the database update (Updates → **Update all**) first. A customer with their
+own Vercel app, or the demo site, gets it only with `MATERIAL_LIST=1` on that project (then redeploy).
+
 ### Trial → paying customer
 **Automatic (section 3h):** the admin pays in their app; the console moves them to their own database by itself. Nothing to do but send a thank-you.
 

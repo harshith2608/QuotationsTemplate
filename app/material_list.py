@@ -16,6 +16,10 @@ in (remembered by name when they move it on a list, or set in Admin → Material
 The list is saved per quotation and edited there (quantities, units, groups, lines added or removed). When the
 quotation changes, Rebuild works it out again and keeps the edits: lines added by hand, quantities changed by hand and
 lines removed by hand. Needs the database update that adds the material_* tables (ready()).
+
+Off until switched on, for every business at once (app/platform_switch.py): the console's switch (dashboard → Material
+list) for the shared app, MATERIAL_LIST=1 for a single-business deployment. Turning it off hides it everywhere; the
+lists and rules stay, ready for when it's back on.
 """
 import hashlib
 import json
@@ -63,7 +67,20 @@ STARTER_RULES = [
     ('{material}', 'Other', '', 1.0, 'sqft', 10, True, 'other'),
 ]
 
+SWITCH_KEY = 'material_list'
+SWITCH_ENV = 'MATERIAL_LIST'
+
 _ready_forever = {}
+
+
+def switched_on():
+    from . import platform_switch
+    return platform_switch.is_on(SWITCH_KEY, SWITCH_ENV)
+
+
+def available():
+    """Shown and usable in this app: switched on (for every business) and the database updated."""
+    return switched_on() and ready()
 
 
 def ready():

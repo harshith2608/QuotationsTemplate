@@ -14,6 +14,8 @@ material_list_bp = Blueprint('materials_list', __name__)
 
 
 def _project(project_id):
+    if not ML.switched_on():
+        abort(404)
     from .models import Project
     project = Project.query.get_or_404(project_id)
     if not access.can_view(project, current_user):
@@ -119,6 +121,8 @@ def _rule_from_form(form, p, rule):
 @login_required
 @admin_required
 def rules():
+    if not ML.switched_on():
+        abort(404)
     if not ML.ready():
         flash('Material rules are available after the next database update.', 'warning')
         return redirect(url_for('admin.rates'))

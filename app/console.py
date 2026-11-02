@@ -710,8 +710,13 @@ def dashboard():
         ai = {'on': ai_import.console_switch(), 'recent': ai_import.recent(10)}
     except Exception:
         ai = {'on': False, 'recent': []}
+    from . import material_list, platform_switch
+    try:
+        mat_on = platform_switch.console_value(material_list.SWITCH_KEY)
+    except Exception:
+        mat_on = False
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
-                           ai=ai,
+                           ai=ai, mat_on=mat_on,
                            lead_wa=texts.get('lead_whatsapp')[1],
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
@@ -729,6 +734,19 @@ def ai_import_switch():
     flash('Bring your old quotation is ' + ('on for every trial and customer (within a minute).' if on else
                                             'off for every trial and customer (within a minute).'), 'ok')
     return redirect(url_for('console.dashboard') + '#ai-import')
+
+
+@console_bp.route('/features/material-list', methods=['POST'])
+@login_required
+def material_list_switch():
+    """Material list (app/material_list.py): on or off for every trial and customer in the shared app."""
+    from . import material_list, platform_switch
+    on = request.form.get('on') == '1'
+    platform_switch.set_switch(material_list.SWITCH_KEY, on)
+    audit('material_list', None, 'on' if on else 'off')
+    flash('Material list is ' + ('on for every trial and customer (within a minute).' if on else
+                                 'off for every trial and customer (within a minute).'), 'ok')
+    return redirect(url_for('console.dashboard') + '#material-list')
 
 
 @console_bp.route('/spares', methods=['POST'])
