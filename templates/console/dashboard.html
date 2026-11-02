@@ -15,11 +15,11 @@
   <span id="tsCount" class="muted small" style="padding-bottom:10px"></span>
   <nav class="small jump" style="flex-basis:100%">Go to:
     <a href="#newRequests">New requests</a> · <a href="#allTrials">All trials</a> · <a href="#handled">Handled requests</a> ·
-    <a href="#website">Website &amp; live demo</a> · <a href="#selfServe">Self-serve</a> · <a href="#ai-import">AI import</a> ·
+    <a href="#website">Website &amp; live demo</a> · <a href="#selfServe">Self-serve</a> ·
     <a href="#newTrial">New trial</a></nav>
 </div>
 <style>
-  #newRequests, #allTrials, #handled, #website, #selfServe, #ai-import, #newTrial, [data-pager] { scroll-margin-top: 150px; }
+  #newRequests, #allTrials, #handled, #website, #selfServe, #newTrial, [data-pager] { scroll-margin-top: 150px; }
   .pager { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 10px 0 4px; }
   .pager[hidden] { display: none; }
 </style>
@@ -205,72 +205,6 @@
   <form method="post" action="{{ url_for('console.top_up_spares') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-sm" type="submit">Make more</button></form>
-</div>
-
-<h2 id="ai-import">Bring your old quotation (AI)</h2>
-<div class="card">
-  <div class="row" style="align-items:center">
-    <div class="grow small">
-      <strong>{{ 'On' if ai.on else 'Off' }}</strong> for every trial and paying customer in the shared app.
-      When on, their admins can upload a quotation they've sent before (PDF or Excel) and their items, rates and terms
-      are set up from it (5 imports in a trial, 20 a month after). Needs <span class="mono">ANTHROPIC_API_KEY</span> on
-      the trials project.
-    </div>
-    <form method="post" action="{{ url_for('console.ai_import_switch') }}"
-          data-confirm="{{ 'Turn it off for every trial and customer?' if ai.on else 'Turn it on for every trial and customer?' }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="on" value="{{ '0' if ai.on else '1' }}">
-      <button class="btn btn-sm" type="submit">{{ 'Turn off' if ai.on else 'Turn on' }}</button></form>
-  </div>
-  {% if ai.recent %}
-  <details style="margin-top:10px"><summary class="small">Recent imports</summary>
-    <table class="small">
-      <tr><th>When (UTC)</th><th>Business</th><th>File</th><th>Result</th><th>Lines</th><th>Cost</th></tr>
-      {% for r in ai.recent %}<tr><td>{{ r.at.strftime('%d %b %H:%M') }}</td><td>{{ r.slug or '—' }}</td><td>{{ r.kind }}</td>
-        <td>{{ 'read' if r.ok else (r.note or 'failed') }}</td><td>{{ r.lines if r.lines is not none else '' }}</td>
-        <td>{% if r.tokens_in is not none %}₹{{ '%.2f' % ((r.tokens_in * 0.10 + r.tokens_out * 0.50) / 1000000 * 88) }}{% endif %}</td></tr>{% endfor %}
-    </table>
-  </details>
-  {% endif %}
-</div>
-
-<h2 id="ai-helpers">AI helpers on quotations</h2>
-<div class="card">
-  {% set texts = {'photos': 'On the same page, the firm takes up to 3 photos of its handwritten site notes and gets the draft from them (photos shrunk, read and never stored). Counted per photo: 15 in a trial, 60 a month.',
-                  'draft': 'The firm pastes a customer\'s WhatsApp message or its site notes and gets the new quotation filled in with its own items and rates (sizes not given are left to fill in, with questions to ask the customer). 10 in a trial, 60 a month.',
-                  'check': 'A "Check before sending" button on each quotation: missing sizes or quantities, rates different from their own, a bigger discount than usual, and what the AI notices (missing usual items, odd sizes, spelling). 20 in a trial, 150 a month.'} %}
-  {% for key, label in [('draft', 'Draft from a message'), ('photos', 'Draft from photos of site notes'), ('check', 'Check before sending')] %}
-  <div class="row" style="align-items:center{% if not loop.first %};border-top:1px solid var(--line);padding-top:10px;margin-top:10px{% endif %}">
-    <div class="grow small">
-      <strong>{{ label }}</strong> · <strong>{{ 'On' if helpers[key] else 'Off' }}</strong> for every trial and paying
-      customer in the shared app. {{ texts[key] }} Uses <span class="mono">ANTHROPIC_API_KEY</span>; calls are listed
-      under Bring your old quotation's recent imports. Own-app customers: <span class="mono">AI_{{ key|upper }}=1</span>.
-    </div>
-    <form method="post" action="{{ url_for('console.ai_helper_switch', feature=key) }}"
-          data-confirm="{{ ('Turn ' ~ label ~ ' off for every trial and customer?') if helpers[key] else ('Turn ' ~ label ~ ' on for every trial and customer?') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="on" value="{{ '0' if helpers[key] else '1' }}">
-      <button class="btn btn-sm" type="submit">{{ 'Turn off' if helpers[key] else 'Turn on' }}</button></form>
-  </div>
-  {% endfor %}
-</div>
-
-<h2 id="material-list">Material list</h2>
-<div class="card">
-  <div class="row" style="align-items:center">
-    <div class="grow small">
-      <strong>{{ 'On' if mat_on else 'Off' }}</strong> for every trial and paying customer in the shared app.
-      When on, every quotation has a Material list button: everything to buy for the job with wastage, by group, to
-      copy or send on WhatsApp, and admins get Rates → Material rules. Turning it off hides it everywhere within a
-      minute; lists and rules already made are kept. Needs the latest database update (Updates → Update all). A
-      business on its own app (not the shared one) turns it on with <span class="mono">MATERIAL_LIST=1</span>.
-    </div>
-    <form method="post" action="{{ url_for('console.material_list_switch') }}"
-          data-confirm="{{ 'Turn the material list off for every trial and customer?' if mat_on else 'Turn the material list on for every trial and customer?' }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="on" value="{{ '0' if mat_on else '1' }}">
-      <button class="btn btn-sm" type="submit">{{ 'Turn off' if mat_on else 'Turn on' }}</button></form>
-  </div>
 </div>
 
 <h2 id="newTrial">New trial (without a request)</h2>

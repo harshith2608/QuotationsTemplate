@@ -92,9 +92,15 @@ with le.begin() as conn:
     conn.execute(text('alter table demo_stats add column site_visitors integer not null default 0'))
     conn.execute(text('alter table demo_stats add column sample_pdfs integer not null default 0'))
     conn.execute(text('alter table demo_stats add column tried integer not null default 0'))
+# The switches have their own page (Features), not the Trials page; the header keeps 5 pages and a More menu
+ft = c.get('/features').text
+ok('Features page: every switch there, none on Trials; the header has a More menu with Features in it',
+   'id="ai-import"' in ft and 'id="ai-helpers"' in ft and 'id="material-list"' in ft and 'id="ai-import"' not in t
+   and 'id="material-list"' not in t and 'class="more"' in t and 'href="/features"' in t
+   and '>Sign out</button>' in t and 'class="on">Trials</a>' in t and 'class="on">More</summary>' in ft)
 # Bring your old quotation: one switch for every trial and customer (app/ai_import.py)
 from app import ai_import as _ai
-ok('AI import: off at first, with a Turn on button', 'Bring your old quotation (AI)' in t and '>Turn on</button>' in t)
+ok('AI import: off at first, with a Turn on button', 'Bring your old quotation (AI)' in ft and '>Turn on</button>' in ft)
 r = c.post('/features/ai-import', data={'on': '1'}, follow_redirects=True)
 with app.app_context():
     on_console = _ai.console_switch()
@@ -113,8 +119,8 @@ with app.app_context():
 ok('…Turn off: off again everywhere', off_apps)
 # Material list: one switch for every trial and customer (app/material_list.py, app/platform_switch.py)
 from app import material_list as _ml, platform_switch as _ps
-ok('Material list: off at first, with a Turn on button', 'id="material-list"' in t
-   and 'action="/features/material-list"' in t)
+ok('Material list: off at first, with a Turn on button', 'id="material-list"' in ft
+   and 'action="/features/material-list"' in ft)
 r = c.post('/features/material-list', data={'on': '1'}, follow_redirects=True)
 with app.app_context():
     os.environ['TENANT_MODE'] = '1'
@@ -128,8 +134,8 @@ ok('…Turn on: on for the shared app, audited; Turn off: off again', ml_on and 
    and 'Material list is on for every trial' in r.text and 'material list' in c.get('/activity').text)
 # AI helpers on quotations: a switch each (app/ai_tools.py)
 from app import ai_tools as _at
-ok('AI helpers: both off at first', 'id="ai-helpers"' in t and 'action="/features/ai-draft"' in t
-   and 'action="/features/ai-check"' in t)
+ok('AI helpers: both off at first', 'id="ai-helpers"' in ft and 'action="/features/ai-draft"' in ft
+   and 'action="/features/ai-check"' in ft)
 r = c.post('/features/ai-check', data={'on': '1'}, follow_redirects=True)
 with app.app_context():
     os.environ['TENANT_MODE'] = '1'
@@ -315,7 +321,7 @@ ok('dashboard: long lists page (requests, trials, handled, by day) and a jump ba
 # Tutorials for the marketing site (in the demo database)
 t = c.get('/tutorials').text
 ok('tutorials page asks for the database update before the table exists', 'Run the database update first' in t
-   and '/tutorials">Tutorials</a>' in t)
+   and 'href="/tutorials" class="on">Tutorials</a>' in t)
 from app.models import Tutorial
 Tutorial.__table__.create(le, checkfirst=True)
 ok('empty list offers the first six', 'Add the first six tutorials' in c.get('/tutorials').text)

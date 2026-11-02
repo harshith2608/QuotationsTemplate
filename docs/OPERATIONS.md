@@ -630,7 +630,7 @@ console's Load price list: their items and rates (priced by item), a starting qu
 payment terms and notes (only if they had none), GST if chosen, and the quotation rebuilt (named "… (your old
 quotation)", with no customer details). About ₹0.10–0.50 a file. 5 imports in a trial, 20 a month on a plan.
 
-**One switch for everyone:** console dashboard → **Bring your old quotation (AI)** → Turn on / Turn off. It takes
+**One switch for everyone:** console → **Features** → **Bring your old quotation (AI)** → Turn on / Turn off. It takes
 effect in every trial and shared-hosting customer within a minute; the card lists the recent imports (business,
 result, lines, cost). It also needs, once, on the **trials** project in Vercel: `ANTHROPIC_API_KEY` = your Anthropic
 API key (console.anthropic.com → API keys; set a monthly spend limit there too), then redeploy. Without the key the
@@ -651,7 +651,7 @@ project. It's always off in the public demo.
   that look wrong, an item in the wrong room, spelling). The customer's name and number aren't sent. 20 in a trial,
   150 a month. If the AI can't answer, the exact checks still show.
 
-**A switch each, off until you turn it on:** console dashboard → **AI helpers on quotations** → Turn on / Turn off.
+**A switch each, off until you turn it on:** console → **Features** → **AI helpers on quotations** → Turn on / Turn off.
 Takes effect for every trial and shared-hosting customer within a minute. Uses the same `ANTHROPIC_API_KEY` as Bring
 your old quotation (without it they stay off); calls are listed in that card's recent imports (kind draft / check).
 About ₹0.10–0.30 a call. Own-app customers: `AI_DRAFT=1` / `AI_PHOTOS=1` / `AI_CHECK=1` with the key. Always off in the public demo.
@@ -663,7 +663,7 @@ Electrical, Paint, Other: the firm's own), to copy or send on WhatsApp to each s
 and so on come from the firm's rules (Admin → Rates → **Material rules**; the starting numbers are estimates); fittings
 and BOQ lines go on as they are. No prices on it.
 
-**One switch for everyone, off until you turn it on:** console dashboard → **Material list** → Turn on / Turn off.
+**One switch for everyone, off until you turn it on:** console → **Features** → **Material list** → Turn on / Turn off.
 It takes effect in every trial and shared-hosting customer within a minute; turning it off hides it everywhere (lists
 and rules already made are kept). It needs the database update (Updates → **Update all**) first. A customer with their
 own Vercel app, or the demo site, gets it only with `MATERIAL_LIST=1` on that project (then redeploy).
