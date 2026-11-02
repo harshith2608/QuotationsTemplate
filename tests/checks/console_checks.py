@@ -111,6 +111,21 @@ with app.app_context():
     off_apps = not _ai.switched_on() and not _ai.console_switch()
     os.environ.pop('TENANT_MODE')
 ok('…Turn off: off again everywhere', off_apps)
+# Material list: one switch for every trial and customer (app/material_list.py, app/platform_switch.py)
+from app import material_list as _ml, platform_switch as _ps
+ok('Material list: off at first, with a Turn on button', 'id="material-list"' in t
+   and 'action="/features/material-list"' in t)
+r = c.post('/features/material-list', data={'on': '1'}, follow_redirects=True)
+with app.app_context():
+    os.environ['TENANT_MODE'] = '1'
+    _ps.forget(_ml.SWITCH_KEY)
+    ml_on = _ml.switched_on() and _ps.console_value(_ml.SWITCH_KEY)
+    c.post('/features/material-list', data={'on': '0'})
+    _ps.forget(_ml.SWITCH_KEY)
+    ml_off = not _ml.switched_on() and not _ps.console_value(_ml.SWITCH_KEY)
+    os.environ.pop('TENANT_MODE')
+ok('…Turn on: on for the shared app, audited; Turn off: off again', ml_on and ml_off
+   and 'Material list is on for every trial' in r.text and 'material list' in c.get('/activity').text)
 ok('dashboard shows new trial request with company and an address suggested from it', 'Ravi Kumar' in t
    and 'Kumar Woodcraft' in t and 'Ravi Modular Kitchens' in t and 'value="kumar-woodcraft"' in t
    and 'name="company" value="Kumar Woodcraft" maxlength="80"' in t)

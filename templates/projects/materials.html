@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Material list – {{ project.customer_name }}{% endblock %}
+
+{% macro group_select(name, current) %}
+<select class="form-select form-select-sm" name="{{ name }}" aria-label="Group">
+  {% for g in names %}<option value="{{ g }}" {{ 'selected' if g == current }}>{{ g }}</option>{% endfor %}
+  {% if current and current not in names %}<option value="{{ current }}" selected>{{ current }}</option>{% endif %}
+</select>
+{% endmacro %}
+
+{% block head %}
+<style>
+  .ki-mat-source { padding-left: 4.7rem; }
+  @media (max-width: 767.98px) { .ki-mat-source { padding-left: 0; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mt-3 mb-3 gap-2">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">Quotations</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="text-decoration-none">Quotation #{{ project.id }}</a></li>
+        <li class="breadcrumb-item active">Material list</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-card-checklist me-2 text-primary"></i>Material list · {{ project.customer_name }}</h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if groups %}
+    <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" data-send
+            onclick="copyText(document.getElementById('text-all').value, this)"><i class="bi bi-clipboard me-1"></i>Copy all</button>
+    <a class="btn btn-success btn-sm fw-semibold" target="_blank" rel="noopener" data-send
+       href="{{ url_for('materials_list.whatsapp', project_id=project.id) }}"><i class="bi bi-whatsapp me-1"></i>Send all</a>
+    {% endif %}
+    {% if current_user.is_admin %}
+    <a class="btn btn-outline-primary btn-sm fw-semibold" href="{{ url_for('materials_list.rules') }}"><i class="bi bi-sliders me-1"></i>Material rules</a>
+    {% endif %}
+  </div>
+</div>
+
+<p class="small text-muted">Everything to buy for this job, worked out from the quotation with wastage added. Change any
+  quantity, remove what you don't need or add your own items, then send each group to whoever supplies it.
+  <strong>No prices</strong> are on these lists.{% if current_user.is_admin %} Board, laminate and edge banding come from your
+  <a href="{{ url_for('materials_list.rules') }}">material rules</a>: they start as estimates, so check them once with your carpenter.{% endif %}</p>
+
+{% if changed %}
+<div class="alert alert-warning py-2 small d-flex flex-wrap align-items-center gap-2">
+  <span><i class="bi bi-exclamation-triangle me-1"></i>The quotation has changed since this list was made.</span>
+  {% if can_edit %}
+  <form method="POST" action="{{ url_for('materials_list.rebuild', project_id=project.id) }}" class="ms-auto">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-warning fw-semibold" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Rebuild (keeps your changes)</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<textarea id="text-all" class="d-none" readonly>{{ all_text }}</textarea>
+
+<form method="POST" id="matForm" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% if not groups %}
+  <div class="card shadow-sm border-0 mb-3"><div class="card-body text-center text-muted py-4">
+    <i class="bi bi-card-checklist fs-2 d-block mb-2"></i>Nothing on the list yet: this quotation has no lines that need
+    materials{% if current_user.is_admin %} under your <a href="{{ url_for('materials_list.rules') }}">material rules</a>{% endif %}.
+    {% if can_edit %}Add your own items below.{% endif %}
+  </div></div>
+  {% endif %}
+
+  {% for group, lines in groups %}
+  <div class="card shadow-sm border-0 mb-3" id="group-{{ loop.index }}">
+    <div class="card-header ki-card-header d-flex flex-wrap align-items-center gap-2">
+      <span class="fw-semibold">{{ group }}</span>
+      <span class="badge bg-light text-dark border">{{ lines|length }}</span>
+      <span class="ms-auto d-flex gap-2">
+        <textarea id="text-{{ loop.index }}" class="d-none" readonly>{{ texts[group] }}</textarea>
+        <button type="button" class="btn btn-sm btn-outline-light py-0" data-send
+                onclick="copyText(document.getElementById('text-{{ loop.index }}').value, this)"><i class="bi bi-clipboard me-1"></i>Copy</button>
+        <a class="btn btn-sm btn-success py-0" target="_blank" rel="noopener" data-send
+           href="{{ url_for('materials_list.whatsapp', project_id=project.id, group=group) }}"><i class="bi bi-whatsapp me-1"></i>WhatsApp</a>
+      </span>
+    </div>
+    {# one line per item: on a phone the name on its own row, then quantity, unit and group #}
+    <div class="row g-2 px-3 pt-2 small text-muted d-none d-md-flex">
+      <div class="col-auto" style="width:4.2rem">Ordered</div><div class="col">Item</div>
+      <div class="col-md-2">Quantity</div><div class="col-md-2">Unit</div>
+      {% if can_edit %}<div class="col-md-2">Group</div><div class="col-auto" style="width:2.6rem"></div>{% endif %}
+    </div>
+    <ul class="list-group list-group-flush">
+    {% for ln in lines %}{% set p = ln.id ~ '_' %}
+      <li class="list-group-item ki-mat-line {{ 'text-muted' if ln.ordered }}">
+        <div class="row g-2 align-items-center">
+          <div class="col-auto text-center" style="width:4.2rem">
+            <input class="form-check-input" type="checkbox" name="{{ p }}ordered" aria-label="Ordered" title="Ordered"
+                   {{ 'checked' if ln.ordered }} {{ 'disabled' if not can_edit }}>
+            <div class="small text-muted d-md-none" style="font-size:.7rem">Ordered</div></div>
+          {% if can_edit %}
+          <div class="col col-md"><input class="form-control form-control-sm" name="{{ p }}name" value="{{ ln.name }}" maxlength="150" aria-label="Item"></div>
+          <div class="col-auto order-md-last" style="width:2.6rem"><label class="btn btn-sm btn-outline-danger py-0 px-1 mb-0" title="Remove from the list">
+            <input type="checkbox" class="d-none" name="{{ p }}remove" data-remove><i class="bi bi-trash"></i></label></div>
+          <div class="w-100 d-md-none"></div>
+          <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="{{ p }}qty" inputmode="decimal" aria-label="Quantity"
+                     placeholder="Qty" value="{{ '{:g}'.format(ln.quantity) if ln.quantity is not none else '' }}"></div>
+          <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="{{ p }}unit" value="{{ ln.unit or '' }}" maxlength="30" placeholder="Unit" aria-label="Unit"></div>
+          <div class="col-4 col-md-2">{{ group_select(p ~ 'group', ln.category) }}</div>
+          {% else %}
+          <div class="col">{{ ln.name }}</div>
+          <div class="col-auto col-md-2">{{ '{:g}'.format(ln.quantity) if ln.quantity is not none else '' }}</div>
+          <div class="col-auto col-md-2">{{ ln.unit or '' }}</div>
+          {% endif %}
+        </div>
+        {% if ln.source %}<div class="small text-muted mt-1 ki-mat-source">From {{ ln.source }}</div>{% endif %}
+      </li>
+    {% endfor %}
+    {% if can_edit %}
+      <li class="list-group-item ki-mat-line bg-light">
+        <div class="row g-2 align-items-center">
+          <div class="col-auto text-center text-muted" style="width:4.2rem"><i class="bi bi-plus-lg"></i></div>
+          <div class="col col-md"><input class="form-control form-control-sm" name="new_name" placeholder="Add an item to {{ group }}" maxlength="150" aria-label="New item"></div>
+          <div class="col-auto order-md-last" style="width:2.6rem"></div>
+          <div class="w-100 d-md-none"></div>
+          <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_qty" inputmode="decimal" placeholder="Qty" aria-label="Quantity"></div>
+          <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_unit" placeholder="nos, sheets…" maxlength="30" aria-label="Unit"></div>
+          <div class="col-4 col-md-2">{{ group_select('new_group', group) }}</div>
+        </div>
+      </li>
+    {% endif %}
+    </ul>
+  </div>
+  {% endfor %}
+
+  {% if can_edit %}
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body py-2">
+      <div class="small fw-semibold mb-2">Add an item to any group</div>
+      <div class="row g-2">
+        <div class="col-12 col-md-5"><input class="form-control form-control-sm" name="new_name" placeholder="Item, e.g. Wall putty" maxlength="150" aria-label="New item"></div>
+        <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_qty" inputmode="decimal" placeholder="Qty" aria-label="Quantity"></div>
+        <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_unit" placeholder="Unit" maxlength="30" aria-label="Unit"></div>
+        <div class="col-4 col-md-3">{{ group_select('new_group', names[-1]) }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if removed %}
+  <details class="mb-3">
+    <summary class="small text-muted">Removed from this list ({{ removed_count }})</summary>
+    <ul class="list-unstyled small mt-2 mb-0">
+      {% for group, lines in removed %}{% for ln in lines %}
+      <li><label class="form-check"><input class="form-check-input" type="checkbox" name="{{ ln.id }}_restore">
+        Put back: {{ ln.name }} ({{ group }})</label></li>
+      {% endfor %}{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+    <button class="btn btn-primary fw-semibold" type="submit"><i class="bi bi-check2 me-1"></i>Save list</button>
+    <span class="small text-muted d-none" id="matDirty"><i class="bi bi-info-circle me-1"></i>Save first: Copy and WhatsApp send the saved list.</span>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const form = document.getElementById('matForm');
+  if (!form) return;
+  form.querySelectorAll('[data-remove]').forEach(box => box.addEventListener('change', () => {
+    box.closest('.ki-mat-line').classList.toggle('opacity-25', box.checked);
+    box.closest('label').classList.toggle('active', box.checked);
+  }));
+  const dirty = () => {
+    document.querySelectorAll('[data-send]').forEach(el => el.classList.add('disabled'));
+    const note = document.getElementById('matDirty');
+    if (note) note.classList.remove('d-none');
+  };
+  form.addEventListener('input', dirty);
+  form.addEventListener('change', dirty);
+})();
+</script>
+{% endblock %}

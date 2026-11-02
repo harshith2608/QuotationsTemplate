@@ -96,7 +96,9 @@ def create_app(config_name='default'):
     from .share import share_bp
     from .billing_bp import billing_bp
     from .plan_bp import plan_bp
+    from .material_list_bp import material_list_bp
     app.register_blueprint(share_bp)
+    app.register_blueprint(material_list_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(plan_bp)
     app.before_request(block_demo_writes)
@@ -176,15 +178,18 @@ def create_app(config_name='default'):
         if current_user.is_authenticated and current_user.is_admin and session.get('setup_step') and request.endpoint:
             from . import setup_guide             # only while following the setup guide
             setup_banner = setup_guide.banner(request.endpoint, request.args)
-        ai_import_on = False
+        ai_import_on = material_list_on = False
         if current_user.is_authenticated and current_user.is_admin:
             from . import ai_import             # Bring your old quotation: one switch for every business
             ai_import_on = ai_import.available()
+            if request.endpoint == 'admin.rates':
+                from . import material_list     # the Material rules link: one switch for every business
+                material_list_on = material_list.available()
         demo_guide = None
         if demo_enabled() and current_user.is_authenticated:
             from . import demo
             demo_guide = demo.guide()
-        return {'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
+        return {'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}

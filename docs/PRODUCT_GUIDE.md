@@ -138,6 +138,13 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Running the business
 - **Job stages:** Awaiting confirmation → Confirmed → Ongoing → Completed (plus On hold, Cancelled), with history and notes.
 - **Dashboard:** value of work at each stage.
+- **★ Material list:** from any quotation, everything to buy for the job with wastage added: plywood and laminate
+  sheets, edge banding, adhesive and screws worked out from each item's area (by the firm's own rules, Admin → Rates →
+  Material rules; the starting numbers are estimates to check with their carpenter), plus fittings and BOQ lines as they
+  are. Grouped (Wood, Hardware, Electrical, Paint, Other: their own groups, add/rename/remove); change quantities, add
+  or remove items, tick what's ordered; **Copy** or **WhatsApp** each group to its supplier. No prices on it. When the
+  quotation changes, **Rebuild** keeps their edits.
+  *(Off until you turn it on in the console: dashboard → Material list, one switch for everyone.)*
 - **Team:** staff logins; staff see only the quotations they're given, as **Can view** or **★ Can edit** (Access on the
   quotations list); only admins can delete; admins see everything.
 - **★ Costs & profit (owner only):** enter what materials and fittings cost you; each quotation shows its
