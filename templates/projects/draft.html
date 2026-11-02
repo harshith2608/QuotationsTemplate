@@ -25,7 +25,7 @@
         <input class="form-control" type="file" id="draftPhotos" name="photos" accept="image/*" multiple>
         <div class="form-text">Up to {{ photo_max }} pages, one page per photo, flat and in good light. Handwriting is
           fine: sizes like 10'6 x 2'9 or 2400 x 600 and short forms like W/R, OHC and MBR are understood.
-          {{ photos_left[0] }} photo{{ '' if photos_left[0] == 1 else 's' }} left ({{ photos_left[1] }}).</div>
+          Each photo is one AI use.</div>
         <div id="photoPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
         <div id="photoData"></div>
         {% endif %}
@@ -34,12 +34,13 @@
         <textarea class="form-control" id="draftMessage" name="message" rows="{{ 5 if photos_on else 9 }}" maxlength="6000"
                   placeholder="e.g. 3 BHK at Kondapur. Wardrobes in both bedrooms with lofts, master one 9 x 7 ft in acrylic. L-shaped modular kitchen with tandem drawers. TV unit in the hall. False ceiling in hall and master bedroom.">{{ message }}</textarea>
         <div class="form-text">Any language mix is fine. Sizes in your own unit (ft, mm, cm or inches) are picked up
-          for the items they belong to; a room's size isn't used as an item's size.
-          {{ left[0] }} draft{{ '' if left[0] == 1 else 's' }} from a message left ({{ left[1] }}).</div>
+          for the items they belong to; a room's size isn't used as an item's size.{% if photos_on %} With no
+          photos, the draft is one AI use.{% endif %}</div>
         {% endif %}
         <button type="submit" class="btn btn-primary ki-btn-primary mt-3" id="draftGo">
           <i class="bi bi-stars me-1"></i>Draft the quotation</button>
         <div class="small text-muted mt-2">Takes about 10–30 seconds. Nothing is saved until you save the quotation.</div>
+        {% include 'projects/_ai_uses.html' %}
       </form>
     </div>
   </div>

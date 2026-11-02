@@ -119,7 +119,7 @@ def copy_trial(slug, target_url, to_key, plan_name):
                         f"(SELECT MAX(id) FROM \"{table.name}\") IS NOT NULL)"))
             if plan_name:                             # start the paid plan today
                 start = plan_mod.today()
-                end = plan_mod.add_length(start, plan_name)
+                end = plan_mod.add_length(start, plan_mod.length_of(plan_name) or plan_name)
                 for key, value in ((plan_mod.PLAN_KEY, plan_name), (plan_mod.STARTED_KEY, start.isoformat()),
                                    (plan_mod.ENDS_KEY, end.isoformat())):
                     tc.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': key})

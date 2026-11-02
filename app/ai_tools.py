@@ -13,8 +13,11 @@ for a single-business deployment), and always off in the public demo:
            the business's own, a bigger discount than usual, the same line twice) and by the AI (what such rooms
            usually need, sizes that look wrong, an item in the wrong room, spelling the customer will read).
 
-Each business may use each helper LIMIT_TRIAL times during its trial and LIMIT_MONTH a month on a plan; every call is
-logged in public.ai_imports (kind 'draft' / 'check') with the AI import's, for the console.
+All three draw on one allowance of "AI uses" per business (a draft from a message, each photo and each check is one
+use): ALLOWANCE['trial'] in all during the free trial, ALLOWANCE['standard'] a month on the 6- or 12-month plan and
+ALLOWANCE['ai'] a month on a plan with AI (plan.AI_PLANS). On a paid plan the business can buy more (plan.ADDON:
+ADDON_USES for AI_ADDON_PRICE, Your plan page), kept until used; the month's allowance is used first. Every call is
+logged in public.ai_imports (kind 'draft' / 'photos' / 'check') with the AI import's, for the console.
 """
 import json
 from datetime import datetime
@@ -29,13 +32,13 @@ MODEL = ai_import.MODEL
 TIMEOUT = 50
 MESSAGE_MAX = 6000
 FEATURES = {
-    'draft': {'switch': 'ai_draft', 'env': 'AI_DRAFT', 'usage': 'ai_draft_usage', 'trial': 10, 'month': 60,
-              'label': 'Draft from a message'},
-    'check': {'switch': 'ai_check', 'env': 'AI_CHECK', 'usage': 'ai_check_usage', 'trial': 20, 'month': 150,
-              'label': 'Check before sending'},
-    'photos': {'switch': 'ai_photos', 'env': 'AI_PHOTOS', 'usage': 'ai_photos_usage', 'trial': 15, 'month': 60,
-               'label': 'Draft from photos of site notes', 'unit': 'photo'},
+    'draft': {'switch': 'ai_draft', 'env': 'AI_DRAFT', 'label': 'Draft from a message'},
+    'check': {'switch': 'ai_check', 'env': 'AI_CHECK', 'label': 'Check before sending'},
+    'photos': {'switch': 'ai_photos', 'env': 'AI_PHOTOS', 'label': 'Draft from photos of site notes', 'unit': 'photo'},
 }
+ALLOWANCE = {'trial': 10, 'standard': 20, 'ai': 100}    # AI uses: in all during the trial; a month on a plan
+ALLOWANCE_ENV = {'trial': 'AI_USES_TRIAL', 'standard': 'AI_USES_MONTH', 'ai': 'AI_USES_MONTH_AI'}
+USAGE_KEY, CREDITS_KEY = 'ai_uses', 'ai_credits'         # AppSetting: {'trial' or '2026-11': used}; bought uses left
 PHOTO_MAX = 3
 PHOTO_BYTES = 10 * 1024 * 1024          # each, as uploaded (shrunk on the phone first, so usually ~300 KB)
 PHOTO_SIDE = 1568                       # px, the longest side: what the AI reads at full detail
@@ -61,53 +64,106 @@ def available(feature):
     return not demo_enabled() and bool(ai_import.api_key()) and switched_on(feature)
 
 
-def _usage(feature):
+def _usage():
     from .models import AppSetting
     try:
-        return json.loads(AppSetting.get(FEATURES[feature]['usage']) or '{}')
+        return json.loads(AppSetting.get(USAGE_KEY) or '{}')
     except ValueError:
         return {}
 
 
-def _period():
+def _credits():
+    from .models import AppSetting
+    try:
+        return max(int(AppSetting.get(CREDITS_KEY) or 0), 0)
+    except ValueError:
+        return 0
+
+
+def tier():
+    """'trial', 'ai' (a plan with AI) or 'standard' (any other plan, or none: a business on its own app)."""
     from . import plan as plan_mod
     status = plan_mod.load_status()
-    return 'trial' if status.has_limit and status.is_trial else datetime.utcnow().strftime('%Y-%m')
+    if status.has_limit and status.is_trial:
+        return 'trial'
+    return 'ai' if status.plan in plan_mod.AI_PLANS else 'standard'
 
 
-def left(feature):
-    """(uses left, the limit's wording)."""
-    f = FEATURES[feature]
-    period = _period()
-    if period == 'trial':
-        return max(f['trial'] - _usage(feature).get('trial', 0), 0), f'{f["trial"]} during your free trial'
-    return max(f['month'] - _usage(feature).get(period, 0), 0), f'{f["month"]} a month'
+def allowance(kind=None):
+    import os
+    kind = kind or tier()
+    try:
+        return max(int(os.environ.get(ALLOWANCE_ENV[kind]) or ALLOWANCE[kind]), 0)
+    except ValueError:
+        return ALLOWANCE[kind]
+
+
+def pool():
+    """This business's AI uses now: {'tier', 'allowance', 'used', 'credits', 'left', 'words', 'can_buy'}.
+    can_buy: more can be bought here (a paid plan in the shared app, with the platform's Razorpay keys)."""
+    from . import subscription
+    kind = tier()
+    period = 'trial' if kind == 'trial' else datetime.utcnow().strftime('%Y-%m')
+    total, used, credits = allowance(kind), _usage().get(period, 0), (0 if kind == 'trial' else _credits())
+    words = f'{total} during your free trial' if kind == 'trial' else f'{total} a month'
+    if credits:
+        words += f' + {credits} bought'
+    return {'tier': kind, 'period': period, 'allowance': total, 'used': used, 'credits': credits,
+            'left': max(total - used, 0) + credits, 'words': words,
+            'can_buy': kind != 'trial' and subscription.enabled()}
+
+
+def left(feature=None):
+    """(AI uses left, the allowance's wording): one allowance for every helper."""
+    p = pool()
+    return p['left'], p['words']
 
 
 def _count(feature, n=1):
+    """Spend n uses: the month's (or the trial's) allowance first, then bought ones."""
     from .models import AppSetting
-    use = _usage(feature)
-    period = _period()
-    use[period] = use.get(period, 0) + n
-    AppSetting.set(FEATURES[feature]['usage'], json.dumps(use))
+    p = pool()
+    from_allowance = min(n, max(p['allowance'] - p['used'], 0))
+    use = _usage()
+    use[p['period']] = p['used'] + from_allowance
+    AppSetting.set(USAGE_KEY, json.dumps(use))
+    if n > from_allowance and p['tier'] != 'trial':
+        AppSetting.set(CREDITS_KEY, str(max(p['credits'] - (n - from_allowance), 0)))
     db.session.commit()
 
 
-def limit_text(feature):
-    return (f'You\'ve used all of "{FEATURES[feature]["label"]}" ({left(feature)[1]}). Message us on WhatsApp if you '
-            'need more.')
+def add_credits(n):
+    """Bought AI uses (the add-on), added to what's left of earlier ones. Commits."""
+    from .models import AppSetting
+    AppSetting.set(CREDITS_KEY, str(_credits() + int(n)))
+    db.session.commit()
+
+
+def limit_text(feature=None):
+    """Why the helper can't be used now, and what to do."""
+    from . import plan as plan_mod, subscription
+    p = pool()
+    if p['tier'] == 'trial':
+        return (f'You\'ve used the {p["allowance"]} AI uses in your free trial. Choose a plan to keep using the AI '
+                'helpers' + (' (Your plan).' if subscription.enabled() else '.'))
+    if not p['can_buy']:
+        return f'You\'ve used this month\'s {p["allowance"]} AI uses. Message us on WhatsApp if you need more.'
+    more = f'buy {plan_mod.ADDON_USES} more for ₹{subscription.prices()[plan_mod.ADDON]:,} on Your plan'
+    if p['tier'] == 'standard':
+        more += f', or move to a plan with AI ({allowance("ai")} a month)'
+    return f'You\'ve used this month\'s {p["allowance"]} AI uses. To carry on now, {more}.'
 
 
 def _ask(feature, prompt, schema, max_tokens, n=1):
     """Claude's answer as `schema`, within the limit (counted, n uses). prompt: text, or content blocks (photos and
     text). Raises AIProblem."""
     import anthropic
-    if left(feature)[0] < n:
-        unit = FEATURES[feature].get('unit')
-        if unit and left(feature)[0] > 0:
-            raise AIProblem(f'You have {left(feature)[0]} {unit}{"" if left(feature)[0] == 1 else "s"} left '
-                            f'({left(feature)[1]}): choose fewer.')
-        raise AIProblem(limit_text(feature))
+    have = left()[0]
+    if have < n:
+        if have > 0:
+            raise AIProblem(f'You have {have} AI use{"" if have == 1 else "s"} left and each photo is one: choose '
+                            f'{"one photo" if have == 1 else f"up to {have} photos"}.')
+        raise AIProblem(limit_text())
     client = anthropic.Anthropic(api_key=ai_import.api_key(), timeout=TIMEOUT, max_retries=1)
     try:
         r = client.messages.parse(model=MODEL, max_tokens=max_tokens, output_format=schema,

@@ -6,6 +6,8 @@ Shared trials app (TENANT_MODE) settings:
     PLATFORM_RAZORPAY_KEY_ID, PLATFORM_RAZORPAY_KEY_SECRET     the platform's Razorpay API keys (live or test)
     PLATFORM_LEGAL_NAME, PLATFORM_ADDRESS, PLATFORM_EMAIL, PLATFORM_PHONE   who issues the receipt
     PLAN_PRICE_6M=4999, PLAN_PRICE_1Y=8999                   optional: prices in rupees (no GST: not registered)
+    PLAN_PRICE_6M_AI=5999, PLAN_PRICE_1Y_AI=9999             the plans with AI (a bigger AI allowance, app/ai_tools.py)
+    AI_ADDON_PRICE=99                                        40 more AI uses (plan.ADDON), bought on a paid plan
 Console settings:
     PLATFORM_RAZORPAY_WEBHOOK_SECRET    the webhook (order.paid → /billing/razorpay-webhook on the console) records a
                                         payment whose browser closed before returning, and starts the move
@@ -30,7 +32,6 @@ from . import db, tenancy
 from . import plan as plan_mod
 
 API = 'https://api.razorpay.com/v1'
-LENGTHS = {'6m': '6m', '1y': '1y'}
 DDL = """
 CREATE TABLE IF NOT EXISTS public.platform_payments (
     id            SERIAL       PRIMARY KEY,
@@ -61,8 +62,10 @@ def _env(name, default=''):
 
 
 def prices():
-    """{'6m': 4999, '1y': 8999} in rupees."""
-    return {'6m': int(_env('PLAN_PRICE_6M', '4999')), '1y': int(_env('PLAN_PRICE_1Y', '8999'))}
+    """{'6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999, 'ai40': 99} in rupees."""
+    return {'6m': int(_env('PLAN_PRICE_6M', '4999')), '1y': int(_env('PLAN_PRICE_1Y', '8999')),
+            '6m_ai': int(_env('PLAN_PRICE_6M_AI', '5999')), '1y_ai': int(_env('PLAN_PRICE_1Y_AI', '9999')),
+            plan_mod.ADDON: int(_env('AI_ADDON_PRICE', '99'))}
 
 
 def enabled():
@@ -121,9 +124,10 @@ def _api(method, path, payload=None):
 # ── Buying ───────────────────────────────────────────────────────────────────
 
 def create_order(slug, plan, business_name='', paid_by='', email='', payer_name=''):
-    """A Razorpay order for `plan` ('6m' / '1y'), remembered as "created". Returns the order row (dict)."""
-    if plan not in LENGTHS:
-        raise PaymentError('Choose the 6-month or 12-month plan.')
+    """A Razorpay order for `plan` (one of plan.PAID, or plan.ADDON: more AI uses), remembered as "created".
+    Returns the order row (dict)."""
+    if plan not in plan_mod.PAID and plan != plan_mod.ADDON:
+        raise PaymentError('Choose a plan.')
     ensure_table()
     amount = prices()[plan] * 100
     order = _api('POST', '/orders', {'amount': amount, 'currency': 'INR',
@@ -147,8 +151,8 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
     """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email, or opened straight away by a
     business buying on the website). kind 'new': a customer whose app is made once they pay. callback_url: where
     Razorpay sends the payer back after paying. Returns the payment row (dict, with link_url)."""
-    if plan not in LENGTHS:
-        raise PaymentError('Choose the 6-month or 12-month plan.')
+    if plan not in plan_mod.PAID:
+        raise PaymentError('Choose a plan.')
     if not links_enabled():
         raise PaymentError('Set PLATFORM_RAZORPAY_KEY_ID and PLATFORM_RAZORPAY_KEY_SECRET on the console first.')
     ensure_table()
@@ -261,11 +265,24 @@ def mark_paid(order_id, payment_id, source):
     return get_by_order(order_id), row is not None
 
 
-def apply_plan(row):
-    """Add the paid plan to the business open now (the current request's database; caller has app context).
-    On time it extends from the end date, so remaining trial days or plan days are not lost. Commits."""
-    status = plan_mod.renew(LENGTHS[row['plan']])
+def _add_here(row):
+    """What a payment buys, added to the business open now: the plan (plan.renew), or AI uses (the add-on).
+    Commits. Returns the plan status."""
+    from . import ai_tools
+    if row['plan'] == plan_mod.ADDON:
+        ai_tools.add_credits(plan_mod.ADDON_USES)
+        return plan_mod.load_status(on=plan_mod.today())
+    status = plan_mod.renew(plan_mod.length_of(row['plan']), row['plan'])
     db.session.commit()
+    return status
+
+
+def apply_plan(row):
+    """Add the paid plan (or the AI uses) to the business open now (the current request's database; caller has app
+    context). On time it extends from the end date, so remaining trial days or plan days are not lost. Commits."""
+    status = _add_here(row)
+    if row['plan'] == plan_mod.ADDON:
+        return status
     with db.engine.begin() as conn:
         conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
                      {'a': status.started_on, 'b': status.ends_on, 'i': row['id']})
@@ -282,8 +299,9 @@ def apply_plan_for(slug, row):
     c = customers.get(slug)
     if c and c['status'] == 'active':
         with customers.open_customer(slug):
-            status = plan_mod.renew(LENGTHS[row['plan']])
-            db.session.commit()
+            status = _add_here(row)
+        if row['plan'] == plan_mod.ADDON:
+            return status
         with db.engine.begin() as conn:
             conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
                          {'a': status.started_on, 'b': status.ends_on, 'i': row['id']})
@@ -321,8 +339,8 @@ def record_manual(slug, plan, amount, method, reference='', paid_on=None, add_pl
     number like any other, and (add_plan) the plan added to their app the same way. Returns the payment row."""
     from datetime import time
     from . import customers
-    if plan not in LENGTHS:
-        raise PaymentError('Choose the 6-month or 12-month plan.')
+    if plan not in plan_mod.PAID and plan != plan_mod.ADDON:
+        raise PaymentError('Choose a plan.')
     try:
         paise = int(round(float(amount) * 100))
     except (TypeError, ValueError):
@@ -427,7 +445,8 @@ def paid_trials():
     with db.engine.connect() as conn:
         return [r[0] for r in conn.execute(text(
             "SELECT DISTINCT p.slug FROM public.platform_payments p JOIN public.tenants t ON t.slug = p.slug "
-            "WHERE p.status = 'paid' AND t.status IN ('active', 'moving')"))]
+            "WHERE p.status = 'paid' AND p.plan <> :addon AND t.status IN ('active', 'moving')"),
+            {'addon': plan_mod.ADDON})]
 
 
 def move_paid_trial(slug, log=None):
@@ -439,7 +458,8 @@ def move_paid_trial(slug, log=None):
         return customers.resume(slug, log=log)          # started before: carry on where it stopped
     with db.engine.connect() as conn:
         last = conn.execute(text("SELECT plan, business_name FROM public.platform_payments WHERE slug = :s AND "
-                                 "status = 'paid' ORDER BY paid_at DESC LIMIT 1"), {'s': slug}).first()
+                                 "status = 'paid' AND plan <> :addon ORDER BY paid_at DESC LIMIT 1"),
+                            {'s': slug, 'addon': plan_mod.ADDON}).first()
     target = tenancy.lookup(slug)
     name, phone = (last[1] if last else '') or slug, ''
     if target and target[0] == 'schema':
@@ -505,11 +525,17 @@ def send_receipt(row, to=None):
         return False
     fmt = lambda d: d.strftime('%d %b %Y') if d else '—'
     first = (row.get('payer_name') or '').split(' ')[0]
-    subject, body = texts.render('pay_receipt', hello=f'Hello {first}' if first else 'Hello',
-                                 amount=f'₹{row["amount_paise"] / 100:,.0f}', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
-                                 business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
-                                 plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
-                                 receipt_no=row.get('receipt_no'))
+    if row['plan'] == plan_mod.ADDON:
+        subject, body = texts.render('pay_addon', hello=f'Hello {first}' if first else 'Hello',
+                                     amount=f'₹{row["amount_paise"] / 100:,.0f}', uses=plan_mod.ADDON_USES,
+                                     business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
+                                     receipt_no=row.get('receipt_no'))
+    else:
+        subject, body = texts.render('pay_receipt', hello=f'Hello {first}' if first else 'Hello',
+                                     amount=f'₹{row["amount_paise"] / 100:,.0f}', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
+                                     business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
+                                     plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
+                                     receipt_no=row.get('receipt_no'))
     return mailer.send(to, subject, body, bcc=mailer.sender(),
                        attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
 
@@ -525,9 +551,10 @@ def notify_paid(row):
     name = row.get('business_name') or row['slug']
     sent = send_receipt(row)
     mailer.send(mailer.operator(), f'Payment: {amount} from {name}',
-                f'{name} ({row["slug"]}){" · " + row["payer_name"] if row.get("payer_name") else ""} paid {amount} for the {plan_label}.\n'
+                f'{name} ({row["slug"]}){" · " + row["payer_name"] if row.get("payer_name") else ""} paid {amount} for {"" if row["plan"] == plan_mod.ADDON else "the "}{plan_label}.\n'
                 f'Receipt {row.get("receipt_no")} · payment {row.get("payment_id")} · via {row.get("source")}\n'
-                f'Plan until {fmt(row.get("plan_end"))}.\n'
+                + (f'Plan until {fmt(row.get("plan_end"))}.\n' if row['plan'] != plan_mod.ADDON else
+                 f'{plan_mod.ADDON_USES} AI uses added to their app.\n')
                 + (f'Receipt emailed to {receipt_email(row)} (a copy is in this mailbox).\n' if sent else
                    'No email address to send the receipt to: send it from console → Payments.\n'))
 
@@ -708,7 +735,7 @@ def proforma_pdf(row, bill_to='', address=''):
                            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
     el += [t, Spacer(1, 16)]
-    months = '6 months' if row['plan'] == '6m' else '12 months'
+    months = '6 months' if plan_mod.length_of(row['plan']) == '6m' else '12 months'
     lines = [['Description', 'Amount'],
              [Paragraph(f'<b>QuoteRoom {escape(plan_label)}</b><br/><font size="8" color="#455a64">'
                         f'Quotation app for your whole team, all features, for {months}. '

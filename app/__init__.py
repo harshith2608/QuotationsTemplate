@@ -58,6 +58,9 @@ def create_app(config_name='default'):
     csrf.init_app(app)
 
     # Operator console deployment: serves only the console (no business app, no tenants)
+    from .plan import short as plan_short
+    app.add_template_filter(plan_short, 'plan_short')   # '12 months with AI', '40 AI uses' (the app and the console)
+
     from .console import console_mode
     if console_mode():
         if tenancy.tenant_mode():

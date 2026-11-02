@@ -1,0 +1,6 @@
+{# AI uses left (app/ai_tools.py pool), and where to get more: needs `ai_pool` #}
+<div class="small mt-2 {{ 'text-danger fw-semibold' if not ai_pool.left else 'text-muted' }}" id="aiUsesLeft">
+  <i class="bi bi-stars me-1"></i>{{ ai_pool.left }} AI use{{ '' if ai_pool.left == 1 else 's' }} left ({{ ai_pool.words }}).
+  {% if ai_pool.tier == 'trial' and plan_page_on %}<a href="{{ url_for('plan.plan_page') }}">Choose a plan</a> for more.
+  {% elif ai_pool.can_buy and (ai_pool.left < 5 or ai_pool.tier == 'standard') and current_user.is_admin %}<a href="{{ url_for('plan.plan_page') }}#aiUses">Get more AI uses</a>{% endif %}
+</div>

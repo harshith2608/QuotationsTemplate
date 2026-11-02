@@ -40,10 +40,10 @@
     <a class="btn btn-outline-secondary btn-sm fw-semibold" href="{{ url_for('projects.view_project', project_id=project.id) }}">Back to the quotation</a>
     <form method="post" class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-outline-primary btn-sm fw-semibold" type="submit" {% if not left %}disabled{% endif %}><i class="bi bi-arrow-repeat me-1"></i>Check again</button>
+      <button class="btn btn-outline-primary btn-sm fw-semibold" type="submit" {% if not ai_pool.left %}disabled{% endif %}><i class="bi bi-arrow-repeat me-1"></i>Check again</button>
     </form>
-    <span class="small text-muted">{{ left }} check{{ '' if left == 1 else 's' }} left ({{ limit }}).</span>
   </div>
+  {% include 'projects/_ai_uses.html' %}
   <p class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>Sizes, quantities, your rates and the discount
     are checked exactly. The rest is the AI's suggestion: you decide. The quotation's lines are read by our AI provider
     (Anthropic), without the customer's name or contact details, and aren't stored or used to train AI.</p>

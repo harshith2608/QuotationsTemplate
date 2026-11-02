@@ -2,7 +2,7 @@
 {% block title %}Payment link{% endblock %}
 {% block content %}
 <h1>Payment link</h1>
-<p class="muted small">{{ row.business_name or row.slug }} · {{ '6 months' if row.plan == '6m' else '12 months' }} ·
+<p class="muted small">{{ row.business_name or row.slug }} · {{ row.plan|plan_short }} ·
   ₹{{ '{:,.0f}'.format(row.amount_paise / 100) }} · {{ 'paid ✓' if row.status == 'paid' else 'waiting for payment (valid 7 days)' }}
   {% if row.kind == 'new' %}· their app is made when they pay{% endif %}</p>
 

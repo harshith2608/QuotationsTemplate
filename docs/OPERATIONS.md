@@ -409,7 +409,8 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    console** set `PLATFORM_RAZORPAY_KEY_ID` and `PLATFORM_RAZORPAY_KEY_SECRET` (the console uses them for payment links),
    plus on both what the receipt shows:
    `PLATFORM_LEGAL_NAME` (e.g. "QuoteRoom (Harshith Pola)"), `PLATFORM_ADDRESS`, `PLATFORM_EMAIL`, `PLATFORM_PHONE`.
-   Prices default to ₹4,999 / ₹8,999 (`PLAN_PRICE_6M`, `PLAN_PRICE_1Y` to change). Without the keys, the plan buttons
+   Prices default to ₹4,999 / ₹8,999 (`PLAN_PRICE_6M`, `PLAN_PRICE_1Y` to change), ₹5,999 / ₹9,999 with AI
+   (`PLAN_PRICE_6M_AI`, `PLAN_PRICE_1Y_AI`) and ₹99 for 40 AI uses (`AI_ADDON_PRICE`). Without the keys, the plan buttons
    keep opening WhatsApp to you, as before.
 4. **Razorpay webhook** (Razorpay → **Account & Settings → Webhooks → Add new webhook**): URL
    `https://ops.quote-room.co.in/billing/razorpay-webhook`, a secret you generate (`python -c "import secrets;
@@ -446,7 +447,8 @@ Vercel **Pro** is needed before the first real payment (section 6, step 0).
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
 
-Prices: **6 months ₹4,999 · 12 months ₹8,999**, with no GST added (not GST-registered for now; check
+Prices: **6 months ₹4,999 · 12 months ₹8,999**; with AI (100 AI uses a month instead of 20) **₹5,999 · ₹9,999**;
+40 more AI uses ₹99. No GST added (not GST-registered for now; check
 with your CA as revenue grows). No auto-renewal, no refunds (the trial is free).
 
 What the app does by itself:
@@ -642,19 +644,28 @@ project. It's always off in the public demo.
 - **Draft from a message:** on the new quotation form, the firm pastes a customer's WhatsApp message or its site
   notes; the form is filled in with **its own** items, materials, fittings and lines. The AI only picks items, sizes
   and quantities: every rate comes from the firm's rates. Sizes that weren't given are left highlighted to fill in,
-  and it lists questions to ask the customer. 10 in a trial, 60 a month.
+  and it lists questions to ask the customer. One AI use.
 - **Draft from photos of site notes** (its own switch): on the same page, up to 3 photos of handwritten notebook
   pages (shrunk on the phone, turned upright, read, never stored; shown small next to the draft for checking).
-  Counted per photo: 15 in a trial, 60 a month. A one-page draft used about 4,800 tokens in and 2,200 out in testing.
+  Each photo is one AI use. A one-page draft used about 4,800 tokens in and 2,200 out in testing.
 - **Check before sending:** a button on each quotation. Exact checks (no size or quantity, a rate different from the
   firm's own, a bigger discount than usual, the same line twice) plus the AI's (what such rooms usually need, sizes
-  that look wrong, an item in the wrong room, spelling). The customer's name and number aren't sent. 20 in a trial,
-  150 a month. If the AI can't answer, the exact checks still show.
+  that look wrong, an item in the wrong room, spelling). The customer's name and number aren't sent. One AI use.
+  If the AI can't answer, the exact checks still show (and nothing is counted).
 
 **A switch each, off until you turn it on:** console → **Features** → **AI helpers on quotations** → Turn on / Turn off.
 Takes effect for every trial and shared-hosting customer within a minute. Uses the same `ANTHROPIC_API_KEY` as Bring
 your old quotation (without it they stay off); calls are listed in that card's recent imports (kind draft / check).
-About ₹0.10–0.30 a call. Own-app customers: `AI_DRAFT=1` / `AI_PHOTOS=1` / `AI_CHECK=1` with the key. Always off in the public demo.
+About ₹0.10–1.50 a call. Own-app customers: `AI_DRAFT=1` / `AI_PHOTOS=1` / `AI_CHECK=1` with the key. Always off in the public demo.
+
+**One allowance of AI uses per business, for all three:** 10 in the free trial (in all), **20 a month** on the 6- or
+12-month plan, **100 a month** on a plan with AI. Bring your old quotation keeps its own limit. When they run out:
+- a trial is told to choose a plan;
+- a paid plan can buy **40 more for ₹99** on **Your plan** (Razorpay, receipt by email; kept until used, the month's
+  own uses go first). It's a payment like any other under Payments, but it never adds plan days or moves a trial.
+Change the numbers with `AI_USES_TRIAL`, `AI_USES_MONTH`, `AI_USES_MONTH_AI` and the add-on price with
+`AI_ADDON_PRICE` (trials project). The website shows the plans with AI only once `AI_PLANS=1` is set on the
+**website** project: set it when you turn the AI helpers on, so nobody buys AI they can't use yet.
 
 ### Material list
 

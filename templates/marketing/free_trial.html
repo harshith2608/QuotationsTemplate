@@ -10,7 +10,7 @@
       <div data-trial-start {% if name %}hidden{% endif %}>
         {% set buying = (form or {}).get('plan') %}
         {% if buying %}
-        <p class="eyebrow">{{ {'6m': '6-month plan · ₹4,999', '1y': '12-month plan · ₹8,999'}[buying] }}</p>
+        <p class="eyebrow">{{ plan_names[buying][0] }} · {{ plan_names[buying][1] }}</p>
         <h1>Get your own {{ product }} app</h1>
         <p class="trial-lede">Tell us a little about you. Next you choose your password and pay, and your app is ready.</p>
         {% else %}

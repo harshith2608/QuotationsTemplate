@@ -26,6 +26,12 @@ def _photos():
     return [ai_tools.prepare_photo(r) for r in raws]
 
 
+def _plan_page_on():
+    """The Your plan page (choose a plan, buy AI uses) exists here, for an admin."""
+    from . import subscription, tenancy
+    return subscription.enabled() and bool(tenancy.current_slug()) and current_user.is_admin
+
+
 @ai_tools_bp.route('/projects/draft', methods=['GET', 'POST'])
 @login_required
 def draft():
@@ -52,8 +58,7 @@ def draft():
             return render_new_form(start, ai_draft=result)
     return render_template('projects/draft.html', title='Draft from a message', message=message,
                            text_on=ai_tools.available('draft'), photos_on=photos_on,
-                           left=ai_tools.left('draft'), photos_left=ai_tools.left('photos'),
-                           photo_max=ai_tools.PHOTO_MAX)
+                           ai_pool=ai_tools.pool(), plan_page_on=_plan_page_on(), photo_max=ai_tools.PHOTO_MAX)
 
 
 @ai_tools_bp.route('/projects/<int:project_id>/check', methods=['GET', 'POST'])
@@ -68,7 +73,6 @@ def check(project_id):
     if request.method == 'GET' or project.status == 'draft':
         return redirect(url_for('projects.view_project', project_id=project.id))
     result = ai_tools.check(project)
-    left, limit = ai_tools.left('check')
     return render_template('projects/check.html', title=f'Check – {project.customer_name}', project=project,
-                           result=result, left=left, limit=limit,
+                           result=result, ai_pool=ai_tools.pool(), plan_page_on=_plan_page_on(),
                            can_edit=access.can_edit(project, current_user))

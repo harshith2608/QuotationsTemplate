@@ -197,7 +197,7 @@ def register_cli(app):
         _show(plan_mod.load_status(on=plan_mod.today()))
 
     @plan_group.command('set')
-    @click.option('--plan', 'plan_name', type=click.Choice(['trial', '6m', '1y', 'custom']), required=True)
+    @click.option('--plan', 'plan_name', type=click.Choice(['trial', '6m', '1y', '6m_ai', '1y_ai', 'custom']), required=True)
     @click.option('--start', default=None, help='Start date YYYY-MM-DD (default: today).')
     @click.option('--until', default=None, help='End date YYYY-MM-DD (default: start + plan length).')
     def plan_set(plan_name, start, until):
@@ -223,7 +223,7 @@ def register_cli(app):
 
     @plan_group.command('extend')
     @click.argument('length')
-    @click.option('--plan', 'plan_name', type=click.Choice(['6m', '1y', 'custom']), default=None,
+    @click.option('--plan', 'plan_name', type=click.Choice(['6m', '1y', '6m_ai', '1y_ai', 'custom']), default=None,
                   help='Plan after renewing (default: 6m for 6m, 1y for 1y, else unchanged).')
     def plan_extend(length, plan_name):
         """Renew: add 6m, 1y, 7d… Extends from the current end date if still within grace, else from today."""
@@ -329,7 +329,7 @@ def register_cli(app):
     @trial_group.command('convert')
     @click.argument('slug')
     @click.option('--to', 'target_url', required=True, help='The customer\'s NEW database URL (direct, not -pooler).')
-    @click.option('--plan', 'plan_name', type=click.Choice(['6m', '1y']), required=True)
+    @click.option('--plan', 'plan_name', type=click.Choice(['6m', '1y', '6m_ai', '1y_ai']), required=True)
     @click.option('--to-key', 'to_key', envvar='TARGET_DATA_ENCRYPTION_KEY', prompt='New project\'s DATA_ENCRYPTION_KEY',
                   hide_input=True, help='The customer project\'s own DATA_ENCRYPTION_KEY (asked if not given).')
     def trial_convert(slug, target_url, plan_name, to_key):

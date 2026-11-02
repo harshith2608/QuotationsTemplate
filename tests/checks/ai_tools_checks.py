@@ -128,13 +128,42 @@ ok('…a measured item becomes a line too (no materials when pricing by item)', 
 with app.app_context():
     boq.set_enabled(False); db.session.commit()
 
-# ── Limit ──
-with app.app_context():
-    AppSetting.set(T.FEATURES['draft']['usage'], json.dumps({'trial': 999, __import__('datetime').datetime.utcnow().strftime('%Y-%m'): 999}))
+# ── One allowance of AI uses for every helper (trial / plan / plan with AI), and bought uses ──
+from app import plan as PM
+MONTH = __import__('datetime').datetime.utcnow().strftime('%Y-%m')
+def set_used(n, credits=0):
+    AppSetting.set(T.USAGE_KEY, json.dumps({'trial': n, MONTH: n})); AppSetting.set(T.CREDITS_KEY, str(credits))
     db.session.commit()
+with app.app_context():
+    from datetime import date as _d
+    PM.save_plan('trial', PM.today(), PM.today().replace(year=PM.today().year + 1)); db.session.commit(); PM.g.pop('plan_status', None)
+    trial = T.pool()
+    PM.save_plan('1y', PM.today(), PM.today().replace(year=PM.today().year + 1)); db.session.commit(); PM.g.pop('plan_status', None)
+    std = T.pool()
+    PM.save_plan('1y_ai', PM.today(), PM.today().replace(year=PM.today().year + 1)); db.session.commit(); PM.g.pop('plan_status', None)
+    with_ai = T.pool()
+    ok('allowance: 10 in a trial, 20 a month on a plan, 100 a month on a plan with AI', (trial['tier'], trial['allowance'])
+       == ('trial', 10) and (std['tier'], std['allowance']) == ('standard', 20) and (with_ai['tier'], with_ai['allowance']) == ('ai', 100))
+    PM.save_plan('1y', PM.today(), PM.today().replace(year=PM.today().year + 1)); db.session.commit(); PM.g.pop('plan_status', None)
+    set_used(18, 5)
+    T._count('photos', 3)
+    p = T.pool()
+    ok('the month\'s uses first, then bought ones (18 of 20 used + 5 bought, 3 used → 20 of 20, 4 bought left)',
+       p['used'] == 20 and p['credits'] == 4 and p['left'] == 4 and '20 a month + 4 bought' in p['words'])
+    T.add_credits(40)
+    ok('bought uses are added to what\'s left of earlier ones', T.pool()['credits'] == 44)
+    PM.save_plan('trial', PM.today(), PM.today().replace(year=PM.today().year + 1)); db.session.commit(); PM.g.pop('plan_status', None)
+    set_used(10, 44)
+    ok('a trial: its 10 only (bought uses wait for a plan), and it\'s told to choose a plan', T.pool()['left'] == 0
+       and 'Choose a plan' in T.limit_text())
+    PM.save_plan('', None, None)                     # back to no plan (the demo data's), as before
+    db.session.commit(); PM.g.pop('plan_status', None)
+    set_used(999)
 n = len(calls)
 r = c.post('/projects/draft', data={'message': 'Wardrobe 9 x 7 in the master bedroom, acrylic finish please'})
-ok('limit reached: said so, AI not called', len(calls) == n and 'used all of' in r.text)
+ok('limit reached: said so, AI not called', len(calls) == n and 'used this month&#39;s 20 AI uses' in r.text)
+with app.app_context():
+    set_used(0)
 
 # ── Photos of site notes ──
 import base64, io
@@ -159,11 +188,12 @@ def data_url(raw, kind='jpeg'):
 ok('photos: off until switched on (their own switch)', 'id="draftPhotos"' not in c.get('/projects/draft').text)
 os.environ['AI_PHOTOS'] = '1'
 page = c.get('/projects/draft').text
-ok('on: take photos of the notes, with the photos left', 'id="draftPhotos"' in page and re.search(r'\d+ photos left', page))
+ok('on: take photos of the notes, with the AI uses left', 'id="draftPhotos"' in page and re.search(r'\d+ AI uses left', page)
+   and 'Each photo is one AI use' in page)
 answers.append(D(job_title='Kitchen and wardrobe', questions=['Loft size?'], rooms=[
     R(name='Kitchen', items=[I(kind='measured', name='Base Cabinet', length_ft=10.5, width_ft=2.75, material='Laminates', work_type='Box Work')])]))
 with app.app_context():
-    before_p, before_d = T.left('photos')[0], T.left('draft')[0]
+    before_p = T.left()[0]
 r = c.post('/projects/draft', data={'message': '', 'photo_data': [data_url(photo(orientation=6)), data_url(photo(800, 600, fmt='PNG'), 'png')]})
 blocks = calls[-1]['messages'][0]['content']
 imgs = [b for b in blocks if b['type'] == 'image']
@@ -177,7 +207,7 @@ items = {i['name']: i for room in rooms_of(r.text) for i in room['items']}
 ok('the draft from the notes, with the photos shown small to check against', items['Base Cabinet']['length'] == 10.5
    and 'Drafted from your notes' in r.text and r.text.count('alt="Site notes, page') == 2)
 with app.app_context():
-    ok('counted per photo, on the photos\' own limit', T.left('photos')[0] == before_p - 2 and T.left('draft')[0] == before_d)
+    ok('counted per photo, from the one allowance', T.left()[0] == before_p - 2)
 n = len(calls)
 r = c.post('/projects/draft', data={'photo_data': [data_url(photo())] * 4})
 ok('more than 3 photos: said so, AI not called', len(calls) == n and 'Up to 3 photos' in r.text)
@@ -189,14 +219,17 @@ answers.append(D(job_title='Wardrobe', questions=[], rooms=[R(name='Bedroom', it
 r = c.post('/projects/draft', data={'photos': [(io.BytesIO(photo(1200, 900)), 'notes.jpg')]}, content_type='multipart/form-data')
 ok('without the phone shrinking it, the photo file itself works too', len(calls) == n + 1 and 'Drafted from your notes' in r.text)
 with app.app_context():
-    AppSetting.set(T.FEATURES['photos']['usage'], json.dumps({'trial': 14, __import__('datetime').datetime.utcnow().strftime('%Y-%m'): 59}))
-    db.session.commit()
+    set_used(19)
 r = c.post('/projects/draft', data={'photo_data': [data_url(photo())] * 2})
-ok('1 photo left, 2 sent: asked to choose fewer', len(calls) == n + 1 and 'You have 1 photo left' in r.text)
+ok('1 use left, 2 photos sent: asked to choose fewer', len(calls) == n + 1 and 'You have 1 AI use left' in r.text)
+with app.app_context():
+    set_used(20)
 os.environ['AI_PHOTOS'] = ''
 r = c.post('/projects/draft', data={'message': 'Wardrobe 9 x 7 in the master bedroom', 'photo_data': [data_url(photo())]})
-ok('photos switched off: photos ignored, the message goes the message\'s way (its limit here)', len(calls) == n + 1
-   and 'used all of &#34;Draft from a message&#34;' in r.text)
+ok('photos switched off: photos ignored, the message goes the message\'s way (no uses left here)', len(calls) == n + 1
+   and 'used this month&#39;s 20 AI uses' in r.text)
+with app.app_context():
+    set_used(0)
 
 # ── Check before sending ──
 q = json.dumps([
@@ -226,11 +259,11 @@ ok('fixes and checks before ideas', text.index('is very large') < text.index('dr
 
 answers.append('fail')
 with app.app_context():
-    before = T.left('check')[0]
+    before = T.left()[0]
 r = c.post(f'/projects/{pid}/check')
 with app.app_context():
     ok('the AI can\'t answer: the exact checks still shown, said so, not counted', 'Only the quick checks ran' in r.text
-       and 'is very large' in r.text and T.left('check')[0] == before)
+       and 'is very large' in r.text and T.left()[0] == before)
 
 staff = app.test_client(); staff.post('/login', data={'username': 'demo-staff', 'password': 'demo1234'})
 ok('staff without access to the quotation can\'t check it', staff.post(f'/projects/{pid}/check').status_code == 403)
@@ -240,3 +273,72 @@ os.environ['DEMO_MODE'] = '1'
 with app.app_context():
     ok('always off in the public demo', not T.available('draft') and not T.available('check'))
 os.environ.pop('DEMO_MODE')
+
+# ── Plans with AI and bought AI uses (app/subscription.py, plan.html): what a payment adds, its emails and receipt ──
+import tempfile, glob, email as _email, email.policy as _policy
+from unittest import mock
+from flask import render_template
+from app import subscription as SUB
+outbox_dir = tempfile.mkdtemp()
+os.environ.update(MAIL_OUTBOX_DIR=outbox_dir, OPERATOR_EMAIL='op@quote-room.test')
+with app.app_context():
+    ok('prices: ₹4,999 / ₹8,999, with AI ₹5,999 / ₹9,999, 40 AI uses ₹99', SUB.prices() == {
+        '6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999, 'ai40': 99})
+    ok('plan names', [PM.short(k) for k in ('6m', '1y_ai', 'ai40')] == ['6 months', '12 months with AI', '40 AI uses'])
+    PM.save_plan('1y', PM.today(), PM.add_length(PM.today(), '1y')); db.session.commit(); PM.g.pop('plan_status', None)
+    set_used(20, 0)
+    before = PM.load_status(on=PM.today())
+    SUB._add_here({'plan': 'ai40'})
+    PM.g.pop('plan_status', None)
+    after = PM.load_status(on=PM.today())
+    ok('40 AI uses bought: added, the plan and its dates untouched', T.pool()['credits'] == 40 and T.pool()['left'] == 40
+       and (after.plan, after.ends_on) == (before.plan, before.ends_on))
+    SUB._add_here({'plan': '1y_ai'})
+    PM.g.pop('plan_status', None)
+    st = PM.load_status(on=PM.today())
+    ok('the 12-month plan with AI: added on from the end date, now with AI (100 a month)', st.plan == '1y_ai'
+       and st.ends_on == PM.add_length(before.ends_on, '1y') and T.pool()['allowance'] == 100)
+    st2 = PM.renew('6m'); db.session.commit()
+    ok('renewing a plan with AI by 6 months keeps it with AI', st2.plan == '6m_ai')
+    row = {'id': 1, 'slug': 'demo', 'plan': 'ai40', 'amount_paise': 9900, 'receipt_no': 'QR2611-0001', 'paid_at': None,
+           'payment_id': 'pay_1', 'paid_by': 'admin', 'business_name': 'Demo Interiors', 'email': 'owner@demo.test',
+           'payer_name': 'Asha Demo', 'source': 'app', 'plan_start': None, 'plan_end': None}
+    with mock.patch.object(SUB, '_app_link', lambda slug, path='': 'https://demo.quote-room.test'):
+        SUB.notify_paid(row)
+    mails = [_email.message_from_bytes(open(f, 'rb').read(), policy=_policy.default) for f in sorted(glob.glob(outbox_dir + '/*.eml'))]
+    to_owner = next((m for m in mails if m['To'] == 'owner@demo.test'), None)
+    to_op = next((m for m in mails if m['To'] == 'op@quote-room.test'), None)
+    body = to_owner.get_body(('plain',)).get_content() if to_owner else ''
+    ok('emails for 40 AI uses: to the business (with the receipt, no plan dates) and a note to the operator',
+       to_owner is not None and to_owner['Subject'] == 'Payment received: 40 more AI uses' and '₹99' in body
+       and 'Plan:' not in body and any(p.get_filename() == 'QuoteRoom-receipt-QR2611-0001.pdf' for p in to_owner.iter_attachments())
+       and to_op is not None and 'paid ₹99 for 40 AI uses' in to_op.get_body(('plain',)).get_content()
+       and '40 AI uses added to their app' in to_op.get_body(('plain',)).get_content())
+    ok('the receipt PDF for 40 AI uses', SUB.receipt_pdf(row).read()[:4] == b'%PDF')
+    with mock.patch.object(SUB, 'enabled', lambda: True):
+        PM.save_plan('trial', PM.today(), PM.today()); PM.g.pop('plan_status', None)
+        trial_can = T.pool()['can_buy']
+        PM.save_plan('1y', PM.today(), PM.add_length(PM.today(), '1y')); db.session.commit(); PM.g.pop('plan_status', None)
+        paid_can = T.pool()['can_buy']
+    ok('a trial can\'t buy AI uses (it chooses a plan); a paid plan can, where paying in the app is on',
+       not trial_can and paid_can)
+with app.test_request_context('/plan'):
+    from flask_login import login_user
+    from app.models import User
+    login_user(User.query.filter_by(username='demo-admin').first())
+    PM.g.pop('plan_status', None)
+    with mock.patch.object(SUB, 'enabled', lambda: True):
+        pool = T.pool()
+    page = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
+                           ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
+                           addon_uses=40, ai_on=True)
+    page_off = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
+                               ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
+                               addon_uses=40, ai_on=False)
+ok('Your plan: four plans (20 or 100 AI uses a month) and Buy 40 AI uses · ₹99',
+   all(p in page for p in ('₹4,999', '₹8,999', '₹5,999', '₹9,999', "buyPlan('1y_ai'", "buyPlan('ai40'"))
+   and 'Buy 40 AI uses · ₹99' in page and '20 AI uses a month' in page and '100 AI uses a month' in page)
+ok('…with every AI helper switched off: only the two plans, nothing about AI', '₹5,999' not in page_off
+   and 'AI uses' not in page_off and '₹8,999' in page_off)
+with app.app_context():
+    PM.save_plan('', None, None); db.session.commit()
