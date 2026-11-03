@@ -256,6 +256,33 @@
 })();
 </script>
 
+<!-- Global: empty "add new" rows (data-grow): typing in the last one adds another below it, so there's always one more
+     to fill without saving first. data-grow-prefix="new": its fields are named new_…, new2_…, new3_… (one per row). -->
+<script>
+document.addEventListener('input', (e) => {
+  const row = e.target.closest('[data-grow]');
+  if (!row || !e.target.value) return;
+  const sibling = (el) => { let n = el.nextElementSibling; while (n && !n.matches('[data-grow]')) n = n.nextElementSibling; return n; };
+  if (sibling(row)) return;                          // not the last empty row
+  const copy = row.cloneNode(true);
+  const prefix = row.dataset.growPrefix;
+  if (prefix) {
+    const n = (parseInt(row.dataset.growN || '1', 10) || 1) + 1;
+    copy.dataset.growN = n;
+    const from = new RegExp('^' + prefix + '\\d*_');
+    copy.querySelectorAll('[name]').forEach(f => { f.name = f.name.replace(from, prefix + n + '_'); });
+  }
+  copy.querySelectorAll('[id]').forEach(f => f.removeAttribute('id'));
+  copy.querySelectorAll('input, textarea, select').forEach(f => {
+    if (f.type === 'checkbox' || f.type === 'radio') f.checked = f.defaultChecked;
+    else if (f.tagName === 'SELECT') [...f.options].forEach(o => { o.selected = o.defaultSelected; });
+    else if (f.type !== 'hidden') f.value = f.defaultValue;
+  });
+  copy.querySelectorAll('details[open]').forEach(d => { d.open = false; });
+  row.after(copy);
+});
+</script>
+
 <!-- Global: copy text (also on plain-http addresses, where the Clipboard API isn't available) -->
 <script>
 function copyText(text, btn) {
