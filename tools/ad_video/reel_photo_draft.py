@@ -1,4 +1,4 @@
-"""Reel 'How long to turn your site notes into a quotation?' (Draft from photos of site notes), about 30 s:
+"""Reel 'How long to turn your site notes into a quotation?' (Draft from photos of site notes), about 38 s:
 the hook asks how long a notebook page takes to become a quotation (guesses pop up) → snap the pages → tap Draft, a
 stopwatch runs while the AI reads the handwriting → the real time it took → handwritten lines next to the rows the app
 made from them → a size the notes didn't have waits to be typed → saved, with its total → free trial.
@@ -119,7 +119,7 @@ def scenes(S):
         col = lambda c: tuple(int(v * a + 14 * (1 - a)) for v in c)
         d.text((60, 230 + int(30 * (1 - a))), 'How long to turn', font=font(80), fill=col(PAPER))
         d.text((60, 330 + int(30 * (1 - a))), 'this into a quotation?', font=font(80), fill=col(TAPE))
-        paper(img, S['page1'], W / 2, 1110, 640, -3, a=phase(t, 0.1, 0.5), scale=1.0 + 0.05 * ease(min(1, t / 3.4)))
+        paper(img, S['page1'], W / 2, 1110, 640, -3, a=phase(t, 0.1, 0.5), scale=1.0 + 0.05 * ease(min(1, t / 4.2)))
         for i, (guess, x) in enumerate([('1 hour?', 250), ('30 min?', 540), ('10 min?', 830)]):
             start = 1.2 + i * 0.45
             if t > start:
@@ -146,11 +146,11 @@ def scenes(S):
         strip = strip.resize((w, int(strip.height * w / strip.width)), Image.LANCZOS).convert('RGBA')
         y0 = 1140
         img.alpha_composite(strip.crop((0, 0, w, 470)), ((W - w) // 2, y0))
-        sy = y0 + int(470 * ((t * 0.9) % 1.0))
+        sy = y0 + int(470 * ((t * 0.7) % 1.0))
         layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
         ImageDraw.Draw(layer).rectangle([(W - w) // 2, sy - 3, (W + w) // 2, sy + 3], fill=TAPE + (230,))
         img.alpha_composite(layer)
-        stopwatch(img, took * ease(min(1.0, t / 3.0)), 380, 1760, 70)
+        stopwatch(img, took * ease(min(1.0, t / 3.7)), 380, 1760, 70)
         return img
 
     def done(t):
@@ -195,10 +195,10 @@ def scenes(S):
     def waiting(t):
         img = BG.copy()
         heading(img, 'Not in your notes?', 'It waits for you to type it', t)
-        screen = S['kitchen_waiting'] if t < 1.9 else S['kitchen_done']
+        screen = S['kitchen_waiting'] if t < 2.4 else S['kitchen_done']
         put_laptop(img, screen)
-        zoom(img, screen, WAITING, t if t < 1.9 else 1.0, start=0.35)
-        chip(img, 'Type the size. Done.' if t >= 1.9 else 'Kitchen sizes: not written down', t, 0.9)
+        zoom(img, screen, WAITING, t if t < 2.4 else 1.0, start=0.35)
+        chip(img, 'Type the size. Done.' if t >= 2.4 else 'Kitchen sizes: not written down', t, 0.9)
         return img
 
     def total(t):
@@ -228,8 +228,8 @@ def scenes(S):
                    anchor='mm')
         return img
 
-    return [(hook, 3.4), (snap, 2.8), (draft, 3.4), (done, 2.8), (pair(0), 2.2), (pair(1), 2.0), (pair(2), 2.0),
-            (waiting, 3.6), (total, 3.0), (end, 4.2)]
+    return [(hook, 4.2), (snap, 3.6), (draft, 4.2), (done, 3.6), (pair(0), 2.9), (pair(1), 2.7), (pair(2), 2.7),
+            (waiting, 4.6), (total, 3.8), (end, 4.8)]
 
 
 if __name__ == '__main__':
