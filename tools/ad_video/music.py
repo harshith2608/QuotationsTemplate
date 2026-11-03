@@ -1,6 +1,6 @@
 """Background music composed in code (free to use in ads).
 
-    make_music(seconds, path, style='pop' | 'funk' | 'tropical' | 'cinematic' | 'lofi')
+    make_music(seconds, path, style='pop' | 'funk' | 'tropical' | 'cinematic' | 'lofi' | 'dance')
 
 Each style has its own tempo, key, chords, instruments and drum feel, so reels don't all sound the same.
 """
@@ -19,7 +19,8 @@ def hz(name):
 
 
 def make_music(seconds, path, style='pop', rate=RATE):
-    makers = {'pop': make_pop, 'funk': _funk, 'tropical': _tropical, 'cinematic': _cinematic, 'lofi': _lofi}
+    makers = {'pop': make_pop, 'funk': _funk, 'tropical': _tropical, 'cinematic': _cinematic, 'lofi': _lofi,
+              'dance': _dance}
     return makers[style](seconds, path, rate)
 
 
@@ -174,6 +175,45 @@ def _tropical(seconds, path, rate):
             tr.add(t0 + k * beat, tr.tone(hz(root) * 2, 0.4, 0.2, ((1, 1), (2, 0.3))), 0.45)
         tr.add(t0, tr.pad([hz(n) for n in tones], bar, attack=0.3), 0.10)
     return tr.finish(path, glue=1.5, level=0.68)
+
+
+def _dance(seconds, path, rate):
+    """Lively dance-pop, 124 bpm, G major: four-on-the-floor kick, open hats on the off-beats, claps, a bouncing 8th
+    bass, bright synth stabs and a catchy riff; a short snare build into the drop at bar 4, and again every 8 bars."""
+    tr = _Track(seconds, rate, 41)
+    beat = 60 / 124
+    bar, s16 = 4 * beat, beat / 4
+    kick, clap, hat = tr.kick(punch=0.02, body=0.13, low=48), tr.clap(), tr.hat(0.012)
+    open_hat = tr.hat(0.06)
+    snare = tr.snare(tone=210, decay=0.08)
+    prog = [(['G4', 'B4', 'D5'], 'G1'), (['D4', 'F#4', 'A4'], 'D2'), (['E4', 'G4', 'B4'], 'E2'), (['C4', 'E4', 'G4'], 'C2')]
+    riff = [(0, 'D5'), (3, 'B4'), (6, 'D5'), (8, 'E5'), (10, 'D5'), (12, 'B4'), (14, 'A4')]
+    bars = int(seconds / bar) + 1
+    for b in range(bars):
+        t0 = b * bar
+        tones, root = prog[b % 4]
+        drop = b >= 4                                  # the first 4 bars are lighter; then everything comes in
+        build = (b % 8 == 3)                           # snare roll in the last bar before each 8-bar section
+        for k in range(4):
+            tr.add(t0 + k * beat, kick, 0.9 if drop else 0.7)
+            tr.add(t0 + k * beat + beat / 2, open_hat, 0.13)
+            if k in (1, 3):
+                tr.add(t0 + k * beat, clap, 0.32 if drop else 0.22)
+        for k in range(16):
+            if k % 2:
+                tr.add(t0 + k * s16, hat, 0.07)
+        for k in range(8):                             # bouncing octave bass on the 8ths
+            f = hz(root) * (2 if k % 2 else 1) * 2
+            tr.add(t0 + k * beat / 2, tr.tone(f, 0.2, 0.09, ((1, 1), (2, 0.45), (3, 0.2))), 0.5)
+        for k in (0, 3, 6, 10, 12):                    # bright off-beat chord stabs
+            tr.add(t0 + k * s16, tr.pad([hz(n) * 2 for n in tones], 0.16, attack=0.005), 0.16 if drop else 0.10)
+        if drop:
+            for k, nme in riff:                        # the hook riff
+                tr.add(t0 + k * s16, tr.tone(hz(nme), 0.25, 0.12, ((1, 1), (2, 0.35), (3, 0.15))), 0.13)
+        if build:
+            for k in range(8, 16):                     # 16th-note snare roll, getting louder
+                tr.add(t0 + k * s16, snare, 0.08 + 0.03 * (k - 8))
+    return tr.finish(path, glue=1.9, level=0.72)
 
 
 def _cinematic(seconds, path, rate):

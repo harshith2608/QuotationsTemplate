@@ -10,11 +10,7 @@
     </ol>
   </nav>
   <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-chat-text me-2 text-primary"></i>Draft {{ 'from a message' if text_on else 'from your site notes' }}</h4>
-  <p class="text-muted mb-3">
-    {% if text_on %}Paste what the customer sent you (their WhatsApp message) or your notes from the site visit{% if photos_on %}, or take photos of your notebook pages{% endif %}.
-    {% else %}Take photos of your notebook pages from the site visit.{% endif %}
-    We draft the quotation with <strong>your own items and your rates</strong>: you then check it, type the sizes that
-    weren't given and save it as usual.</p>
+  <p class="text-muted mb-3">Drafted with <strong>your own items and rates</strong>. You check it and save.</p>
 
   <div class="card shadow-sm border-0">
     <div class="card-body">
@@ -23,31 +19,23 @@
         {% if photos_on %}
         <label class="form-label fw-semibold" for="draftPhotos"><i class="bi bi-camera me-1"></i>Photos of your site notes</label>
         <input class="form-control" type="file" id="draftPhotos" name="photos" accept="image/*" multiple>
-        <div class="form-text">Up to {{ photo_max }} pages, one page per photo, flat and in good light. Handwriting is
-          fine: sizes like 10'6 x 2'9 or 2400 x 600 and short forms like W/R, OHC and MBR are understood.
-          Each photo is one AI use.</div>
+        <div class="form-text">Up to {{ photo_max }} pages, one per photo · 1 AI use each</div>
         <div id="photoPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
         <div id="photoData"></div>
         {% endif %}
         {% if text_on %}
-        <label class="form-label fw-semibold {{ 'mt-3' if photos_on }}" for="draftMessage">{{ 'Or the' if photos_on else 'The' }} customer's requirements{{ ' (or anything to add to the photos)' if photos_on }}</label>
-        <textarea class="form-control" id="draftMessage" name="message" rows="{{ 5 if photos_on else 9 }}" maxlength="6000"
-                  placeholder="e.g. 3 BHK at Kondapur. Wardrobes in both bedrooms with lofts, master one 9 x 7 ft in acrylic. L-shaped modular kitchen with tandem drawers. TV unit in the hall. False ceiling in hall and master bedroom.">{{ message }}</textarea>
-        <div class="form-text">Any language mix is fine. Sizes in your own unit (ft, mm, cm or inches) are picked up
-          for the items they belong to; a room's size isn't used as an item's size.{% if photos_on %} With no
-          photos, the draft is one AI use.{% endif %}</div>
+        <label class="form-label fw-semibold {{ 'mt-3' if photos_on }}" for="draftMessage">{{ 'Or type' if photos_on else 'Type' }} the requirements</label>
+        <textarea class="form-control" id="draftMessage" name="message" rows="{{ 4 if photos_on else 8 }}" maxlength="6000"
+                  placeholder="e.g. 3 BHK. Wardrobes with lofts in both bedrooms, TV unit, L-shaped kitchen, false ceiling in hall.">{{ message }}</textarea>
         {% endif %}
         <button type="submit" class="btn btn-primary ki-btn-primary mt-3" id="draftGo">
           <i class="bi bi-stars me-1"></i>Draft the quotation</button>
-        <div class="small text-muted mt-2">Takes about 10–30 seconds. Nothing is saved until you save the quotation.</div>
         {% include 'projects/_ai_uses.html' %}
       </form>
     </div>
   </div>
 
-  <div class="small text-muted mt-3"><i class="bi bi-shield-check me-1"></i>The message{{ ' and photos are' if photos_on else ' is' }}
-    read by our AI provider (Anthropic) and {{ 'aren\'t' if photos_on else 'isn\'t' }} stored or used to train AI. Rates always come from your
-    own rates, never from the AI.</div>
+  <div class="small text-muted mt-3"><i class="bi bi-shield-check me-1"></i>Not stored or used to train AI.</div>
 </div>
 <script>
 (function () {

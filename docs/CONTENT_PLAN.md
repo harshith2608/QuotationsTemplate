@@ -24,6 +24,7 @@ For product facts, prices and sales scripts see `docs/PRODUCT_GUIDE.md` (the sou
 | "Customer changed their mind?" (quotation revisions: the final_v2.pdf mess → edit, Rev 2 with what changed → same link → restore Rev 1 → accepted, on a laptop) | Reel 42 s, 9:16, music | **Ready** (30 Oct) | `reel-revisions-9x16.mp4`, `-frames.png`; longer: tutorial 7 | `tools/ad_video/reel_revisions.py` (screens: `tools/tutorials/revisions_reel_screens.py`) |
 | "Every firm prices differently. Which way is yours?" (pricing by material or by item: Settings choice, sizes & materials with fittings, each line with its own rate, PDF room by room or as a bill of quantities, on a laptop) | Reel 45 s, 9:16, music | **Ready** (30 Oct) | `reel-pricing-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_pricing.py` (screens: `tools/tutorials/pricing_reel_screens.py`) |
 | "Where is every job right now?" (track every job: partner, supervisor and customers asking → sticky notes → the pipeline by stage → only the jobs on site → move a job to Ongoing with a note → who did what, and when → the bell, on a laptop) | Reel 40 s, 9:16, lo-fi music | **Ready** (1 Nov) | `reel-jobs-9x16.mp4`, `-frames.png`; longer: tutorial 8 | `tools/ad_video/reel_jobs.py` (screens: `tools/tutorials/jobs_reel_screens.py`) |
+| "How long to turn this into a quotation?" (Draft from photos of site notes: the owner's own two notebook pages → snap → tap Draft, a stopwatch runs → 11 seconds, every room → handwriting next to the rows made from it → a kitchen size typed → saved with its total, on a laptop; recorded with the real AI) | Reel 37 s, 9:16, dance music | **Ready** (3 Nov) — post only once Draft from photos is switched on | `reel-photo-draft-9x16.mp4`, `-frames.png` | `tools/ad_video/reel_photo_draft.py` (screens: `tools/tutorials/photo_draft_reel_screens.py`) |
 | "Does your quotation have all 6?" | Single image 4:5 | **Posted** (by 23 Oct) | `post-checklist.png` | `tools/ad_video/profile_posts.py` |
 | Earlier video ads (measure → quote) | 9:16 / 4:5 / 16:9 with owner's voice | Running in ads | `quoteroom-ad-*-your-voice.mp4` | `tools/ad_video/render_ad.py` |
 | Earlier static ads | 4:5 + 9:16 | Running in ads | `static-measure-*.png`, `static-customer-*.png` | `tools/ad_video/static_ads.py` |
@@ -210,7 +211,7 @@ Every idea speaks to the **business owner** (interior designer / modular furnitu
   SF (₹) and Arial Unicode (→, ✓). Use these helpers for any text containing them.
 - **Music:** `tools/ad_video/music.py` composes tracks in code (free to use), in five styles so reels don't all sound
   the same: `pop` (tape-to-invoice), `funk` (Excel vs QuoteRoom), `tropical` (payments), `cinematic` (profit), and
-  `lofi` (where is every job). `render()` in `reel_templates.py` takes the style. Pick a style no recent reel used. Reels mix it with loudnorm −16 LUFS.
+  `lofi` (where is every job), `dance` (site notes to quotation, the liveliest). `render()` in `reel_templates.py` takes the style. Pick a style no recent reel used. Reels mix it with loudnorm −16 LUFS.
 - **Screens:** real app screenshots of a fictional business, **Nest & Grain Interiors** (Hyderabad, fictional Telangana GSTIN),
   stored in `static/ads/` (01–08: list, add item, stage, room totals, initial PDF, full PDF, approval accepted, GST invoice).
   New screenshots come from a local app started with the "ad-shots" preview config (demo data renamed to Nest & Grain).
@@ -443,6 +444,28 @@ Console → Tutorials → Add a tutorial: title `13 · On your home screen`, len
 > 👉 Free 7-day trial: https://www.quote-room.co.in
 
 Extra tags: `quotation template, BOQ, turnkey interiors`.
+
+**Reel "How long to turn this into a quotation?"** (`reel-photo-draft-9x16.mp4`). Hook: the notebook page with the
+question and three guesses (1 hour? 30 min? 10 min?); the answer, 11 seconds, is the real time the AI took.
+
+Instagram / Facebook:
+> How long does it take you to turn your site notes into a quotation? ⏱️
+>
+> Snap a photo of each notebook page. QuoteRoom reads your handwriting (rooms, items and sizes in your own unit), and drafts the whole quotation with your own items and your own rates in seconds. Anything you didn't write down waits for you to type. Check it, save it, send the PDF.
+>
+> 👉 Free 7-day trial, no payment to start: link in bio
+>
+> #interiordesign #interiordesigner #interiorquotation #modularkitchen #turnkeyinteriors #interiorbusiness #quoteroom
+
+YouTube Short: title *Turn handwritten site notes into an interior quotation in seconds #Shorts*
+> Still typing your site notes into Excel? Take a photo of each notebook page and QuoteRoom drafts the quotation from your handwriting: every room, every item, the sizes you wrote, priced with your own rates. Sizes you didn't write down are left for you to fill in. Check it, save it and send a branded PDF.
+>
+> 👉 Free 7-day trial, no payment to start: https://www.quote-room.co.in
+>
+> #interiordesign #interiorquotation #quotationsoftware #interiorbusiness #quoteroom #Shorts
+
+Tags: `interior quotation, handwritten notes to quotation, quotation app for interior designers, site measurement,
+interior design business, QuoteRoom`.
 
 The reel as a YouTube Short (`reel-jobs-9x16.mp4`), worded for what people search ("quotation and billing software",
 "turnkey projects interior designing", "how to make interior quotation"): title
