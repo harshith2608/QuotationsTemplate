@@ -193,6 +193,15 @@ c.post('/admin/rates', data={'boq_submit': '1', 'bq_finish_on': '1', 'bq_id': [x
 with app.app_context():
     ok('…and untick an item (no Finish choice for it any more)', not finishes.line_ids()
        and not any(b.get('finish') for b in boq.saved_lines()))
+ok('…a new line\'s row has its own Finishes tick', 'name="bq_newfin"' in c.get('/admin/rates').text)
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_finish_on': '1',
+                             'bq_id': [x[0] for x in rows] + ['', '', ''], 'bq_name': [x[1] for x in rows] + ['Study Table', 'Shoe Rack', ''],
+                             'bq_desc': [x[2] for x in rows] + ['', '', ''], 'bq_unit': [x[3] for x in rows] + ['sqft'] * 3,
+                             'bq_rate': [x[4] for x in rows] + ['1500', '1200', ''], 'bq_cat': [x[5] for x in rows] + [''] * 3,
+                             'bq_finish': [wid], 'bq_newfin': ['0', '0', '1', '0']})
+with app.app_context():
+    ticked = {BoqItem.query.get(i).name for i in finishes.line_ids()}
+    ok(f'…new lines saved with their tick: only the one ticked comes in finishes {ticked}', ticked == {'Wardrobe', 'Shoe Rack'})
     finishes.save([], []); db.session.commit()
     ok('no finishes: nothing changes (no choice offered)', finishes.for_form() is None
        and not any(b.get('finish') for b in boq.saved_lines()))
