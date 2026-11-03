@@ -227,26 +227,27 @@ def bar(endpoint, view_args):
         _flag(False)
         return None
     key = _state().get('step')
-    hint, nxt, skip = None, 'Next', True
+    hint, nxt, skip, back = None, 'Next', True, None
     if key in ('quote', 'send') and endpoint == 'projects.view_project':
         key, nxt, skip = 'send', 'Finish', False
         hint = ('This is your quotation. Tap <strong>Quotation PDF</strong> to see what your customer gets, or '
                 '<strong>Send on WhatsApp</strong> (further down).')
     elif key == 'quote' and endpoint == 'projects.create_project':
         hint = 'Add a room, add an item, type its size, then tap <strong>Save quotation</strong>.'
-        nxt = None
+        nxt, back = None, 'welcome.check'
     elif key == 'rates' and endpoint == 'admin.ai_import':
         from flask import request
         hint = ('Check the lines we read, then set up your app with them.' if request.method == 'POST' else
                 'Upload your file. You check every line before anything is saved.')
-        nxt = None
+        nxt, back = None, 'welcome.rates'
     elif key == 'rates' and endpoint == 'admin.rates':
         hint = 'These are your rates. Change anything that\'s different, tap <strong>Save</strong>, then Next.'
+        back = 'welcome.rates'
     else:
         return {'key': key, 'number': number(key), 'total': len(ORDER), 'title': TITLES.get(key, ''),
-                'hint': None, 'next': None, 'skip': False, 'away': True}
+                'hint': None, 'next': None, 'skip': False, 'away': True, 'back': None}
     return {'key': key, 'number': number(key), 'total': len(ORDER), 'title': TITLES[key], 'hint': hint, 'next': nxt,
-            'skip': skip, 'away': False}
+            'skip': skip, 'away': False, 'back': back}
 
 
 def console_text(raw):

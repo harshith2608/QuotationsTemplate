@@ -62,8 +62,15 @@ with app.app_context():
        and BoqItem.query.filter_by(name='Wall Panelling').first().rate == 650 and W.step() == 'quote')
     g = json.loads(AppSetting.get('setup_guide'))
     ok('…the setup guide\'s steps are done too (company, units, pricing, rates)', {'company', 'units', 'pricing', 'rates'} <= set(g['done']))
+ok('Back on every step after the first (step 3 without the upload question: back to how you measure)',
+   'id="wBack"' not in c.get('/welcome/business').text and 'href="/welcome/business" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/units').text
+   and 'href="/welcome/units"' in c.get('/welcome/rates/check').text)
+with app.app_context():
+    ok('…opening a step again puts the tour back on it', W.step() == 'rates')
+    W.go_to('quote'); db.session.commit()
 r = c.get('/welcome/', follow_redirects=True)
 t = r.text
+ok('…and the strip on the quotation form goes back to the rates', 'href="/welcome/rates/check"' in t and '> Back</a>' in t)
 ok('step 4: the new quotation form, with the strip saying what to do', 'New Quotation' in t and 'step 4 of 5' in t
    and 'Your first quotation' in t and 'Save quotation' in t)
 ok('…the app\'s menu is there on the real pages', 'id="ki-navbar"' in t)

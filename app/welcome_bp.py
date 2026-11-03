@@ -15,9 +15,16 @@ def admins_only():
         abort(404)
 
 
-def _page(template, key, **kw):
+BACK = {'units': 'welcome.business', 'rates': 'welcome.units', 'kind': 'welcome.rates', 'check': 'welcome.rates'}
+
+
+def _page(template, key, back=None, **kw):
+    """A tour page; back: the page before it (its GET puts the tour back on that step)."""
+    from . import ai_import
+    if back == 'welcome.rates' and not ai_import.available():
+        back = 'welcome.units'                    # no upload question here: the step before is how you measure
     return render_template(template, hide_nav=True, key=key, number=W.number(key), total=len(W.ORDER),
-                           title="Let's set up your QuoteRoom", **kw)
+                           back_url=url_for(back) if back else None, title="Let's set up your QuoteRoom", **kw)
 
 
 def _next(key, skipped=False):
@@ -139,7 +146,7 @@ def units():
         setup_guide.mark('units')
         return _next('units')
     db.session.commit()
-    return _page('welcome/units.html', 'units', size=U.size_unit(), area=U.area_unit())
+    return _page('welcome/units.html', 'units', back=BACK['units'], size=U.size_unit(), area=U.area_unit())
 
 
 # ── 3. Your rates ────────────────────────────────────────────────────────────
@@ -164,7 +171,7 @@ def rates():
         return redirect(url_for('welcome.kind'))
     if not ai_import.available():                 # no upload here: straight to the typical rates
         return redirect(url_for('welcome.check') if _has_items() else url_for('welcome.kind'))
-    return _page('welcome/rates.html', 'rates', has_items=_has_items())
+    return _page('welcome/rates.html', 'rates', back=BACK['rates'], has_items=_has_items())
 
 
 @welcome_bp.route('/rates/kind', methods=['GET', 'POST'])
@@ -184,7 +191,7 @@ def kind():
         db.session.commit()
         return redirect(url_for('welcome.check'))
     db.session.commit()
-    return _page('welcome/kind.html', 'rates', kinds=W.KINDS, has_items=_has_items())
+    return _page('welcome/kind.html', 'rates', back=BACK['kind'], kinds=W.KINDS, has_items=_has_items())
 
 
 @welcome_bp.route('/rates/check', methods=['GET', 'POST'])
@@ -229,7 +236,7 @@ def check():
     for it in items:                              # in their groups, in the order they were added
         first.setdefault(it.category or '', it.id)
     items.sort(key=lambda it: (first[it.category or ''], it.id))
-    return _page('welcome/check.html', 'rates', items=items, units_list=boq.units_for_business())
+    return _page('welcome/check.html', 'rates', back=BACK['check'], items=items, units_list=boq.units_for_business())
 
 
 def _money(value, default):
