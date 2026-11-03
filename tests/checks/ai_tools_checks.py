@@ -189,7 +189,7 @@ ok('photos: off until switched on (their own switch)', 'id="draftPhotos"' not in
 os.environ['AI_PHOTOS'] = '1'
 page = c.get('/projects/draft').text
 ok('on: take photos of the notes, with the AI uses left', 'id="draftPhotos"' in page and re.search(r'\d+ AI uses left', page)
-   and 'Each photo is one AI use' in page)
+   and '1 AI use each' in page)
 answers.append(D(job_title='Kitchen and wardrobe', questions=['Loft size?'], rooms=[
     R(name='Kitchen', items=[I(kind='measured', name='Base Cabinet', length_ft=10.5, width_ft=2.75, material='Laminates', work_type='Box Work')])]))
 with app.app_context():

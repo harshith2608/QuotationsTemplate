@@ -551,6 +551,7 @@ def render_new_form(start=None, started_from=None, form_data=None, form_cat=None
     """The new quotation form, filled in from `start` (a quotation, template or AI draft: rooms_json, discount,
     plywood) when given. ai_draft: what the AI says to check (app/ai_tools.py)."""
     from . import ai_tools, quote_templates as QT
+    from .demo import demo_enabled
     form_data = form_data or {}
     return render_template('projects/form.html',
                            title='New Quotation',
@@ -563,7 +564,7 @@ def render_new_form(start=None, started_from=None, form_data=None, form_cat=None
                            rooms_json=start['rooms_json'] if start else '[]',
                            start=start, started_from=started_from, templates=QT.all_templates(),
                            chosen_template=request.args.get('template', ''),
-                           ai_draft=ai_draft, ai_draft_on=ai_tools.available('draft') or ai_tools.available('photos'),
+                           ai_draft=ai_draft, ai_draft_on=ai_tools.available('draft') or ai_tools.available('photos') or demo_enabled(),
                            project=None)
 
 

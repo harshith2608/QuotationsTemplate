@@ -35,6 +35,9 @@ def _plan_page_on():
 @ai_tools_bp.route('/projects/draft', methods=['GET', 'POST'])
 @login_required
 def draft():
+    from .demo import demo_enabled
+    if demo_enabled():          # the public demo: no AI (anyone can open it); the page points to the free trial
+        return render_template('projects/draft_demo.html', title='Draft from photos or a message')
     photos_on = ai_tools.available('photos')
     if not (ai_tools.available('draft') or photos_on):
         abort(404)

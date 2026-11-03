@@ -76,7 +76,7 @@
 {% if ai_draft_on and not project and not started_from and not ai_draft %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
   <i class="bi bi-chat-text text-primary"></i><span>Have the customer's requirements on WhatsApp, or notes from the site?</span>
-  <a class="btn btn-sm btn-outline-primary fw-semibold" href="{{ url_for('ai_tools.draft') }}"><i class="bi bi-stars me-1"></i>Draft from a message or notes</a>
+  <a class="btn btn-sm btn-outline-primary fw-semibold" href="{{ url_for('ai_tools.draft') }}"><i class="bi bi-stars me-1"></i>Draft from a message or notes</a>{% if demo_mode %}<span class="badge text-bg-success">In the free trial</span>{% endif %}
 </div>
 {% endif %}
 {% if ai_draft %}
