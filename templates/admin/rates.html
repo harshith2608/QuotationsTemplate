@@ -280,7 +280,7 @@
                 </tr>
                 {% endfor %}
                 {% for _ in range(3) %}
-                <tr class="table-light">
+                <tr class="table-light" data-grow>
                   <td>
                     <input type="hidden" name="pl_id" value="">
                     <input type="text" name="pl_name" class="form-control form-control-sm" placeholder="Add new item…" maxlength="100" aria-label="New item name">
@@ -349,7 +349,7 @@
                 </tr>
                 {% endfor %}
                 {% for _ in range(2) %}
-                <tr class="table-light">
+                <tr class="table-light" data-grow>
                   <td>
                     <input type="hidden" name="bq_id" value="">
                     <input type="hidden" name="bq_unit" value="lump sum">
@@ -408,7 +408,7 @@
               </tr>
               {% endfor %}
               {% for _ in range(2 if finish_options else 3) %}
-              <tr class="table-light">
+              <tr class="table-light" data-grow>
                 <td><input type="text" name="fin_name" class="form-control form-control-sm" maxlength="40"
                            placeholder="{{ ('e.g. Laminate (your base)' if loop.first else 'e.g. Acrylic') if not finish_options else 'Add a finish, e.g. PU' }}" aria-label="New finish name"></td>
                 <td>{% if not finish_options and loop.first %}<input type="hidden" name="fin_extra" value="0"><span class="small text-muted">Base rate</span>
@@ -482,7 +482,7 @@
                 </tr>
                 {% endfor %}
                 {% for _ in range(2) %}
-                <tr class="table-light">
+                <tr class="table-light" data-grow>
                   <td>
                     <input type="hidden" name="bq_id" value="">
                     <input type="text" name="bq_name" class="form-control form-control-sm mb-1" placeholder="Add a line, e.g. False Ceiling…" maxlength="100" aria-label="New line name">

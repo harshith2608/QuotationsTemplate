@@ -116,7 +116,7 @@
       </li>
     {% endfor %}
     {% if can_edit %}
-      <li class="list-group-item ki-mat-line bg-light">
+      <li class="list-group-item ki-mat-line bg-light" data-grow>
         <div class="row g-2 align-items-center">
           <div class="col-auto text-center text-muted" style="width:4.2rem"><i class="bi bi-plus-lg"></i></div>
           <div class="col col-md"><input class="form-control form-control-sm" name="new_name" placeholder="Add an item to {{ group }}" maxlength="150" aria-label="New item"></div>
@@ -136,7 +136,7 @@
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-body py-2">
       <div class="small fw-semibold mb-2">Add an item to any group</div>
-      <div class="row g-2">
+      <div class="row g-2 mb-2" data-grow>
         <div class="col-12 col-md-5"><input class="form-control form-control-sm" name="new_name" placeholder="Item, e.g. Wall putty" maxlength="150" aria-label="New item"></div>
         <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_qty" inputmode="decimal" placeholder="Qty" aria-label="Quantity"></div>
         <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_unit" placeholder="Unit" maxlength="30" aria-label="Unit"></div>

@@ -137,10 +137,14 @@ def rules():
                     db.session.delete(rule)
                 elif p + 'name' in request.form:
                     _rule_from_form(request.form, p, rule)
-            if ML.clean_text(request.form.get('new_name'), 100):
-                rule = MaterialRule(sort_order=len(ML.rules()) + 1)
-                _rule_from_form(request.form, 'new_', rule)
-                db.session.add(rule)
+            import re
+            news = sorted((int(m.group(1) or 1), m.group(0)[:-4]) for m in
+                          (re.fullmatch(r'new(\d*)_name', k) for k in request.form) if m)
+            for n, (_, p) in enumerate(news):               # the new rules: new_, new2_, new3_… (one per row)
+                if ML.clean_text(request.form.get(p + 'name'), 100):
+                    rule = MaterialRule(sort_order=len(ML.rules()) + 1 + n)
+                    _rule_from_form(request.form, p, rule)
+                    db.session.add(rule)
             flash('Material rules saved. Lists made from now on use them (Rebuild an existing list to update it).',
                   'success')
         elif section == 'groups':

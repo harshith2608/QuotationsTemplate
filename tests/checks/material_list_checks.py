@@ -143,8 +143,16 @@ with app.app_context():
         rule_rows[f'r{r_.id}_mat'] = ML.rule_materials(r_)
 rule_rows[f'r{rid}_per'] = '0.2'
 rule_rows.update({'section': 'rules', 'new_name': 'Hinges', 'new_group': 'Hardware', 'new_per': '0.1', 'new_unit': 'nos',
-                  'new_wastage': '0', 'new_work': 'Box Work', 'new_allmat': 'on', 'new_up': 'on', 'new_active': 'on'})
+                  'new_wastage': '0', 'new_work': 'Box Work', 'new_allmat': 'on', 'new_up': 'on', 'new_active': 'on',
+                  'new2_name': 'Drawer channels', 'new2_group': 'Hardware', 'new2_per': '0.05', 'new2_unit': 'pairs',
+                  'new2_wastage': '0', 'new2_work': '', 'new2_allmat': 'on', 'new2_up': 'on', 'new2_active': 'on',
+                  'new3_name': ''})
+ok('the rules page: its empty row grows (another appears while typing in the last one)',
+   'data-grow data-grow-prefix="new"' in c.get('/admin/material-rules').text)
 c.post('/admin/material-rules', data=rule_rows)
+with app.app_context():
+    ok('several new rules saved at once (new_, new2_…; an empty one skipped)',
+       {'Hinges', 'Drawer channels'} <= {r_.name for r_ in ML.rules()} and '' not in {r_.name for r_ in ML.rules()})
 save_quote('/projects/new', 'Third Home', rooms())
 with app.app_context():
     pid3 = Project.query.order_by(Project.id.desc()).first().id

@@ -1129,7 +1129,9 @@ def settings():
             flash(err, 'danger')
         if not errors:
             flash('Theme reset to defaults.' if request.form.get('reset_theme') else 'Settings saved.', 'success')
-        return redirect(url_for('admin.settings', tab=tab))
+        back_to = request.form.get('back_to', '')            # a section's own Save button: back to that section
+        return redirect(url_for('admin.settings', tab=tab,
+                                _anchor=back_to if re.fullmatch(r'[\w-]{1,40}', back_to) else None))
 
     saved_keys = ([branding.FIELDS[k][0] for k in branding.COMPANY_KEYS + branding.THEME_KEYS]
                   + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes',

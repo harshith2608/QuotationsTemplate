@@ -10,7 +10,7 @@
 {% endmacro %}
 
 {% macro rule_row(p, r, mats, per) %}
-<tr>
+<tr{% if not r %} data-grow data-grow-prefix="new"{% endif %}>
   <td><input class="form-control form-control-sm" name="{{ p }}name" value="{{ r.name if r else '' }}" maxlength="100"
              placeholder="{{ 'New rule, e.g. Hinges' if not r }}" aria-label="Item to buy"></td>
   <td>{{ group_select(p ~ 'group', r.category if r else groups[0]) }}</td>
