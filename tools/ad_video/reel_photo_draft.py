@@ -217,4 +217,4 @@ if __name__ == '__main__':
         sheet.save(os.path.join(OUT, 'reel-photo-draft-frames.png'))
         print('stills done', round(total, 1), 's')
     else:
-        render(frame_at, total, os.path.join(OUT, 'reel-photo-draft-9x16.mp4'), '9x16', style='pop')
+        render(frame_at, total, os.path.join(OUT, 'reel-photo-draft-9x16.mp4'), '9x16', style='dance')
