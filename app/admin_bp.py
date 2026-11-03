@@ -347,8 +347,19 @@ def _save_boq_lines():
     cats = request.form.getlist('bq_cat') or [''] * len(ids)
     delete_ids = {d for d in request.form.getlist('bq_delete') if d}
     existing = {str(b.id): b for b in BoqItem.query.all()}
+    new_ticks = []                         # each new row's Finishes box: a "0", then a "1" when ticked
+    for v in request.form.getlist('bq_newfin'):
+        if v == '0':
+            new_ticks.append(False)
+        elif v == '1' and new_ticks:
+            new_ticks[-1] = True
+    new_rows, new_ticked = 0, set()
     seen = set()
     for item_id, name, desc, unit, rate, cat in zip(ids, names, descs, units, rates, cats):
+        ticked_new = False
+        if not item_id:
+            ticked_new = new_rows < len(new_ticks) and new_ticks[new_rows]
+            new_rows += 1
         name = ' '.join(name.split())[:100]
         if item_id in delete_ids:
             if item_id in existing:
@@ -376,10 +387,14 @@ def _save_boq_lines():
             if clash and str(clash.id) not in ids:
                 errors.append(f'"{name}" is already in your BOQ lines.')
                 continue
-            db.session.add(BoqItem(**values))
+            added = BoqItem(**values)
+            db.session.add(added)
+            if ticked_new:
+                db.session.flush()
+                new_ticked.add(added.id)
     if not errors and 'bq_finish_on' in request.form:      # the Finish column is shown: which lines come in finishes
         from . import finishes
-        ticked = {int(i) for i in request.form.getlist('bq_finish') if i.isdigit() and i not in delete_ids}
+        ticked = {int(i) for i in request.form.getlist('bq_finish') if i.isdigit() and i not in delete_ids} | new_ticked
         errors += finishes.save([(o['name'], o['extra']) for o in finishes.all_options()], ticked)
     return errors
 

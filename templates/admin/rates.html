@@ -496,7 +496,10 @@
                       <input type="number" name="bq_rate" class="form-control text-end" step="0.01" min="0" placeholder="0" aria-label="New line rate">
                     </div>
                   </td>
-                  {% if finish_on %}<td></td>{% endif %}
+                  {% if finish_on %}<td class="text-center">
+                    <input type="hidden" name="bq_newfin" value="0">{# one per new row; the box adds a "1" after it when ticked #}
+                    <input class="form-check-input" type="checkbox" name="bq_newfin" value="1" aria-label="This new line comes in your finishes">
+                  </td>{% endif %}
                   <td></td>
                 </tr>
                 {% endfor %}
