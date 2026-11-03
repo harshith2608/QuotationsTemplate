@@ -23,10 +23,11 @@ from reel_templates import BG, W, heading, make_frame_at, put_laptop, render, zo
 from static_ads import INK, MUTED, OUT, PAPER, TAPE, brand, font, shadowed
 
 CHIP_Y = 1825
-# a handwritten line on page 1 (photo pixels) and the row the app made from it (screenshot pixels)
-PAIRS = [('TV Unit', (230, 140, 820, 212), 'room0', (30, 250, 1000, 330)),
-         ('Wardrobe', (180, 472, 780, 545), 'room1', (30, 585, 1000, 670)),
-         ('False ceiling', (220, 255, 820, 325), 'room0', (30, 590, 1000, 665))]
+# a handwritten line on page 1 (photo pixels) and the line the app made from it, as the recorded screens show it
+# (room0 / room1): name, length, width, area, rate, amount
+PAIRS = [((230, 140, 820, 212), ('TV Unit', '9 ft 4 in', '8 ft 6 in', '79.33 sqft', '₹1,400', '₹1,11,062')),
+         ((180, 472, 780, 545), ('Wardrobe', '8 ft 4 in', '7 ft 3 in', '60.42 sqft', '₹1,600', '₹96,672')),
+         ((220, 255, 820, 325), ('False Ceiling', '12 ft 5 in', '14 ft 5 in', '179.01 sqft', '₹120', '₹21,481'))]
 THUMBS = (38, 432, 300, 535)            # the two photos, chosen
 WAITING = (30, 250, 1000, 500)          # the kitchen's highlighted rows
 TOTAL = (650, 510, 1520, 830)           # the saved quotation's cost summary
@@ -71,6 +72,40 @@ def stopwatch(img, seconds, cx, cy, size, done=False):
     d.line([(cx, cy), (cx + r * 0.78 * math.cos(ang), cy + r * 0.78 * math.sin(ang))], fill=col, width=max(4, size // 16))
     d.ellipse([cx - 7, cy - 7, cx + 7, cy + 7], fill=col)
     d.text((cx + r + 34, cy), f'{seconds:.1f} s', font=font(size), fill=col, anchor='lm')
+
+
+def line_card(line, a):
+    """The quotation line the app made, big enough to read on a phone: name and amount, the two sizes in boxes like
+    the app's, then area × rate."""
+    name, length, width, area, rate, amount = line
+    layer = Image.new('RGBA', (W, 1920), (0, 0, 0, 0))
+    x0, y0, x1, y1 = 50, 980, W - 50, 1500
+    card = Image.new('RGBA', (x1 - x0, y1 - y0), (0, 0, 0, 0))
+    d = ImageDraw.Draw(card)
+    d.rounded_rectangle([0, 0, card.width - 1, card.height - 1], radius=34, fill=(255, 255, 255, 255), outline=TAPE + (255,),
+                        width=8)
+    green = (25, 135, 84)
+    rich_text(d, (50, 70), name, 64, 'heavy', INK, anchor='lm')
+    rich_text(d, (card.width - 50, 70), amount, 64, 'heavy', green, anchor='rm')
+    d.line([(40, 130), (card.width - 40, 130)], fill=(225, 230, 228), width=3)
+    grey = (100, 112, 108)
+    d.text((50, 200), 'Size', font=font(40, 'demi'), fill=grey, anchor='lm')
+    bx = 170
+    for i, val in enumerate((length, width)):
+        w = font(60).getlength(val) + 60
+        d.rounded_rectangle([bx, 150, bx + w, 250], radius=18, fill=(244, 246, 248), outline=(206, 212, 218), width=3)
+        d.text((bx + w / 2, 200), val, font=font(60), fill=INK, anchor='mm')
+        bx += w
+        if i == 0:
+            d.text((bx + 34, 200), '×', font=font(56), fill=grey, anchor='mm')
+            bx += 68
+    rich_text(d, (50, 330), f'= {area}  ×  {rate}', 50, 'demi', (31, 77, 63), anchor='lm')
+    rich_text(d, (50, 425), 'Priced at your own rate', 38, 'demi', grey, anchor='lm')
+    sh_img, p = shadowed(card, 34, blur=24, alpha=int(170 * a), pad=40)
+    if a < 1:
+        sh_img.putalpha(sh_img.getchannel('A').point(lambda v: int(v * a)))
+    layer.alpha_composite(sh_img, (x0 - p, y0 - p))
+    return layer
 
 
 def scenes(S):
@@ -133,36 +168,27 @@ def scenes(S):
         return img
 
     def pair(i):
-        label, note_box, room, row_box = PAIRS[i]
+        note_box, line = PAIRS[i]
 
         def scene(t):
             img = BG.copy()
             heading(img, 'It reads your handwriting', 'Item, size and room', t if i == 0 else 1.0)
             a = phase(t, 0.0, 0.35)
             note = S['page1'].crop(note_box)
-            nw = 960
+            nw = 980
             note = note.resize((nw, int(note.height * nw / note.width)), Image.LANCZOS)
-            paper(img, note, W / 2, 720 + int(40 * (1 - a)), nw, -1.5, a=a)
-            # arrow down
-            b = phase(t, 0.35, 0.6)
+            paper(img, note, W / 2, 650 + int(40 * (1 - a)), nw, -1.5, a=a)
+            b = phase(t, 0.35, 0.6)                          # arrow down
             if b > 0:
                 d = ImageDraw.Draw(img)
-                cx, top = W / 2, 860
-                d.line([(cx, top), (cx, top + 120 * b)], fill=TAPE, width=10)
+                cx, top = W / 2, 790
+                d.line([(cx, top), (cx, top + 110 * b)], fill=TAPE, width=12)
                 if b > 0.9:
-                    d.polygon([(cx - 30, top + 100), (cx + 30, top + 100), (cx, top + 150)], fill=TAPE)
+                    d.polygon([(cx - 34, top + 92), (cx + 34, top + 92), (cx, top + 145)], fill=TAPE)
             c = phase(t, 0.55, 0.9)
             if c > 0:
-                row = S[room].crop(row_box)
-                rw = 1000
-                row = row.resize((rw, int(row.height * rw / row.width)), Image.LANCZOS)
-                card = Image.new('RGBA', (row.width + 12, row.height + 12), TAPE + (255,))
-                card.paste(row, (6, 6))
-                sh_img, p = shadowed(card, 14, blur=22, alpha=int(170 * c), pad=36)
-                if c < 1:
-                    sh_img.putalpha(sh_img.getchannel('A').point(lambda v: int(v * c)))
-                img.alpha_composite(sh_img, ((W - card.width) // 2 - p, 1060 + int(30 * (1 - c)) - p))
-            chip(img, f'{label}: read exactly', t, 1.0)
+                img.alpha_composite(line_card(line, c), (0, int(30 * (1 - c))))
+            chip(img, f'{line[0]}: read exactly', t, 1.0)
             return img
         return scene
 
