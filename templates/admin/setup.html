@@ -7,6 +7,10 @@
   <p class="text-muted mb-3">A few short steps to make the app yours. Each step opens the right page with a reminder of what
     to do; press <strong>Done, next step</strong> when you're happy. You can come back here any time from the menu
     (<strong>Setup guide</strong>).</p>
+  <form method="post" action="{{ url_for('welcome.restart') }}" class="mb-2 small">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-play-circle me-1"></i>Take the guided setup (5 short steps)</button>
+  </form>
   <div class="d-flex align-items-center gap-3 mb-1">
     <div class="progress flex-grow-1" style="height:10px" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100">
       <div class="progress-bar bg-success" style="width:{{ pct }}%"></div>

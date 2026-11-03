@@ -60,7 +60,9 @@ def usage():
             return datetime.fromisoformat(value) if value else None
         except ValueError:
             return None
-    s = AppSetting.get_many([LAST_ACTIVE_KEY, LAST_LOGIN_KEY, FIELDS['name'][0], 'company_name_prefilled', 'company_mobile'])
+    from . import welcome
+    s = AppSetting.get_many([LAST_ACTIVE_KEY, LAST_LOGIN_KEY, FIELDS['name'][0], 'company_name_prefilled', 'company_mobile',
+                             welcome.KEY])
     last_quote = db.session.scalar(select(func.max(Project.updated_at)))
     out = dict(
         quotations=db.session.scalar(select(func.count(Project.id))) or 0,
@@ -75,6 +77,7 @@ def usage():
         last_active_at=when(s[LAST_ACTIVE_KEY]),
         company_name=(s[FIELDS['name'][0]] or '').strip(),        # for the console's search
         phone=''.join(ch for ch in (s['company_mobile'] or '') if ch.isdigit()),
+        setup_tour=welcome.console_text(s[welcome.KEY]),          # where they are in the guided first setup
     )
     seen = [d for d in (out['last_active_at'], out['last_login_at'], last_quote) if d]
     out['last_seen_at'] = max(seen) if seen else None

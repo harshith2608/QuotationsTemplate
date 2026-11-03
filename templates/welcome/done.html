@@ -1,0 +1,21 @@
+{% extends "welcome/_frame.html" %}
+{% block step %}
+<div class="text-center">
+  <div class="display-6 mb-2">🎉</div>
+  <h4 class="fw-bold mb-1">You're set up</h4>
+  <p class="text-muted mb-4">Your QuoteRoom is ready for your next quotation.</p>
+  <a class="btn btn-primary ki-btn-primary btn-lg w-100 mb-2" href="{{ url_for('projects.create_project') }}"><i class="bi bi-plus-lg me-1"></i>Make a quotation</a>
+  <a class="btn btn-outline-secondary w-100" href="{{ url_for('projects.list_projects') }}">Go to my quotations</a>
+</div>
+{% if later %}
+<hr class="my-4">
+<div class="fw-semibold mb-2">When you have time</div>
+<div class="list-group list-group-flush">
+  {% for s, d in later %}
+  <a class="list-group-item list-group-item-action px-0 d-flex justify-content-between align-items-center" href="{{ url_for('admin.setup_open', key=s.key) }}">
+    <span>{{ {'pdf': 'Terms & conditions, PDF look', 'payments': 'Payment details (UPI, bank)'}.get(s.key, s.title) }}</span><i class="bi bi-chevron-right text-muted"></i></a>
+  {% endfor %}
+</div>
+<div class="small text-muted mt-2">All of these are in Admin → Setup guide too.</div>
+{% endif %}
+{% endblock %}

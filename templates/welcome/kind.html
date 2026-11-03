@@ -1,0 +1,15 @@
+{% extends "welcome/_frame.html" %}
+{% block step %}
+<h4 class="fw-bold mb-1">What do you mostly do?</h4>
+<p class="text-muted mb-4">We'll start you with the usual items for it.</p>
+<form method="post" class="d-grid gap-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for k, label in kinds.items() %}
+  <button class="btn btn-outline-primary btn-lg text-start" type="submit" name="kind" value="{{ k }}">
+    <i class="bi bi-{{ {'interiors': 'house-door', 'kitchens': 'grid-3x3-gap', 'turnkey': 'bricks', 'other': 'three-dots'}[k] }} me-2"></i>{{ label }}</button>
+  {% endfor %}
+</form>
+{% if has_items %}
+<div class="text-center mt-3 small"><a href="{{ url_for('welcome.check') }}">My rates are already in: check them</a></div>
+{% endif %}
+{% endblock %}

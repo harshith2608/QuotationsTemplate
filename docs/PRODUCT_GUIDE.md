@@ -73,7 +73,14 @@ branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed
 Explain features as **problem → what QuoteRoom does → what the customer gets**.
 
 ### Getting started
-- **★ Setup guide.** A new business's admin lands on a short guide after their first sign-in: company details, logo &
+- **★ Guided first setup.** On their first sign-in a new business's admin sees "Let's set up your QuoteRoom": one
+  question a page, each with **Skip for now**: (1) business name, phone, logo; (2) how you measure (ft & in, mm, cm,
+  in); (3) "Do you have an old quotation or rate Excel ready?" Yes: upload it; no: pick what you mostly do and get a
+  ready list of typical items and rates. Either way: **"These are your rates"**, to check and change; (4) the first
+  quotation (or their old one, rebuilt), with a strip saying what to do; (5) its PDF and Send on WhatsApp. Then
+  "When you have time": payment details, terms & conditions, invoices, team. The console's trial page shows where
+  each trial stopped. *Pitch: "Five short questions and you're making your first quotation."*
+- **★ Setup guide.** The full list of steps, after the guided setup or instead of it: company details, logo &
   colours, units, rates, quotation PDF, how customers pay, first quotation (plus optional costs, team, invoices,
   email). Each step opens the right page with a banner and **Done, next step**; steps tick themselves off when the
   page is saved or the app can see it's done. Open it again any time: menu → **Setup guide**. *Pitch: "We'll walk you

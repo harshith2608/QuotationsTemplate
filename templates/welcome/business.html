@@ -1,0 +1,30 @@
+{% extends "welcome/_frame.html" %}
+{% block step %}
+<h4 class="fw-bold mb-1">Your business</h4>
+<p class="text-muted mb-4">This goes on every quotation you send.</p>
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label fw-semibold" for="wName">Business name</label>
+  {% if 'name' in locked %}
+  <input class="form-control form-control-lg mb-3" id="wName" value="{{ name }}" disabled>
+  {% else %}
+  <input class="form-control form-control-lg mb-3" id="wName" name="name" value="{{ name }}" maxlength="80" required autofocus>
+  {% endif %}
+  <label class="form-label fw-semibold" for="wPhone">Phone</label>
+  <input class="form-control form-control-lg mb-3" id="wPhone" name="phone" value="{{ phone }}" maxlength="30" inputmode="tel">
+  {% if 'logo' not in locked %}
+  <label class="form-label fw-semibold" for="wLogo">Logo <span class="text-muted fw-normal">(optional)</span></label>
+  {% if logo_url %}<div class="mb-2"><img src="{{ logo_url }}" alt="Your logo" style="max-height:48px"></div>{% endif %}
+  <input class="form-control mb-1" type="file" id="wLogo" name="logo" accept="image/png,image/jpeg,image/webp">
+  <div class="form-text mb-3">No logo yet? Leave it: you can add it later.</div>
+  {% endif %}
+  {% if lock_enabled and ('name' not in locked or 'logo' not in locked) %}
+  <div class="form-check mb-3">
+    <input class="form-check-input" type="checkbox" name="confirm" id="wConfirm" value="1">
+    <label class="form-check-label small" for="wConfirm">These details are correct. <span class="text-muted">The name and logo
+      can't be changed later without contacting us.</span></label>
+  </div>
+  {% endif %}
+  <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Continue <i class="bi bi-arrow-right ms-1"></i></button>
+</form>
+{% endblock %}

@@ -126,6 +126,7 @@
   <tr><td>Quotations</td><td><strong>{{ u.quotations }}</strong>{% if u.last_quotation_at %} · last created or edited {{ u.last_quotation_at|ist }}{% endif %}</td></tr>
   <tr><td>Last sign-in</td><td>{{ u.last_login_at|ist if u.last_login_at else 'none recorded' }}</td></tr>
   <tr><td>Last used</td><td>{{ u.last_seen_at|ist if u.last_seen_at else 'never' }}{% if u.last_seen_at %} ({{ u.last_seen_at|ago }}){% endif %}</td></tr>
+  <tr><td>Guided setup</td><td>{{ u.setup_tour or 'not started' }}</td></tr>
   <tr><td>Company details</td><td>{{ 'added' if u.company_set else 'not yet' }} · logo {{ 'uploaded' if u.logo_set else 'not yet' }}</td></tr>
   <tr><td>Users</td><td>{{ u.users }}</td></tr>
   <tr><td>Payments recorded</td><td>{{ u.payments }}</td></tr>

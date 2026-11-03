@@ -85,6 +85,13 @@ def ai_import_set_up():
         db.session.rollback()
         flash(f'Your app couldn\'t be set up from it: {exc}', 'danger')
         return redirect(url_for('admin.ai_import'))
+    from . import welcome
+    if welcome.step() == 'rates':                 # the guided first setup: back to "These are your rates"
+        if project_id:
+            welcome.remember_project(project_id)
+        db.session.commit()
+        flash('Read from your file. These are your rates: check them and change anything.', 'success')
+        return redirect(url_for('welcome.check'))
     if data['pricing'] == 'material':
         flash(f'Your app is set up by material: {result["materials"]} material{"" if result["materials"] == 1 else "s"} '
               f'with their rates, {result["fittings"]} fitting{"" if result["fittings"] == 1 else "s"}'

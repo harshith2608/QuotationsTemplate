@@ -1,0 +1,37 @@
+{% extends "welcome/_frame.html" %}
+{% block step %}
+<h4 class="fw-bold mb-1">These are your rates</h4>
+<p class="text-muted mb-3">Check them and change anything that's different from yours. Add your own items in the empty rows.</p>
+<form method="post" data-unsaved>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="table-responsive">
+  <table class="table table-sm align-middle ki-welcome-rates mb-3">
+    <thead><tr class="small text-muted"><th>Item</th><th style="width:110px">Unit</th><th style="width:130px">Rate (₹)</th><th style="width:36px"></th></tr></thead>
+    <tbody>
+    {% for it in items %}
+    {% if loop.first or it.category != items[loop.index0 - 1].category %}
+    <tr><td colspan="4" class="small fw-semibold text-muted pt-3 border-0">{{ it.category or 'Other' }}</td></tr>
+    {% endif %}
+    <tr>
+      <td><input class="form-control form-control-sm" name="name_{{ it.id }}" value="{{ it.name }}" maxlength="100" aria-label="Item"></td>
+      <td><select class="form-select form-select-sm" name="unit_{{ it.id }}" aria-label="Unit">
+        {% for u in units_list %}<option {{ 'selected' if u == it.unit }}>{{ u }}</option>{% endfor %}
+        {% if it.unit not in units_list %}<option selected>{{ it.unit }}</option>{% endif %}</select></td>
+      <td><input class="form-control form-control-sm text-end" name="rate_{{ it.id }}" value="{{ '%g' % it.rate }}" inputmode="decimal" aria-label="Rate"></td>
+      <td class="text-center"><input class="form-check-input" type="checkbox" name="del_{{ it.id }}" value="1" title="Remove" aria-label="Remove {{ it.name }}"></td>
+    </tr>
+    {% endfor %}
+    <tr data-grow data-grow-prefix="new">
+      <td><input class="form-control form-control-sm" name="new_name" maxlength="100" placeholder="Add an item…" aria-label="New item"></td>
+      <td><select class="form-select form-select-sm" name="new_unit" aria-label="Unit">{% for u in units_list %}<option>{{ u }}</option>{% endfor %}</select></td>
+      <td><input class="form-control form-control-sm text-end" name="new_rate" inputmode="decimal" placeholder="0" aria-label="Rate"></td>
+      <td></td>
+    </tr>
+    </tbody>
+  </table>
+  </div>
+  {% if items %}<div class="small text-muted mb-3"><i class="bi bi-check2-square me-1"></i>Tick the box at the end of a row to remove it.</div>{% endif %}
+  <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Save my rates <i class="bi bi-arrow-right ms-1"></i></button>
+  <div class="small text-muted text-center mt-2">You can change them any time: Admin → Rates.</div>
+</form>
+{% endblock %}
