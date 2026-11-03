@@ -283,6 +283,40 @@ document.addEventListener('input', (e) => {
 });
 </script>
 
+<!-- Global: forms marked data-unsaved show a "You have unsaved changes · Save" bar at the bottom once something changes,
+     and ask before leaving the page without saving. -->
+<script>
+(function () {
+  let dirty = null;                                   // the form with unsaved changes
+  const show = (form) => {
+    if (dirty === form) return;
+    dirty = form;
+    if (form.querySelector('.ki-unsaved-bar')) return;
+    const bar = document.createElement('div');
+    bar.className = 'ki-unsaved-bar';
+    bar.innerHTML = '<span><i class="bi bi-exclamation-circle me-1"></i>You have unsaved changes</span>' +
+      '<button type="submit" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button>';
+    form.appendChild(bar);
+  };
+  ['input', 'change'].forEach(ev => document.addEventListener(ev, (e) => {
+    const form = e.target.closest && e.target.closest('form[data-unsaved]');
+    if (form && !e.target.closest('.ki-unsaved-bar')) show(form);
+  }));
+  document.addEventListener('submit', (e) => { if (e.target === dirty) dirty = null; });
+  window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  // Back on the section just saved (#its-id), once the page has finished laying out
+  window.addEventListener('load', () => {
+    const el = location.hash.length > 1 && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (!el) return;
+    el.scrollIntoView({ block: 'start' });
+    const btn = el.querySelector('button[name=back_to]');           // its Save: "Saved" beside it, as the top message is out of sight
+    if (btn && document.querySelector('.alert-success')) {
+      btn.insertAdjacentHTML('beforebegin', '<span class="text-success small fw-semibold me-2"><i class="bi bi-check2-circle me-1"></i>Saved</span>');
+    }
+  });
+})();
+</script>
+
 <!-- Global: copy text (also on plain-http addresses, where the Clipboard API isn't available) -->
 <script>
 function copyText(text, btn) {

@@ -98,7 +98,7 @@
 
 {# ───────────────────────────── COMPANY ───────────────────────────── #}
 {% if tab == 'company' %}
-<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="company">
   <div class="card shadow-sm border-0">
@@ -167,7 +167,7 @@
 {% for k in ['theme_primary','theme_secondary','theme_accent','theme_background','theme_header','theme_corners','theme_buttons','theme_font'] %}
   {% set _ = cur.update({k: saved[k] or defaults[k]}) %}
 {% endfor %}
-<form method="POST" action="{{ url_for('admin.settings') }}" enctype="multipart/form-data" id="themeForm" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" enctype="multipart/form-data" id="themeForm" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="appearance">
   <div class="row g-3">
@@ -382,10 +382,10 @@
 
 {# ───────────────────────────── DOCUMENTS ───────────────────────────── #}
 {% if tab == 'documents' %}
-<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="documents">
-  <div class="card shadow-sm border-0 mb-3">
+  <div class="card shadow-sm border-0 mb-3" id="pdfLayout">
     <div class="card-header ki-card-header"><i class="bi bi-layout-text-window me-2"></i>{{ 'Your quotation PDF' if 'boq' in layouts else 'Initial Quotation' }} (what your customer gets)</div>
     <div class="card-body">
       {% for key, label in layouts.items() %}
@@ -407,6 +407,7 @@
           customer's link and WhatsApp). Your quotation page always shows the rates.</div>
       </div>
       {% endif %}
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="pdfLayout" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3" id="pdfLook">
@@ -425,6 +426,7 @@
         cleanly; your logo and photos stay as they are. Your app keeps its own colours and font.
         {% if preview_pid %}<a href="{{ url_for('projects.download_customer_pdf', project_id=preview_pid) }}" target="_blank" rel="noopener">See a quotation PDF
         <i class="bi bi-box-arrow-up-right"></i></a> (save first).{% endif %}</div>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="pdfLook" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   {% if presentation %}
@@ -445,6 +447,7 @@
       <textarea name="next_steps" id="next_steps" class="form-control" rows="5">{{ presentation.next_steps }}</textarea>
       <div class="form-text">Empty: our usual five steps (go through the quotation, confirm and pay the advance, site
         measurement, production and installation, handover) are used.</div>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="presentation" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   {% endif %}
@@ -455,9 +458,10 @@
         on the Initial Quotation. One per line. A room left on "Materials used" lists its materials instead.</p>
       <textarea name="room_descriptions" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6"
                 placeholder="e.g. Carcass: BWP 710 ply, laminate finish · Shutters: 1mm laminate&#10;Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic">{{ saved.room_descriptions }}</textarea>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="room-descriptions" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
-  <div class="card shadow-sm border-0 mb-3">
+  <div class="card shadow-sm border-0 mb-3" id="material-specs">
     <div class="card-header ki-card-header"><i class="bi bi-card-checklist me-2"></i>Material Specifications</div>
     <div class="card-body">
       <p class="small text-muted mb-3">
@@ -465,30 +469,33 @@
       </p>
       <textarea name="material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6"
                 placeholder="e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...">{{ saved.material_specs }}</textarea>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="material-specs" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   {% for key, title, icon, example in [('payment_terms', 'Payment Terms', 'cash-coin', 'e.g. 10% advance with order confirmation&#10;50% after design finalisation&#10;40% on delivery of materials to site'),
                                        ('delivery_terms', 'Delivery Terms', 'truck', 'e.g. 45 to 60 working days from sign-off and payment'),
                                        ('important_notes', 'Important Notes', 'exclamation-circle', 'e.g. Chimney, sink, hob and granite are not included unless mentioned')] %}
-  <div class="card shadow-sm border-0 mb-3">
+  <div class="card shadow-sm border-0 mb-3" id="{{ key }}">
     <div class="card-header ki-card-header"><i class="bi bi-{{ icon }} me-2"></i>{{ title }}</div>
     <div class="card-body">
       <p class="small text-muted mb-3">One point per line; the PDFs number them. Leave blank to leave the section out.</p>
       <textarea name="{{ key }}" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6"
                 placeholder="{{ example|safe }}">{{ saved[key] }}</textarea>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="{{ key }}" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   {% endfor %}
-  <div class="card shadow-sm border-0">
+  <div class="card shadow-sm border-0" id="terms">
     <div class="card-header ki-card-header"><i class="bi bi-file-text me-2"></i>Terms &amp; Conditions</div>
     <div class="card-body">
       <p class="small text-muted mb-3">Printed at the bottom of every quotation PDF. One term per line.</p>
       <textarea name="terms_conditions" class="form-control font-monospace" rows="8" style="font-size:0.82rem; line-height:1.6"
                 placeholder="1. This is a preliminary estimate...">{{ saved.terms_conditions }}</textarea>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="terms" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   <div class="mt-3 mb-5">
-    <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save Quotation Settings</button>
+    <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save all</button>
   </div>
 </form>
 <script>
@@ -520,7 +527,7 @@
 
 {# ───────────────────────────── UNITS ───────────────────────────── #}
 {% if tab == 'units' %}
-<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="units">
   <div class="card shadow-sm border-0 mb-3">
@@ -560,7 +567,7 @@
 
 {# ───────────────────────────── PRICING ───────────────────────────── #}
 {% if tab == 'pricing' %}
-<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="pricing">
   <div class="card shadow-sm border-0 mb-3">
@@ -600,7 +607,7 @@
 
 {# ───────────────────────────── INVOICES ───────────────────────────── #}
 {% if tab == 'invoices' %}
-<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="invoices">
   <div class="card shadow-sm border-0 mb-3">
@@ -738,7 +745,7 @@
   </div>
 </div>
 
-<form method="POST" action="{{ url_for('admin.settings') }}" novalidate>
+<form method="POST" action="{{ url_for('admin.settings') }}" novalidate data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="section" value="email">
   <div class="card shadow-sm border-0">

@@ -667,3 +667,15 @@ body > main { flex: 1 0 auto; }
 .ki-rich .ql-editor { min-height: 140px; font-size: .95rem; }
 .ql-toolbar.ql-snow { border-radius: .375rem .375rem 0 0; background: #f8f9fa; }
 .ql-container.ql-snow { border-radius: 0 0 .375rem .375rem; background: #fff; }
+
+/* ---- Unsaved changes (forms with data-unsaved, base.html) ---- */
+.ki-unsaved-bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 1045;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 8px 8px 16px; border-radius: 999px;
+  background: #fff; border: 1px solid var(--ki-border); box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+  font-size: .9rem; white-space: nowrap; max-width: calc(100vw - 24px);
+}
+.ki-unsaved-bar .btn { border-radius: 999px; }
+.card[id] { scroll-margin-top: 76px; }      /* a section opened by its #id clears the sticky top bar */
