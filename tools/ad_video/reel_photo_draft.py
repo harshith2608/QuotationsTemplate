@@ -1,4 +1,4 @@
-"""Reel 'How long to turn your site notes into a quotation?' (Draft from photos of site notes), about 38 s:
+"""Reel 'How long to turn your site notes into a quotation?' (Draft from photos of site notes), about 37 s:
 the hook asks how long a notebook page takes to become a quotation (guesses pop up) → snap the pages → tap Draft, a
 stopwatch runs while the AI reads the handwriting → the real time it took → handwritten lines next to the rows the app
 made from them → a size the notes didn't have waits to be typed → saved, with its total → free trial.
