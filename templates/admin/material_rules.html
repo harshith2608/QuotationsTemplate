@@ -9,32 +9,57 @@
 </select>
 {% endmacro %}
 
-{% macro rule_row(p, r, mats, per) %}
-<tr{% if not r %} data-grow data-grow-prefix="new"{% endif %}>
-  <td><input class="form-control form-control-sm" name="{{ p }}name" value="{{ r.name if r else '' }}" maxlength="100"
-             placeholder="{{ 'New rule, e.g. Hinges' if not r }}" aria-label="Item to buy"></td>
-  <td>{{ group_select(p ~ 'group', r.category if r else groups[0]) }}</td>
-  <td>
-    <details class="ki-mat-pick">
-      <summary class="small">{% if not mats %}Every material{% else %}{{ mats|join(', ') }}{% endif %}</summary>
-      <label class="form-check small mt-1"><input class="form-check-input" type="checkbox" name="{{ p }}allmat" {{ 'checked' if not mats }}> Every material</label>
+{% macro target_select(p, current) %}
+<select class="form-select form-select-sm d-inline-block w-auto" name="{{ p }}target" aria-label="Of what" data-target>
+  <optgroup label="Measured items">
+    {% for w in work_types %}<option value="w:{{ w }}" data-unit="{{ area_label }}" {{ 'selected' if current == 'w:' ~ w }}>{{ w }}</option>{% endfor %}
+    <option value="w:" data-unit="{{ area_label }}" {{ 'selected' if current == 'w:' }}>any measured item</option>
+  </optgroup>
+  {% set gone = current[2:] if current.startswith('b:') and current[2:] not in boq_lines else '' %}
+  {% if boq_lines or gone %}
+  <optgroup label="Your BOQ lines">
+    {% for name, unit in boq_lines.items() %}<option value="b:{{ name }}" data-unit="{{ unit }}" {{ 'selected' if current == 'b:' ~ name }}>{{ name }}</option>{% endfor %}
+    {% if gone %}<option value="b:{{ gone }}" data-unit="" selected>{{ gone }} (not in your rates)</option>{% endif %}
+  </optgroup>
+  {% endif %}
+</select>
+{% endmacro %}
+
+{# One rule as a sentence: "[Plywood [ply]] · 1 [sheets] for every [9] sqft of [Box Work] · [10] % extra" #}
+{% macro rule_card(p, row) %}
+{% set r = row.rule if row else None %}
+<div class="ki-rule border-bottom px-3 py-3"{% if not r %} data-grow data-grow-prefix="new"{% endif %}>
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+    <input class="form-control form-control-sm fw-semibold ki-rule-name" name="{{ p }}name" value="{{ row.name if row else '' }}" maxlength="100"
+           placeholder="{{ 'Add a rule: what to buy, e.g. Hinges' if not r else '' }}" aria-label="What to buy">
+    {% if row and row.example %}<span class="small text-muted">On a list: {{ row.example }}</span>{% endif %}
+    <div style="width:9rem">{{ group_select(p ~ 'group', r.category if r else groups[0]) }}</div>
+    {% if r %}<button type="button" class="btn btn-sm btn-link text-muted px-1 ms-auto ki-rule-del" title="Delete this rule" aria-label="Delete this rule"><i class="bi bi-trash3"></i></button>
+    <input type="hidden" name="{{ p }}remove" value="">{% endif %}
+  </div>
+  <div class="d-flex flex-wrap gap-2 align-items-center small">
+    <input class="form-control form-control-sm text-end ki-rule-num" name="{{ p }}amount" inputmode="decimal" value="{{ '{:g}'.format(row.amount) if row else '1' }}" aria-label="How much">
+    <input class="form-control form-control-sm ki-rule-unit" name="{{ p }}unit" value="{{ r.unit if r and r.unit else '' }}" maxlength="30" placeholder="sheets, kg…" aria-label="Unit">
+    <span>for every</span>
+    <input class="form-control form-control-sm text-end ki-rule-num" name="{{ p }}every" inputmode="decimal" value="{{ '{:g}'.format(row.every) if row else '' }}" placeholder="9" aria-label="For every">
+    <span data-target-unit>{{ boq_lines.get(row.line, '') if row and row.line else area_label }}</span>
+    <span>of</span>
+    {{ target_select(p, row.target if row else 'w:' ~ work_types[0]) }}
+    <span class="text-nowrap">+ <input class="form-control form-control-sm text-end ki-rule-num d-inline-block" name="{{ p }}wastage" inputmode="decimal" value="{{ '{:g}'.format(r.wastage) if r else '10' }}" aria-label="Extra for wastage, %"> % extra</span>
+  </div>
+  <details class="mt-2 small">
+    <summary class="text-muted">More</summary>
+    <div class="mt-2 ps-1" data-mats>
+      <div class="mb-1">For these finishes (measured items only):</div>
+      <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="{{ p }}allmat" {{ 'checked' if not row or not row.materials }}> All of them</label>
       {% for m in materials %}
-      <label class="form-check small"><input class="form-check-input" type="checkbox" name="{{ p }}mat" value="{{ m }}" {{ 'checked' if m in mats }}> {{ m }}</label>
+      <label class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="{{ p }}mat" value="{{ m }}" {{ 'checked' if row and m in row.materials }}> {{ m }}</label>
       {% endfor %}
-    </details>
-  </td>
-  <td><select class="form-select form-select-sm" name="{{ p }}work" aria-label="Work type">
-    <option value="">Any</option>
-    {% for w in work_types %}<option value="{{ w }}" {{ 'selected' if r and r.work_type == w }}>{{ w }}</option>{% endfor %}
-  </select></td>
-  <td><input class="form-control form-control-sm" name="{{ p }}per" inputmode="decimal" value="{{ '{:g}'.format(per) if r else '' }}" aria-label="Quantity per {{ area_label }}"></td>
-  <td><input class="form-control form-control-sm" name="{{ p }}unit" value="{{ r.unit if r and r.unit else '' }}" maxlength="30" placeholder="sheets" aria-label="Unit"></td>
-  <td><input class="form-control form-control-sm" name="{{ p }}wastage" inputmode="decimal" value="{{ '{:g}'.format(r.wastage) if r else '10' }}" aria-label="Wastage %"></td>
-  <td class="text-center"><input class="form-check-input" type="checkbox" name="{{ p }}up" {{ 'checked' if not r or r.round_up }} aria-label="Round up"></td>
-  <td class="text-center"><input class="form-check-input" type="checkbox" name="{{ p }}active" {{ 'checked' if not r or r.active }} aria-label="On"></td>
-  <td class="text-center">{% if r %}<label class="btn btn-sm btn-outline-danger py-0 px-1 mb-0" title="Delete this rule">
-    <input type="checkbox" class="d-none" name="{{ p }}remove" data-remove><i class="bi bi-trash"></i></label>{% endif %}</td>
-</tr>
+    </div>
+    <label class="form-check mt-2"><input class="form-check-input" type="checkbox" name="{{ p }}up" {{ 'checked' if not r or r.round_up }}> Round up to whole units (sheets, bags…)</label>
+    <label class="form-check"><input class="form-check-input" type="checkbox" name="{{ p }}active" {{ 'checked' if not r or r.active }}> Use this rule</label>
+  </details>
+</div>
 {% endmacro %}
 
 {% block content %}
@@ -45,36 +70,22 @@
 
 <div class="alert alert-info py-2 small">
   <i class="bi bi-info-circle me-1"></i>
-  Each quotation has a <strong>Material list</strong>: everything to buy for the job, by group, to send to your suppliers.
-  These rules work out the board, laminate, edge banding and so on from each item's area: for example
-  <em>0.11 sheets of plywood for every {{ area_label }} of Box Work</em>, plus wastage. <strong>The starting numbers are
-  estimates</strong>: check them once with your carpenter and change them to how you work. Fittings and BOQ lines go on
-  the list as they are on the quotation.
+  These work out how much to buy for each quotation's <strong>material list</strong>, e.g. <em>1 sheet of plywood for every
+  9 {{ area_label }} of Box Work</em>. <strong>You don't have to change anything here</strong>: the starting numbers are
+  typical. Check them once with your carpenter if you like.
 </div>
 
 <div class="card shadow-sm border-0 mb-3" id="rules">
-  <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>Rules for measured items</div>
-  <form method="POST" novalidate>
+  <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>How much you use</div>
+  <form method="POST" novalidate data-unsaved>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="section" value="rules">
-    <div class="card-body pb-0">
-      <p class="small text-muted mb-2">An item's name can use <code>{material}</code> (the line's material, e.g. Laminates)
-        and <code>{plywood}</code> (its plywood). Lines with the same item and unit add up across the quotation.
-        <strong>Round up</strong> gives whole sheets, rolls or boxes.</p>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead class="small text-muted"><tr>
-          <th style="min-width:14rem">Item to buy</th><th style="min-width:8rem">Group</th><th style="min-width:10rem">For these materials</th>
-          <th style="min-width:7rem">Work type</th><th style="min-width:6rem">Per {{ area_label }}</th><th style="min-width:7rem">Unit</th>
-          <th style="min-width:5rem">Wastage %</th><th>Round up</th><th>On</th><th></th>
-        </tr></thead>
-        <tbody>
-          {% for row in rows %}{{ rule_row('r' ~ row.rule.id ~ '_', row.rule, row.materials, row.per) }}{% endfor %}
-          {{ rule_row('new_', None, [], 0) }}
-        </tbody>
-      </table>
-    </div>
+    <div class="px-3 pt-3 small text-muted">Pick <strong>Box Work</strong> or <strong>Frame Work</strong> for the items you measure
+      on a quotation, or one of <strong>your BOQ lines</strong> (Painting, Floor tiles…): a BOQ line with rules is
+      replaced on the list by what it needs. In a name, <code>[ply]</code> is the ply chosen on the quotation and
+      <code>[finish]</code> the item's finish (e.g. Laminates). Lines with the same name add up across the quotation.</div>
+    {% for row in rows %}{{ rule_card('r' ~ row.rule.id ~ '_', row) }}{% endfor %}
+    {{ rule_card('new_', None) }}
     <div class="card-body"><button class="btn btn-sm btn-primary" type="submit">Save rules</button></div>
   </form>
 </div>
@@ -131,10 +142,37 @@
 </div>
 {% endblock %}
 
+{% block head %}
+<style>
+  .ki-rule-name { flex: 1 1 14rem; max-width: 26rem; }
+  .ki-rule-num { width: 4.5rem; }
+  .ki-rule-unit { width: 7.5rem; }
+  .ki-rule.ki-removed > div { opacity: .4; text-decoration: line-through; pointer-events: none; }
+  .ki-rule.ki-removed .ki-rule-del { pointer-events: auto; }
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
-document.querySelectorAll('[data-remove]').forEach(box => box.addEventListener('change', () => {
-  box.closest('tr').classList.toggle('opacity-25', box.checked);
-}));
+// "for every 9 sqft of Box Work" / "for every 10 Point of Electrical points": the unit follows what's picked
+document.addEventListener('change', (e) => {
+  if (!e.target.matches('[data-target]')) return;
+  const card = e.target.closest('.ki-rule');
+  card.querySelector('[data-target-unit]').textContent = e.target.selectedOptions[0].dataset.unit || '';
+  card.querySelector('[data-mats]').classList.toggle('d-none', e.target.value.startsWith('b:'));
+});
+document.querySelectorAll('[data-target]').forEach(s => s.closest('.ki-rule').querySelector('[data-mats]').classList.toggle('d-none', s.value.startsWith('b:')));
+// Delete: crossed out until Save rules; tap again to keep it
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.ki-rule-del');
+  if (!btn) return;
+  const card = btn.closest('.ki-rule'), flag = btn.nextElementSibling;
+  const removing = !card.classList.contains('ki-removed');
+  card.classList.toggle('ki-removed', removing);
+  flag.value = removing ? '1' : '';
+  btn.innerHTML = removing ? '<i class="bi bi-arrow-counterclockwise"></i>' : '<i class="bi bi-trash3"></i>';
+  btn.title = removing ? 'Keep it' : 'Delete this rule';
+  flag.dispatchEvent(new Event('change', { bubbles: true }));
+});
 </script>
 {% endblock %}

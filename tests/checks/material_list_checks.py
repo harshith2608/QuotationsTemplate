@@ -32,7 +32,7 @@ with app.app_context():
 PLY = ML.render_name('Plywood ({plywood})', '', ply)
 
 
-def rooms(width=7, tandem=4):
+def rooms(width=7, tandem=4, boq_names=('Switch Board Shifting', 'Wall putty touch-up')):
     return json.dumps([
         {'name': 'Master Bedroom', 'items': [
             {'name': 'Wardrobe', 'length': 9, 'width': width, 'wood_type': 'Laminates', 'work_type': 'Box Work'},
@@ -40,8 +40,8 @@ def rooms(width=7, tandem=4):
             {'name': 'Tandem Drawer', 'type': 'fixed', 'quantity': tandem, 'unit_price': 4500},
             {'name': 'Hob & Chimney Installation', 'type': 'fixed', 'quantity': 1, 'unit_price': 1500}]},
         {'name': 'Whole House', 'items': [
-            {'name': 'Electrical points', 'type': 'boq', 'quantity': 20, 'unit': 'point', 'unit_price': 850},
-            {'name': 'Wall painting', 'type': 'boq', 'quantity': 400, 'unit': 'sqft', 'unit_price': 22},
+            {'name': boq_names[0], 'type': 'boq', 'quantity': 20, 'unit': 'point', 'unit_price': 850},
+            {'name': boq_names[1], 'type': 'boq', 'quantity': 400, 'unit': 'sqft', 'unit_price': 22},
             {'name': 'Site Cleaning', 'type': 'boq', 'quantity': 1, 'unit': 'lump sum', 'unit_price': 9000}]}])
 
 
@@ -79,7 +79,7 @@ ok('glass is not on plywood: 15 sqft + 10% → 17 sqft, under Other', q('Glass')
 ok('fittings as they are (4 tandem drawers, Hardware); a service (Hob & Chimney Installation) left out',
    q('Tandem Drawer') == (4, 'nos', 'Hardware') and 'Hob & Chimney Installation' not in L)
 ok('BOQ lines as they are, grouped by name; a lump sum left out',
-   q('Electrical points') == (20, 'Point', 'Electrical') and q('Wall painting') == (400, 'Sq.ft', 'Paint')
+   q('Switch Board Shifting') == (20, 'Point', 'Electrical') and q('Wall putty touch-up') == (400, 'Sq.ft', 'Paint')
    and 'Site Cleaning' not in L)
 ok('where each line comes from', L[PLY].source == 'Wardrobe (Master Bedroom)')
 
@@ -164,24 +164,38 @@ ok('…a ticked choice and a typed item are added', (L5[pick].quantity, L5[pick]
    and (L5['Asian Royale emulsion'].quantity, L5['Asian Royale emulsion'].category) == (4, 'Paint'))
 ok('…an item typed on one list is a choice on the next', 'Asian Royale emulsion' in c.get(f'/projects/{pid}/materials/select').text)
 
-# ── Admin → Material rules ──
+# ── Admin → Material rules: one sentence per rule ──
 rp = c.get('/admin/material-rules')
-ok('the rules page opens, saying the numbers are estimates', rp.status_code == 200 and 'starting numbers are' in rp.text)
+ok('the rules page opens: plain sentences, no change needed', rp.status_code == 200 and "have to change anything" in rp.text
+   and 'for every' in rp.text and '{plywood}' not in rp.text and '[ply]' in rp.text)
+ok('…plywood shown as "1 sheet for every 9.09 sqft" (0.11 per sqft)', 'value="9.09"' in rp.text)
+
+
+def card(r_, **change):
+    """A rule card as the page posts it."""
+    amount, every = ML.coverage(r_.per_sqft)
+    target = f'b:{ML.rule_boq(r_)}' if ML.rule_boq(r_) else f'w:{r_.work_type or ""}'
+    p = f'r{r_.id}_'
+    row = {p + 'name': ML.name_shown(r_.name), p + 'group': r_.category, p + 'amount': amount, p + 'every': every,
+           p + 'unit': r_.unit, p + 'wastage': r_.wastage, p + 'target': target, p + 'active': 'on',
+           p + 'up': 'on' if r_.round_up else '', p + 'mat': ML.rule_materials(r_),
+           p + 'allmat': '' if ML.rule_materials(r_) else 'on', p + 'remove': ''}
+    row.update({p + k: v for k, v in change.items()})
+    return row
+
+
 with app.app_context():
     rule = MaterialRule.query.filter_by(name='Plywood ({plywood})', work_type='Box Work').first()
     rid = rule.id
-    rule_rows = {f'r{r.id}_name': r.name for r in ML.rules()}
+    rule_rows = {}
     for r_ in ML.rules():
-        rule_rows.update({f'r{r_.id}_group': r_.category, f'r{r_.id}_per': r_.per_sqft, f'r{r_.id}_unit': r_.unit,
-                          f'r{r_.id}_wastage': r_.wastage, f'r{r_.id}_work': r_.work_type or '',
-                          f'r{r_.id}_active': 'on', f'r{r_.id}_up': 'on' if r_.round_up else ''})
-        rule_rows[f'r{r_.id}_mat'] = ML.rule_materials(r_)
-rule_rows[f'r{rid}_per'] = '0.2'
-rule_rows.update({'section': 'rules', 'new_name': 'Hinges', 'new_group': 'Hardware', 'new_per': '0.1', 'new_unit': 'nos',
-                  'new_wastage': '0', 'new_work': 'Box Work', 'new_allmat': 'on', 'new_up': 'on', 'new_active': 'on',
-                  'new2_name': 'Drawer channels', 'new2_group': 'Hardware', 'new2_per': '0.05', 'new2_unit': 'pairs',
-                  'new2_wastage': '0', 'new2_work': '', 'new2_allmat': 'on', 'new2_up': 'on', 'new2_active': 'on',
-                  'new3_name': ''})
+        rule_rows.update(card(r_, **({'amount': '1', 'every': '5'} if r_.id == rid else {})))
+rule_rows.update({'section': 'rules', 'new_name': 'Hinges', 'new_group': 'Hardware', 'new_amount': '1', 'new_every': '10',
+                  'new_unit': 'nos', 'new_wastage': '0', 'new_target': 'w:Box Work', 'new_allmat': 'on', 'new_up': 'on',
+                  'new_active': 'on',
+                  'new2_name': 'Drawer channels', 'new2_group': 'Hardware', 'new2_amount': '1', 'new2_every': '20',
+                  'new2_unit': 'pairs', 'new2_wastage': '0', 'new2_target': 'w:', 'new2_allmat': 'on', 'new2_up': 'on',
+                  'new2_active': 'on', 'new3_name': ''})
 ok('the rules page: its empty row grows (another appears while typing in the last one)',
    'data-grow data-grow-prefix="new"' in c.get('/admin/material-rules').text)
 c.post('/admin/material-rules', data=rule_rows)
@@ -193,7 +207,7 @@ with app.app_context():
     pid3 = Project.query.order_by(Project.id.desc()).first().id
 c.get(f'/projects/{pid3}/materials')
 L3 = lines(pid3)
-ok('a changed rule is used on the next list (63 × 0.2 + 10% → 14 sheets)', L3[PLY].quantity == 14)
+ok('a changed rule is used on the next list (1 sheet for every 5 sqft: 63 / 5 + 10% → 14 sheets)', L3[PLY].quantity == 14)
 ok('a new rule for every material (63 × 0.1 → 7 hinges)', (L3['Hinges'].quantity, L3['Hinges'].category) == (7, 'Hardware'))
 ok('the earlier list is not changed by the rules until it is rebuilt', lines(pid2)[PLY].quantity == 8)
 
@@ -220,9 +234,59 @@ ok('an item set to "Leave off the list" is left off', 'Tandem Drawer' not in lin
 with app.app_context():
     AppSetting.set('area_unit', 'sqm'); db.session.commit()
 rp = c.get('/admin/material-rules').text
-ok('rules shown per sq m when the business uses sq m (0.2 per sqft = 2.1528 per sq m)', 'Per sq m' in rp and 'value="2.1528"' in rp)
+ok('rules shown per sq m when the business uses sq m (1 sheet for every 5 sqft = 2.153 sheets for every sq m)',
+   'sq m</span>' in rp and 'value="2.153"' in rp)
 with app.app_context():
     AppSetting.set('area_unit', 'sqft'); db.session.commit()
+
+# ── Rules on BOQ lines: typical ones for usual names, in place of the line ──
+from app.models import BoqItem
+with app.app_context():
+    for name, unit in (('Wall painting', 'sqft'), ('Floor tiling', 'sqft'), ('Electrical points', 'point'), ('Site Cleaning', 'lump sum')):
+        if not BoqItem.query.filter_by(name=name).first():
+            db.session.add(BoqItem(name=name, unit=unit, rate=10))
+    db.session.commit()
+rp = c.get('/admin/material-rules').text
+with app.app_context():
+    on_line = {}
+    for r_ in ML.rules():
+        if ML.rule_boq(r_):
+            on_line.setdefault(ML.rule_boq(r_), []).append(r_.name)
+ok('typical rules added for usual BOQ lines (painting, tiles, points); none for a lump sum',
+   {'Wall putty (40 kg bag)', 'Primer', 'Emulsion paint'} <= set(on_line.get('Wall painting', []))
+   and 'Tile adhesive (20 kg bag)' in on_line.get('Floor tiling', []) and on_line.get('Electrical points')
+   and 'Site Cleaning' not in on_line)
+ok('…the BOQ lines are choices on the rules page, with their unit', 'value="b:Wall painting"' in rp and 'data-unit="Point"' in rp)
+save_quote('/projects/new', 'Paint Home', rooms(boq_names=('Electrical points', 'Wall painting')))
+with app.app_context():
+    pid6 = Project.query.order_by(Project.id.desc()).first().id
+c.get(f'/projects/{pid6}/materials')
+L6 = lines(pid6)
+ok('a BOQ line with rules: what it needs, in place of the line (400 sqft: 1 bag putty, 5 L primer → 5, 8 L emulsion + 10% → 9)',
+   'Wall painting' not in L6 and (L6['Wall putty (40 kg bag)'].quantity, L6['Primer'].quantity, L6['Emulsion paint'].quantity) == (2, 5, 9)
+   and L6['Primer'].source == 'Wall painting (Whole House)')
+ok('…20 points: 3 coils of wire, 63 conduit pipes; no line for the points', 'Electrical points' not in L6
+   and L6['Wire 1.5 sq mm (90 m coil)'].quantity == 3 and L6['PVC conduit pipe (3 m)'].quantity == 63)
+with app.app_context():
+    putty = next(r_ for r_ in ML.rules() if r_.name == 'Wall putty (40 kg bag)' and ML.rule_boq(r_) == 'Wall painting')
+    gone = [r_ for r_ in ML.rules() if ML.rule_boq(r_) == 'Electrical points']
+    form = {}
+    for r_ in ML.rules():
+        form.update(card(r_, **({'every': '200'} if r_.id == putty.id else {'remove': '1'} if r_ in gone else {})))
+form.update({'section': 'rules', 'new_name': 'Masking tape', 'new_group': 'Paint', 'new_amount': '1', 'new_every': '200',
+             'new_unit': 'rolls', 'new_wastage': '0', 'new_target': 'b:Wall painting', 'new_up': 'on', 'new_active': 'on'})
+c.post('/admin/material-rules', data=form)
+with app.app_context():
+    putty = next(r_ for r_ in ML.rules() if r_.name == 'Wall putty (40 kg bag)' and ML.rule_boq(r_) == 'Wall painting')
+    tape = next((r_ for r_ in ML.rules() if r_.name == 'Masking tape'), None)
+    ok('a BOQ rule changed (1 bag for every 200 sqft), a new one on a BOQ line, deleted ones stay deleted',
+       abs(putty.per_sqft - 1 / 200) < 1e-9 and ML.rule_boq(putty) == 'Wall painting' and tape and ML.rule_boq(tape) == 'Wall painting'
+       and not any(ML.rule_boq(r_) == 'Electrical points' for r_ in ML.rules()))
+    ML.seed(); ok('…and typical rules are not added back', not any(ML.rule_boq(r_) == 'Electrical points' for r_ in ML.rules()))
+c.post(f'/projects/{pid6}/materials/rebuild')
+L6 = lines(pid6)
+ok('rebuilt: 3 bags of putty (400 / 200 + 5%), 2 rolls of tape, and the points back as a line', L6['Wall putty (40 kg bag)'].quantity == 3
+   and L6['Masking tape'].quantity == 2 and L6['Electrical points'].quantity == 20)
 
 # ── Who ──
 staff = app.test_client(); staff.post('/login', data={'username': 'demo-staff', 'password': 'demo1234'})

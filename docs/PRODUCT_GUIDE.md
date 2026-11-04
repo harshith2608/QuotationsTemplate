@@ -156,8 +156,10 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 - **Dashboard:** value of work at each stage.
 - **★ Material list:** from any quotation, everything to buy for the job with wastage added: plywood and laminate
   sheets, edge banding, adhesive and screws worked out from each item's area (by the firm's own rules, Admin → Rates →
-  Material rules; the starting numbers are estimates to check with their carpenter), plus fittings and BOQ lines as they
-  are. Grouped (Wood, Hardware, Electrical, Paint, Other: their own groups, add/rename/remove); change quantities, add
+  Material rules, written as plain sentences: "1 sheet for every 9 sqft of Box Work"; the starting numbers are typical,
+  nothing has to be changed), plus fittings. BOQ lines can have rules too ("1 bag of putty for every 400 sqft of
+  Painting"): the line is then replaced on the list by what it needs. Usual BOQ lines (painting, tiles, gypsum ceiling,
+  electrical points, wardrobes & cabinets) get typical rules by themselves; other BOQ lines go on as they are. Grouped (Wood, Hardware, Electrical, Paint, Other: their own groups, add/rename/remove); change quantities, add
   or remove items, tick what's ordered; **Copy** or **WhatsApp** each group to its supplier. No prices on it. When the
   quotation changes, **Rebuild** keeps their edits. **Select materials** (on the quotation): a tick list of everything
   the firm has (each plywood, laminates, fittings, BOQ lines, items typed on earlier lists) with what this quotation
