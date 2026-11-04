@@ -75,8 +75,11 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Getting started
 - **★ Guided first setup.** On their first sign-in a new business's admin sees "Let's set up your QuoteRoom": one
   question a page, each with **Skip for now**: (1) business name, phone, logo; (2) how you measure (ft & in, mm, cm,
-  in); (3) "Do you have an old quotation or rate Excel ready?" Yes: upload it; no: pick what you mostly do and get a
-  ready list of typical items and rates. Either way: **"These are your rates"**, to check and change; (4) the first
+  in); (3) what you mostly do: interiors, kitchens & wardrobes, turnkey, furniture, uPVC windows, glass & aluminium,
+  tiles & flooring, construction, painting, false ceiling, steel fabrication, curtains & blinds. Interiors, kitchens
+  and turnkey are asked for an old quotation or rate Excel; everyone else (and a "no") gets a ready list of typical
+  items and rates for their business. Either way: **"These are your rates"**, in sections they can rename and add
+  to, to check and change; (4) the first
   quotation (or their old one, rebuilt), with a strip saying what to do; (5) its PDF and Send on WhatsApp. Then
   "When you have time": payment details, terms & conditions, invoices, team. The console's trial page shows where
   each trial stopped. *Pitch: "Five short questions and you're making your first quotation."*

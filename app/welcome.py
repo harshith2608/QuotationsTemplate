@@ -3,9 +3,10 @@ instead of the setup guide. One question a page, each with "Skip for now", and "
 
   1. business  the company name and phone (filled in from the trial request), the logo if they have it
   2. units     how they measure: feet & inches, mm, cm or inches, and rates per sqft or per sq m
-  3. rates     "Do you have an old quotation or rate Excel ready?" yes: Bring your old quotation (app/ai_import.py,
-               when it's on), which then comes back here; no: what they mostly do → a short list of typical items
-               and rates (TYPICAL, priced by item). Either way: "These are your rates", to check and change.
+  3. rates     what they mostly do (KINDS); interiors, kitchens and turnkey firms are then asked "Do you have an
+               old quotation or rate Excel ready?" (Bring your old quotation, app/ai_import.py, when it's on: it
+               then comes back here). Every other kind, and a "no", gets a short list of typical items and rates
+               (TYPICAL, priced by item). Either way: "These are your rates", in sections, to check and change.
   4. quote     their first quotation: the new quotation form (or, set up from an old quotation, that quotation
                rebuilt here), with a strip on top saying what to do
   5. send      the saved quotation: its PDF and Send on WhatsApp
@@ -25,8 +26,16 @@ STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('rates', 
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
 
-KINDS = {'interiors': 'Full interiors', 'kitchens': 'Modular kitchens & wardrobes', 'turnkey': 'Turnkey & civil work',
-         'other': 'Something else'}
+KINDS = {'interiors': 'Full interiors', 'kitchens': 'Modular kitchens & wardrobes', 'turnkey': 'Turnkey interiors & civil',
+         'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium',
+         'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
+         'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
+         'curtains': 'Curtains, blinds & wallpaper', 'other': 'Something else'}
+ICONS = {'interiors': 'house-door', 'kitchens': 'grid-3x3-gap', 'turnkey': 'buildings', 'furniture': 'lamp',
+         'upvc': 'window', 'glass': 'window-split', 'tiles': 'grid', 'construction': 'bricks', 'painting': 'paint-bucket',
+         'ceiling': 'lightbulb', 'fabrication': 'tools', 'curtains': 'border-style', 'other': 'three-dots'}
+# Asked for an old quotation or rate Excel: the kinds that usually have one. The others start from typical items.
+FILE_KINDS = ('interiors', 'kitchens', 'turnkey')
 
 # Typical items and rates (per sqft, rft, nos or point) for a business with no file: a starting point they change.
 # Not any customer's numbers. ('#', group) starts a group.
@@ -74,6 +83,106 @@ TYPICAL = {
                 ('Wall Tiling', 'sqft', 140, 'Bathroom and kitchen walls, laying only'),
                 ('Plumbing Point', 'point', 1500, 'CPVC lines, fittings extra')]
                + _SERVICES + _WOOD[:3] + _WOOD[6:8] + _KITCHEN[:3],
+    'furniture': [('#', 'Furniture'),
+                  ('Wardrobe', 'sqft', 1400, 'Plywood with laminate, soft-close hinges'),
+                  ('Bed with Storage', 'nos', 38000, 'Queen size, hydraulic storage'),
+                  ('TV Unit', 'sqft', 1200, 'With back panel and storage'),
+                  ('Study Table', 'sqft', 1200, 'With drawer'),
+                  ('Shoe Rack', 'sqft', 1100, 'With seating top'),
+                  ('Dining Table (6 seater)', 'nos', 32000, 'Solid wood top'),
+                  ('Sofa (3 seater)', 'nos', 42000, 'Fabric, with cushions'),
+                  ('Wooden Door', 'nos', 14000, 'Flush door with frame and laminate'),
+                  ('Polish (PU)', 'sqft', 180, 'PU polish on wood')],
+    'upvc': [('#', 'Windows'),
+             ('Sliding Window (2 track)', 'sqft', 550, 'uPVC profile, 5 mm clear glass'),
+             ('Sliding Window (3 track with mesh)', 'sqft', 650, 'With sliding mosquito mesh'),
+             ('Casement Window', 'sqft', 700, 'Openable, multi-point locking'),
+             ('Fixed Window', 'sqft', 450, 'Fixed glass'),
+             ('Ventilator', 'sqft', 600, 'Bathroom ventilator with louvres'),
+             ('#', 'Doors'),
+             ('Sliding Door', 'sqft', 650, 'uPVC profile, toughened glass'),
+             ('Casement Door', 'sqft', 800, 'Openable, with handle and lock'),
+             ('#', 'Extras'),
+             ('Toughened Glass (upgrade)', 'sqft', 90, 'In place of clear glass'),
+             ('Safety Grill', 'sqft', 150, 'MS grill, painted'),
+             ('Old Frame Removal', 'nos', 500, 'Per window, with debris removal')],
+    'glass': [('#', 'Aluminium'),
+              ('Aluminium Sliding Window', 'sqft', 450, 'Section with 5 mm glass'),
+              ('Aluminium Partition', 'sqft', 350, 'Office partition with glass'),
+              ('ACP Cladding', 'sqft', 260, '4 mm ACP sheet with framework'),
+              ('#', 'Glass'),
+              ('Toughened Glass 12 mm', 'sqft', 280, 'With fittings'),
+              ('Shower Partition', 'sqft', 650, '10 mm toughened glass with SS fittings'),
+              ('Glass Railing', 'rft', 1800, '12 mm toughened glass with SS clamps'),
+              ('Mirror', 'sqft', 180, '5 mm mirror with polished edges'),
+              ('Spider Glazing', 'sqft', 900, 'Structural glazing with spider fittings')],
+    'tiles': [('#', 'Flooring'),
+              ('Floor Tiles (2 x 2, with laying)', 'sqft', 110, 'Vitrified tiles with adhesive and grout'),
+              ('Large Tiles (4 x 2, with laying)', 'sqft', 160, 'Vitrified tiles with adhesive and grout'),
+              ('Granite Flooring', 'sqft', 180, 'With laying and polish'),
+              ('Marble Flooring', 'sqft', 350, 'With laying and polish'),
+              ('Wooden Flooring', 'sqft', 160, 'Laminate flooring with underlay'),
+              ('Skirting', 'rft', 60, 'Tile skirting, 4 inch'),
+              ('#', 'Walls & others'),
+              ('Wall Tiles (with laying)', 'sqft', 120, 'Bathroom and kitchen walls'),
+              ('Granite Kitchen Platform', 'rft', 450, '2 ft deep, with edge polish'),
+              ('Epoxy Grouting', 'sqft', 25, 'In place of cement grout'),
+              ('Old Tile Removal', 'sqft', 20, 'Breaking and debris removal')],
+    'construction': [('#', 'Construction'),
+                     ('Building Construction (Standard)', 'sqft', 2000, 'Built-up area, with materials and labour'),
+                     ('Building Construction (Premium)', 'sqft', 2500, 'Built-up area, premium finishes'),
+                     ('RCC Slab', 'sqft', 280, 'With steel and shuttering'),
+                     ('Brickwork (9 inch)', 'sqft', 140, 'Red brick or block wall'),
+                     ('Brickwork (4.5 inch)', 'sqft', 75, 'Partition wall'),
+                     ('Plastering (inside)', 'sqft', 35, '12 mm cement plaster'),
+                     ('Plastering (outside)', 'sqft', 45, '20 mm cement plaster'),
+                     ('Compound Wall', 'rft', 1800, '5 ft high, with foundation'),
+                     ('#', 'Finishing'),
+                     ('Flooring (Vitrified Tiles)', 'sqft', 120, 'With laying'),
+                     ('Waterproofing', 'sqft', 45, 'Terrace and bathrooms'),
+                     ('Electrical Point', 'point', 850, 'Wiring with conduit'),
+                     ('Plumbing Point', 'point', 1500, 'CPVC lines, fittings extra'),
+                     ('Painting', 'sqft', 28, 'Putty, primer and two coats')],
+    'painting': [('#', 'Painting'),
+                 ('Interior Emulsion', 'sqft', 22, 'Putty, primer and two coats'),
+                 ('Premium Emulsion', 'sqft', 30, 'Washable, two coats'),
+                 ('Exterior Emulsion', 'sqft', 28, 'Weatherproof, two coats'),
+                 ('Texture Paint', 'sqft', 85, 'Designer texture, one wall'),
+                 ('Enamel on Grills & Doors', 'sqft', 25, 'Primer and two coats'),
+                 ('Wood Polish (PU)', 'sqft', 180, 'PU polish on doors and furniture'),
+                 ('#', 'Waterproofing'),
+                 ('Terrace Waterproofing', 'sqft', 55, 'Membrane or chemical coating'),
+                 ('Bathroom Waterproofing', 'sqft', 65, 'Before tiling')],
+    'ceiling': [('#', 'False ceiling'),
+                ('Gypsum False Ceiling', 'sqft', 95, 'Gypsum board with framework'),
+                ('POP False Ceiling', 'sqft', 110, 'POP with framework'),
+                ('Grid Ceiling (2 x 2)', 'sqft', 75, 'Mineral fibre tiles'),
+                ('PVC Ceiling', 'sqft', 120, 'PVC panels with framework'),
+                ('Wooden Ceiling Panels', 'sqft', 350, 'Veneer or laminate panels'),
+                ('#', 'Lights & finishing'),
+                ('Cove Light Profile', 'rft', 120, 'With LED strip'),
+                ('Ceiling Light Point', 'point', 350, 'Wiring for one light'),
+                ('Ceiling Painting', 'sqft', 18, 'Primer and two coats')],
+    'fabrication': [('#', 'Fabrication'),
+                    ('MS Window Grill', 'sqft', 180, 'With primer and enamel'),
+                    ('MS Gate', 'sqft', 450, 'With primer and enamel'),
+                    ('MS Railing', 'rft', 650, 'Staircase or balcony'),
+                    ('SS Railing', 'rft', 1400, 'SS 304 with glass or pipes'),
+                    ('Collapsible Gate', 'sqft', 320, 'With lock'),
+                    ('Rolling Shutter', 'sqft', 280, 'Galvanised, with lock'),
+                    ('Roofing Shed', 'sqft', 160, 'MS structure with roofing sheets')],
+    'curtains': [('#', 'Curtains'),
+                 ('Curtain Stitching', 'nos', 450, 'Per panel, eyelet or pleated'),
+                 ('Curtain Track', 'rft', 120, 'With installation'),
+                 ('Curtain Rod', 'rft', 150, 'With brackets and installation'),
+                 ('#', 'Blinds'),
+                 ('Roller Blinds', 'sqft', 160, 'Blackout or sunscreen fabric'),
+                 ('Zebra Blinds', 'sqft', 220, 'Day and night'),
+                 ('Roman Blinds', 'sqft', 260, 'Fabric blinds'),
+                 ('Wooden Blinds', 'sqft', 380, 'Venetian wooden slats'),
+                 ('#', 'Others'),
+                 ('Wallpaper (with fixing)', 'sqft', 90, 'Imported wallpaper'),
+                 ('Pleated Mosquito Mesh', 'sqft', 140, 'For windows and doors')],
     'other': [],
 }
 
@@ -179,6 +288,12 @@ def finish(how='done'):
     _flag(False)
 
 
+def set_kind(kind):
+    s = _state()
+    s['kind'] = kind
+    _store(s)
+
+
 def remember_project(project_id):
     """The quotation rebuilt from their old one (Bring your old quotation): step 4 opens it."""
     s = _state()
@@ -239,7 +354,7 @@ def bar(endpoint, view_args):
         from flask import request
         hint = ('Check the lines we read, then set up your app with them.' if request.method == 'POST' else
                 'Upload your file. You check every line before anything is saved.')
-        nxt, back = None, 'welcome.rates'
+        nxt, back = None, 'welcome.file'
     elif key == 'rates' and endpoint == 'admin.rates':
         hint = 'These are your rates. Change anything that\'s different, tap <strong>Save</strong>, then Next.'
         back = 'welcome.rates'
@@ -260,6 +375,8 @@ def console_text(raw):
         return ''
     skipped = [TITLES.get(k, k).lower() for k in s.get('skipped') or []]
     tail = f' (skipped {", ".join(skipped)})' if skipped else ''
+    if s.get('kind') in KINDS:
+        tail += f' · {KINDS[s["kind"]].lower()}'
     if s.get('finished') == 'done':
         return 'finished' + tail
     where = TITLES.get(s['step'], s['step']).lower()

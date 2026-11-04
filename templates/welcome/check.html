@@ -1,17 +1,29 @@
 {% extends "welcome/_frame.html" %}
+{% macro new_row(k, units_list) %}
+    <tr data-grow data-grow-prefix="n{{ k }}x">
+      <td><input class="form-control form-control-sm" name="n{{ k }}x_name" maxlength="100" placeholder="Add an item…" aria-label="New item"></td>
+      <td><select class="form-select form-select-sm" name="n{{ k }}x_unit" aria-label="Unit">{% for u in units_list %}<option>{{ u }}</option>{% endfor %}</select></td>
+      <td><input class="form-control form-control-sm text-end" name="n{{ k }}x_rate" inputmode="decimal" placeholder="₹ 0" aria-label="Rate"></td>
+      <td></td>
+    </tr>
+{% endmacro %}
 {% block step %}
 <h4 class="fw-bold mb-1">These are your rates</h4>
-<p class="text-muted mb-3">Check them and change anything that's different from yours. Add your own items in the empty rows.</p>
+<p class="text-muted mb-3">Check them and change anything that's different from yours. Add your own items in the empty rows,
+  and your own sections below.</p>
 <form method="post" data-unsaved>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="table-responsive">
-  <table class="table table-sm align-middle ki-welcome-rates mb-3">
+  <table class="table table-sm align-middle ki-welcome-rates mb-2" id="wRates">
     <thead><tr class="small text-muted"><th>Item</th><th style="width:110px">Unit</th><th style="width:130px">Rate (₹)</th><th style="width:36px"></th></tr></thead>
+    {% set sections = groups if groups else [('Items', [])] %}
+    {% for name, items in sections %}
+    {% set k = loop.index0 %}
     <tbody>
+    <tr class="ki-welcome-sec"><td colspan="4">
+      <input class="form-control form-control-sm fw-semibold" name="grp_{{ k }}" value="{{ name }}" maxlength="60" aria-label="Section name">
+      <input type="hidden" name="grpold_{{ k }}" value="{{ name }}"></td></tr>
     {% for it in items %}
-    {% if loop.first or it.category != items[loop.index0 - 1].category %}
-    <tr><td colspan="4" class="small fw-semibold text-muted pt-3 border-0">{{ it.category or 'Other' }}</td></tr>
-    {% endif %}
     <tr>
       <td><input class="form-control form-control-sm" name="name_{{ it.id }}" value="{{ it.name }}" maxlength="100" aria-label="Item"></td>
       <td><select class="form-select form-select-sm" name="unit_{{ it.id }}" aria-label="Unit">
@@ -21,17 +33,35 @@
       <td class="text-center"><input class="form-check-input" type="checkbox" name="del_{{ it.id }}" value="1" title="Remove" aria-label="Remove {{ it.name }}"></td>
     </tr>
     {% endfor %}
-    <tr data-grow data-grow-prefix="new">
-      <td><input class="form-control form-control-sm" name="new_name" maxlength="100" placeholder="Add an item…" aria-label="New item"></td>
-      <td><select class="form-select form-select-sm" name="new_unit" aria-label="Unit">{% for u in units_list %}<option>{{ u }}</option>{% endfor %}</select></td>
-      <td><input class="form-control form-control-sm text-end" name="new_rate" inputmode="decimal" placeholder="0" aria-label="Rate"></td>
-      <td></td>
-    </tr>
+    {{ new_row(k, units_list) }}
     </tbody>
+    {% endfor %}
   </table>
   </div>
-  {% if items %}<div class="small text-muted mb-3"><i class="bi bi-check2-square me-1"></i>Tick the box at the end of a row to remove it.</div>{% endif %}
+  <button class="btn btn-sm btn-outline-primary mb-3" type="button" id="wAddSection" data-next="{{ sections|length }}">
+    <i class="bi bi-plus-lg me-1"></i>Add a section</button>
+  {% if groups %}<div class="small text-muted mb-3"><i class="bi bi-check2-square me-1"></i>Tick the box at the end of a row to remove it.
+    Rename a section by typing over its name.</div>{% endif %}
   <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Save my rates <i class="bi bi-arrow-right ms-1"></i></button>
   <div class="small text-muted text-center mt-2">You can change them any time: Admin → Rates.</div>
 </form>
+<template id="wSectionTpl">
+  <tbody>
+    <tr class="ki-welcome-sec"><td colspan="4">
+      <input class="form-control form-control-sm fw-semibold" name="grp___K__" maxlength="60" placeholder="Section name, e.g. Bathrooms" aria-label="Section name"></td></tr>
+    {{ new_row('__K__', units_list) }}
+  </tbody>
+</template>
+<script>
+document.getElementById('wAddSection').addEventListener('click', (e) => {
+  const btn = e.currentTarget, k = btn.dataset.next;
+  btn.dataset.next = parseInt(k, 10) + 1;
+  const html = document.getElementById('wSectionTpl').innerHTML.replaceAll('__K__', k);
+  const table = document.getElementById('wRates');
+  table.insertAdjacentHTML('beforeend', html);
+  const name = table.querySelector(`input[name="grp_${k}"]`);
+  name.focus();
+  name.dispatchEvent(new Event('input', { bubbles: true }));     // the "unsaved changes" bar
+});
+</script>
 {% endblock %}

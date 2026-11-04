@@ -698,3 +698,9 @@ body > main { flex: 1 0 auto; }
   .ki-welcome-rates td:first-child { grid-column: 1 / -1; }
   .ki-welcome-rates td:last-child { align-self: center; }
 }
+.ki-welcome-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ki-welcome-kinds .btn { padding: 10px 12px; }
+.ki-welcome-sec td { padding-top: 14px !important; border-bottom: 0; }
+.ki-welcome-sec input { background: transparent; border-color: transparent; padding-left: 0; }
+.ki-welcome-sec input:hover, .ki-welcome-sec input:focus { border-color: var(--bs-border-color); padding-left: .5rem; }
+@media (max-width: 575.98px) { .ki-welcome-kinds { grid-template-columns: 1fr; } }

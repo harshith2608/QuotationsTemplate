@@ -15,14 +15,11 @@ def admins_only():
         abort(404)
 
 
-BACK = {'units': 'welcome.business', 'rates': 'welcome.units', 'kind': 'welcome.rates', 'check': 'welcome.rates'}
+BACK = {'units': 'welcome.business', 'rates': 'welcome.units', 'file': 'welcome.rates', 'check': 'welcome.rates'}
 
 
 def _page(template, key, back=None, **kw):
     """A tour page; back: the page before it (its GET puts the tour back on that step)."""
-    from . import ai_import
-    if back == 'welcome.rates' and not ai_import.available():
-        back = 'welcome.units'                    # no upload question here: the step before is how you measure
     return render_template(template, hide_nav=True, key=key, number=W.number(key), total=len(W.ORDER),
                            back_url=url_for(back) if back else None, title="Let's set up your QuoteRoom", **kw)
 
@@ -162,41 +159,60 @@ def _has_items():
 
 @welcome_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
-    from . import ai_import
-    W.go_to('rates')
-    db.session.commit()
-    if request.method == 'POST':
-        if request.form.get('file') == 'yes' and ai_import.available():
-            return redirect(url_for('admin.ai_import'))
-        return redirect(url_for('welcome.kind'))
-    if not ai_import.available():                 # no upload here: straight to the typical rates
-        return redirect(url_for('welcome.check') if _has_items() else url_for('welcome.kind'))
-    return _page('welcome/rates.html', 'rates', back=BACK['rates'], has_items=_has_items())
-
-
-@welcome_bp.route('/rates/kind', methods=['GET', 'POST'])
-def kind():
+    """What they mostly do. Interiors, kitchens and turnkey firms are then asked for an old quotation or rate Excel
+    (when Bring your old quotation is on); every other kind goes straight to its typical items."""
+    from . import ai_import, boq
     W.go_to('rates')
     if request.method == 'POST':
         k = request.form.get('kind')
         if k not in W.KINDS:
             flash('Choose what you mostly do.', 'danger')
-            return redirect(url_for('welcome.kind'))
-        from . import boq
+            return redirect(url_for('welcome.rates'))
         if not boq.ready():
             flash('Your app needs its latest update first. Please contact support.', 'danger')
-            return redirect(url_for('welcome.kind'))
+            return redirect(url_for('welcome.rates'))
+        W.set_kind(k)
+        if k in W.FILE_KINDS and ai_import.available() and not _has_items():
+            db.session.commit()
+            return redirect(url_for('welcome.file'))
         if not _has_items():                      # never over rates already set up (they're checked instead)
             W.add_typical(k)
         db.session.commit()
         return redirect(url_for('welcome.check'))
     db.session.commit()
-    return _page('welcome/kind.html', 'rates', back=BACK['kind'], kinds=W.KINDS, has_items=_has_items())
+    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=W.KINDS, icons=W.ICONS, chosen=W.state().get('kind'),
+                 has_items=_has_items())
+
+
+@welcome_bp.route('/rates/file', methods=['GET', 'POST'])
+def file():
+    """"Do you have an old quotation or rate Excel ready?" (interiors, kitchens and turnkey)."""
+    from . import ai_import
+    W.go_to('rates')
+    if request.method == 'POST':
+        if request.form.get('file') == 'yes' and ai_import.available():
+            db.session.commit()
+            return redirect(url_for('admin.ai_import'))
+        if not _has_items():
+            W.add_typical(W.state().get('kind') or 'interiors')
+        db.session.commit()
+        return redirect(url_for('welcome.check'))
+    db.session.commit()
+    if not ai_import.available():
+        return redirect(url_for('welcome.rates'))
+    return _page('welcome/rates.html', 'rates', back=BACK['file'], has_items=_has_items())
+
+
+@welcome_bp.route('/rates/kind')
+def kind():
+    return redirect(url_for('welcome.rates'))       # (the first page of step 3 before it asked what you do first)
 
 
 @welcome_bp.route('/rates/check', methods=['GET', 'POST'])
 def check():
-    """"These are your rates": every item with its unit and rate, to change; empty rows to add more."""
+    """"These are your rates": every item with its unit and rate in its section, to change; sections can be renamed
+    and added, each with an empty row to add more."""
+    import re
     from . import boq
     from .models import BoqItem
     W.go_to('rates')
@@ -204,6 +220,18 @@ def check():
         db.session.commit()
         return redirect(url_for('admin.rates'))
     if request.method == 'POST':
+        sections = {}
+        for key, value in request.form.items():
+            m = re.match(r'^grp_(\d+)$', key)
+            if m:
+                sections[m.group(1)] = ' '.join(value.split())[:60]
+        for k, name in sections.items():           # a section renamed: its items move with it
+            old = request.form.get(f'grpold_{k}')
+            if old is not None and name and name != old:
+                q = BoqItem.query.filter((BoqItem.category == old) | (BoqItem.category.is_(None))) if old in ('', 'Other') \
+                    else BoqItem.query.filter(BoqItem.category == old)
+                for it in q.all():
+                    it.category = name
         for item in BoqItem.query.all():
             if request.form.get(f'del_{item.id}'):
                 db.session.delete(item)
@@ -215,14 +243,16 @@ def check():
             item.rate = _money(request.form.get(f'rate_{item.id}'), item.rate)
         have = {i.name.lower() for i in BoqItem.query.all()}
         for key in request.form:
-            if not (key.startswith('new') and key.endswith('_name')):
+            m = re.match(r'^n(\d+)x\d*_name$', key)
+            if not m:
                 continue
             p = key[:-len('name')]
             name = ' '.join(request.form.get(key, '').split())[:100]
             if not name or name.lower() in have:
                 continue
             db.session.add(BoqItem(name=name, unit=boq.clean_unit(request.form.get(p + 'unit')),
-                                   rate=_money(request.form.get(p + 'rate'), 0), category='Other'))
+                                   rate=_money(request.form.get(p + 'rate'), 0),
+                                   category=sections.get(m.group(1)) or 'Other'))
             have.add(name.lower())
         from . import setup_guide
         setup_guide.mark('pricing')
@@ -232,11 +262,11 @@ def check():
         return _next('rates')
     db.session.commit()
     items = BoqItem.query.order_by(BoqItem.id).all()
-    first = {}
-    for it in items:                              # in their groups, in the order they were added
-        first.setdefault(it.category or '', it.id)
-    items.sort(key=lambda it: (first[it.category or ''], it.id))
-    return _page('welcome/check.html', 'rates', back=BACK['check'], items=items, units_list=boq.units_for_business())
+    groups = {}
+    for it in items:                              # in their sections, in the order they were added
+        groups.setdefault(it.category or 'Other', []).append(it)
+    return _page('welcome/check.html', 'rates', back=BACK['check'], groups=list(groups.items()),
+                 units_list=boq.units_for_business())
 
 
 def _money(value, default):
