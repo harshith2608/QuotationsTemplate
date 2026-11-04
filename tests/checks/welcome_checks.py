@@ -82,6 +82,18 @@ ok('Back on every step after the first', 'id="wBack"' not in c.get('/welcome/bus
 with app.app_context():
     ok('…opening a step again puts the tour back on it', W.step() == 'rates')
     W.go_to('quote'); db.session.commit()
+# Back, and a different business: its own typical items (the first one's go, except changed ones and their own)
+r = c.post('/welcome/rates', data={'kind': 'tiles'})
+with app.app_context():
+    names = {b.name for b in BoqItem.query.all()}
+    ok('Back and another business: its own typical items instead', loc(r).endswith('/welcome/rates/check')
+       and 'Floor Tiles (2 x 2, with laying)' in names and 'Base Cabinet' not in names and 'TV Unit' not in names)
+    ok('…the first one\'s items they changed or added stay', {'Wardrobe', 'Wall Panelling', 'Vanity Unit'} <= names)
+c.post('/welcome/rates', data={'kind': 'interiors'})
+with app.app_context():
+    names = {b.name for b in BoqItem.query.all()}
+    ok('…and back again: interiors\' items again, no tiles', 'Base Cabinet' in names and 'Granite Flooring' not in names)
+    W.go_to('quote'); db.session.commit()
 r = c.get('/welcome/', follow_redirects=True)
 t = r.text
 ok('…and the strip on the quotation form goes back to the rates', 'href="/welcome/rates/check"' in t and '> Back</a>' in t)

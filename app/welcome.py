@@ -298,14 +298,54 @@ def remember_project(project_id):
     _store(s)
 
 
+def _typical_ids():
+    return set((_state().get('typical') or {}).get('ids') or [])
+
+
+def note_added(ids):
+    """Items they added on "These are your rates": theirs, but made in this tour (see own_items)."""
+    s = _state()
+    s['added'] = sorted(set(s.get('added') or []) | {int(i) for i in ids})
+    _store(s)
+
+
+def own_items():
+    """Their items from outside this tour (an old quotation, a price list loaded from the console): not the typical
+    ones it gave them nor the ones they added in it. Lump sums don't count."""
+    from . import boq
+    from .models import BoqItem
+    st = _state()
+    ids = _typical_ids() | set(st.get('given') or []) | set(st.get('added') or [])
+    return [b for b in BoqItem.query.filter(BoqItem.unit != boq.LUMP_SUM).all() if b.id not in ids]
+
+
+def _drop_typical():
+    """Another kind of business chosen (Back, then a different choice): the typical items given for the first one go,
+    except any they changed (name, unit or rate); the items they added themselves stay."""
+    from . import db
+    from .models import BoqItem
+    given = (_state().get('typical') or {}).get('rows') or {}
+    for item_id, (name, unit, rate) in given.items():
+        b = db.session.get(BoqItem, int(item_id))
+        if b is not None and (b.name, b.unit, float(b.rate or 0)) == (name, unit, float(rate)):
+            db.session.delete(b)
+    db.session.flush()
+
+
 def add_typical(kind):
     """Price by item, with the typical items for this kind of business when they have no items of their own yet
-    (in their own units). Returns how many were added."""
+    (in their own units); the typical items of a kind chosen before are replaced. Returns how many were added."""
     from sqlalchemy import func
     from . import boq, db
     from .models import BoqItem
-    added = 0
-    if BoqItem.query.filter(BoqItem.unit != boq.LUMP_SUM).first() is None:
+    added, rows = 0, {}
+    s = _state()
+    if (s.get('typical') or {}).get('kind') == kind and _typical_ids():
+        boq.set_pricing(boq.ITEM, starter=False)
+        return 0                                  # the same choice again: what they have stays
+    if s.get('typical'):
+        _drop_typical()
+    if not own_items():
         from . import units
         metric = units.area_unit() == 'sqm'
         have = {n for (n,) in db.session.query(func.lower(BoqItem.name)).all()}
@@ -321,10 +361,16 @@ def add_typical(kind):
                 unit, rate = 'rmt', boq._metric_rate(rate, boq.LENGTH_UNITS['rmt'])
             if name.lower() in have:
                 continue
-            db.session.add(BoqItem(name=name, unit=unit, rate=rate, description=description, category=group))
+            b = BoqItem(name=name, unit=unit, rate=rate, description=description, category=group)
+            db.session.add(b)
+            db.session.flush()
+            rows[str(b.id)] = (name, unit, float(rate))
             have.add(name.lower())
             added += 1
-        db.session.flush()
+    s = _state()
+    s['typical'] = {'kind': kind, 'ids': [int(i) for i in rows], 'rows': rows}
+    s['given'] = sorted(set(s.get('given') or []) | {int(i) for i in rows})     # every kind's, for own_items
+    _store(s)
     boq.set_pricing(boq.ITEM, starter=False)
     return added
 

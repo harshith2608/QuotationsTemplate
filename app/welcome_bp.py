@@ -149,12 +149,12 @@ def units():
 # ── 3. Your rates ────────────────────────────────────────────────────────────
 
 def _has_items():
-    """Their rates are already in: their own items, or rates set up before (a price list loaded from the console)."""
+    """Their rates are already in, from somewhere other than this tour's typical items: their own items (an old
+    quotation read, a price list loaded from the console), or rates set up by material."""
     from . import boq, setup_guide
-    from .models import BoqItem
-    if boq.enabled() and BoqItem.query.filter(BoqItem.unit != boq.LUMP_SUM).first() is not None:
+    if boq.enabled() and W.own_items():
         return True
-    return 'rates' in (setup_guide._state().get('done') or [])
+    return 'rates' in (setup_guide._state().get('done') or []) and not W.state().get('typical')
 
 
 @welcome_bp.route('/rates', methods=['GET', 'POST'])
@@ -176,7 +176,7 @@ def rates():
             db.session.commit()
             return redirect(url_for('welcome.file'))
         if not _has_items():                      # never over rates already set up (they're checked instead)
-            W.add_typical(k)
+            W.add_typical(k)                      # (replacing the typical items of a kind chosen before)
         db.session.commit()
         return redirect(url_for('welcome.check'))
     db.session.commit()
@@ -242,6 +242,7 @@ def check():
             item.unit = boq.clean_unit(request.form.get(f'unit_{item.id}', item.unit))
             item.rate = _money(request.form.get(f'rate_{item.id}'), item.rate)
         have = {i.name.lower() for i in BoqItem.query.all()}
+        added = []
         for key in request.form:
             m = re.match(r'^n(\d+)x\d*_name$', key)
             if not m:
@@ -250,10 +251,13 @@ def check():
             name = ' '.join(request.form.get(key, '').split())[:100]
             if not name or name.lower() in have:
                 continue
-            db.session.add(BoqItem(name=name, unit=boq.clean_unit(request.form.get(p + 'unit')),
-                                   rate=_money(request.form.get(p + 'rate'), 0),
-                                   category=sections.get(m.group(1)) or 'Other'))
+            b = BoqItem(name=name, unit=boq.clean_unit(request.form.get(p + 'unit')),
+                        rate=_money(request.form.get(p + 'rate'), 0), category=sections.get(m.group(1)) or 'Other')
+            db.session.add(b)
+            db.session.flush()
+            added.append(b.id)
             have.add(name.lower())
+        W.note_added(added)
         from . import setup_guide
         setup_guide.mark('pricing')
         setup_guide.mark('rates')
