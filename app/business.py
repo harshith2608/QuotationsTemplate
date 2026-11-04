@@ -11,6 +11,12 @@ examples it always had.
 from flask import g, has_app_context
 
 KEY = 'business_kind'
+# Which kinds new businesses can choose (the website's trial form, the guided setup): the console's Features page.
+# A JSON list of kinds, in console_state for the shared app and in the website's app_settings (kept on the demo's
+# nightly reset). Interiors and "Something else" are always offered; until the console says, the ones offered before.
+KINDS_KEY = 'business_kinds'
+ALWAYS_OFFERED = ('interiors', 'other')
+OFFERED_BEFORE = ('interiors', 'furniture', 'upvc', 'glass', 'other')
 INTERIORS = ('interiors', 'turnkey', 'furniture')     # the app's own words (wardrobe, plywood, BHK) fit these
 BY_ROOM = INTERIORS + ('upvc', 'glass', 'tiles', 'painting', 'ceiling', 'curtains')   # work done room by room
 
@@ -155,3 +161,35 @@ def item_names():
         return names
     own = [b.name for b in BoqItem.query.order_by(BoqItem.name)] if boq.ready() else []
     return list(dict.fromkeys([n for n in names if n not in catalog.DEFAULT_ITEMS] + own))
+
+
+def parse_kinds(raw):
+    """The kinds in a stored KINDS_KEY value, or None when there is none."""
+    import json
+    from . import welcome
+    if raw is None:
+        return None
+    try:
+        found = json.loads(raw)
+    except ValueError:
+        return None
+    return [k for k in welcome.KINDS if k in found] if isinstance(found, list) else None
+
+
+def kinds_offered():
+    """The kinds a new business can choose, in welcome.KINDS order ('other' last)."""
+    from . import platform_switch, tenancy, welcome
+    from .models import AppSetting
+    try:
+        raw = platform_switch.value(KINDS_KEY) if tenancy.tenant_mode() else AppSetting.get(KINDS_KEY)
+    except Exception:
+        raw = None
+    on = parse_kinds(raw)
+    on = set(OFFERED_BEFORE if on is None else on) | set(ALWAYS_OFFERED)
+    return [k for k in welcome.KINDS if k in on]
+
+
+def offered(value):
+    """A trial form's business type (marketing.BUSINESS_TYPES) is offered now."""
+    from . import welcome
+    return welcome.OLD_KINDS.get(value, value) in kinds_offered()

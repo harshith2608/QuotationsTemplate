@@ -86,3 +86,32 @@ from app import marketing, signup
 ok('the trial form offers every kind, and each can set up its own app',
    {'tiles', 'construction', 'painting', 'ceiling', 'fabrication', 'curtains', 'turnkey'} <= set(marketing.BUSINESS_TYPES)
    and set(marketing.BUSINESS_TYPES) - {'other'} == signup.ELIGIBLE)
+
+# ── Kinds of business offered (the console's Features → Kinds of business) ──
+with app.app_context():
+    ok('not saved yet: the kinds offered before (interiors, furniture, uPVC, glass, something else)',
+       business.kinds_offered() == ['interiors', 'furniture', 'upvc', 'glass', 'other'])
+    AppSetting.set(business.KINDS_KEY, json.dumps(['tiles', 'painting'])); db.session.commit()
+with app.app_context():
+    ok('saved: those kinds, with interiors and something else always',
+       business.kinds_offered() == ['interiors', 'tiles', 'painting', 'other'])
+    ok('…the trial form\'s types follow (modular kitchens is interiors)', business.offered('tiles')
+       and business.offered('kitchens') and not business.offered('upvc') and not business.offered('construction'))
+with app.test_request_context():
+    types = [k for k, _ in marketing._context()['business_types']]
+ok('…the website\'s trial form shows only those', types == ['interiors', 'kitchens', 'tiles', 'painting', 'other'])
+c.post('/welcome/restart')
+kp = c.get('/welcome/rates').text
+ok('…the guided setup offers only those', 'value="tiles"' in kp and 'value="painting"' in kp and 'value="upvc"' not in kp
+   and 'value="interiors"' in kp)
+kind('upvc')
+with app.app_context():
+    from app import welcome as W
+    s = W.state(); s['kind'] = 'upvc'; W._store(s); db.session.commit()
+ok('…a business that chose a kind since switched off still sees it', 'value="upvc"' in c.get('/welcome/rates').text)
+
+from app import seed
+with app.app_context():
+    seed._clear_all_tables()
+    ok('the website keeps the choice on the demo\'s nightly reset', AppSetting.get(business.KINDS_KEY) is not None
+       and AppSetting.get(business.KEY) is None)

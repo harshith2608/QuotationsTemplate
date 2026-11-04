@@ -88,7 +88,9 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
   ("e.g. Sliding Window"), its own item suggestions, no interiors tagline, a neutral thank-you on PDFs and messages,
   and AI helpers that know its work (Check looks for a missing mosquito mesh, not a missing chimney). Construction,
   fabrication and others split a quotation into **Areas** (Ground Floor, Terrace…) instead of Rooms. Interiors
-  businesses, and every business from before, see exactly what they did. The trial form offers all 12 kinds.
+  businesses, and every business from before, see exactly what they did. Which kinds can sign up (the website's
+  trial form and the guided setup) is a switch per kind in the console: Features → Kinds of business (interiors and
+  "something else" always; until saved, interiors, furniture, uPVC and glass as before).
 - **★ Setup guide.** The full list of steps, after the guided setup or instead of it: company details, logo &
   colours, units, rates, quotation PDF, how customers pay, first quotation (plus optional costs, team, invoices,
   email). Each step opens the right page with a banner and **Done, next step**; steps tick themselves off when the

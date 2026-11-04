@@ -185,8 +185,12 @@ def rates():
         if k in W.FILE_KINDS and ai_import.available() and not _has_items():
             return redirect(url_for('welcome.file', kind=k))
         return redirect(url_for('welcome.check', kind=k))
-    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=W.KINDS, icons=W.ICONS,
-                 chosen=request.args.get('kind') or W.state().get('kind') or _trial_kind(), has_items=_has_items())
+    from . import business
+    chosen = request.args.get('kind') or W.state().get('kind') or _trial_kind()
+    offered = business.kinds_offered()
+    kinds = {k: v for k, v in W.KINDS.items() if k in offered or k == chosen}   # the console's Kinds of business
+    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=kinds, icons=W.ICONS,
+                 chosen=chosen, has_items=_has_items())
 
 
 @welcome_bp.route('/rates/file', methods=['GET', 'POST'])

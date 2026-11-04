@@ -62,7 +62,8 @@ def website_sells():
 
 def website_offers(business_type):
     """True if the website should offer "Set up your app now" for this request."""
-    return website_sells() and business_type in ELIGIBLE
+    from . import business
+    return website_sells() and business_type in ELIGIBLE and business.offered(business_type)
 
 
 def setup_url(lead_id, base=None, plan=None):
