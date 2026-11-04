@@ -55,6 +55,7 @@
           <input type="hidden" name="lead_id" value="{{ l.id }}">
           <input type="hidden" name="name" value="{{ l.name }}">
           <input type="hidden" name="phone" value="{{ l.phone }}">
+          <input type="hidden" name="business_type" value="{{ l.business_type or '' }}">
           <div class="grow"><label>Company name <span class="muted small">(goes on their quotations)</span></label>
             <input type="text" name="company" value="{{ l.company_name or '' }}" maxlength="80"></div>
           <div class="grow"><label>City</label><input type="text" name="city" value="{{ l.city or '' }}" maxlength="60"></div>

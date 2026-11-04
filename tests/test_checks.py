@@ -31,7 +31,7 @@ SETUP = {
     'legal_checks': 'seed', 'plan_checks': 'seed', 'settings_checks': 'seed', 'smoke_checks': 'seed',
     'stage_checks': 'seed', 'totals_checks': 'seed', 'webhook_checks': 'seed',
     'encryption_checks': 'seed', 'leads_checks': 'seed', 'materials_checks': 'seed', 'billing_checks': 'seed', 'lock_checks': 'bootstrap', 'setup_checks': 'bootstrap', 'tenant_checks': 'postgres', 'console_checks': 'postgres',
-    'customers_checks': 'realpg', 'plywood_checks': 'seed', 'units_checks': 'seed', 'layout_checks': 'seed', 'boq_checks': 'seed', 'templates_checks': 'seed', 'price_list_checks': 'seed', 'item_images_checks': 'seed', 'quote_gst_checks': 'seed', 'presentation_checks': 'seed', 'item_costs_checks': 'seed', 'ai_import_checks': 'seed', 'pdf_look_checks': 'seed', 'material_list_checks': 'seed', 'ai_tools_checks': 'seed', 'welcome_checks': 'bootstrap',
+    'customers_checks': 'realpg', 'plywood_checks': 'seed', 'units_checks': 'seed', 'layout_checks': 'seed', 'boq_checks': 'seed', 'templates_checks': 'seed', 'price_list_checks': 'seed', 'item_images_checks': 'seed', 'quote_gst_checks': 'seed', 'presentation_checks': 'seed', 'item_costs_checks': 'seed', 'ai_import_checks': 'seed', 'pdf_look_checks': 'seed', 'material_list_checks': 'seed', 'ai_tools_checks': 'seed', 'welcome_checks': 'bootstrap', 'business_checks': 'bootstrap',
 }
 
 # env vars from the developer's shell/.env that would change app behaviour

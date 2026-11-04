@@ -152,6 +152,14 @@ def units():
 
 # ── 3. Your rates ────────────────────────────────────────────────────────────
 
+def _trial_kind():
+    """What they picked on the trial form (set up with the trial), to start with it chosen."""
+    from . import business
+    from .models import AppSetting
+    found = AppSetting.get(business.KEY) or ''
+    return W.OLD_KINDS.get(found, found) if found else None
+
+
 def _has_items():
     """Their rates are already in, from outside this tour: their own items (an old quotation read, a price list loaded
     from the console), or rates set up by material."""
@@ -178,7 +186,7 @@ def rates():
             return redirect(url_for('welcome.file', kind=k))
         return redirect(url_for('welcome.check', kind=k))
     return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=W.KINDS, icons=W.ICONS,
-                 chosen=request.args.get('kind') or W.state().get('kind'), has_items=_has_items())
+                 chosen=request.args.get('kind') or W.state().get('kind') or _trial_kind(), has_items=_has_items())
 
 
 @welcome_bp.route('/rates/file', methods=['GET', 'POST'])

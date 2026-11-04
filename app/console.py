@@ -810,7 +810,8 @@ def create_trial():
             return redirect(url_for('console.trial_detail', slug=done))
     try:
         days = int(days)
-        t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email)
+        t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email,
+                             kind=request.form.get('business_type', '').strip()[:20] or None)
     except (ops.OpsError, ValueError) as exc:
         with db.engine.connect() as conn:
             existing = conn.execute(text('SELECT status FROM public.tenants WHERE slug = :s'), {'s': slug}).scalar()
@@ -2318,7 +2319,8 @@ def start_trial():
                 break
             try:
                 t = ops.claim_trial(slug, form['username'], password, 7, company=form['company'],
-                                    phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'))
+                                    phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'),
+                                    kind=lead.get('business_type'))
                 break
             except ops.OpsError as exc:
                 if 'is taken' not in str(exc):           # taken by someone else a moment ago: try the next one

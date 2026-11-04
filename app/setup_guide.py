@@ -44,8 +44,9 @@ class Step:
     @property
     def what(self):
         if self._by_item():
-            return ('Each item you quote (wardrobe, false ceiling, side table…) with its description, unit and rate. '
-                    'They fill in by themselves on every quotation.')
+            from . import business
+            return (f'Each item you quote ({business.profile()["items_example"]}…) with its description, unit and '
+                    'rate. They fill in by themselves on every quotation.')
         if self.key == 'first_quote':
             from . import boq
             if boq.enabled():
@@ -55,6 +56,11 @@ class Step:
             from . import presentation
             if presentation.enabled():
                 return self._what + ' Your cover page, About us and Next steps too.'
+        if self.key in OTHER_WORK:
+            from . import business
+            p = business.profile()
+            if not p['interiors']:                          # a uPVC, tiles, construction… business
+                return OTHER_WORK[self.key].format(items=p['items_example'], section=p['section'].lower())
         return self._what
 
     def url(self, **extra):
@@ -63,6 +69,14 @@ class Step:
     def matches(self, endpoint, args):
         return endpoint == self.endpoint and all(args.get(k) == v for k, v in self.args.items())
 
+
+# The steps' words for a business that isn't interiors (app/business.py)
+OTHER_WORK = {
+    'pricing': 'By item ({items}… each with its own rate), or by material (a rate per sqft for each material and work '
+               'type, as interior firms do).',
+    'templates': 'Save a quotation you make often as a starting quotation: the next one starts with every {section} and '
+                 'item filled in, and you just type the sizes. Open a quotation and tap Save as template.',
+}
 
 STEPS = [
     Step('import', 'The quick way: bring your old quotation or your Excel rates', 'Upload a quotation you have sent '

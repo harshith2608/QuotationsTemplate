@@ -184,8 +184,12 @@ def terms():
 
 # The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Every one but 'other' is a
 # trade QuoteRoom is for: they can set up their own app (signup.ELIGIBLE) and count as a Lead for the ads.
-BUSINESS_TYPES = {'interiors': 'Interior designer', 'furniture': 'Furniture works', 'kitchens': 'Modular kitchens',
-                  'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium works', 'other': 'Other'}
+# The trial form's choices (the app's own kinds: welcome.KINDS; 'kitchens' is set up as interiors)
+BUSINESS_TYPES = {'interiors': 'Interior designer', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
+                  'furniture': 'Furniture works', 'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium works',
+                  'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
+                  'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
+                  'curtains': 'Curtains, blinds & wallpaper', 'other': 'Other'}
 MAX_PER_IP_PER_HOUR = 5
 KEEP_LEADS_DAYS = 365          # stated in the privacy policy
 

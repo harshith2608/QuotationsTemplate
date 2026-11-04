@@ -189,7 +189,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="kind" value="changes">
         <input type="hidden" name="name" value="{{ snap.customer.name }}">
-        <textarea name="note" class="form-control mb-2" rows="3" maxlength="1000" required placeholder="e.g. Please change the wardrobe to laminate and add a study table."></textarea>
+        <textarea name="note" class="form-control mb-2" rows="3" maxlength="1000" required placeholder="e.g. {{ biz.change_example }}"></textarea>
         <button class="btn btn-outline-secondary w-100" type="submit">Send my changes</button>
       </form>
     </details>

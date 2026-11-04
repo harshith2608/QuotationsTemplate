@@ -185,8 +185,8 @@ def _letterhead(name, lines, title_style, subtitle_style, accent):
 
 
 def _thank_you_text():
-    return (f"Thank you for choosing <b>{escape(get_brand()['name'])}</b>. "
-            "We look forward to transforming your space!")
+    from . import business
+    return f"Thank you for choosing <b>{escape(get_brand()['name'])}</b>. {escape(business.profile()['thank_you'])}!"
 
 
 def _quote_ref(project):

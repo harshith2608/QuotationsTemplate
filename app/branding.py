@@ -149,7 +149,18 @@ def _env_or_default(brand_key):
 
 def env_default(brand_key):
     """The deployment-level value (env var or built-in default) — shown as placeholders in Settings."""
+    if brand_key == 'tagline' and not _interiors():
+        return (os.environ.get(FIELDS['tagline'][1]) or '').strip()
     return _env_or_default(brand_key)
+
+
+def _interiors():
+    """An interiors business (app/business.py): the built-in tagline is theirs. True when it can't be told."""
+    try:
+        from . import business
+        return business.is_interiors()
+    except Exception:
+        return True
 
 
 def _logo_file():
@@ -169,6 +180,8 @@ def build_brand(saved):
         value = clean_value(key, saved.get(app_key))
         brand[key] = value if value else _env_or_default(key)
     brand['signatory_name'] = brand['signatory_name'] or brand['name']
+    if not clean_value('tagline', saved.get(FIELDS['tagline'][0])) and not _interiors():
+        brand['tagline'] = (os.environ.get(FIELDS['tagline'][1]) or '').strip()   # the built-in one is for interiors
 
     # Derived colours
     brand['light'] = tint(brand['primary'], 0.9)
@@ -207,13 +220,13 @@ def build_brand(saved):
 def prefetch_common():
     """Read, in ONE query, the settings nearly every page needs: brand, units, plan, invoice and payment settings
     (AppSetting keeps them for the rest of the request). Returns the raw values."""
-    from . import billing, boq, layout, plan, units
+    from . import billing, boq, business, layout, plan, units, welcome
     from .models import AppSetting
     keys = ([f[0] for f in FIELDS.values()] + [LOGO_VERSION_KEY] + list(units.KEYS)
             + [plan.PLAN_KEY, plan.STARTED_KEY, plan.ENDS_KEY] + list(billing.INVOICE_KEYS)
             + ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code', 'razorpay_key_id', 'admin_email',
                'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'terms_conditions', 'plywood_seeded', 'setup_guide', 'quote_templates',
-               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, boq.KEY]
+               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, boq.KEY, business.KEY, welcome.KEY]
             + [k for k, _ in layout.SECTION_KEYS])
     return AppSetting.prefetch(keys)
 

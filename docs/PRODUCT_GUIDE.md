@@ -83,6 +83,12 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
   quotation (or their old one, rebuilt), with a strip saying what to do; (5) its PDF and Send on WhatsApp. Then
   "When you have time": payment details, terms & conditions, invoices, team. The console's trial page shows where
   each trial stopped. *Pitch: "Five short questions and you're making your first quotation."*
+- **Made for their kind of business.** The app knows what the business does (from "What do you mostly do?" in the
+  guided setup, filled in from the trial form): a uPVC, tiles, painting or construction firm sees its own examples
+  ("e.g. Sliding Window"), its own item suggestions, no interiors tagline, a neutral thank-you on PDFs and messages,
+  and AI helpers that know its work (Check looks for a missing mosquito mesh, not a missing chimney). Construction,
+  fabrication and others split a quotation into **Areas** (Ground Floor, Terrace…) instead of Rooms. Interiors
+  businesses, and every business from before, see exactly what they did. The trial form offers all 12 kinds.
 - **★ Setup guide.** The full list of steps, after the guided setup or instead of it: company details, logo &
   colours, units, rates, quotation PDF, how customers pay, first quotation (plus optional costs, team, invoices,
   email). Each step opens the right page with a banner and **Done, next step**; steps tick themselves off when the

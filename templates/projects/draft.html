@@ -26,7 +26,7 @@
         {% if text_on %}
         <label class="form-label fw-semibold {{ 'mt-3' if photos_on }}" for="draftMessage">{{ 'Or type' if photos_on else 'Type' }} the requirements</label>
         <textarea class="form-control" id="draftMessage" name="message" rows="{{ 4 if photos_on else 8 }}" maxlength="6000"
-                  placeholder="e.g. 3 BHK. Wardrobes with lofts in both bedrooms, TV unit, L-shaped kitchen, false ceiling in hall.">{{ message }}</textarea>
+                  placeholder="e.g. {{ biz.draft_example }}">{{ message }}</textarea>
         {% endif %}
         <button type="submit" class="btn btn-primary ki-btn-primary mt-3" id="draftGo">
           <i class="bi bi-stars me-1"></i>Draft the quotation</button>

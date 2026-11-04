@@ -631,7 +631,7 @@
           <select id="invRate" name="invoice_gst_rate" class="form-select">
             {% for r in gst_rates %}<option value="{{ r }}" {% if r == invoice_settings.gst_rate %}selected{% endif %}>{{ r }}%</option>{% endfor %}
           </select>
-          <div class="form-text">Furniture and interior work is usually 18%. Ask your accountant if unsure.</div>
+          <div class="form-text">{{ 'Furniture and interior work' if biz.interiors else 'Most works contracts are' }} usually 18%. Ask your accountant if unsure.</div>
         </div>
         <div class="col-sm-4">
           <label class="form-label small fw-semibold" for="invHsn">HSN / SAC code <span class="text-muted fw-normal">(optional)</span></label>
