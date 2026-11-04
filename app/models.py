@@ -803,7 +803,8 @@ class MaterialRule(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(100), nullable=False)          # may use {material} and {plywood}
     category   = db.Column(db.String(60), nullable=False)
-    materials  = db.Column(db.Text, nullable=True)                  # JSON list of material names; empty = every material
+    materials  = db.Column(db.Text, nullable=True)                  # JSON list of material names (empty = every
+                                                                    # material), or {"boq": line name} for a BOQ line's rule
     work_type  = db.Column(db.String(50), nullable=True)            # '' / None = any work type
     per_sqft   = db.Column(db.Float, nullable=False, default=0.0)
     unit       = db.Column(db.String(30), nullable=True)

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Select materials – {{ project.customer_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .ki-sel-row { cursor: pointer; }
+  .ki-sel-row.on { background: rgba(var(--bs-primary-rgb), .06); }
+  .ki-sel-qty { width: 5.5rem; flex-shrink: 0; }
+  .ki-sel-ply { width: 11rem; flex-shrink: 0; }
+  .ki-sel-unit { width: 6rem; flex-shrink: 0; line-height: 1.2; }
+  @media (max-width: 575.98px) { .ki-sel-row.has-ply { flex-wrap: wrap; } .ki-sel-row.has-ply label { flex-basis: calc(100% - 2rem); }
+    .ki-sel-ply { order: 5; width: auto; flex: 1 1 auto; margin-left: 1.6rem; }
+    .ki-sel-qty { width: 4.2rem; } .ki-sel-unit { width: 3.6rem; font-size: .75rem; } }
+  .ki-sel-bar { position: sticky; bottom: 0; z-index: 5; background: var(--bs-body-bg); border-top: 1px solid var(--bs-border-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mt-3 mb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">Quotations</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="text-decoration-none">Quotation #{{ project.id }}</a></li>
+      <li class="breadcrumb-item active">Select materials</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-ui-checks me-2 text-primary"></i>Select materials · {{ project.customer_name }}</h4>
+</div>
+
+<p class="small text-muted">What this quotation needs is already ticked. Untick what you don't need, tick anything else,
+  change a quantity or the type of ply if you like, then make the list to copy or send. <strong>No prices</strong> are on it.</p>
+
+<input type="search" class="form-control mb-3" id="selFind" placeholder="Find a material, e.g. ply, hinge, paint" aria-label="Find a material">
+
+<form method="POST" id="selForm" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% set n = namespace(c=0) %}
+  {% for group, rows in choices %}
+  <div class="card shadow-sm border-0 mb-3" data-sel-group>
+    <div class="card-header ki-card-header d-flex align-items-center gap-2">
+      <span class="fw-semibold">{{ group }}</span>
+      <span class="badge bg-light text-dark border" data-sel-count></span>
+    </div>
+    <ul class="list-group list-group-flush">
+    {% for c in rows %}
+      {% if c.line %}{% set p = 'l%d_' % c.line.id %}{% else %}{% set n.c = n.c + 1 %}{% set p = 'c%d_' % n.c %}{% endif %}
+      <li class="list-group-item ki-sel-row d-flex align-items-center gap-2 {{ 'on' if c.on }} {{ 'has-ply' if c.ply }}" data-name="{{ c.name|lower }}">
+        <input class="form-check-input flex-shrink-0 mt-0" type="checkbox" name="{{ p }}on" id="{{ p }}on" {{ 'checked' if c.on }}>
+        {% if c.line %}<input type="hidden" name="{{ p }}seen" value="1">{% else %}
+        <input type="hidden" name="{{ p }}name" value="{{ c.name }}"><input type="hidden" name="{{ p }}unit" value="{{ c.unit }}">
+        <input type="hidden" name="{{ p }}group" value="{{ group }}">{% endif %}
+        <label class="flex-grow-1 mb-0" for="{{ p }}on" style="min-width:0">
+          <span class="d-block" data-sel-name>{{ c.name }}</span>
+          {% if c.source %}<span class="d-block small text-muted text-truncate">For {{ c.source }}</span>{% endif %}
+        </label>
+        {% if c.ply %}
+        <select class="form-select form-select-sm ki-sel-ply" name="{{ p }}ply" aria-label="Type of ply" title="Type of ply" data-was="{{ c.ply }}">
+          {% for o in plys %}<option {{ 'selected' if o == c.ply }}>{{ o }}</option>{% endfor %}</select>
+        {% endif %}
+        <input class="form-control form-control-sm text-end ki-sel-qty" name="{{ p }}qty" inputmode="decimal" placeholder="Qty"
+               aria-label="Quantity of {{ c.name }}" value="{{ '{:g}'.format(c.quantity) if c.quantity is not none else '' }}">
+        <span class="small text-muted ki-sel-unit">{{ c.unit }}</span>
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body py-2">
+      <div class="small fw-semibold mb-2">Something else? Type it in</div>
+      <div class="row g-2 mb-2" data-grow>
+        <div class="col-12 col-md-5"><input class="form-control form-control-sm" name="new_name" placeholder="e.g. Century Club Prime 19 mm" maxlength="150" aria-label="New item"></div>
+        <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_qty" inputmode="decimal" placeholder="Qty" aria-label="Quantity"></div>
+        <div class="col-4 col-md-2"><input class="form-control form-control-sm" name="new_unit" placeholder="Unit" maxlength="30" aria-label="Unit"></div>
+        <div class="col-4 col-md-3"><select class="form-select form-select-sm" name="new_group" aria-label="Group">
+          {% for g in names %}<option {{ 'selected' if loop.last }}>{{ g }}</option>{% endfor %}</select></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ki-sel-bar py-2 mb-3 d-flex align-items-center gap-2">
+    <button class="btn btn-primary fw-semibold flex-grow-1 flex-md-grow-0" type="submit">
+      <i class="bi bi-card-checklist me-1"></i>Make my material list (<span id="selTicked">{{ ticked }}</span>)</button>
+    <a class="small text-muted" href="{{ url_for('materials_list.view', project_id=project.id) }}">See the list</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const form = document.getElementById('selForm');
+  const count = () => {
+    form.querySelectorAll('[data-sel-group]').forEach(g => {
+      g.querySelector('[data-sel-count]').textContent = g.querySelectorAll('.ki-sel-row input[type=checkbox]:checked').length || '';
+    });
+    document.getElementById('selTicked').textContent = form.querySelectorAll('.ki-sel-row input[type=checkbox]:checked').length;
+  };
+  form.addEventListener('change', (e) => {
+    if (e.target.type === 'checkbox') e.target.closest('.ki-sel-row').classList.toggle('on', e.target.checked);
+    count();
+  });
+  // another type of ply: the name follows, e.g. Plywood (18mm BWP) → Plywood (12mm MR)
+  form.addEventListener('change', (e) => {
+    if (!e.target.classList.contains('ki-sel-ply')) return;
+    const label = e.target.closest('.ki-sel-row').querySelector('[data-sel-name]');
+    label.textContent = label.textContent.replace('(' + e.target.dataset.was + ')', '(' + e.target.value + ')');
+    e.target.dataset.was = e.target.value;
+  });
+  // typing a quantity ticks the line
+  form.addEventListener('input', (e) => {
+    if (!e.target.classList.contains('ki-sel-qty') || !e.target.value) return;
+    const box = e.target.closest('.ki-sel-row').querySelector('input[type=checkbox]');
+    if (!box.checked) { box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true })); }
+  });
+  document.getElementById('selFind').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    form.querySelectorAll('[data-sel-group]').forEach(g => {
+      let shown = 0;
+      g.querySelectorAll('.ki-sel-row').forEach(r => { const hit = !q || r.dataset.name.includes(q); r.classList.toggle('d-none', !hit); shown += hit; });
+      g.classList.toggle('d-none', !shown);
+    });
+  });
+  count();
+})();
+</script>
+{% endblock %}

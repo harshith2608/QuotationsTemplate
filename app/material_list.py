@@ -7,7 +7,9 @@ Built from the quotation's lines:
     rules are estimates for the business to adjust. A rule's name may use {material} and {plywood} (the line's).
   * fittings, as they are (their quantity, plus the spare % in Admin → Material rules); services (a 'job' or a lump
     sum) are left out.
-  * BOQ lines, as they are (quantity and unit); lump sums are left out.
+  * BOQ lines: by the rules made for that line (1 bag of putty for every 100 sqft of Painting), in place of the line;
+    a BOQ line with no rules goes on as it is (quantity and unit); lump sums are left out. Typical starting rules are
+    added once for BOQ lines with a usual name (painting, tiles, gypsum ceiling, electrical points: BOQ_STARTERS).
 Lines with the same name and unit add up; quantities from rules round up to whole units (sheets, rolls…).
 
 Groups are the business's own (add, rename, remove). A fitting or BOQ line goes to the group the business last put it
@@ -65,6 +67,27 @@ STARTER_RULES = [
     ('Wood adhesive', 'Wood', '', 0.04, 'kg', 5, True, 'board'),
     ('Screws (box of 100)', 'Hardware', '', 0.025, 'boxes', 0, True, 'board'),
     ('{material}', 'Other', '', 1.0, 'sqft', 10, True, 'other'),
+]
+
+# Starting rules for BOQ lines with a usual name (estimates): name pattern, names to leave out, the line's units, and
+# (item to buy, group, amount, for every so many sqft / points, unit, wastage %). Added once per BOQ line.
+BOQ_SEEDED_KEY = 'material_rules_boq_seeded'      # JSON list of BOQ line names (lower-case) already given rules
+BOQ_STARTERS = [
+    (r'wardrobe|loft|cabinet|tall unit|tv unit|crockery|shoe rack|pooja|dressing|study table', r'', 'area',
+     [('Plywood ({plywood})', 'Wood', 1, 9, 'sheets (8×4)', 10), ('Laminate (outer finish)', 'Wood', 1, 28, 'sheets (8×4)', 10),
+      ('Inner liner laminate 0.8 mm', 'Wood', 1, 8, 'sheets (8×4)', 10), ('Edge banding tape', 'Wood', 1, 1, 'm', 10),
+      ('Screws (box of 100)', 'Hardware', 1, 40, 'boxes', 0)]),
+    (r'paint|emulsion', r'texture|polish|enamel', 'area',
+     [('Wall putty (40 kg bag)', 'Paint', 1, 400, 'bags', 5), ('Primer', 'Paint', 1, 100, 'litres', 5),
+      ('Emulsion paint', 'Paint', 1, 50, 'litres', 10)]),
+    (r'tile|tiling', r'remov|grout', 'area',
+     [('Tiles', 'Other', 1, 1, 'sqft', 10), ('Tile adhesive (20 kg bag)', 'Other', 1, 50, 'bags', 5),
+      ('Tile grout (1 kg)', 'Other', 1, 40, 'kg', 5)]),
+    (r'gypsum|^false ceiling$', r'paint', 'area',
+     [('Gypsum board (6×4 ft)', 'Other', 1, 22, 'boards', 10), ('Ceiling channels (12 ft)', 'Hardware', 1, 10, 'nos', 5),
+      ('Jointing compound (20 kg)', 'Other', 1, 300, 'bags', 0), ('Ceiling screws (box of 1000)', 'Hardware', 1, 250, 'boxes', 0)]),
+    (r'electrical point|light point|wiring', r'', 'point',
+     [('Wire 1.5 sq mm (90 m coil)', 'Electrical', 1, 8, 'coils', 0), ('PVC conduit pipe (3 m)', 'Electrical', 3, 1, 'pipes', 5)]),
 ]
 
 SWITCH_KEY = 'material_list'
@@ -238,17 +261,93 @@ def seed_rules():
     db.session.commit()
 
 
+def seed():
+    """The starting rules: for measured items once per business, then for BOQ lines once per line."""
+    seed_rules()
+    seed_boq_rules()
+
+
+def seed_boq_rules():
+    """Typical rules for each BOQ line with a usual name (BOQ_STARTERS), once per line (deleting them later doesn't
+    bring them back). A line added later gets them the next time a list or the rules page is opened."""
+    from . import boq, units
+    from .models import AppSetting, BoqItem, MaterialRule
+    if not boq.ready():
+        return
+    done = set(_json_setting(BOQ_SEEDED_KEY, []))
+    fresh = [b for b in BoqItem.query.all() if b.name.lower() not in done]
+    if not fresh:
+        return
+    known = {x.lower() for x in groups()}
+    top = max([r.sort_order for r in rules()] or [0])
+    for b in fresh:
+        done.add(b.name.lower())
+        unit = b.unit or ''
+        for pattern, skip, kind, rows in BOQ_STARTERS:
+            if not re.search(pattern, b.name, re.I) or (skip and re.search(skip, b.name, re.I)):
+                continue
+            if kind == 'area' and unit not in boq.AREA_UNITS or kind == 'point' and unit not in ('point', 'nos'):
+                break
+            for name, group, amount, every, buy_unit, wastage in rows:
+                if kind == 'area':                     # 'for every so many sqft' → per one of the line's unit
+                    every = every * boq.AREA_UNITS[unit]
+                    if buy_unit == 'sqft' and units.area_unit() == 'sqm':
+                        amount, buy_unit = amount * units.SQM_PER_SQFT, 'sq m'
+                top += 1
+                db.session.add(MaterialRule(name=name, category=group if group.lower() in known else fallback_group(),
+                                            materials=json.dumps({'boq': b.name}), work_type='',
+                                            per_sqft=amount / every, unit=buy_unit, wastage=wastage, round_up=True,
+                                            sort_order=top))
+            break
+    AppSetting.set(BOQ_SEEDED_KEY, json.dumps(sorted(done)))
+    db.session.commit()
+
+
 def rules():
     from .models import MaterialRule
     return MaterialRule.query.order_by(MaterialRule.sort_order, MaterialRule.id).all()
 
 
-def rule_materials(rule):
+def _rule_target(rule):
     try:
-        found = json.loads(rule.materials or '[]')
+        return json.loads(rule.materials or '[]')
     except ValueError:
-        found = []
-    return [m for m in found if isinstance(m, str)]
+        return []
+
+
+def rule_materials(rule):
+    """The materials a rule for measured items is for ([] = every material; [] too for a rule on a BOQ line)."""
+    found = _rule_target(rule)
+    return [m for m in found if isinstance(m, str)] if isinstance(found, list) else []
+
+
+def rule_boq(rule):
+    """The BOQ line a rule is for (its name), or '' for a rule on measured items."""
+    found = _rule_target(rule)
+    return clean_text(found.get('boq'), NAME_MAX) if isinstance(found, dict) else ''
+
+
+# How a rule is shown and typed: "1 sheet for every 9 sqft"; [ply] and [finish] in names
+TOKENS = (('{plywood}', '[ply]'), ('{material}', '[finish]'))
+
+
+def name_shown(name):
+    for stored, shown in TOKENS:
+        name = (name or '').replace(stored, shown)
+    return name
+
+
+def name_stored(name):
+    for stored, shown in TOKENS:
+        name = re.sub(re.escape(shown), stored, name or '', flags=re.I)
+    return name
+
+
+def coverage(per):
+    """(amount, for every): 0.11 → (1, 9.09); 1.5 → (1.5, 1)."""
+    if not per or per >= 1:
+        return round(per or 0, 3), 1
+    return 1, round(1 / per, 2)
 
 
 def render_name(template, material='', plywood=''):
@@ -289,6 +388,11 @@ def build(project, rooms=None):
     extra = 1 + spare() / 100
     ply = plywood.project_plywood(project) or ''
     active = [r for r in rules() if r.active and r.per_sqft]
+    by_line = {}
+    for r in active:
+        if rule_boq(r):
+            by_line.setdefault(rule_boq(r).lower(), []).append(r)
+    active = [r for r in active if not rule_boq(r)]
     rule_mats = {r.id: rule_materials(r) for r in active}
     out = {}
 
@@ -311,16 +415,25 @@ def build(project, rooms=None):
             if i.is_boq:
                 if ((i.unit if boq.ready() else '') or '') == boq.LUMP_SUM:
                     continue
+                if i.name.lower() in by_line:            # its own rules, in place of the line
+                    for r in by_line[i.name.lower()]:
+                        name = render_name(r.name, i.finish or '', plywood.item_plywood(i) or ply)
+                        unit = clean_text(r.unit, UNIT_MAX)
+                        group = group_for(name, lower.get((r.category or '').lower(), fallback_group(names)))
+                        if name and group:
+                            add(f'rule|{name.lower()}|{unit.lower()}', 'rule', group, name,
+                                (i.quantity or 0) * r.per_sqft * (1 + (r.wastage or 0) / 100), unit, source,
+                                up=r.round_up)
+                    continue
                 unit = i.unit_text
                 name = clean_text(i.display_name, NAME_MAX)
                 group = group_for(name, guess_group(name, 'Other', names))
                 if group:
                     add(f'boq|{name.lower()}|{unit.lower()}', 'boq', group, name, i.quantity, unit, source)
             elif i.is_fitting:
-                unit = fittings_unit.get(i.name.lower(), '')
-                if unit.lower() in SERVICE_UNITS:
+                unit = fitting_unit(fittings_unit.get(i.name.lower(), ''))
+                if unit is None:
                     continue
-                unit = 'nos' if unit.lower() in ('', 'piece', 'pieces', 'nos', 'no') else unit
                 name = clean_text(i.name, NAME_MAX)
                 group = group_for(name, guess_group(name, 'Hardware', names))
                 if group:
@@ -347,6 +460,14 @@ def build(project, rooms=None):
         line['quantity'] = _qty(line.pop('raw'), line.pop('up'))
         line['source'] = source_text(line.pop('sources'))
     return lines
+
+
+def fitting_unit(unit):
+    """A fitting's unit on a list ('nos' for pieces), or None for a service (a job, a lump sum)."""
+    unit = unit or ''
+    if unit.lower() in SERVICE_UNITS:
+        return None
+    return 'nos' if unit.lower() in ('', 'piece', 'pieces', 'nos', 'no') else unit
 
 
 def source_text(sources):
@@ -478,6 +599,125 @@ def save(lst, form):
                                         unit=clean_text(unit, UNIT_MAX),
                                         category=group if group in names else fallback_group(names),
                                         sort_order=top + 1 + n))
+    lst.updated_at = datetime.utcnow()
+    db.session.commit()
+
+
+# ── Select materials: tick what goes on the list ─────────────────────────────
+
+CHOICES_MAX = 600
+
+
+def catalogue(project):
+    """Everything the business could put on a list, by name: [{'name', 'unit', 'group'}]. The material rules (one per
+    plywood and per material when the rule names them), fittings (not services), BOQ lines (not lump sums) and items
+    typed by hand on earlier lists."""
+    from . import boq, plywood
+    from .models import BoqItem, Material, MaterialListLine, PriceListItem
+    names = groups()
+    lower = {x.lower(): x for x in names}
+    remembered = item_groups()
+    out = {}
+
+    def add(name, unit, default):
+        name, unit = clean_text(name, NAME_MAX), clean_text(unit, UNIT_MAX)
+        if not name or name.lower() in out:
+            return
+        group = remembered.get(name.lower()) or default
+        out[name.lower()] = {'name': name, 'unit': unit, 'group': lower.get((group or '').lower()) or fallback_group(names)}
+
+    mats = [m.name for m in Material.query.filter_by(active=True).order_by(Material.sort_order, Material.id)]
+    plys = [o['name'] for o in plywood.context()['options'] if o.get('active', True)] or \
+        [plywood.project_plywood(project) or '']
+    for r in rules():
+        if not r.active:
+            continue
+        for mat in ((rule_materials(r) or mats) if '{material}' in (r.name or '') else ['']):
+            for ply in (plys if '{plywood}' in (r.name or '') else ['']):
+                add(render_name(r.name, mat, ply), r.unit, r.category)
+    for f in PriceListItem.query.order_by(PriceListItem.name):
+        unit = fitting_unit(f.unit)
+        if unit is not None:
+            add(f.name, unit, guess_group(f.name, 'Hardware', names))
+    if boq.ready():
+        for b in BoqItem.query.order_by(BoqItem.name):
+            if (b.unit or '') != boq.LUMP_SUM:
+                add(b.name, boq.unit_text(b.unit or 'nos'), guess_group(b.name, 'Other', names))
+    for ln in MaterialListLine.query.filter_by(kind='manual').order_by(MaterialListLine.id.desc()).limit(CHOICES_MAX):
+        add(ln.name, ln.unit, ln.category)
+    return list(out.values())[:CHOICES_MAX]
+
+
+def plywood_names():
+    """The business's plywoods (active), longest first, to find one in a line's name."""
+    from . import plywood
+    return sorted((o['name'] for o in plywood.context()['options'] if o.get('active', True)), key=len, reverse=True)
+
+
+def line_plywood(name, plys):
+    """The plywood a line's name is for ('Plywood (18mm BWP)' → '18mm BWP'), or ''."""
+    return next((p_ for p_ in plys if f'({p_.lower()})' in (name or '').lower()), '')
+
+
+def choices(lst, project):
+    """Select materials: [(group, [{'line' or None, 'name', 'unit', 'quantity', 'source', 'on', 'ply'}])] in group
+    order. The list's lines first (ticked unless removed), then the rest of the catalogue, not ticked. 'ply': the
+    plywood a list line is for, which can be changed there (the quotation's, until they choose another)."""
+    names = groups()
+    plys = plywood_names()
+    found, seen = {}, set()
+    for ln in sorted(lst.lines, key=lambda ln: (ln.kind == 'manual', ln.sort_order, ln.id)):
+        seen.add(ln.name.lower())
+        found.setdefault(ln.category, []).append({'line': ln, 'name': ln.name, 'unit': ln.unit or '',
+                                                  'quantity': ln.quantity, 'source': ln.source, 'on': not ln.removed,
+                                                  'ply': line_plywood(ln.name, plys)})
+    for c in catalogue(project):
+        if c['name'].lower() not in seen:
+            found.setdefault(c['group'], []).append({'line': None, 'name': c['name'], 'unit': c['unit'],
+                                                     'quantity': None, 'source': '', 'on': False, 'ply': ''})
+    ordered = [g_ for g_ in names if g_ in found] + [g_ for g_ in found if g_ not in names]
+    return [(g_, found[g_]) for g_ in ordered]
+
+
+def save_selection(lst, form):
+    """Save Select materials: a list line ticked stays (with its quantity), unticked is removed (it stays a choice);
+    a catalogue item ticked is added (kind 'manual'); new rows typed in are added."""
+    from .models import MaterialListLine
+    names = groups()
+    plys = plywood_names()
+    for ln in lst.lines.all():
+        p = f'l{ln.id}_'
+        if p + 'seen' not in form:
+            continue
+        old, new = line_plywood(ln.name, plys), form.get(p + 'ply')
+        if old and new in plys and new != old:          # another plywood: Plywood (18mm BWP) → Plywood (12mm MR)
+            at = ln.name.lower().index(f'({old.lower()})')
+            ln.name = clean_text(ln.name[:at] + f'({new})' + ln.name[at + len(old) + 2:], NAME_MAX)
+        ln.removed = not form.get(p + 'on')
+        if ln.removed:
+            continue
+        qty = number(form.get(p + 'qty'))
+        if qty != ln.quantity:
+            ln.quantity = qty
+            ln.edited = ln.kind != 'manual'
+    top = max([ln.sort_order for ln in lst.lines] or [0])
+    picked = [(form.get(k[:-2] + 'name'), form.get(k[:-2] + 'qty'), form.get(k[:-2] + 'unit'), form.get(k[:-2] + 'group'))
+              for k in form if re.fullmatch(r'c\d+_on', k)]
+    picked += list(zip(form.getlist('new_name'), form.getlist('new_qty'), form.getlist('new_unit'),
+                       form.getlist('new_group')))
+    have = {ln.name.lower(): ln for ln in lst.lines}
+    for n, (name, qty, unit, group) in enumerate(picked):
+        name = clean_text(name, NAME_MAX)
+        if not name:
+            continue
+        if name.lower() in have:                     # typed again: it's on the list (put back if removed)
+            have[name.lower()].removed = False
+            continue
+        have[name.lower()] = MaterialListLine(list_id=lst.id, kind='manual', name=name, quantity=number(qty),
+                                              unit=clean_text(unit, UNIT_MAX),
+                                              category=group if group in names else fallback_group(names),
+                                              sort_order=top + 1 + n)
+        db.session.add(have[name.lower()])
     lst.updated_at = datetime.utcnow()
     db.session.commit()
 
