@@ -1,0 +1,34 @@
+{# The guided first setup's pages (app/welcome_bp.py): no menu, one question, the step on top, Skip for now below #}
+{% extends "base.html" %}
+{% block title %}Let's set up your QuoteRoom{% endblock %}
+{% block content %}
+<div class="ki-welcome mx-auto my-4">
+  <div class="d-flex align-items-center justify-content-between mb-2 small text-muted">
+    <span class="fw-semibold">{% if back_url %}<a href="{{ back_url }}" class="text-decoration-none me-2" id="wBack"><i class="bi bi-arrow-left"></i> Back</a>
+      <span class="text-muted fw-normal">·</span> {% endif %}Let's set up your QuoteRoom</span>
+    {% if number %}<span>Step {{ number }} of {{ total }}</span>{% endif %}
+  </div>
+  {% if number %}
+  <div class="ki-welcome-steps mb-4" aria-hidden="true">
+    {% for i in range(1, total + 1) %}<span class="{{ 'on' if i <= number }}"></span>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      {% block step %}{% endblock %}
+    </div>
+  </div>
+  {% if key %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3 small">
+    <form method="post" action="{{ url_for('welcome.skip', key=key) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-link btn-sm px-0 text-decoration-none" type="submit">Skip for now <i class="bi bi-arrow-right"></i></button>
+    </form>
+    <form method="post" action="{{ url_for('welcome.leave') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-link btn-sm px-0 text-muted text-decoration-none" type="submit">I'll explore on my own</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "welcome/_frame.html" %}
+{% block step %}
+<h4 class="fw-bold mb-1">How do you take measurements?</h4>
+<p class="text-muted mb-4">Sizes are typed and shown in this unit.</p>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="ki-welcome-choices mb-4">
+    {% for k, label in [('ftin', 'Feet & inches'), ('mm', 'Millimetres'), ('cm', 'Centimetres'), ('in', 'Inches')] %}
+    <input type="radio" class="btn-check" name="size_unit" id="u_{{ k }}" value="{{ k }}" {{ 'checked' if size == k }}>
+    <label class="btn btn-outline-primary btn-lg" for="u_{{ k }}">{{ label }}<span class="d-block small opacity-75">{{ {'ftin': "10' 6\"", 'mm': '3200 mm', 'cm': '320 cm', 'in': '126"'}[k] }}</span></label>
+    {% endfor %}
+  </div>
+  <div class="fw-semibold mb-2">Your rates are per</div>
+  <div class="d-flex gap-2 mb-4">
+    <input type="radio" class="btn-check" name="area_unit" id="a_sqft" value="sqft" {{ 'checked' if area != 'sqm' }}>
+    <label class="btn btn-outline-secondary" for="a_sqft">sqft</label>
+    <input type="radio" class="btn-check" name="area_unit" id="a_sqm" value="sqm" {{ 'checked' if area == 'sqm' }}>
+    <label class="btn btn-outline-secondary" for="a_sqm">sq m</label>
+  </div>
+  <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Continue <i class="bi bi-arrow-right ms-1"></i></button>
+</form>
+{% endblock %}

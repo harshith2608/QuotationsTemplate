@@ -31,10 +31,11 @@ def login():
             from .activity import record_login
             record_login()
             if user.is_admin and not request.args.get('next'):
-                from . import setup_guide
-                if setup_guide.open_on_first_login():       # a new business: start with the setup guide
-                    flash(f'Welcome, {user.display_name}! Let\'s set up your app: a few short steps.', 'success')
-                    return redirect(url_for('admin.setup'))
+                from . import db, welcome
+                if welcome.start_on_first_login():          # a new business: the guided first setup
+                    db.session.commit()
+                    return redirect(url_for('welcome.resume'))
+                welcome.note_sign_in()
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(safe_next())
         flash('Invalid username or password.', 'danger')

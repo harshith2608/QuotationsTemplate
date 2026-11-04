@@ -9,7 +9,9 @@ ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 
 c = app.test_client()
 r = c.post('/login', data={'username': 'owner', 'password': 'owner-pass-123'})
-ok('first sign-in of a new business\'s admin opens the setup guide', r.status_code == 302 and r.headers['Location'].endswith('/admin/setup'))
+ok('first sign-in of a new business\'s admin opens the guided setup (tests/checks/welcome_checks.py)', r.status_code == 302
+   and r.headers['Location'].endswith('/welcome/'))
+c.post('/welcome/exit')                       # this file checks the setup guide itself
 t = c.get('/admin/setup').text
 ok('guide lists the steps, none done, with Start', '0 of 8 done' in t and 'Start: Your company details' in t
    and 'Your rates, materials &amp; plywood' in t and 'Optional, when you need them' in t)

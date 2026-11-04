@@ -106,6 +106,8 @@ def create_app(config_name='default'):
     app.register_blueprint(ai_tools_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(plan_bp)
+    from .welcome_bp import welcome_bp
+    app.register_blueprint(welcome_bp)
     app.before_request(block_demo_writes)
     from .demo import count_demo_use, count_site_visit
     app.after_request(count_demo_use)
@@ -183,6 +185,13 @@ def create_app(config_name='default'):
         if current_user.is_authenticated and current_user.is_admin and session.get('setup_step') and request.endpoint:
             from . import setup_guide             # only while following the setup guide
             setup_banner = setup_guide.banner(request.endpoint, request.args)
+        welcome_bar = None
+        if current_user.is_authenticated and current_user.is_admin and request.endpoint:
+            from . import welcome                 # the guided first setup's strip on the app's own pages
+            try:
+                welcome_bar = welcome.bar(request.endpoint, request.view_args or {})
+            except Exception:
+                welcome_bar = None
         ai_import_on = material_list_on = False
         if current_user.is_authenticated and current_user.is_admin:
             from . import ai_import             # Bring your old quotation: one switch for every business
@@ -195,7 +204,7 @@ def create_app(config_name='default'):
             from . import demo
             demo_guide = demo.guide()
         return {'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
-                'setup_banner': setup_banner,
+                'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
 

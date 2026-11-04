@@ -679,3 +679,30 @@ body > main { flex: 1 0 auto; }
 }
 .ki-unsaved-bar .btn { border-radius: 999px; }
 .card[id] { scroll-margin-top: 76px; }      /* a section opened by its #id clears the sticky top bar */
+
+/* Guided first setup (templates/welcome/) */
+.ki-welcome { max-width: 560px; }
+.ki-welcome-steps { display: flex; gap: 6px; }
+.ki-welcome-steps span { flex: 1; height: 6px; border-radius: 3px; background: rgba(0,0,0,.1); }
+.ki-welcome-steps span.on { background: var(--bs-success, #198754); }
+.ki-welcome-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ki-welcome-choices .btn { padding: 14px 8px; }
+.ki-welcome-rates td { padding-top: 4px; padding-bottom: 4px; }
+.ki-welcome-bar { border-left: 4px solid var(--bs-success, #198754) !important; }
+@media (max-width: 575.98px) {            /* on a phone: the item's name on its own line, unit and rate under it */
+  .ki-welcome .card-body { padding: 1rem !important; }
+  .ki-welcome-rates thead { display: none; }
+  .ki-welcome-rates tr { display: grid; grid-template-columns: 1fr 1fr 32px; gap: 4px; padding: 6px 0;
+                         border-bottom: 1px solid rgba(0,0,0,.08); }
+  .ki-welcome-rates td { display: block; border: 0; padding: 0 !important; }
+  .ki-welcome-rates td:first-child { grid-column: 1 / -1; }
+  .ki-welcome-rates td:last-child { align-self: center; }
+}
+.ki-welcome-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ki-welcome-kinds .btn { padding: 10px 12px; }
+.ki-welcome-sec td { padding-top: 14px !important; border-bottom: 0; }
+.ki-welcome-sec input { background: transparent; border-color: transparent; padding-left: 0; }
+.ki-welcome-sec input:hover, .ki-welcome-sec input:focus { border-color: var(--bs-border-color); padding-left: .5rem; }
+@media (max-width: 575.98px) { .ki-welcome-kinds { grid-template-columns: 1fr; } }
+.ki-welcome-rates tr.ki-w-removed input:not([type=hidden]), .ki-welcome-rates tr.ki-w-removed select {
+  opacity: .45; text-decoration: line-through; pointer-events: none; background: var(--bs-light, #f8f9fa); }

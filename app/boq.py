@@ -70,23 +70,24 @@ def pricing_mode():
     return ITEM if enabled() else MATERIAL
 
 
-def set_pricing(mode):
+def set_pricing(mode, starter=True):
     """Choose how this business prices its work (set_enabled for BOQ lines); the setup guide's step is then done."""
     from . import setup_guide
-    set_enabled(mode == ITEM)
+    set_enabled(mode == ITEM, starter=starter)
     setup_guide.mark('pricing')
 
 
-def set_enabled(on):
+def set_enabled(on, starter=True):
     """Turn BOQ lines on or off. Turning on also picks the BOQ layout for the customer's PDF (Settings → Quotation PDFs,
     where it can be changed back) and gives a business with no saved lines the starter set. Turned off, the layout
-    falls back to room by room by itself (layout.initial_layout)."""
+    falls back to room by room by itself (layout.initial_layout). starter=False: no starter set (the guided first
+    setup gives its own, app/welcome.py)."""
     from . import layout, tenancy
     from .models import AppSetting
     AppSetting.set(KEY, '1' if on else '')
     if on:
         AppSetting.set(layout.LAYOUT_KEY, layout.LAYOUT_BOQ)
-    if on and _columns_ready(tenancy.current_schema()):
+    if on and starter and _columns_ready(tenancy.current_schema()):
         add_starter_lines()
 
 
