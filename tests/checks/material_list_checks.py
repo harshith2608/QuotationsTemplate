@@ -149,7 +149,11 @@ form = {f'l{ln.id}_seen': '1' for ln in L5.values()}
 form.update({f'l{ln.id}_on': 'on' for ln in L5.values() if ln.name != 'Screws (box of 100)'})
 form.update({f'l{ln.id}_qty': ln.quantity for ln in L5.values()})
 form[f'l{L5["Tandem Drawer"].id}_qty'] = '5'
-pick = next(n for n in cat if n not in L5)
+ok('…the plywood line has a choice of ply, the quotation\'s chosen', not others or
+   _re.search(rf'name="l{L5[PLY].id}_ply"', sp) and f'<option selected>{ply}</option>' in sp)
+if others:
+    form[f'l{L5[PLY].id}_ply'] = others[0]
+pick = next(n for n in cat if n not in L5 and 'Plywood' not in n)
 form.update({f'{cat[pick]}_on': 'on', f'{cat[pick]}_name': pick, f'{cat[pick]}_qty': '2', f'{cat[pick]}_unit': 'nos',
              f'{cat[pick]}_group': 'Hardware'})
 form.update({'new_name': ['Asian Royale emulsion', ''], 'new_qty': ['4', ''], 'new_unit': ['litres', ''],
@@ -160,6 +164,9 @@ ok('select saved → the list page to copy', 'Copy all' in r.text and 'material 
 ok('…an unticked line is removed (and still a choice next time)', 'Screws (box of 100)' not in L5
    and 'Screws (box of 100)' in c.get(f'/projects/{pid5}/materials/select').text)
 ok('…a quantity changed', L5['Tandem Drawer'].quantity == 5 and L5['Tandem Drawer'].edited)
+OTHER = ML.render_name('Plywood ({plywood})', '', others[0]) if others else PLY
+ok('…another ply chosen: the line is for it, with the same quantity', not others or
+   (PLY not in L5 and L5[OTHER].quantity == 8 and not L5[OTHER].edited))
 ok('…a ticked choice and a typed item are added', (L5[pick].quantity, L5[pick].kind) == (2, 'manual')
    and (L5['Asian Royale emulsion'].quantity, L5['Asian Royale emulsion'].category) == (4, 'Paint'))
 ok('…an item typed on one list is a choice on the next', 'Asian Royale emulsion' in c.get(f'/projects/{pid}/materials/select').text)

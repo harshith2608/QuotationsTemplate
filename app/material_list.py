@@ -648,19 +648,33 @@ def catalogue(project):
     return list(out.values())[:CHOICES_MAX]
 
 
+def plywood_names():
+    """The business's plywoods (active), longest first, to find one in a line's name."""
+    from . import plywood
+    return sorted((o['name'] for o in plywood.context()['options'] if o.get('active', True)), key=len, reverse=True)
+
+
+def line_plywood(name, plys):
+    """The plywood a line's name is for ('Plywood (18mm BWP)' → '18mm BWP'), or ''."""
+    return next((p_ for p_ in plys if f'({p_.lower()})' in (name or '').lower()), '')
+
+
 def choices(lst, project):
-    """Select materials: [(group, [{'line' or None, 'name', 'unit', 'quantity', 'source', 'on'}])] in group order.
-    The list's lines first (ticked unless removed), then the rest of the catalogue, not ticked."""
+    """Select materials: [(group, [{'line' or None, 'name', 'unit', 'quantity', 'source', 'on', 'ply'}])] in group
+    order. The list's lines first (ticked unless removed), then the rest of the catalogue, not ticked. 'ply': the
+    plywood a list line is for, which can be changed there (the quotation's, until they choose another)."""
     names = groups()
+    plys = plywood_names()
     found, seen = {}, set()
     for ln in sorted(lst.lines, key=lambda ln: (ln.kind == 'manual', ln.sort_order, ln.id)):
         seen.add(ln.name.lower())
         found.setdefault(ln.category, []).append({'line': ln, 'name': ln.name, 'unit': ln.unit or '',
-                                                  'quantity': ln.quantity, 'source': ln.source, 'on': not ln.removed})
+                                                  'quantity': ln.quantity, 'source': ln.source, 'on': not ln.removed,
+                                                  'ply': line_plywood(ln.name, plys)})
     for c in catalogue(project):
         if c['name'].lower() not in seen:
             found.setdefault(c['group'], []).append({'line': None, 'name': c['name'], 'unit': c['unit'],
-                                                     'quantity': None, 'source': '', 'on': False})
+                                                     'quantity': None, 'source': '', 'on': False, 'ply': ''})
     ordered = [g_ for g_ in names if g_ in found] + [g_ for g_ in found if g_ not in names]
     return [(g_, found[g_]) for g_ in ordered]
 
@@ -670,10 +684,15 @@ def save_selection(lst, form):
     a catalogue item ticked is added (kind 'manual'); new rows typed in are added."""
     from .models import MaterialListLine
     names = groups()
+    plys = plywood_names()
     for ln in lst.lines.all():
         p = f'l{ln.id}_'
         if p + 'seen' not in form:
             continue
+        old, new = line_plywood(ln.name, plys), form.get(p + 'ply')
+        if old and new in plys and new != old:          # another plywood: Plywood (18mm BWP) → Plywood (12mm MR)
+            at = ln.name.lower().index(f'({old.lower()})')
+            ln.name = clean_text(ln.name[:at] + f'({new})' + ln.name[at + len(old) + 2:], NAME_MAX)
         ln.removed = not form.get(p + 'on')
         if ln.removed:
             continue

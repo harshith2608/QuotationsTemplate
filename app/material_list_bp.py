@@ -67,6 +67,7 @@ def view(project_id):
 @login_required
 def select(project_id):
     """Select materials: everything the business has, with what this quotation needs ticked; the list to copy."""
+    from . import plywood
     project = _project(project_id)
     stop = _not_ready(project)
     if stop:
@@ -87,6 +88,7 @@ def select(project_id):
         ML.rebuild(lst, project)                # the quotation changed: tick what it needs now (keeps their changes)
     choices = ML.choices(lst, project)
     return render_template('projects/materials_select.html', project=project, choices=choices, names=ML.groups(),
+                           plys=[o['name'] for o in plywood.context()['options'] if o.get('active', True)],
                            ticked=sum(c['on'] for _, rows in choices for c in rows),
                            title=f'Select materials – {project.customer_name}')
 

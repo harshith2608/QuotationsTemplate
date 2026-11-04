@@ -6,8 +6,11 @@
   .ki-sel-row { cursor: pointer; }
   .ki-sel-row.on { background: rgba(var(--bs-primary-rgb), .06); }
   .ki-sel-qty { width: 5.5rem; flex-shrink: 0; }
+  .ki-sel-ply { width: 11rem; flex-shrink: 0; }
   .ki-sel-unit { width: 6rem; flex-shrink: 0; line-height: 1.2; }
-  @media (max-width: 575.98px) { .ki-sel-qty { width: 4.2rem; } .ki-sel-unit { width: 3.6rem; font-size: .75rem; } }
+  @media (max-width: 575.98px) { .ki-sel-row.has-ply { flex-wrap: wrap; } .ki-sel-row.has-ply label { flex-basis: calc(100% - 2rem); }
+    .ki-sel-ply { order: 5; width: auto; flex: 1 1 auto; margin-left: 1.6rem; }
+    .ki-sel-qty { width: 4.2rem; } .ki-sel-unit { width: 3.6rem; font-size: .75rem; } }
   .ki-sel-bar { position: sticky; bottom: 0; z-index: 5; background: var(--bs-body-bg); border-top: 1px solid var(--bs-border-color); }
 </style>
 {% endblock %}
@@ -25,7 +28,7 @@
 </div>
 
 <p class="small text-muted">What this quotation needs is already ticked. Untick what you don't need, tick anything else,
-  change a quantity if you like, then make the list to copy or send. <strong>No prices</strong> are on it.</p>
+  change a quantity or the type of ply if you like, then make the list to copy or send. <strong>No prices</strong> are on it.</p>
 
 <input type="search" class="form-control mb-3" id="selFind" placeholder="Find a material, e.g. ply, hinge, paint" aria-label="Find a material">
 
@@ -41,15 +44,19 @@
     <ul class="list-group list-group-flush">
     {% for c in rows %}
       {% if c.line %}{% set p = 'l%d_' % c.line.id %}{% else %}{% set n.c = n.c + 1 %}{% set p = 'c%d_' % n.c %}{% endif %}
-      <li class="list-group-item ki-sel-row d-flex align-items-center gap-2 {{ 'on' if c.on }}" data-name="{{ c.name|lower }}">
+      <li class="list-group-item ki-sel-row d-flex align-items-center gap-2 {{ 'on' if c.on }} {{ 'has-ply' if c.ply }}" data-name="{{ c.name|lower }}">
         <input class="form-check-input flex-shrink-0 mt-0" type="checkbox" name="{{ p }}on" id="{{ p }}on" {{ 'checked' if c.on }}>
         {% if c.line %}<input type="hidden" name="{{ p }}seen" value="1">{% else %}
         <input type="hidden" name="{{ p }}name" value="{{ c.name }}"><input type="hidden" name="{{ p }}unit" value="{{ c.unit }}">
         <input type="hidden" name="{{ p }}group" value="{{ group }}">{% endif %}
         <label class="flex-grow-1 mb-0" for="{{ p }}on" style="min-width:0">
-          <span class="d-block">{{ c.name }}</span>
+          <span class="d-block" data-sel-name>{{ c.name }}</span>
           {% if c.source %}<span class="d-block small text-muted text-truncate">For {{ c.source }}</span>{% endif %}
         </label>
+        {% if c.ply %}
+        <select class="form-select form-select-sm ki-sel-ply" name="{{ p }}ply" aria-label="Type of ply" title="Type of ply" data-was="{{ c.ply }}">
+          {% for o in plys %}<option {{ 'selected' if o == c.ply }}>{{ o }}</option>{% endfor %}</select>
+        {% endif %}
         <input class="form-control form-control-sm text-end ki-sel-qty" name="{{ p }}qty" inputmode="decimal" placeholder="Qty"
                aria-label="Quantity of {{ c.name }}" value="{{ '{:g}'.format(c.quantity) if c.quantity is not none else '' }}">
         <span class="small text-muted ki-sel-unit">{{ c.unit }}</span>
@@ -93,6 +100,13 @@
   form.addEventListener('change', (e) => {
     if (e.target.type === 'checkbox') e.target.closest('.ki-sel-row').classList.toggle('on', e.target.checked);
     count();
+  });
+  // another type of ply: the name follows, e.g. Plywood (18mm BWP) → Plywood (12mm MR)
+  form.addEventListener('change', (e) => {
+    if (!e.target.classList.contains('ki-sel-ply')) return;
+    const label = e.target.closest('.ki-sel-row').querySelector('[data-sel-name]');
+    label.textContent = label.textContent.replace('(' + e.target.dataset.was + ')', '(' + e.target.value + ')');
+    e.target.dataset.was = e.target.value;
   });
   // typing a quantity ticks the line
   form.addEventListener('input', (e) => {
