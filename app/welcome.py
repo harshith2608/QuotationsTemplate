@@ -3,10 +3,11 @@ instead of the setup guide. One question a page, each with "Skip for now", and "
 
   1. business  the company name and phone (filled in from the trial request), the logo if they have it
   2. units     how they measure: feet & inches, mm, cm or inches, and rates per sqft or per sq m
-  3. rates     what they mostly do (KINDS); interiors, kitchens and turnkey firms are then asked "Do you have an
-               old quotation or rate Excel ready?" (Bring your old quotation, app/ai_import.py, when it's on: it
-               then comes back here). Every other kind, and a "no", gets a short list of typical items and rates
-               (TYPICAL, priced by item). Either way: "These are your rates", in sections, to check and change.
+  3. rates     what they mostly do (KINDS); interiors and turnkey firms are then asked "Do you have an old
+               quotation or rate Excel ready?" (Bring your old quotation, app/ai_import.py, when it's on: it then
+               comes back here). Every other kind, and a "no", is shown a short list of typical items and rates
+               (TYPICAL) on "These are your rates", in sections, to check and change. Choosing a business writes
+               nothing: the items are saved (priced by item) only with Save my rates.
   4. quote     their first quotation: the new quotation form (or, set up from an old quotation, that quotation
                rebuilt here), with a strip on top saying what to do
   5. send      the saved quotation: its PDF and Send on WhatsApp
@@ -251,8 +252,9 @@ def start_on_first_login():
 
 
 def go_to(key):
+    """The tour is on this step (stored only when it changes)."""
     s = _state()
-    if key in ORDER and not s.get('finished'):
+    if key in ORDER and not s.get('finished') and s.get('step') != key:
         s['step'] = key
         _store(s)
 
@@ -286,9 +288,11 @@ def finish(how='done'):
 
 
 def set_kind(kind):
+    """What they do, kept when their rates are saved (for the console)."""
     s = _state()
-    s['kind'] = kind
-    _store(s)
+    if s.get('kind') != kind:
+        s['kind'] = kind
+        _store(s)
 
 
 def remember_project(project_id):
@@ -298,81 +302,39 @@ def remember_project(project_id):
     _store(s)
 
 
-def _typical_ids():
-    return set((_state().get('typical') or {}).get('ids') or [])
-
-
 def note_added(ids):
-    """Items they added on "These are your rates": theirs, but made in this tour (see own_items)."""
+    """Items saved on "These are your rates": made in this tour (see own_items)."""
     s = _state()
     s['added'] = sorted(set(s.get('added') or []) | {int(i) for i in ids})
     _store(s)
 
 
 def own_items():
-    """Their items from outside this tour (an old quotation, a price list loaded from the console): not the typical
-    ones it gave them nor the ones they added in it. Lump sums don't count."""
+    """Their items from outside this tour (an old quotation read, a price list loaded from the console), not the ones
+    saved on "These are your rates". Lump sums don't count."""
     from . import boq
     from .models import BoqItem
-    st = _state()
-    ids = _typical_ids() | set(st.get('given') or []) | set(st.get('added') or [])
+    ids = set(_state().get('added') or [])
     return [b for b in BoqItem.query.filter(BoqItem.unit != boq.LUMP_SUM).all() if b.id not in ids]
 
 
-def _drop_typical():
-    """Another kind of business chosen (Back, then a different choice): the typical items given for the first one go,
-    except any they changed (name, unit or rate); the items they added themselves stay."""
-    from . import db
-    from .models import BoqItem
-    given = (_state().get('typical') or {}).get('rows') or {}
-    for item_id, (name, unit, rate) in given.items():
-        b = db.session.get(BoqItem, int(item_id))
-        if b is not None and (b.name, b.unit, float(b.rate or 0)) == (name, unit, float(rate)):
-            db.session.delete(b)
-    db.session.flush()
-
-
-def add_typical(kind):
-    """Price by item, with the typical items for this kind of business when they have no items of their own yet
-    (in their own units); the typical items of a kind chosen before are replaced. Returns how many were added."""
-    from sqlalchemy import func
-    from . import boq, db
-    from .models import BoqItem
-    added, rows = 0, {}
-    s = _state()
-    if (s.get('typical') or {}).get('kind') == kind and _typical_ids():
-        boq.set_pricing(boq.ITEM, starter=False)
-        return 0                                  # the same choice again: what they have stays
-    if s.get('typical'):
-        _drop_typical()
-    if not own_items():
-        from . import units
-        metric = units.area_unit() == 'sqm'
-        have = {n for (n,) in db.session.query(func.lower(BoqItem.name)).all()}
-        group = 'Other'
-        for row in TYPICAL.get(kind, []):
-            if row[0] == '#':
-                group = row[1]
-                continue
-            name, unit, rate, description = row
-            if metric and unit == 'sqft':
-                unit, rate = 'sq m', boq._metric_rate(rate, boq.AREA_UNITS['sq m'])
-            elif metric and unit == 'rft':
-                unit, rate = 'rmt', boq._metric_rate(rate, boq.LENGTH_UNITS['rmt'])
-            if name.lower() in have:
-                continue
-            b = BoqItem(name=name, unit=unit, rate=rate, description=description, category=group)
-            db.session.add(b)
-            db.session.flush()
-            rows[str(b.id)] = (name, unit, float(rate))
-            have.add(name.lower())
-            added += 1
-    s = _state()
-    s['typical'] = {'kind': kind, 'ids': [int(i) for i in rows], 'rows': rows}
-    s['given'] = sorted(set(s.get('given') or []) | {int(i) for i in rows})     # every kind's, for own_items
-    _store(s)
-    boq.set_pricing(boq.ITEM, starter=False)
-    return added
+def typical_rows(kind):
+    """[(section, name, unit, rate, description)]: the typical items for this kind of business, in their own units.
+    Only shown on "These are your rates" until saved: nothing is written to their app by choosing a business."""
+    from . import boq, units
+    metric = units.area_unit() == 'sqm'
+    out, group = [], 'Other'
+    for row in TYPICAL.get(kind, []):
+        if row[0] == '#':
+            group = row[1]
+            continue
+        name, unit, rate, description = row
+        if metric and unit == 'sqft':
+            unit, rate = 'sq m', boq._metric_rate(rate, boq.AREA_UNITS['sq m'])
+        elif metric and unit == 'rft':
+            unit, rate = 'rmt', boq._metric_rate(rate, boq.LENGTH_UNITS['rmt'])
+        out.append((group, name, unit, rate, description))
+    return out
 
 
 def bar(endpoint, view_args):

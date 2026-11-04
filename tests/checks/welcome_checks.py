@@ -28,7 +28,12 @@ ok('step 1: one question, no menu, step 1 of 5, Skip for now and I\'ll explore o
 r = c.post('/welcome/business', data={'name': 'Nest & Grain Interiors', 'phone': '90000 00021', 'confirm': '1'})
 with app.app_context():
     ok('…saves the name and phone, then step 2', loc(r).endswith('/welcome/') and AppSetting.get('company_name') == 'Nest & Grain Interiors'
-       and AppSetting.get('company_mobile') == '90000 00021' and W.step() == 'units')
+       and AppSetting.get('company_mobile') == '+91 90000 00021' and W.step() == 'units')
+r = c.post('/welcome/business', data={'name': 'Nest & Grain Interiors', 'phone': 'call me 98abc', 'confirm': '1'}, follow_redirects=True)
+with app.app_context():
+    ok('…a phone with letters (or too short) is refused, the saved one kept', 'digits only' in r.text
+       and AppSetting.get('company_mobile') == '+91 90000 00021')
+    W.go_to('units'); db.session.commit()
 r = c.get('/welcome/')
 t = c.get('/welcome/units').text
 ok('step 2: how you measure, four units', loc(r).endswith('/welcome/units') and 'Feet &amp; inches' in t and 'Millimetres' in t
@@ -40,59 +45,66 @@ t = c.get('/welcome/rates').text
 ok('step 3 asks what you mostly do first: interiors and the businesses that measure', all(k in t for k in (
    'Interiors, modular kitchens &amp; wardrobes', 'Turnkey', 'uPVC windows', 'Tiles, flooring', 'Construction', 'Painting',
    'False ceiling', 'Steel fabrication', 'Curtains', 'Glass &amp; aluminium', 'Something else')))
-r = c.post('/welcome/rates', data={'kind': 'interiors'})
 with app.app_context():
-    names = {b.name for b in BoqItem.query.all()}
-    from app import boq
-    ok('…typical interiors items (modular kitchen and wardrobes too), priced by item, not the services starter set',
-       loc(r).endswith('/welcome/rates/check') and boq.enabled()
-       and {'Wardrobe', 'Sliding Wardrobe', 'TV Unit', 'Base Cabinet', 'Magic Corner', 'Countertop (Granite)', 'False Ceiling'} <= names
-       and 'Electric Wiring' not in names)
+    before = AppSetting.query.count(), BoqItem.query.count()
+r = c.post('/welcome/rates', data={'kind': 'upvc'})
+r2 = c.post('/welcome/rates', data={'kind': 'tiles'})
+with app.app_context():
+    ok('choosing a business (and changing it) saves nothing: it goes to "These are your rates" with the choice',
+       loc(r).endswith('/welcome/rates/check?kind=upvc') and loc(r2).endswith('/welcome/rates/check?kind=tiles')
+       and (AppSetting.query.count(), BoqItem.query.count()) == before)
+t = c.get('/welcome/rates/check?kind=tiles').text
+ok('…each business shows its own typical items, marked as not saved yet', 'value="Floor Tiles (2 x 2, with laying)"' in t
+   and 'value="Sliding Window (2 track)"' not in t and 'nothing is saved until you tap Save my rates' in t)
+t = c.get('/welcome/rates/check?kind=interiors').text
+ok('"These are your rates" for interiors: in sections, the typical items (kitchens and wardrobes too), an empty row in '
+   'each, Add a section', 'name="grp_0" value="Bedrooms"' in t and 'name="s0y1_name" value="Wardrobe"' in t
+   and 'value="1600"' in t and 'value="Sliding Wardrobe"' in t and 'value="Magic Corner"' in t
+   and 'value="Countertop (Granite)"' in t and 'name="n0x_name"' in t and 'name="n1x_name"' in t and 'Add a section' in t)
+with app.app_context():
+    ok('…still nothing saved', BoqItem.query.count() == before[1])
     ok('…one choice for interiors and modular kitchens', 'kitchens' not in W.KINDS)
-    wardrobe = BoqItem.query.filter_by(name='Wardrobe').first()
-    bed = BoqItem.query.filter_by(name='Bed with Storage').first()
-t = c.get('/welcome/rates/check').text
-ok('"These are your rates": in sections, every rate there to change, an empty row in each, Add a section',
-   'These are your rates' in t and 'name="grp_0" value="Bedrooms"' in t and f'name="rate_{wardrobe.id}"' in t
-   and 'value="1600"' in t and 'name="n0x_name"' in t and 'name="n1x_name"' in t and 'Add a section' in t)
-r = c.post('/welcome/rates/check', data={f'name_{wardrobe.id}': 'Wardrobe', f'unit_{wardrobe.id}': 'sqft',
-                                         f'rate_{wardrobe.id}': '1,750', f'del_{bed.id}': '1',
-                                         'grp_0': 'Bedrooms', 'grpold_0': 'Bedrooms',
-                                         'grp_1': 'Living Room', 'grpold_1': 'Living & Dining',
-                                         'n0x_name': 'Wall Panelling', 'n0x_unit': 'sqft', 'n0x_rate': '650',
-                                         'n0x2_name': 'Wardrobe', 'n0x2_rate': '9',
-                                         'grp_9': 'Bathrooms', 'n9x_name': 'Vanity Unit', 'n9x_unit': 'sqft', 'n9x_rate': '1500',
-                                         'n9x2_name': 'Mirror Cabinet', 'n9x2_unit': 'nos', 'n9x2_rate': '6000'})
+import re as _re
+form = {}
+for m in _re.finditer(r'name="((?:s|grp|grpold)[^"]*)" value="([^"]*)"', t):
+    if not m.group(1).endswith('_skip'):          # (unticked boxes aren't sent)
+        form[m.group(1)] = m.group(2).replace('&amp;', '&')
+for m in _re.finditer(r'name="(s\d+y\d+_unit)"[^>]*>(.*?)</select>', t, _re.S):
+    form[m.group(1)] = _re.search(r'<option selected>([^<]*)', m.group(2)).group(1)
+key = lambda n: next(k for k, v in form.items() if k.endswith('_name') and v == n)[:-len('name')]
+form[key('Wardrobe') + 'rate'] = '1,750'
+form[key('Bed with Storage') + 'skip'] = '1'
+form.update({'grp_1': 'Living Room', 'n0x_name': 'Wall Panelling', 'n0x_unit': 'sqft', 'n0x_rate': '650',
+             'n0x2_name': 'Wardrobe', 'n0x2_rate': '9', 'grp_9': 'Bathrooms', 'n9x_name': 'Vanity Unit', 'n9x_unit': 'sqft',
+             'n9x_rate': '1500', 'n9x2_name': 'Mirror Cabinet', 'n9x2_unit': 'nos', 'n9x2_rate': '6000'})
+r = c.post('/welcome/rates/check?kind=interiors', data=form)
 with app.app_context():
-    ok('…saved: a changed rate, a removed item, a new one (not a second Wardrobe)', loc(r).endswith('/welcome/')
-       and BoqItem.query.filter_by(name='Wardrobe').count() == 1 and BoqItem.query.filter_by(name='Wardrobe').first().rate == 1750
-       and BoqItem.query.filter_by(name='Bed with Storage').first() is None
-       and BoqItem.query.filter_by(name='Wall Panelling').first().rate == 650
-       and BoqItem.query.filter_by(name='Wall Panelling').first().category == 'Bedrooms' and W.step() == 'quote')
-    ok('…a renamed section takes its items with it; a new section with its items',
+    from app import boq
+    names = {b.name for b in BoqItem.query.all()}
+    ok('Save my rates: the typical items saved (a changed rate, one left out), priced by item, not the services set',
+       loc(r).endswith('/welcome/') and boq.enabled() and BoqItem.query.filter_by(name='Wardrobe').count() == 1
+       and BoqItem.query.filter_by(name='Wardrobe').first().rate == 1750 and 'Bed with Storage' not in names
+       and {'TV Unit', 'Base Cabinet', 'Magic Corner', 'False Ceiling'} <= names and 'Electric Wiring' not in names
+       and BoqItem.query.filter_by(name='Wardrobe').first().description.startswith('Carcass') and W.step() == 'quote')
+    ok('…new rows in their sections (not a second Wardrobe)', BoqItem.query.filter_by(name='Wall Panelling').first().rate == 650
+       and BoqItem.query.filter_by(name='Wall Panelling').first().category == 'Bedrooms')
+    ok('…a renamed section; a new section with its items',
        BoqItem.query.filter_by(name='TV Unit').first().category == 'Living Room'
        and not BoqItem.query.filter_by(category='Living & Dining').count()
        and {b.name for b in BoqItem.query.filter_by(category='Bathrooms')} == {'Vanity Unit', 'Mirror Cabinet'})
     g = json.loads(AppSetting.get('setup_guide'))
     ok('…the setup guide\'s steps are done too (company, units, pricing, rates)', {'company', 'units', 'pricing', 'rates'} <= set(g['done']))
-ok('Back on every step after the first', 'id="wBack"' not in c.get('/welcome/business').text
+    ok('…and what they do, for the console', W.state()['kind'] == 'interiors')
+ok('Back on every step after the first (keeping the business chosen)', 'id="wBack"' not in c.get('/welcome/business').text
    and 'href="/welcome/business" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/units').text
    and 'href="/welcome/units" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates').text
-   and 'href="/welcome/rates" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check').text)
+   and 'href="/welcome/rates?kind=interiors" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check?kind=interiors').text)
 with app.app_context():
     ok('…opening a step again puts the tour back on it', W.step() == 'rates')
-    W.go_to('quote'); db.session.commit()
-# Back, and a different business: its own typical items (the first one's go, except changed ones and their own)
-r = c.post('/welcome/rates', data={'kind': 'tiles'})
+t = c.get('/welcome/rates/check?kind=upvc').text
+ok('after saving, another business: its typical items shown beside the saved ones (to keep or remove)',
+   'value="Sliding Window (2 track)"' in t and 'name="name_' in t and 'value="Base Cabinet"' in t)
 with app.app_context():
-    names = {b.name for b in BoqItem.query.all()}
-    ok('Back and another business: its own typical items instead', loc(r).endswith('/welcome/rates/check')
-       and 'Floor Tiles (2 x 2, with laying)' in names and 'Base Cabinet' not in names and 'TV Unit' not in names)
-    ok('…the first one\'s items they changed or added stay', {'Wardrobe', 'Wall Panelling', 'Vanity Unit'} <= names)
-c.post('/welcome/rates', data={'kind': 'interiors'})
-with app.app_context():
-    names = {b.name for b in BoqItem.query.all()}
-    ok('…and back again: interiors\' items again, no tiles', 'Base Cabinet' in names and 'Granite Flooring' not in names)
     W.go_to('quote'); db.session.commit()
 r = c.get('/welcome/', follow_redirects=True)
 t = r.text
@@ -153,6 +165,7 @@ def no_rates_yet():
         BoqItem.query.delete()
         boq.set_enabled(False)
         AppSetting.set('setup_guide', json.dumps({'seen': True}))
+        st = W.state(); st.pop('added', None); AppSetting.set(W.KEY, json.dumps(st))
         db.session.commit()
 
 
@@ -160,18 +173,19 @@ no_rates_yet()
 r = c.post('/welcome/rates', data={'kind': 'upvc'})
 with app.app_context():
     ok('with Bring your old quotation on, uPVC (a business that measures) isn\'t asked for a file: its typical items',
-       loc(r).endswith('/welcome/rates/check') and W.state()['kind'] == 'upvc'
-       and BoqItem.query.filter_by(name='Sliding Window (2 track)').first() is not None
-       and BoqItem.query.filter_by(name='Wardrobe').first() is None)
-t = c.get('/welcome/rates/check').text
-ok('…in its sections (Windows, Doors, Extras)', all(f'value="{g}"' in t for g in ('Windows', 'Doors', 'Extras')))
+       loc(r).endswith('/welcome/rates/check?kind=upvc') and BoqItem.query.count() == 0)
+t = c.get('/welcome/rates/check?kind=upvc').text
+ok('…in its sections (Windows, Doors, Extras)', all(f'value="{g}"' in t for g in ('Windows', 'Doors', 'Extras'))
+   and 'value="Sliding Window (2 track)"' in t and 'value="Wardrobe"' not in t)
 no_rates_yet()
 r = c.post('/welcome/rates', data={'kind': 'interiors'})
-t = c.get('/welcome/rates/file').text
-ok('interiors with Bring your old quotation on: do you have a file?', loc(r).endswith('/welcome/rates/file')
+t = c.get('/welcome/rates/file?kind=interiors').text
+ok('interiors with Bring your old quotation on: do you have a file?', loc(r).endswith('/welcome/rates/file?kind=interiors')
    and 'old quotation or your rate list' in t and 'Yes, upload it' in t and 'No, start with typical rates' in t
-   and 'href="/welcome/rates" class="text-decoration-none me-2" id="wBack"' in t)
-r = c.post('/welcome/rates/file', data={'file': 'yes'})
+   and 'href="/welcome/rates?kind=interiors" class="text-decoration-none me-2" id="wBack"' in t)
+r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'no'})
+ok('…no: its typical items, not saved yet', loc(r).endswith('/welcome/rates/check?kind=interiors'))
+r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'yes'})
 ok('…yes: the upload page, with the strip', loc(r).endswith('/admin/import') and 'step 3 of 5' in c.get('/admin/import').text)
 form = {'job_title': '2 BHK interiors', 'discount': '0', 'gst': '', 'sections': '1', 'charges': '0', 's0_name': 'Master Bedroom',
         's0_lines': '2', 's0_0_keep': '1', 's0_0_name': 'Wardrobe', 's0_0_unit': 'sqft', 's0_0_quantity': '70', 's0_0_rate': '1450',

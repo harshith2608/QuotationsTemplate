@@ -11,7 +11,8 @@
   <input class="form-control form-control-lg mb-3" id="wName" name="name" value="{{ name }}" maxlength="80" required autofocus>
   {% endif %}
   <label class="form-label fw-semibold" for="wPhone">Phone</label>
-  <input class="form-control form-control-lg mb-3" id="wPhone" name="phone" value="{{ phone }}" maxlength="30" inputmode="tel">
+  <input class="form-control form-control-lg mb-3" id="wPhone" name="phone" value="{{ phone }}" maxlength="20" type="tel"
+         inputmode="tel" pattern="[0-9+\(\)\- ]{10,20}" title="Digits only, e.g. 98765 43210" placeholder="e.g. 98765 43210">
   {% if 'logo' not in locked %}
   <label class="form-label fw-semibold" for="wLogo">Logo <span class="text-muted fw-normal">(optional)</span></label>
   {% if logo_url %}<div class="mb-2"><img src="{{ logo_url }}" alt="Your logo" style="max-height:48px"></div>{% endif %}
@@ -27,4 +28,8 @@
   {% endif %}
   <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Continue <i class="bi bi-arrow-right ms-1"></i></button>
 </form>
+<script>
+  // a phone number: digits, spaces, + ( ) - only, as it's typed
+  document.getElementById('wPhone').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/[^0-9+()\- ]/g, ''); });
+</script>
 {% endblock %}

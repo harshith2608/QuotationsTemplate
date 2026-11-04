@@ -18,10 +18,10 @@ def admins_only():
 BACK = {'units': 'welcome.business', 'rates': 'welcome.units', 'file': 'welcome.rates', 'check': 'welcome.rates'}
 
 
-def _page(template, key, back=None, **kw):
+def _page(template, key, back=None, back_args=None, **kw):
     """A tour page; back: the page before it (its GET puts the tour back on that step)."""
     return render_template(template, hide_nav=True, key=key, number=W.number(key), total=len(W.ORDER),
-                           back_url=url_for(back) if back else None, title="Let's set up your QuoteRoom", **kw)
+                           back_url=url_for(back, **(back_args or {})) if back else None, title="Let's set up your QuoteRoom", **kw)
 
 
 def _next(key, skipped=False):
@@ -96,7 +96,11 @@ def business():
                 if branding.lock_enabled():
                     branding.relock('name')
         if phone:
-            AppSetting.set(phone_key, phone)
+            clean = _phone(phone)
+            if clean is None:
+                errors.append('Type your phone number with digits only, e.g. 98765 43210.')
+            else:
+                AppSetting.set(phone_key, clean)
         logo = request.files.get('logo')
         if logo and logo.filename and 'logo' not in locked and not errors:
             if not confirmed:
@@ -149,39 +153,32 @@ def units():
 # ── 3. Your rates ────────────────────────────────────────────────────────────
 
 def _has_items():
-    """Their rates are already in, from somewhere other than this tour's typical items: their own items (an old
-    quotation read, a price list loaded from the console), or rates set up by material."""
+    """Their rates are already in, from outside this tour: their own items (an old quotation read, a price list loaded
+    from the console), or rates set up by material."""
     from . import boq, setup_guide
     if boq.enabled() and W.own_items():
         return True
-    return 'rates' in (setup_guide._state().get('done') or []) and not W.state().get('typical')
+    return 'import' in (setup_guide._state().get('done') or [])
 
 
 @welcome_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
-    """What they mostly do. Interiors (with modular kitchens) and turnkey firms are then asked for an old quotation or rate Excel
-    (when Bring your old quotation is on); every other kind goes straight to its typical items."""
-    from . import ai_import, boq
+    """What they mostly do. Interiors and turnkey firms are then asked for an old quotation or rate Excel (when Bring
+    your old quotation is on); every other kind goes straight to its typical items. Nothing is saved here: the
+    choice travels in the address to "These are your rates"."""
+    from . import ai_import
     W.go_to('rates')
+    db.session.commit()
     if request.method == 'POST':
         k = request.form.get('kind')
         if k not in W.KINDS:
             flash('Choose what you mostly do.', 'danger')
             return redirect(url_for('welcome.rates'))
-        if not boq.ready():
-            flash('Your app needs its latest update first. Please contact support.', 'danger')
-            return redirect(url_for('welcome.rates'))
-        W.set_kind(k)
         if k in W.FILE_KINDS and ai_import.available() and not _has_items():
-            db.session.commit()
-            return redirect(url_for('welcome.file'))
-        if not _has_items():                      # never over rates already set up (they're checked instead)
-            W.add_typical(k)                      # (replacing the typical items of a kind chosen before)
-        db.session.commit()
-        return redirect(url_for('welcome.check'))
-    db.session.commit()
-    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=W.KINDS, icons=W.ICONS, chosen=W.state().get('kind'),
-                 has_items=_has_items())
+            return redirect(url_for('welcome.file', kind=k))
+        return redirect(url_for('welcome.check', kind=k))
+    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=W.KINDS, icons=W.ICONS,
+                 chosen=request.args.get('kind') or W.state().get('kind'), has_items=_has_items())
 
 
 @welcome_bp.route('/rates/file', methods=['GET', 'POST'])
@@ -189,18 +186,15 @@ def file():
     """"Do you have an old quotation or rate Excel ready?" (interiors and turnkey)."""
     from . import ai_import
     W.go_to('rates')
+    db.session.commit()
+    k = request.args.get('kind') if request.args.get('kind') in W.KINDS else 'interiors'
     if request.method == 'POST':
         if request.form.get('file') == 'yes' and ai_import.available():
-            db.session.commit()
             return redirect(url_for('admin.ai_import'))
-        if not _has_items():
-            W.add_typical(W.state().get('kind') or 'interiors')
-        db.session.commit()
-        return redirect(url_for('welcome.check'))
-    db.session.commit()
+        return redirect(url_for('welcome.check', kind=k))
     if not ai_import.available():
-        return redirect(url_for('welcome.rates'))
-    return _page('welcome/rates.html', 'rates', back=BACK['file'], has_items=_has_items())
+        return redirect(url_for('welcome.check', kind=k))
+    return _page('welcome/rates.html', 'rates', back=BACK['file'], back_args={'kind': k}, has_items=_has_items())
 
 
 @welcome_bp.route('/rates/kind')
@@ -210,23 +204,28 @@ def kind():
 
 @welcome_bp.route('/rates/check', methods=['GET', 'POST'])
 def check():
-    """"These are your rates": every item with its unit and rate in its section, to change; sections can be renamed
-    and added, each with an empty row to add more."""
+    """"These are your rates": their items in sections, and (with ?kind=…, when their rates aren't already in from
+    elsewhere) the typical items for that business, shown but not saved. Sections can be renamed and added, each
+    with an empty row to add more. Save my rates writes it all, priced by item."""
     import re
     from . import boq
     from .models import BoqItem
     W.go_to('rates')
-    if not boq.enabled():                         # priced by material (set up from their file): the Rates page
+    k = request.args.get('kind') if request.args.get('kind') in W.KINDS else None
+    if not boq.enabled() and _has_items():        # priced by material (set up from their file): the Rates page
         db.session.commit()
         return redirect(url_for('admin.rates'))
     if request.method == 'POST':
+        if not boq.ready():
+            flash('Your app needs its latest update first. Please contact support.', 'danger')
+            return redirect(url_for('welcome.check', kind=k))
         sections = {}
         for key, value in request.form.items():
             m = re.match(r'^grp_(\d+)$', key)
             if m:
                 sections[m.group(1)] = ' '.join(value.split())[:60]
-        for k, name in sections.items():           # a section renamed: its items move with it
-            old = request.form.get(f'grpold_{k}')
+        for sk, name in sections.items():          # a section renamed: its items move with it
+            old = request.form.get(f'grpold_{sk}')
             if old is not None and name and name != old:
                 q = BoqItem.query.filter((BoqItem.category == old) | (BoqItem.category.is_(None))) if old in ('', 'Other') \
                     else BoqItem.query.filter(BoqItem.category == old)
@@ -243,34 +242,59 @@ def check():
             item.rate = _money(request.form.get(f'rate_{item.id}'), item.rate)
         have = {i.name.lower() for i in BoqItem.query.all()}
         added = []
-        for key in request.form:
-            m = re.match(r'^n(\d+)x\d*_name$', key)
+        for key in request.form:                   # new rows (n…) and the typical items shown (s…, unless untick)
+            m = re.match(r'^(?:n(\d+)x\d*|s(\d+)y\d+)_name$', key)
             if not m:
                 continue
             p = key[:-len('name')]
             name = ' '.join(request.form.get(key, '').split())[:100]
-            if not name or name.lower() in have:
+            if not name or name.lower() in have or request.form.get(p + 'skip'):
                 continue
             b = BoqItem(name=name, unit=boq.clean_unit(request.form.get(p + 'unit')),
-                        rate=_money(request.form.get(p + 'rate'), 0), category=sections.get(m.group(1)) or 'Other')
+                        rate=_money(request.form.get(p + 'rate'), 0),
+                        description=(request.form.get(p + 'desc') or '').strip()[:500] or None,
+                        category=sections.get(m.group(1) or m.group(2)) or 'Other')
             db.session.add(b)
             db.session.flush()
             added.append(b.id)
             have.add(name.lower())
         W.note_added(added)
+        if k:
+            W.set_kind(k)
+        boq.set_pricing(boq.ITEM, starter=False)
         from . import setup_guide
-        setup_guide.mark('pricing')
         setup_guide.mark('rates')
         db.session.commit()
         flash('Your rates are saved.', 'success')
         return _next('rates')
     db.session.commit()
-    items = BoqItem.query.order_by(BoqItem.id).all()
+    items = BoqItem.query.order_by(BoqItem.id).all() if boq.enabled() else []
     groups = {}
     for it in items:                              # in their sections, in the order they were added
-        groups.setdefault(it.category or 'Other', []).append(it)
-    return _page('welcome/check.html', 'rates', back=BACK['check'], groups=list(groups.items()),
-                 units_list=boq.units_for_business())
+        groups.setdefault(it.category or 'Other', ([], []))[0].append(it)
+    if k and not _has_items():
+        have = {it.name.lower() for it in items}
+        for group, name, unit, rate, description in W.typical_rows(k):
+            if name.lower() not in have:
+                groups.setdefault(group, ([], []))[1].append(
+                    {'name': name, 'unit': unit, 'rate': rate, 'description': description})
+    return _page('welcome/check.html', 'rates', back=BACK['check'], groups=[(g, a, b) for g, (a, b) in groups.items()],
+                 units_list=boq.units_for_business(), back_args={'kind': k} if k else None)
+
+
+def _phone(raw):
+    """A phone number as shown on quotations ('+91 98765 43210' for an Indian mobile), or None when it isn't one
+    (letters, or too few or too many digits)."""
+    import re
+    from .marketing import normalise_phone
+    from .ops import phone_display
+    if not re.fullmatch(r'[0-9+()\- ]+', raw):
+        return None
+    mobile = normalise_phone(raw)
+    if mobile:
+        return phone_display(mobile)
+    digits = re.sub(r'\D', '', raw)
+    return ' '.join(raw.split()) if 10 <= len(digits) <= 13 else None
 
 
 def _money(value, default):
