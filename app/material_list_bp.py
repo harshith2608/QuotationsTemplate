@@ -63,6 +63,34 @@ def view(project_id):
                            all_text=ML.text(lst, project), title=f'Material list – {project.customer_name}')
 
 
+@material_list_bp.route('/projects/<int:project_id>/materials/select', methods=['GET', 'POST'])
+@login_required
+def select(project_id):
+    """Select materials: everything the business has, with what this quotation needs ticked; the list to copy."""
+    project = _project(project_id)
+    stop = _not_ready(project)
+    if stop:
+        return stop
+    if not access.can_edit(project, current_user):
+        return _back(project)
+    lst = ML.get(project)
+    if request.method == 'POST':
+        if lst is None:
+            abort(403)
+        ML.save_selection(lst, request.form)
+        flash('Your material list is ready: tap Copy all, or send each group on WhatsApp.', 'success')
+        return _back(project)
+    if lst is None:
+        ML.seed_rules()
+        lst = ML.create(project)
+    elif ML.changed(lst, project):
+        ML.rebuild(lst, project)                # the quotation changed: tick what it needs now (keeps their changes)
+    choices = ML.choices(lst, project)
+    return render_template('projects/materials_select.html', project=project, choices=choices, names=ML.groups(),
+                           ticked=sum(c['on'] for _, rows in choices for c in rows),
+                           title=f'Select materials – {project.customer_name}')
+
+
 @material_list_bp.route('/projects/<int:project_id>/materials/rebuild', methods=['POST'])
 @login_required
 def rebuild(project_id):

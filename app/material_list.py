@@ -317,10 +317,9 @@ def build(project, rooms=None):
                 if group:
                     add(f'boq|{name.lower()}|{unit.lower()}', 'boq', group, name, i.quantity, unit, source)
             elif i.is_fitting:
-                unit = fittings_unit.get(i.name.lower(), '')
-                if unit.lower() in SERVICE_UNITS:
+                unit = fitting_unit(fittings_unit.get(i.name.lower(), ''))
+                if unit is None:
                     continue
-                unit = 'nos' if unit.lower() in ('', 'piece', 'pieces', 'nos', 'no') else unit
                 name = clean_text(i.name, NAME_MAX)
                 group = group_for(name, guess_group(name, 'Hardware', names))
                 if group:
@@ -347,6 +346,14 @@ def build(project, rooms=None):
         line['quantity'] = _qty(line.pop('raw'), line.pop('up'))
         line['source'] = source_text(line.pop('sources'))
     return lines
+
+
+def fitting_unit(unit):
+    """A fitting's unit on a list ('nos' for pieces), or None for a service (a job, a lump sum)."""
+    unit = unit or ''
+    if unit.lower() in SERVICE_UNITS:
+        return None
+    return 'nos' if unit.lower() in ('', 'piece', 'pieces', 'nos', 'no') else unit
 
 
 def source_text(sources):
@@ -478,6 +485,106 @@ def save(lst, form):
                                         unit=clean_text(unit, UNIT_MAX),
                                         category=group if group in names else fallback_group(names),
                                         sort_order=top + 1 + n))
+    lst.updated_at = datetime.utcnow()
+    db.session.commit()
+
+
+# ── Select materials: tick what goes on the list ─────────────────────────────
+
+CHOICES_MAX = 600
+
+
+def catalogue(project):
+    """Everything the business could put on a list, by name: [{'name', 'unit', 'group'}]. The material rules (one per
+    plywood and per material when the rule names them), fittings (not services), BOQ lines (not lump sums) and items
+    typed by hand on earlier lists."""
+    from . import boq, plywood
+    from .models import BoqItem, Material, MaterialListLine, PriceListItem
+    names = groups()
+    lower = {x.lower(): x for x in names}
+    remembered = item_groups()
+    out = {}
+
+    def add(name, unit, default):
+        name, unit = clean_text(name, NAME_MAX), clean_text(unit, UNIT_MAX)
+        if not name or name.lower() in out:
+            return
+        group = remembered.get(name.lower()) or default
+        out[name.lower()] = {'name': name, 'unit': unit, 'group': lower.get((group or '').lower()) or fallback_group(names)}
+
+    mats = [m.name for m in Material.query.filter_by(active=True).order_by(Material.sort_order, Material.id)]
+    plys = [o['name'] for o in plywood.context()['options'] if o.get('active', True)] or \
+        [plywood.project_plywood(project) or '']
+    for r in rules():
+        if not r.active:
+            continue
+        for mat in ((rule_materials(r) or mats) if '{material}' in (r.name or '') else ['']):
+            for ply in (plys if '{plywood}' in (r.name or '') else ['']):
+                add(render_name(r.name, mat, ply), r.unit, r.category)
+    for f in PriceListItem.query.order_by(PriceListItem.name):
+        unit = fitting_unit(f.unit)
+        if unit is not None:
+            add(f.name, unit, guess_group(f.name, 'Hardware', names))
+    if boq.ready():
+        for b in BoqItem.query.order_by(BoqItem.name):
+            if (b.unit or '') != boq.LUMP_SUM:
+                add(b.name, boq.unit_text(b.unit or 'nos'), guess_group(b.name, 'Other', names))
+    for ln in MaterialListLine.query.filter_by(kind='manual').order_by(MaterialListLine.id.desc()).limit(CHOICES_MAX):
+        add(ln.name, ln.unit, ln.category)
+    return list(out.values())[:CHOICES_MAX]
+
+
+def choices(lst, project):
+    """Select materials: [(group, [{'line' or None, 'name', 'unit', 'quantity', 'source', 'on'}])] in group order.
+    The list's lines first (ticked unless removed), then the rest of the catalogue, not ticked."""
+    names = groups()
+    found, seen = {}, set()
+    for ln in sorted(lst.lines, key=lambda ln: (ln.kind == 'manual', ln.sort_order, ln.id)):
+        seen.add(ln.name.lower())
+        found.setdefault(ln.category, []).append({'line': ln, 'name': ln.name, 'unit': ln.unit or '',
+                                                  'quantity': ln.quantity, 'source': ln.source, 'on': not ln.removed})
+    for c in catalogue(project):
+        if c['name'].lower() not in seen:
+            found.setdefault(c['group'], []).append({'line': None, 'name': c['name'], 'unit': c['unit'],
+                                                     'quantity': None, 'source': '', 'on': False})
+    ordered = [g_ for g_ in names if g_ in found] + [g_ for g_ in found if g_ not in names]
+    return [(g_, found[g_]) for g_ in ordered]
+
+
+def save_selection(lst, form):
+    """Save Select materials: a list line ticked stays (with its quantity), unticked is removed (it stays a choice);
+    a catalogue item ticked is added (kind 'manual'); new rows typed in are added."""
+    from .models import MaterialListLine
+    names = groups()
+    for ln in lst.lines.all():
+        p = f'l{ln.id}_'
+        if p + 'seen' not in form:
+            continue
+        ln.removed = not form.get(p + 'on')
+        if ln.removed:
+            continue
+        qty = number(form.get(p + 'qty'))
+        if qty != ln.quantity:
+            ln.quantity = qty
+            ln.edited = ln.kind != 'manual'
+    top = max([ln.sort_order for ln in lst.lines] or [0])
+    picked = [(form.get(k[:-2] + 'name'), form.get(k[:-2] + 'qty'), form.get(k[:-2] + 'unit'), form.get(k[:-2] + 'group'))
+              for k in form if re.fullmatch(r'c\d+_on', k)]
+    picked += list(zip(form.getlist('new_name'), form.getlist('new_qty'), form.getlist('new_unit'),
+                       form.getlist('new_group')))
+    have = {ln.name.lower(): ln for ln in lst.lines}
+    for n, (name, qty, unit, group) in enumerate(picked):
+        name = clean_text(name, NAME_MAX)
+        if not name:
+            continue
+        if name.lower() in have:                     # typed again: it's on the list (put back if removed)
+            have[name.lower()].removed = False
+            continue
+        have[name.lower()] = MaterialListLine(list_id=lst.id, kind='manual', name=name, quantity=number(qty),
+                                              unit=clean_text(unit, UNIT_MAX),
+                                              category=group if group in names else fallback_group(names),
+                                              sort_order=top + 1 + n)
+        db.session.add(have[name.lower()])
     lst.updated_at = datetime.utcnow()
     db.session.commit()
 

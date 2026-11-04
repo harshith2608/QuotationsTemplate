@@ -159,7 +159,9 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
   Material rules; the starting numbers are estimates to check with their carpenter), plus fittings and BOQ lines as they
   are. Grouped (Wood, Hardware, Electrical, Paint, Other: their own groups, add/rename/remove); change quantities, add
   or remove items, tick what's ordered; **Copy** or **WhatsApp** each group to its supplier. No prices on it. When the
-  quotation changes, **Rebuild** keeps their edits.
+  quotation changes, **Rebuild** keeps their edits. **Select materials** (on the quotation): a tick list of everything
+  the firm has (each plywood, laminates, fittings, BOQ lines, items typed on earlier lists) with what this quotation
+  needs already ticked; untick, tick, change a quantity, then Copy / WhatsApp the list.
   *(Off until you turn it on in the console: dashboard → Material list, one switch for everyone.)*
 - **★ Draft from a message (AI):** paste the customer's WhatsApp requirements or site notes → the quotation is
   filled in with the firm's own items and rates; sizes not given are highlighted, with questions to ask the customer.

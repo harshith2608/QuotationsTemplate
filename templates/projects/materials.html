@@ -34,6 +34,9 @@
     <a class="btn btn-success btn-sm fw-semibold" target="_blank" rel="noopener" data-send
        href="{{ url_for('materials_list.whatsapp', project_id=project.id) }}"><i class="bi bi-whatsapp me-1"></i>Send all</a>
     {% endif %}
+    {% if can_edit %}
+    <a class="btn btn-outline-primary btn-sm fw-semibold" href="{{ url_for('materials_list.select', project_id=project.id) }}"><i class="bi bi-ui-checks me-1"></i>Select materials</a>
+    {% endif %}
     {% if current_user.is_admin %}
     <a class="btn btn-outline-primary btn-sm fw-semibold" href="{{ url_for('materials_list.rules') }}"><i class="bi bi-sliders me-1"></i>Material rules</a>
     {% endif %}

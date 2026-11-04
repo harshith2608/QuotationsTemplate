@@ -60,7 +60,8 @@ save_quote('/projects/new', 'Material Home', rooms())
 with app.app_context():
     pid = Project.query.order_by(Project.id.desc()).first().id
 
-ok('the quotation page has the Material list button', f'/projects/{pid}/materials' in c.get(f'/projects/{pid}').text)
+ok('the quotation page has the Select materials button', f'/projects/{pid}/materials/select' in c.get(f'/projects/{pid}').text
+   and 'Select materials' in c.get(f'/projects/{pid}').text)
 page = c.get(f'/projects/{pid}/materials')
 ok('the list opens and is made from the quotation', page.status_code == 200 and 'Material list' in page.text and lines(pid))
 with app.app_context():
@@ -128,6 +129,40 @@ with app.app_context():
     pid2 = Project.query.order_by(Project.id.desc()).first().id
 c.get(f'/projects/{pid2}/materials')
 ok('a new list puts the remembered fitting in its group', lines(pid2)['Tandem Drawer'].category == 'Wood')
+
+# ── Select materials: what the quotation needs ticked, everything else to tick ──
+import re as _re
+save_quote('/projects/new', 'Select Home', rooms())
+with app.app_context():
+    pid5 = Project.query.order_by(Project.id.desc()).first().id
+    others = [o['name'] for o in plywood.context()['options'] if o['active'] and o['name'] != ply]
+sp = c.get(f'/projects/{pid5}/materials/select').text
+ok('select: the list is made and its lines are ticked', lines(pid5) and all(
+    _re.search(rf'name="l{ln.id}_on" id="l{ln.id}_on" checked', sp) for ln in lines(pid5).values()))
+ok('…the other plywoods are there to tick (not ticked)', not others or all(
+    ML.render_name('Plywood ({plywood})', '', o) in sp for o in others))
+ok('…fittings not on this quotation are there; a service is not', 'Hob &amp; Chimney Installation' not in sp)
+ok('…no prices', '₹' not in sp and '4500' not in sp)
+L5 = lines(pid5)
+cat = {m.group(2): m.group(1) for m in _re.finditer(r'name="(c\d+)_name" value="([^"]+)"', sp)}
+form = {f'l{ln.id}_seen': '1' for ln in L5.values()}
+form.update({f'l{ln.id}_on': 'on' for ln in L5.values() if ln.name != 'Screws (box of 100)'})
+form.update({f'l{ln.id}_qty': ln.quantity for ln in L5.values()})
+form[f'l{L5["Tandem Drawer"].id}_qty'] = '5'
+pick = next(n for n in cat if n not in L5)
+form.update({f'{cat[pick]}_on': 'on', f'{cat[pick]}_name': pick, f'{cat[pick]}_qty': '2', f'{cat[pick]}_unit': 'nos',
+             f'{cat[pick]}_group': 'Hardware'})
+form.update({'new_name': ['Asian Royale emulsion', ''], 'new_qty': ['4', ''], 'new_unit': ['litres', ''],
+             'new_group': ['Paint', 'Paint']})
+r = c.post(f'/projects/{pid5}/materials/select', data=form, follow_redirects=True)
+L5 = lines(pid5)
+ok('select saved → the list page to copy', 'Copy all' in r.text and 'material list is ready' in r.text)
+ok('…an unticked line is removed (and still a choice next time)', 'Screws (box of 100)' not in L5
+   and 'Screws (box of 100)' in c.get(f'/projects/{pid5}/materials/select').text)
+ok('…a quantity changed', L5['Tandem Drawer'].quantity == 5 and L5['Tandem Drawer'].edited)
+ok('…a ticked choice and a typed item are added', (L5[pick].quantity, L5[pick].kind) == (2, 'manual')
+   and (L5['Asian Royale emulsion'].quantity, L5['Asian Royale emulsion'].category) == (4, 'Paint'))
+ok('…an item typed on one list is a choice on the next', 'Asian Royale emulsion' in c.get(f'/projects/{pid}/materials/select').text)
 
 # ── Admin → Material rules ──
 rp = c.get('/admin/material-rules')
