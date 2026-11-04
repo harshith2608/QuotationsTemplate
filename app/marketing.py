@@ -63,6 +63,8 @@ def _context():
     google_ads_id = _env('GOOGLE_ADS_ID')
     google_conv = _env('GOOGLE_ADS_CONVERSION')
     from .signup import website_sells
+    from . import business
+    offered = {k for k in BUSINESS_TYPES if business.offered(k)}   # the console's Features → Kinds of business
     return dict(
         product=product,
         legal_name=_env('MARKETING_LEGAL_NAME', product),
@@ -82,7 +84,7 @@ def _context():
         year=datetime.utcnow().year,
         demo_video=youtube_id(_env('MARKETING_DEMO_VIDEO', 'cJgZoWVaB80')) or 'cJgZoWVaB80',
         has_tutorials=bool(tutorials()),
-        business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items()],
+        business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items() if k in offered],
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
         ai_plans=ai_plans(), plan_names=PLAN_NAMES, plan_values=PLAN_VALUES,
     )
@@ -184,8 +186,12 @@ def terms():
 
 # The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Every one but 'other' is a
 # trade QuoteRoom is for: they can set up their own app (signup.ELIGIBLE) and count as a Lead for the ads.
-BUSINESS_TYPES = {'interiors': 'Interior designer', 'furniture': 'Furniture works', 'kitchens': 'Modular kitchens',
-                  'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium works', 'other': 'Other'}
+# The trial form's choices (the app's own kinds: welcome.KINDS; 'kitchens' is set up as interiors)
+BUSINESS_TYPES = {'interiors': 'Interior designer', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
+                  'furniture': 'Furniture works', 'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium works',
+                  'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
+                  'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
+                  'curtains': 'Curtains, blinds & wallpaper', 'other': 'Other'}
 MAX_PER_IP_PER_HOUR = 5
 KEEP_LEADS_DAYS = 365          # stated in the privacy policy
 

@@ -152,6 +152,14 @@ def units():
 
 # ── 3. Your rates ────────────────────────────────────────────────────────────
 
+def _trial_kind():
+    """What they picked on the trial form (set up with the trial), to start with it chosen."""
+    from . import business
+    from .models import AppSetting
+    found = AppSetting.get(business.KEY) or ''
+    return W.OLD_KINDS.get(found, found) if found else None
+
+
 def _has_items():
     """Their rates are already in, from outside this tour: their own items (an old quotation read, a price list loaded
     from the console), or rates set up by material."""
@@ -177,8 +185,12 @@ def rates():
         if k in W.FILE_KINDS and ai_import.available() and not _has_items():
             return redirect(url_for('welcome.file', kind=k))
         return redirect(url_for('welcome.check', kind=k))
-    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=W.KINDS, icons=W.ICONS,
-                 chosen=request.args.get('kind') or W.state().get('kind'), has_items=_has_items())
+    from . import business
+    chosen = request.args.get('kind') or W.state().get('kind') or _trial_kind()
+    offered = business.kinds_offered()
+    kinds = {k: v for k, v in W.KINDS.items() if k in offered or k == chosen}   # the console's Kinds of business
+    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=kinds, icons=W.ICONS,
+                 chosen=chosen, has_items=_has_items())
 
 
 @welcome_bp.route('/rates/file', methods=['GET', 'POST'])

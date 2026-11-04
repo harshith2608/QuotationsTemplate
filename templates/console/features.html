@@ -6,7 +6,7 @@
   minute. Turn one off if something goes wrong with it; what they've already made is kept.</p>
 <nav class="small" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0">
   <a href="#ai-import">Bring your old quotation</a><a href="#ai-helpers">AI helpers on quotations</a>
-  <a href="#material-list">Material list</a></nav>
+  <a href="#material-list">Material list</a><a href="#kinds">Kinds of business</a></nav>
 
 <h2 id="ai-import">Bring your old quotation (AI)</h2>
 <div class="card">
@@ -76,5 +76,25 @@
       <input type="hidden" name="on" value="{{ '0' if mat_on else '1' }}">
       <button class="btn btn-sm" type="submit">{{ 'Turn off' if mat_on else 'Turn on' }}</button></form>
   </div>
+</div>
+
+<h2 id="kinds">Kinds of business</h2>
+<div class="card">
+  <p class="small" style="margin-top:0">Which businesses can sign up: the choices on the website's trial form (and its
+    <em>Set up your app now</em>) and on "What do you mostly do?" in the guided first setup. Businesses already set up
+    keep their kind and everything they made. Interiors and Something else are always offered.
+    {% if not kinds.website %}<br><span class="muted">The website isn't connected (<span class="mono">LEADS_DATABASE_URL</span>):
+    only the guided setup follows these.</span>{% endif %}</p>
+  <form method="post" action="{{ url_for('console.business_kinds') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px 14px;margin-bottom:10px">
+      {% for k, label in kinds.all.items() %}
+      <label class="small"><input type="checkbox" name="kind" value="{{ k }}" {{ 'checked' if k in kinds.on }}
+        {{ 'disabled' if k in kinds.always }}> {{ label }}{% if k in kinds.always %} <span class="muted">(always)</span>{% endif %}</label>
+      {% endfor %}
+    </div>
+    <button class="btn btn-sm btn-primary" type="submit">Save</button>
+    <span class="muted small">{% if kinds.saved %}On now: {{ kinds.on|length }} of {{ kinds.all|length }}.{% else %}Not saved yet: the ones offered before are on.{% endif %}</span>
+  </form>
 </div>
 {% endblock %}

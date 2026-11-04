@@ -202,7 +202,7 @@ SPARE_PREFIX = 'spare-'
 
 
 def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=None, company=None, phone=None,
-                 city=None, email=None, spare=False):
+                 city=None, email=None, spare=False, kind=None):
     """Create schema, tables, admin login, default data and the trial plan. Returns a summary dict.
     `company` / `phone` / `city` / `email` (from the trial request) are filled in as the business's company name,
     phone, address and email, so the
@@ -245,12 +245,12 @@ def create_trial(slug, admin_username='admin', admin_password=None, days=7, log=
         with db.engine.begin() as conn:
             conn.execute(text("UPDATE public.tenants SET status = 'spare' WHERE slug = :s"), {'s': slug})
         return {'slug': slug, 'schema': schema}
-    end = _finish_trial(slug, schema, company, phone, city, email, days, log)
+    end = _finish_trial(slug, schema, company, phone, city, email, days, log, kind=kind)
     return {'slug': slug, 'schema': schema, 'username': admin_username, 'password': admin_password,
             'ends_on': end, 'url': trial_url(slug), 'company': ' '.join((company or '').split())[:80]}
 
 
-def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda line: None):
+def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda line: None, kind=None):
     """The trial's details from the request (company, phone, city, email), its plan from today, then live."""
     with tenancy.tenant_context(slug, schema):
         company = ' '.join((company or '').split())[:80]
@@ -266,6 +266,9 @@ def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda li
                            ('company_email', (email or '').strip()[:120] if '@' in (email or '') else '')):
             if value:
                 AppSetting.set(key, value)
+        if kind:                                    # what they do (the trial form): their examples, words and setup
+            from . import business
+            business.set_kind(kind)
         start = plan_mod.today()
         end = start + timedelta(days=int(days))
         plan_mod.save_plan('trial', start, end)
@@ -295,7 +298,8 @@ def top_up_spares(target=None, log=None):
     return made
 
 
-def claim_trial(slug, admin_username, admin_password, days=7, company=None, phone=None, city=None, email=None):
+def claim_trial(slug, admin_username, admin_password, days=7, company=None, phone=None, city=None, email=None,
+                kind=None):
     """A new trial at once: a ready-made one renamed to `slug` with this admin login and these details (or, with none
     ready, a new one made now). Returns create_trial's summary."""
     from werkzeug.security import generate_password_hash
@@ -322,7 +326,7 @@ def claim_trial(slug, admin_username, admin_password, days=7, company=None, phon
                          {'n': slug, 'sc': schema, 'o': spare[0]})
     if not spare:
         return create_trial(slug, admin_username, admin_password, days, company=company, phone=phone, city=city,
-                            email=email)
+                            email=email, kind=kind)
     if _schema_revision(schema) != _head_revision():
         migrate_schema(schema)                     # made before the latest update
     with tenancy.tenant_context(slug, schema):
@@ -330,7 +334,7 @@ def claim_trial(slug, admin_username, admin_password, days=7, company=None, phon
         admin.username = admin_username
         admin.password_hash = generate_password_hash(admin_password, method='pbkdf2:sha256')
         db.session.commit()
-    end = _finish_trial(slug, schema, company, phone, city, email, days)
+    end = _finish_trial(slug, schema, company, phone, city, email, days, kind=kind)
     return {'slug': slug, 'schema': schema, 'username': admin_username, 'password': admin_password,
             'ends_on': end, 'url': trial_url(slug), 'company': ' '.join((company or '').split())[:80]}
 

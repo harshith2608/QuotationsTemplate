@@ -21,7 +21,8 @@ import time
 import urllib.parse
 import urllib.request
 
-ELIGIBLE = {'interiors', 'furniture', 'kitchens', 'upvc', 'glass'}     # marketing.BUSINESS_TYPES but 'other'
+ELIGIBLE = {'interiors', 'kitchens', 'turnkey', 'furniture', 'upvc', 'glass', 'tiles', 'construction', 'painting',
+            'ceiling', 'fabrication', 'curtains'}          # marketing.BUSINESS_TYPES but 'other'
 PLANS = ('6m', '1y', '6m_ai', '1y_ai')        # plan.PAID: what the website's pricing cards can buy
 TOKEN_HOURS = 72
 MAX_PER_IP_PER_HOUR = 3
@@ -61,7 +62,8 @@ def website_sells():
 
 def website_offers(business_type):
     """True if the website should offer "Set up your app now" for this request."""
-    return website_sells() and business_type in ELIGIBLE
+    from . import business
+    return website_sells() and business_type in ELIGIBLE and business.offered(business_type)
 
 
 def setup_url(lead_id, base=None, plan=None):

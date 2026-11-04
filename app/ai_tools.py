@@ -289,10 +289,13 @@ def _catalog():
         if names:
             out.append('Their usual measured item names: ' + ', '.join(names))
     else:
-        out.append('This business prices by item: there are no measured items, everything is a line (furniture too). '
-                   'Use its own line when one matches. Anything asked for that has no line of its own (a wardrobe, '
-                   'loft, kitchen cabinet, TV unit…) still goes in as a line, with a short clear name and its usual '
-                   'unit (sqft for furniture priced by area, rft by length, nos by the piece): the business prices it.')
+        out.append(_for_business(
+            'This business prices by item: there are no measured items, everything is a line (furniture too). '
+            'Use its own line when one matches. Anything asked for that has no line of its own (a wardrobe, '
+            'loft, kitchen cabinet, TV unit…) still goes in as a line, with a short clear name and its usual '
+            'unit (sqft for furniture priced by area, rft by length, nos by the piece): the business prices it.',
+            [(' (furniture too)', ''), ('(a wardrobe, loft, kitchen cabinet, TV unit…)', '({example}…)'),
+             ('sqft for furniture priced by area', 'sqft for work priced by area')]))
     opts = finishes.options() if by_item else []
     if opts:
         out.append('Finishes (put the one asked for in material): ' + ', '.join(o['name'] for o in opts))
@@ -389,7 +392,7 @@ def draft(message, photos=()):
     if not photos and len(message) < 15:
         raise AIProblem('Paste the customer\'s message or your notes: which rooms and what they want in each.')
     cat = _catalog()
-    rules = DRAFT_PROMPT.replace('{measured}', '' if cat['by_item'] else MEASURED_RULE)
+    rules = _for_business(DRAFT_PROMPT.replace('{measured}', '' if cat['by_item'] else MEASURED_RULE), DRAFT_OTHER)
     text_part = (f'{rules}\n\n' + (f'{PHOTO_PROMPT}\n\n' if photos else '') +
                  f'<business_items>\n{cat["text"]}\n</business_items>' +
                  (f'\n\n<requirements>\n{message[:MESSAGE_MAX]}\n</requirements>' if message else ''))
@@ -438,6 +441,41 @@ Don't comment on rates, prices, the discount or totals (checked separately), the
 below), or design and style. At most 8 findings; none when it looks right. level: 'fix' (very likely a mistake),
 'check' (worth a look), 'idea' (could be added). where: the room and item ("Kitchen · Base Cabinet"). message: one
 short, plain sentence for the business owner."""
+
+
+# A business that isn't interiors (app/business.py): the prompts' interiors words and examples, replaced
+DRAFT_OTHER = [
+    ("or an interior designer's notes from a\nsite visit.", "or the business's notes from a site visit. The business "
+     "does {label}.\n"),
+    ('(Living Room, Master Bedroom, Kids Room, Kitchen…)', '({sections}), as the business would name them'),
+    ('("Wardrobe" for "almirah")', '("{item}" for what the customer calls it)'),
+    ('("wardrobes in both bedrooms" = one in each room; "2 lofts" = count 2)', '("2 windows in each bedroom" = 2 in '
+     'each room)'),
+    ('(work types, plywood, how it prices)', '(how it prices, its materials)'),
+    ('("3 BHK interiors", "Kitchen and wardrobes")', '(for example "{example}")'),
+]
+CHECK_OTHER = [
+    ('You are checking an interior quotation', 'You are checking a quotation from a business that does {label},'),
+    ('(a kitchen with cabinets but no hob, chimney or\n  drawers; wardrobes with lofts in one bedroom and not the other)',
+     '(for this kind of work: {missed})'),
+    ('(a wardrobe 18 ft high, a TV unit 0.5 ft wide, length and width that look swapped)',
+     '(far too big or too small for what it is, length and width that look swapped)'),
+]
+
+
+def _for_business(prompt, swaps):
+    """The prompt in this business's words: as written for interiors, else with `swaps` made."""
+    from . import business
+    p = business.profile()
+    if p['interiors']:
+        return prompt
+    names = [p['section_example']] + [n for n in p['section_suggestions'] if n != p['section_example']][:3]
+    words = {'label': p['label'].lower(), 'sections': ', '.join(names) if len(names) > 1 else
+             f'{p["section_example"]}, Bedroom, Kitchen…', 'item': p['item_example'],
+             'example': ', '.join(p['typical_names'][:2]) or 'the work asked for', 'missed': p['often_missed']}
+    for old, new in swaps:
+        prompt = prompt.replace(old, new.format(**words))
+    return prompt
 
 
 def _rooms_text(project, rooms):
@@ -507,7 +545,7 @@ def check(project):
     rooms = project.rooms_with_items()
     found = rule_findings(project, rooms)
     already = '\n'.join(f'- {f["where"]}: {f["message"]}' for f in found) or '(none)'
-    prompt = (f'{CHECK_PROMPT}\n\n<quotation>\n{_rooms_text(project, rooms)}\n</quotation>\n\n'
+    prompt = (f'{_for_business(CHECK_PROMPT, CHECK_OTHER)}\n\n<quotation>\n{_rooms_text(project, rooms)}\n</quotation>\n\n'
               f'<already_found>\n{already}\n</already_found>')
     try:
         answer, used = _ask('check', prompt, Review, 3000)

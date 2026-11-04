@@ -245,6 +245,7 @@ def _seed_demo_quote_to_cash(users):
 
 # Real data that lives in the marketing/demo database and must survive the nightly demo reset
 KEEP_ON_RESET = {'leads', 'demo_stats', 'tutorials'}
+KEEP_SETTINGS = {'business_kinds'}          # app_settings the console writes to the website (business.KINDS_KEY)
 
 
 def _clear_all_tables():
@@ -254,7 +255,10 @@ def _clear_all_tables():
     present = set(inspect(db.session.connection()).get_table_names(schema=current_schema()))
     for table in reversed(db.metadata.sorted_tables):
         if table.name not in KEEP_ON_RESET and table.name in present:   # tables a pending update adds are skipped
-            db.session.execute(table.delete())
+            if table.name == 'app_settings':
+                db.session.execute(table.delete().where(table.c.key.notin_(KEEP_SETTINGS)))
+            else:
+                db.session.execute(table.delete())
     db.session.commit()
 
 

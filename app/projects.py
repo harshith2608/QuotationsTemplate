@@ -418,8 +418,8 @@ def create_project():
     form_cat = _form_catalog(None)
 
     if request.method == 'POST':
-        master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
-        master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
+        master_rooms = __import__('app.business', fromlist=['room_names']).room_names()
+        master_items = __import__('app.business', fromlist=['item_names']).item_names()
         item_rates = _get_item_rates()
         customer_name  = request.form.get('customer_name', '').strip()
         mobile         = request.form.get('mobile', '').strip()
@@ -555,8 +555,8 @@ def render_new_form(start=None, started_from=None, form_data=None, form_cat=None
     form_data = form_data or {}
     return render_template('projects/form.html',
                            title='New Quotation',
-                           master_rooms=[r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()],
-                           master_items=[i.name for i in MasterItem.query.order_by(MasterItem.name).all()],
+                           master_rooms=__import__('app.business', fromlist=['room_names']).room_names(),
+                           master_items=__import__('app.business', fromlist=['item_names']).item_names(),
                            **(form_cat or _form_catalog(None)),
                            item_rates=_get_item_rates(),
                            price_list=_get_price_list(),
@@ -748,8 +748,8 @@ def edit_project(project_id):
     if not access.can_edit(project, current_user):     # admin, its creator, or staff given "Can edit"
         abort(403)
 
-    master_rooms = [r.name for r in MasterRoom.query.order_by(MasterRoom.name).all()]
-    master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
+    master_rooms = __import__('app.business', fromlist=['room_names']).room_names()
+    master_items = __import__('app.business', fromlist=['item_names']).item_names()
     item_rates = _get_item_rates()
     rooms = project.rooms_with_items()           # once, for the form's materials and (on GET) the rooms themselves
     form_cat = _form_catalog(project, rooms)
@@ -1284,7 +1284,7 @@ def whatsapp_share(project_id):
         "_Please find the detailed PDF quotation attached._",
         "",
         f"Thank you for choosing {get_brand()['name']}! 🏡",
-        "We look forward to transforming your space."
+        __import__('app.business', fromlist=['profile']).profile()['thank_you'] + '.'
     ]
 
     from .demo import demo_enabled
@@ -1404,7 +1404,7 @@ def razorpay_webhook():
             f"Balance Due: ₹{balance:,.2f}\n\n"
             f"{'Thank you — your account is fully settled!' if balance == 0 else 'Please clear the remaining balance at your earliest convenience.'}\n\n"
             f"Thank you for choosing {get_brand()['name']}!\n"
-            f"We look forward to transforming your space."
+            f"{__import__('app.business', fromlist=['profile']).profile()['thank_you']}."
         )
         _send_email(
             project.email,

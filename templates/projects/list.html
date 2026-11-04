@@ -362,7 +362,7 @@
         <div class="modal-body">
           <p>Are you sure you want to delete the quotation for
             <strong>{{ project.customer_name }}</strong>?</p>
-          <p class="text-danger small">This action cannot be undone. All rooms and items will be permanently deleted.</p>
+          <p class="text-danger small">This action cannot be undone. All {{ biz.sections|lower }} and items will be permanently deleted.</p>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

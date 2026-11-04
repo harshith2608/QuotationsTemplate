@@ -17,6 +17,9 @@ let modalPriceTouched = false;
 
 // Material catalogue — injected by templates/projects/form.html from app/catalog.py
 const CATALOG = window.KI_CATALOG || { combos: [], defaultWood: '', defaultWork: '' };
+// This business's words: Room or Area, its own examples (app/business.py)
+const BIZ = window.KI_BIZ || { section: 'Room', sections: 'Rooms', example: 'Living Room', interiors: true,
+  item: 'Wardrobe', description: 'Making safety door with block board, both side laminate finish, including safety grill' };
 // 'Material|Work Type'; materials with a single rate (e.g. Glass) have an empty work type: 'Glass|'
 function splitCombo(value) {
   const i = (value || '').indexOf('|');
@@ -195,7 +198,7 @@ async function openPhotoLibrary(rk, ik) {
         <div class="modal-header ki-card-header py-2"><h6 class="modal-title fw-bold mb-0"><i class="bi bi-images me-2"></i>My photos</h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div>
         <div class="modal-body">
-          <input type="search" class="form-control form-control-sm mb-3" id="photoLibSearch" placeholder="Search by item, e.g. Wardrobe"
+          <input type="search" class="form-control form-control-sm mb-3" id="photoLibSearch" placeholder="Search by item, e.g. ${escHtml(BIZ.item)}"
                  oninput="renderPhotoLibrary()" autocomplete="off">
           <div class="ki-photo-lib" id="photoLibGrid"><div class="small text-muted">Loading your photos…</div></div>
         </div></div></div>`;
@@ -351,6 +354,7 @@ function updateRoomHeader(rk, hasMeasured, hasPriced) {
   if (!th('c1').dataset.measured) ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => { th(c).dataset.measured = th(c).textContent; });
   const m = c => th(c).dataset.measured;
   const priced = { c1: 'Qty', c2: 'Unit', c3: 'Rate (₹)', c4: 'Type', c5: 'Amount' };
+  if (!hasMeasured && !hasPriced && CATALOG.byItem) hasPriced = true;   // empty, priced by item: its lines' columns
   ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => {
     th(c).textContent = hasPriced && !hasMeasured ? priced[c] : hasPriced ? `${m(c)} / ${priced[c]}` : m(c);
   });
@@ -748,13 +752,13 @@ function addRoom(presetName) {
         <input type="text"
                class="form-control form-control-sm fw-semibold"
                id="room_name_${rk}"
-               placeholder="Room name (e.g. Living Room)"
+               placeholder="${escHtml(BIZ.section)} name (e.g. ${escHtml(BIZ.example)})"
                value="${escHtml(presetName || '')}"
                oninput="onRoomNameChange('${rk}', this.value)"
                autocomplete="off">
       </div>
-      <span class="badge bg-primary ms-auto me-1" id="room_total_badge_${rk}">0.00 ${escHtml(UNITS.areaLabel)}</span>
-      <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRoom('${rk}')" title="Remove Room">
+      <span class="badge bg-primary ms-auto me-1" id="room_total_badge_${rk}">${CATALOG.byItem ? '₹0' : '0.00 ' + escHtml(UNITS.areaLabel)}</span>
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRoom('${rk}')" title="Remove ${escHtml(BIZ.section)}">
         <i class="bi bi-trash"></i>
       </button>
     </div>
@@ -797,6 +801,7 @@ function addRoom(presetName) {
     </div>
   `;
   container.appendChild(div);
+  updateRoomHeader(rk, false, false);          // priced by item: Qty / Unit / Rate from the start
   renderRoomDescriptions(rk, []);
   // Wire up autocomplete for room name input
   const roomNameInput = document.getElementById('room_name_' + rk);
@@ -935,11 +940,12 @@ function setModalItemType(type) {
     if (u) { u.innerHTML = unitOptions('lump sum'); syncLumpSum(u, document.getElementById('modal_boq_qty')); }
   }
   const nameEl = document.getElementById('modal_item_name');
-  if (nameEl) nameEl.placeholder = type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling'
+  if (nameEl) nameEl.placeholder = !BIZ.interiors ? (lump ? 'e.g. Transport & unloading' : `e.g. ${BIZ.item}`)
+                                 : type === 'fixed' ? 'e.g. Magic Corner' : type === 'boq' ? 'e.g. False Ceiling'
                                  : lump ? 'e.g. Pooja Civil Works' : 'e.g. Wardrobe';
   const descIn = document.getElementById('modal_item_desc');
   if (descIn) descIn.placeholder = lump ? 'e.g. Extension of wall with block work, plastering and painting'
-                                        : 'e.g. Making safety door with block board, both side laminate finish, including safety grill';
+                                        : `e.g. ${BIZ.description}`;
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
   if (type === 'boq' || lump) _applySavedBoq();
   syncModalPly();
@@ -1098,7 +1104,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   tr.id = 'item_row_' + ik;
   tr.innerHTML = `
     <td>
-      <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. False Ceiling"
+      <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. ${escHtml(BIZ.interiors ? 'False Ceiling' : BIZ.item)}"
                   oninput="autoGrow(this); onBoqField('${rk}','${ik}')" onkeydown="if (event.key === 'Enter') event.preventDefault()"
                   autocomplete="off">${escHtml(name || '')}</textarea>
     </td>
@@ -1234,7 +1240,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
   tr.innerHTML = `
     <td>
       <div class="ki-ac-wrap">
-        <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. Magic Corner"
+        <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. ${escHtml(BIZ.interiors ? 'Magic Corner' : BIZ.item)}"
                   oninput="autoGrow(this); onFixedField('${rk}','${ik}')" onkeydown="if (event.key === 'Enter') event.preventDefault()"
                   autocomplete="off">${escHtml(name || '')}</textarea>
       </div>
@@ -1403,7 +1409,7 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   tr.innerHTML = `
     <td>
       <div class="ki-ac-wrap">
-        <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. Wardrobe"
+        <textarea class="form-control form-control-sm ki-name" rows="1" id="item_name_${ik}" placeholder="e.g. ${escHtml(BIZ.item)}"
                   oninput="autoGrow(this); onItemField('${rk}','${ik}')" onkeydown="if (event.key === 'Enter') event.preventDefault()"
                   autocomplete="off">${escHtml(name)}</textarea>
       </div>
@@ -1681,7 +1687,7 @@ function renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal) {
   if (!panel) return;
   const hasData = Object.values(comboAreas).some(a => a > 0) || fixedTotal > 0 || boqTotal > 0;
   if (!hasData) {
-    panel.innerHTML = '<p class="text-muted text-center small py-2">Add rooms and items to see cost breakdown.</p>';
+    panel.innerHTML = `<p class="text-muted text-center small py-2">Add ${BIZ.sections.toLowerCase()} and items to see cost breakdown.</p>`;
     return;
   }
   let html = '<div class="small fw-semibold text-muted mb-1">Cost Breakdown</div>';
@@ -1765,7 +1771,7 @@ function _validateForm() {
   }
 
   if (!hasItem) {
-    showFormAlert('Please add at least one room with one complete item (name and size, or name, quantity and price).', 'warning');
+    showFormAlert(`Please add at least one ${BIZ.section.toLowerCase()} with one complete item (name and size, or name, quantity and price).`, 'warning');
     valid = false;
   }
 

@@ -14,7 +14,7 @@
         {% endif %}
       </div>
       <h2 class="fw-bold ki-brand-text">{{ brand.name }}</h2>
-      <p class="text-muted small">Interior Design &amp; Quotation Management</p>
+      <p class="text-muted small">{{ 'Interior Design &amp; Quotation Management'|safe if biz.interiors else 'Quotations &amp; payments'|safe }}</p>
     </div>
 
     <div class="card shadow-lg border-0 ki-login-card">

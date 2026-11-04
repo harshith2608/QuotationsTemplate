@@ -728,8 +728,15 @@ def features_page():
         helpers = {k: platform_switch.console_value(f['switch']) for k, f in ai_tools.FEATURES.items()}
     except Exception:
         mat_on, helpers = False, {k: False for k in ai_tools.FEATURES}
-    from . import subscription
-    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers,
+    from . import business, subscription, welcome
+    try:
+        saved = business.parse_kinds(platform_switch.console_value(business.KINDS_KEY, raw=True))
+    except Exception:
+        saved = None
+    kinds = {'all': welcome.KINDS, 'always': business.ALWAYS_OFFERED, 'saved': saved is not None,
+             'on': set(business.OFFERED_BEFORE if saved is None else saved) | set(business.ALWAYS_OFFERED),
+             'website': _leads_engine_or_none() is not None}
+    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers, kinds=kinds,
                            allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
                            addon_price=subscription.prices()[plan_mod.ADDON])
 
@@ -758,6 +765,31 @@ def material_list_switch():
     flash('Material list is ' + ('on for every trial and customer (within a minute).' if on else
                                  'off for every trial and customer (within a minute).'), 'ok')
     return redirect(url_for('console.features_page') + '#material-list')
+
+
+@console_bp.route('/features/kinds', methods=['POST'])
+@login_required
+def business_kinds():
+    """Kinds of business (app/business.py): which a new business can choose, on the website and in the guided setup."""
+    import json
+    from . import business, platform_switch, welcome
+    on = [k for k in welcome.KINDS if k in request.form.getlist('kind') or k in business.ALWAYS_OFFERED]
+    value = json.dumps(on)
+    platform_switch.set_value(business.KINDS_KEY, value)
+    website = _leads_engine_or_none()
+    note = ''
+    if website is not None:                       # the website reads its own database (kept on the nightly reset)
+        try:
+            with website.begin() as conn:
+                conn.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': business.KINDS_KEY})
+                conn.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'),
+                             {'k': business.KINDS_KEY, 'v': value})
+        except Exception:
+            note = ' The website could not be updated: try again.'
+    audit('business_kinds', None, ', '.join(on))
+    flash(f'Saved: {len(on)} kinds of business offered (the guided setup within a minute, the website now).' + note,
+          'ok' if not note else 'error')
+    return redirect(url_for('console.features_page') + '#kinds')
 
 
 @console_bp.route('/features/ai-<feature>', methods=['POST'])
@@ -810,7 +842,8 @@ def create_trial():
             return redirect(url_for('console.trial_detail', slug=done))
     try:
         days = int(days)
-        t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email)
+        t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email,
+                             kind=request.form.get('business_type', '').strip()[:20] or None)
     except (ops.OpsError, ValueError) as exc:
         with db.engine.connect() as conn:
             existing = conn.execute(text('SELECT status FROM public.tenants WHERE slug = :s'), {'s': slug}).scalar()
@@ -2318,7 +2351,8 @@ def start_trial():
                 break
             try:
                 t = ops.claim_trial(slug, form['username'], password, 7, company=form['company'],
-                                    phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'))
+                                    phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'),
+                                    kind=lead.get('business_type'))
                 break
             except ops.OpsError as exc:
                 if 'is taken' not in str(exc):           # taken by someone else a moment ago: try the next one

@@ -289,10 +289,12 @@ def finish(how='done'):
 
 def set_kind(kind):
     """What they do, kept when their rates are saved (for the console)."""
+    from . import business
     s = _state()
     if s.get('kind') != kind:
         s['kind'] = kind
         _store(s)
+    business.set_kind(kind)
 
 
 def remember_project(project_id):
@@ -353,7 +355,9 @@ def bar(endpoint, view_args):
         hint = ('This is your quotation. Tap <strong>Quotation PDF</strong> to see what your customer gets, or '
                 '<strong>Send on WhatsApp</strong> (further down).')
     elif key == 'quote' and endpoint == 'projects.create_project':
-        hint = 'Add a room, add an item, type its size, then tap <strong>Save quotation</strong>.'
+        from . import business
+        hint = (f'Add a {business.profile()["section"].lower()}, add an item, type its size, then tap '
+                '<strong>Save quotation</strong>.')
         nxt, back = None, 'welcome.check'
     elif key == 'rates' and endpoint == 'admin.ai_import':
         from flask import request

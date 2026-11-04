@@ -24,34 +24,43 @@ def is_on(key, env_var):
     from . import tenancy
     if not tenancy.tenant_mode():
         return _truthy(os.environ.get(env_var))
+    return value(key) == '1'
+
+
+def value(key):
+    """The console's value for `key` in the shared app (cached for TTL seconds), or None when it has none."""
     hit = _cache.get(key)
     if hit and time.time() - hit[1] < TTL:
         return hit[0]
-    on = False
+    found = None
     try:
         with db.engine.connect() as conn:
             if conn.execute(text("SELECT to_regclass('public.console_state')")).scalar() is not None:
-                on = conn.execute(text('SELECT value FROM public.console_state WHERE key = :k'),
-                                  {'k': key}).scalar() == '1'
+                found = conn.execute(text('SELECT value FROM public.console_state WHERE key = :k'),
+                                     {'k': key}).scalar()
     except Exception:
-        on = False
-    _cache[key] = (on, time.time())
-    return on
+        found = None
+    _cache[key] = (found, time.time())
+    return found
 
 
 def set_switch(key, on):
     """The console's switch (the console's database is the trials database). Takes effect within TTL."""
+    set_value(key, '1' if on else '0')
+
+
+def set_value(key, value):
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.console_state WHERE key = :k'), {'k': key})
-        conn.execute(text('INSERT INTO public.console_state (key, value) VALUES (:k, :v)'),
-                     {'k': key, 'v': '1' if on else '0'})
+        conn.execute(text('INSERT INTO public.console_state (key, value) VALUES (:k, :v)'), {'k': key, 'v': value})
     _cache.pop(key, None)
 
 
-def console_value(key):
-    """The console's own reading of the switch (no cache)."""
+def console_value(key, raw=False):
+    """The console's own reading of the switch (no cache); raw: the stored value, or None."""
     with db.engine.connect() as conn:
-        return conn.execute(text('SELECT value FROM public.console_state WHERE key = :k'), {'k': key}).scalar() == '1'
+        found = conn.execute(text('SELECT value FROM public.console_state WHERE key = :k'), {'k': key}).scalar()
+    return found if raw else found == '1'
 
 
 def forget(key):

@@ -41,6 +41,9 @@ ok('step 2: how you measure, four units', loc(r).endswith('/welcome/units') and 
 c.post('/welcome/units', data={'size_unit': 'mm', 'area_unit': 'sqft'})
 with app.app_context():
     ok('…saved (mm, per sqft), then step 3', AppSetting.get('size_unit') == 'mm' and W.step() == 'rates')
+with app.app_context():                     # every kind switched on (console → Features → Kinds of business)
+    from app import business
+    AppSetting.set(business.KINDS_KEY, json.dumps(list(W.KINDS))); db.session.commit()
 t = c.get('/welcome/rates').text
 ok('step 3 asks what you mostly do first: interiors and the businesses that measure', all(k in t for k in (
    'Interiors, modular kitchens &amp; wardrobes', 'Turnkey', 'uPVC windows', 'Tiles, flooring', 'Construction', 'Painting',
