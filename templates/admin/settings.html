@@ -457,7 +457,7 @@
       <p class="small text-muted mb-3">What a room is made of, chosen from a list on each room of a quotation and printed for that room
         on the Initial Quotation. One per line. A room left on "Materials used" lists its materials instead.</p>
       <textarea name="room_descriptions" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6"
-                placeholder="e.g. Carcass: BWP 710 ply, laminate finish · Shutters: 1mm laminate&#10;Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic">{{ saved.room_descriptions }}</textarea>
+                placeholder="{{ 'e.g. Carcass: BWP 710 ply, laminate finish · Shutters: 1mm laminate&#10;Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic' if biz.interiors else 'e.g. ' ~ biz.description_example }}">{{ saved.room_descriptions }}</textarea>
       <div class="text-end mt-2"><button type="submit" name="back_to" value="room-descriptions" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
@@ -468,7 +468,7 @@
         Appears in every quotation PDF, first of the sections below. One point per line; the PDFs number them. Leave blank to omit the section. Use <strong>Insert</strong> to add details that change per quotation, e.g. <code>{plywood_details} for all the carcass and shutters</code>.
       </p>
       <textarea name="material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6"
-                placeholder="e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...">{{ saved.material_specs }}</textarea>
+                placeholder="{{ 'e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...' if biz.interiors else 'e.g. MATERIAL SPECIFICATIONS:&#10;● ' ~ biz.item_example ~ ': ' ~ biz.description_example }}">{{ saved.material_specs }}</textarea>
       <div class="text-end mt-2"><button type="submit" name="back_to" value="material-specs" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
