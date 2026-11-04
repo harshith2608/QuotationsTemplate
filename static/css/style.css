@@ -704,3 +704,5 @@ body > main { flex: 1 0 auto; }
 .ki-welcome-sec input { background: transparent; border-color: transparent; padding-left: 0; }
 .ki-welcome-sec input:hover, .ki-welcome-sec input:focus { border-color: var(--bs-border-color); padding-left: .5rem; }
 @media (max-width: 575.98px) { .ki-welcome-kinds { grid-template-columns: 1fr; } }
+.ki-welcome-rates tr.ki-w-removed input:not([type=hidden]), .ki-welcome-rates tr.ki-w-removed select {
+  opacity: .45; text-decoration: line-through; pointer-events: none; background: var(--bs-light, #f8f9fa); }

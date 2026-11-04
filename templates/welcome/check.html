@@ -7,6 +7,10 @@
       <td></td>
     </tr>
 {% endmacro %}
+{% macro remove(name, field) %}
+<button type="button" class="btn btn-sm btn-link text-muted px-1 ki-w-del" title="Remove" aria-label="Remove {{ name }}"><i class="bi bi-trash3"></i></button>
+<input type="hidden" name="{{ field }}" value="">
+{% endmacro %}
 {% block step %}
 <h4 class="fw-bold mb-1">These are your rates</h4>
 <p class="text-muted mb-3">Check them and change anything that's different from yours. Add your own items in the empty rows,
@@ -30,7 +34,7 @@
         {% for u in units_list %}<option {{ 'selected' if u == it.unit }}>{{ u }}</option>{% endfor %}
         {% if it.unit not in units_list %}<option selected>{{ it.unit }}</option>{% endif %}</select></td>
       <td><input class="form-control form-control-sm text-end" name="rate_{{ it.id }}" value="{{ '%g' % it.rate }}" inputmode="decimal" aria-label="Rate"></td>
-      <td class="text-center"><input class="form-check-input" type="checkbox" name="del_{{ it.id }}" value="1" title="Remove" aria-label="Remove {{ it.name }}"></td>
+      <td class="text-center">{{ remove(it.name, 'del_%d' % it.id) }}</td>
     </tr>
     {% endfor %}
     {% for t in shown %}{# a typical item for their business: saved only with Save my rates #}
@@ -41,7 +45,7 @@
         {% for u in units_list %}<option {{ 'selected' if u == t.unit }}>{{ u }}</option>{% endfor %}
         {% if t.unit not in units_list %}<option selected>{{ t.unit }}</option>{% endif %}</select></td>
       <td><input class="form-control form-control-sm text-end" name="s{{ k }}y{{ loop.index }}_rate" value="{{ '%g' % t.rate }}" inputmode="decimal" aria-label="Rate"></td>
-      <td class="text-center"><input class="form-check-input" type="checkbox" name="s{{ k }}y{{ loop.index }}_skip" value="1" title="Remove" aria-label="Remove {{ t.name }}"></td>
+      <td class="text-center">{{ remove(t.name, 's%sy%d_skip' % (k, loop.index)) }}</td>
     </tr>
     {% endfor %}
     {{ new_row(k, units_list) }}
@@ -52,7 +56,8 @@
   <button class="btn btn-sm btn-outline-primary mb-3" type="button" id="wAddSection" data-next="{{ sections|length }}">
     <i class="bi bi-plus-lg me-1"></i>Add a section</button>
   {% if groups %}<div class="small text-muted mb-3">{% if groups|selectattr(2)|list %}<i class="bi bi-info-circle me-1"></i>These are
-    typical items for your business: nothing is saved until you tap Save my rates.<br>{% endif %}<i class="bi bi-check2-square me-1"></i>Tick the box at the end of a row to remove it.
+    typical items for your business: nothing is saved until you tap Save my rates.<br>{% endif %}<i class="bi bi-trash3 me-1"></i>Tap the bin to remove an item: it's
+    deleted when you save (tap <i class="bi bi-arrow-counterclockwise"></i> to keep it).
     Rename a section by typing over its name.</div>{% endif %}
   <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Save my rates <i class="bi bi-arrow-right ms-1"></i></button>
   <div class="small text-muted text-center mt-2">You can change them any time: Admin → Rates.</div>
@@ -65,6 +70,21 @@
   </tbody>
 </template>
 <script>
+// Remove: the line is greyed out and crossed through until Save my rates deletes it; tap again to keep it
+document.getElementById('wRates').addEventListener('click', (e) => {
+  const btn = e.target.closest('.ki-w-del');
+  if (!btn) return;
+  const row = btn.closest('tr');
+  const flag = btn.nextElementSibling;
+  const removing = !row.classList.contains('ki-w-removed');
+  flag.value = removing ? '1' : '';
+  row.classList.toggle('ki-w-removed', removing);
+  row.querySelectorAll('input:not([type=hidden]), select').forEach(f => { f.readOnly = removing; f.tabIndex = removing ? -1 : 0; });
+  btn.innerHTML = removing ? '<i class="bi bi-arrow-counterclockwise"></i>' : '<i class="bi bi-trash3"></i>';
+  btn.title = removing ? 'Keep it' : 'Remove';
+  btn.classList.toggle('text-primary', removing);
+  flag.dispatchEvent(new Event('change', { bubbles: true }));     // the "unsaved changes" bar
+});
 document.getElementById('wAddSection').addEventListener('click', (e) => {
   const btn = e.currentTarget, k = btn.dataset.next;
   btn.dataset.next = parseInt(k, 10) + 1;
