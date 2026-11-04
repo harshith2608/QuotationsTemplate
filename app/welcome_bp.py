@@ -159,7 +159,7 @@ def _has_items():
 
 @welcome_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
-    """What they mostly do. Interiors, kitchens and turnkey firms are then asked for an old quotation or rate Excel
+    """What they mostly do. Interiors (with modular kitchens) and turnkey firms are then asked for an old quotation or rate Excel
     (when Bring your old quotation is on); every other kind goes straight to its typical items."""
     from . import ai_import, boq
     W.go_to('rates')
@@ -186,7 +186,7 @@ def rates():
 
 @welcome_bp.route('/rates/file', methods=['GET', 'POST'])
 def file():
-    """"Do you have an old quotation or rate Excel ready?" (interiors, kitchens and turnkey)."""
+    """"Do you have an old quotation or rate Excel ready?" (interiors and turnkey)."""
     from . import ai_import
     W.go_to('rates')
     if request.method == 'POST':

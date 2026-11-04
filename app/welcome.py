@@ -26,22 +26,24 @@ STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('rates', 
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
 
-KINDS = {'interiors': 'Full interiors', 'kitchens': 'Modular kitchens & wardrobes', 'turnkey': 'Turnkey interiors & civil',
+KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes', 'turnkey': 'Turnkey interiors & civil',
          'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium',
          'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
          'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
          'curtains': 'Curtains, blinds & wallpaper', 'other': 'Something else'}
-ICONS = {'interiors': 'house-door', 'kitchens': 'grid-3x3-gap', 'turnkey': 'buildings', 'furniture': 'lamp',
+ICONS = {'interiors': 'house-door', 'turnkey': 'buildings', 'furniture': 'lamp',
          'upvc': 'window', 'glass': 'window-split', 'tiles': 'grid', 'construction': 'bricks', 'painting': 'paint-bucket',
          'ceiling': 'lightbulb', 'fabrication': 'tools', 'curtains': 'border-style', 'other': 'three-dots'}
 # Asked for an old quotation or rate Excel: the kinds that usually have one. The others start from typical items.
-FILE_KINDS = ('interiors', 'kitchens', 'turnkey')
+FILE_KINDS = ('interiors', 'turnkey')
+OLD_KINDS = {'kitchens': 'interiors'}      # kinds offered before, as they're now named
 
 # Typical items and rates (per sqft, rft, nos or point) for a business with no file: a starting point they change.
 # Not any customer's numbers. ('#', group) starts a group.
 _WOOD = [
     ('#', 'Bedrooms'),
     ('Wardrobe', 'sqft', 1600, 'Carcass in BWR plywood, laminate outside, liner inside, soft-close hinges'),
+    ('Sliding Wardrobe', 'sqft', 1800, 'Sliding shutters with soft-close channel'),
     ('Loft', 'sqft', 1100, 'Above the wardrobe, same finish'),
     ('Dressing Table', 'sqft', 1500, 'With mirror and drawers'),
     ('Study Table', 'sqft', 1400, 'With drawer and open shelves'),
@@ -68,21 +70,16 @@ _SERVICES = [
     ('Electrical Point', 'point', 850, 'Wiring with conduit; switches and plates extra'),
 ]
 TYPICAL = {
-    'interiors': _WOOD + _KITCHEN[:5] + _SERVICES[:2],
-    'kitchens': _KITCHEN + [
+    'interiors': _WOOD + _KITCHEN + [
         ('Pull-out Basket', 'nos', 4500, 'Stainless steel, soft-close'),
         ('Countertop (Granite)', 'rft', 450, 'Black granite, 2 ft deep, with edge polish'),
-        ('#', 'Wardrobes'),
-        ('Wardrobe (Hinged)', 'sqft', 1600, 'Laminate outside, liner inside, soft-close hinges'),
-        ('Wardrobe (Sliding)', 'sqft', 1800, 'Sliding shutters with soft-close channel'),
-        ('Loft', 'sqft', 1100, 'Above the wardrobe, same finish'),
-    ],
+    ] + _SERVICES[:2],
     'turnkey': [('#', 'Civil'),
                 ('Demolition & Debris', 'sqft', 40, 'Breaking, removal and disposal'),
                 ('Flooring (Vitrified Tiles)', 'sqft', 120, 'Laying with tile adhesive, tiles extra'),
                 ('Wall Tiling', 'sqft', 140, 'Bathroom and kitchen walls, laying only'),
                 ('Plumbing Point', 'point', 1500, 'CPVC lines, fittings extra')]
-               + _SERVICES + _WOOD[:3] + _WOOD[6:8] + _KITCHEN[:3],
+               + _SERVICES + _WOOD[:2] + _WOOD[3:4] + _WOOD[7:9] + _KITCHEN[:3],
     'furniture': [('#', 'Furniture'),
                   ('Wardrobe', 'sqft', 1400, 'Plywood with laminate, soft-close hinges'),
                   ('Bed with Storage', 'nos', 38000, 'Queen size, hydraulic storage'),
@@ -375,8 +372,9 @@ def console_text(raw):
         return ''
     skipped = [TITLES.get(k, k).lower() for k in s.get('skipped') or []]
     tail = f' (skipped {", ".join(skipped)})' if skipped else ''
-    if s.get('kind') in KINDS:
-        tail += f' · {KINDS[s["kind"]].lower()}'
+    kind = OLD_KINDS.get(s.get('kind'), s.get('kind'))
+    if kind in KINDS:
+        tail += f' · {KINDS[kind].lower()}'
     if s.get('finished') == 'done':
         return 'finished' + tail
     where = TITLES.get(s['step'], s['step']).lower()

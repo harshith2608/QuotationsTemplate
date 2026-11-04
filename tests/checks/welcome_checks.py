@@ -38,14 +38,17 @@ with app.app_context():
     ok('…saved (mm, per sqft), then step 3', AppSetting.get('size_unit') == 'mm' and W.step() == 'rates')
 t = c.get('/welcome/rates').text
 ok('step 3 asks what you mostly do first: interiors and the businesses that measure', all(k in t for k in (
-   'Full interiors', 'Modular kitchens', 'Turnkey', 'uPVC windows', 'Tiles, flooring', 'Construction', 'Painting',
+   'Interiors, modular kitchens &amp; wardrobes', 'Turnkey', 'uPVC windows', 'Tiles, flooring', 'Construction', 'Painting',
    'False ceiling', 'Steel fabrication', 'Curtains', 'Glass &amp; aluminium', 'Something else')))
 r = c.post('/welcome/rates', data={'kind': 'interiors'})
 with app.app_context():
     names = {b.name for b in BoqItem.query.all()}
     from app import boq
-    ok('…typical interiors items, priced by item, not the services starter set', loc(r).endswith('/welcome/rates/check')
-       and boq.enabled() and {'Wardrobe', 'TV Unit', 'Base Cabinet', 'False Ceiling'} <= names and 'Electric Wiring' not in names)
+    ok('…typical interiors items (modular kitchen and wardrobes too), priced by item, not the services starter set',
+       loc(r).endswith('/welcome/rates/check') and boq.enabled()
+       and {'Wardrobe', 'Sliding Wardrobe', 'TV Unit', 'Base Cabinet', 'Magic Corner', 'Countertop (Granite)', 'False Ceiling'} <= names
+       and 'Electric Wiring' not in names)
+    ok('…one choice for interiors and modular kitchens', 'kitchens' not in W.KINDS)
     wardrobe = BoqItem.query.filter_by(name='Wardrobe').first()
     bed = BoqItem.query.filter_by(name='Bed with Storage').first()
 t = c.get('/welcome/rates/check').text
@@ -101,7 +104,7 @@ t = c.get('/welcome/done').text
 with app.app_context():
     ok('Finish: "You\'re set up", with what\'s left for later', loc(r).endswith('/welcome/done') and "You're set up" in t
        and 'Payment details' in t and 'Terms &amp; conditions' in t and not W.active())
-    ok('the console says it\'s finished, and what they do', W.console_text(AppSetting.get(W.KEY)) == 'finished · full interiors')
+    ok('the console says it\'s finished, and what they do', W.console_text(AppSetting.get(W.KEY)) == 'finished · interiors, modular kitchens & wardrobes')
 ok('the strip is gone once finished', 'Continue setting up' not in c.get('/projects').text
    and 'step 4 of 5' not in c.get('/projects/new').text)
 c.get('/logout')
