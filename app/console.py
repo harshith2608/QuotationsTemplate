@@ -747,7 +747,13 @@ def features_page():
     kinds = {'all': welcome.KINDS, 'always': business.ALWAYS_OFFERED, 'saved': saved is not None,
              'on': set(business.OFFERED_BEFORE if saved is None else saved) | set(business.ALWAYS_OFFERED),
              'website': _leads_engine_or_none() is not None}
+    from . import callbook
+    try:
+        call_hours, call_next = callbook.hours(), callbook.slots()[:2]
+    except Exception:
+        call_hours, call_next = dict(callbook.DEFAULT_HOURS), []
     return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers, kinds=kinds,
+                           call_hours=call_hours, call_days=callbook.DAYS, call_next=call_next,
                            allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
                            addon_price=subscription.prices()[plan_mod.ADDON])
 
@@ -776,6 +782,27 @@ def material_list_switch():
     flash('Material list is ' + ('on for every trial and customer (within a minute).' if on else
                                  'off for every trial and customer (within a minute).'), 'ok')
     return redirect(url_for('console.features_page') + '#material-list')
+
+
+@console_bp.route('/features/call-hours', methods=['POST'])
+@login_required
+def call_hours():
+    """Call bookings (app/callbook.py): when trials can book a free set-up call with us, India time."""
+    import json
+    from . import callbook, platform_switch
+    found = {}
+    for d, day in enumerate(callbook.DAYS):
+        text_ = ' '.join(request.form.get(f'day{d}', '').split())
+        try:
+            callbook.parse_ranges(text_)
+        except ValueError as exc:
+            flash(f'{day}: {exc}', 'error')
+            return redirect(url_for('console.features_page') + '#calls')
+        found[str(d)] = text_
+    platform_switch.set_value(callbook.SWITCH_KEY, json.dumps(found))
+    audit('call_hours', None, '; '.join(f'{callbook.DAYS[int(d)][:3]} {v or "off"}' for d, v in found.items()))
+    flash('Call hours saved. Trials see the new times within a minute.', 'ok')
+    return redirect(url_for('console.features_page') + '#calls')
 
 
 @console_bp.route('/features/kinds', methods=['POST'])

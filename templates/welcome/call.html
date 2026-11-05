@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Book a free set-up call{% endblock %}
+{% block content %}
+<div class="mx-auto my-4" style="max-width:640px">
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      {% if booked %}
+      <div class="text-center">
+        <div class="fs-1 text-success" aria-hidden="true"><i class="bi bi-check-circle"></i></div>
+        <h4 class="fw-bold">Your call is booked</h4>
+        <p class="mb-1"><strong>{{ booked.when }}</strong> (India time)</p>
+        <p class="text-muted">We'll call you then and set up your rates and first quotation with you. Keep an old
+          quotation or your rate list handy if you have one.</p>
+        <a class="btn btn-primary" href="{{ url_for('projects.list_projects') }}">Back to my quotations</a>
+        {% if whatsapp %}<div class="small text-muted mt-3">Need another time? <a href="{{ whatsapp }}" target="_blank" rel="noopener">Message us on WhatsApp</a>.</div>{% endif %}
+      </div>
+      {% else %}
+      <h4 class="fw-bold mb-1">Book a free set-up call</h4>
+      <p class="text-muted">10 minutes on the phone: we set up your rates and your first quotation with you. Pick a
+        time that suits you (India time).</p>
+      {% if slots %}
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for day, free in slots %}
+        <div class="fw-semibold small mt-3 mb-1">{{ day }}</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for value, label in free %}
+          <input type="radio" class="btn-check" name="slot" id="slot{{ value|replace(':', '')|replace('-', '') }}" value="{{ value }}" required>
+          <label class="btn btn-sm btn-outline-primary" for="slot{{ value|replace(':', '')|replace('-', '') }}">{{ label }}</label>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <label class="form-label fw-semibold mt-4" for="callPhone">Phone number to call</label>
+        <input class="form-control" id="callPhone" name="phone" type="tel" inputmode="tel" value="{{ phone }}" maxlength="20" required
+               pattern="[0-9+\(\)\- ]{10,20}">
+        <label class="form-label fw-semibold mt-3" for="callNote">Anything we should know? <span class="text-muted fw-normal">(optional)</span></label>
+        <input class="form-control" id="callNote" name="note" maxlength="300" placeholder="e.g. I quote kitchens and wardrobes, in feet">
+        <button class="btn btn-primary btn-lg w-100 mt-4" type="submit"><i class="bi bi-calendar-check me-1"></i>Book this time</button>
+      </form>
+      {% else %}
+      <p>No free times in the next week just now.</p>
+      {% endif %}
+      {% if whatsapp %}
+      <div class="text-center mt-3"><span class="text-muted small">Rather chat?</span>
+        <a class="btn btn-success btn-sm ms-1" href="{{ whatsapp }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp me-1"></i>Chat on WhatsApp</a></div>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

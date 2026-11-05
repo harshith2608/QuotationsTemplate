@@ -482,3 +482,24 @@ def done():
     st = setup_guide.status()
     later = [(s, d) for s, d in st['steps'] if s.key in ('logo', 'payments', 'pdf', 'invoices', 'team') and not d]
     return render_template('welcome/done.html', hide_nav=True, title='You\'re set up', later=later)
+
+
+# ── A free set-up call with us, or a WhatsApp chat (app/callbook.py) ─────────────
+
+@welcome_bp.route('/call', methods=['GET', 'POST'])
+def call():
+    """Book a free 10-minute set-up call: our free times for the next week; the booking goes on our Schedule."""
+    from . import branding, callbook
+    if not callbook.available():
+        abort(404)
+    if request.method == 'POST':
+        try:
+            callbook.book(request.form.get('slot'), request.form.get('phone', ''), request.form.get('note', ''),
+                          current_user.display_name)
+        except ValueError as exc:
+            flash(str(exc), 'danger')
+            return redirect(url_for('welcome.call'))
+        return redirect(url_for('welcome.call'))
+    return render_template('welcome/call.html', title='Book a free set-up call', booked=callbook.booked(),
+                           slots=callbook.slots(), whatsapp=callbook.whatsapp_url(),
+                           phone=branding.get_brand().get('phone') or '')

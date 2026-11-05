@@ -680,6 +680,15 @@ The same file (or one with only `"quotations"`) can also bring in quotations the
 with every line, unit and rate (the total is checked against their sheet). Loading it again doesn't add them twice. Their
 sheets often have no customer mobile number: they add it when they next edit the quotation.
 
+### Trials book a set-up call with you (console → Features → Call bookings)
+
+Every trial sees **Get your rates set up for you** on its quotations and at the end of the guided setup: **Book a free
+call** (they pick a free half-hour slot, at least an hour ahead, up to a week) or **Chat on WhatsApp** (to
+`SUPPORT_WHATSAPP`, the message saying who they are). A booking lands on the console's **Schedule**, marks the trial
+hot, and emails you (with email set up). Set your free times on **Features → Call bookings**, India time, one line a
+day (`09:00-10:15, 12:00-20:00`; empty = off). Until saved: weekdays not 10:15–12:00, Wednesday and Thursday only from
+18:30, Saturday 9:00–20:00, Sunday off.
+
 ### Following up trials (console → Follow-ups)
 Every running trial has a stage, worked out from its own data: **not signed in → no company details → no quotation yet →
 quoting → ending soon → ended**. Follow-ups shows how many are at each stage and who's **due today** (not messaged about

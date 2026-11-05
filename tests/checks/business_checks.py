@@ -172,3 +172,39 @@ for k in ('QA_MODE', 'CONSOLE_TOTP_SECRET', 'CONSOLE_PASSWORD_HASH'):
     os.environ.pop(k, None)
 ok('…sign-in: the live console always asks for the code; QA only when it has a 2FA secret',
    live_2fa and not qa_2fa and qa_ready and qa_with_secret)
+
+# ── A free set-up call (app/callbook.py): our hours, free slots, the card ──
+from datetime import datetime as _dt
+from app import callbook as CB
+with app.app_context():
+    try:
+        CB.parse_ranges('9-10'); bad = False
+    except ValueError:
+        bad = True
+    ok('call hours: ranges read, a wrong one refused', CB.parse_ranges('09:00-10:15, 12:00-20:00') == [(540, 615), (720, 1200)]
+       and bad)
+    days = dict(CB.slots(now=_dt(2026, 11, 9, 0, 30), taken=[]))      # Monday 6:00 AM India time
+    mon = [lbl for _, lbl in days['Today']]
+    ok('…Monday: 9:00 and 9:30, nothing 10:15–12:00 (a 10:00 call would run into it), from 12:00 to 7:30 PM',
+       mon[:3] == ['9:00 AM', '9:30 AM', '12:00 PM'] and mon[-1] == '7:30 PM' and '10:00 AM' not in mon
+       and '11:30 AM' not in mon)
+    ok('…Wednesday and Thursday only after office (6:30 PM); Saturday all day; Sunday off',
+       [l for _, l in days['Wednesday 11 Nov']] == ['6:30 PM', '7:00 PM', '7:30 PM']
+       and [l for _, l in days['Thursday 12 Nov']] == ['6:30 PM', '7:00 PM', '7:30 PM']
+       and days['Saturday 14 Nov'][0][1] == '9:00 AM' and 'Sunday 15 Nov' not in days)
+    soon = dict(CB.slots(now=_dt(2026, 11, 9, 6, 0), taken=[_dt(2026, 11, 9, 8, 30)]))   # Monday 11:30 AM India time
+    today = [l for _, l in soon['Today']]
+    ok('…not within the next hour, and a booked time (2:00 PM) is taken',
+       today[:4] == ['12:30 PM', '1:00 PM', '1:30 PM', '2:30 PM'] and '2:00 PM' not in today)
+    ok('the card only for trials in the shared app (not here)', not CB.available())
+lp = c.get('/projects').text
+ok('…so no card on the quotations here', 'Get your rates set up for you' not in lp)
+with app.test_request_context():
+    from flask import render_template_string
+    card = render_template_string('{% include "partials/_help_card.html" %}',
+                                  help_card={'booked': None, 'whatsapp': 'https://wa.me/919999999999?text=Hi'})
+    done = render_template_string('{% include "partials/_help_card.html" %}',
+                                  help_card={'booked': {'when': 'Mon 9 Nov, 5:00 PM'}, 'whatsapp': ''})
+ok('…the card: Book a free call and Chat on WhatsApp; once booked, when', 'Get your rates set up for you' in card
+   and '/welcome/call' in card and 'wa.me/919999999999' in card and 'Your free set-up call: Mon 9 Nov, 5:00 PM' in done
+   and '/welcome/call' not in done)

@@ -6,7 +6,7 @@
   minute. Turn one off if something goes wrong with it; what they've already made is kept.</p>
 <nav class="small" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0">
   <a href="#ai-import">Bring your old quotation</a><a href="#ai-helpers">AI helpers on quotations</a>
-  <a href="#material-list">Material list</a><a href="#kinds">Kinds of business</a></nav>
+  <a href="#material-list">Material list</a><a href="#kinds">Kinds of business</a><a href="#calls">Call bookings</a></nav>
 
 <h2 id="ai-import">Bring your old quotation (AI)</h2>
 <div class="card">
@@ -95,6 +95,27 @@
     </div>
     <button class="btn btn-sm btn-primary" type="submit">Save</button>
     <span class="muted small">{% if kinds.saved %}On now: {{ kinds.on|length }} of {{ kinds.all|length }}.{% else %}Not saved yet: the ones offered before are on.{% endif %}</span>
+  </form>
+</div>
+
+<h2 id="calls">Call bookings</h2>
+<div class="card">
+  <p class="small" style="margin-top:0">Trials see <em>Get your rates set up for you</em> on their quotations and at the end
+    of the guided setup: <strong>Book a free call</strong> (a 10-minute call in a half-hour slot, at least an hour ahead, up to
+    a week) or <strong>Chat on WhatsApp</strong> (<span class="mono">SUPPORT_WHATSAPP</span> on the trials project). A booked
+    call goes on the <strong>Schedule</strong> and the trial is marked hot. Your free times, India time: one or more ranges a
+    day, like <span class="mono">09:00-10:15, 12:00-20:00</span>; empty = not that day. Booked slots are left out by themselves.</p>
+  <form method="post" action="{{ url_for('console.call_hours') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for day in call_days %}
+    <div class="row" style="align-items:center;margin-bottom:6px">
+      <label style="width:110px" for="day{{ loop.index0 }}">{{ day }}</label>
+      <input class="grow" type="text" id="day{{ loop.index0 }}" name="day{{ loop.index0 }}" value="{{ call_hours[loop.index0] }}"
+             placeholder="not available" maxlength="120">
+    </div>
+    {% endfor %}
+    <button class="btn btn-sm btn-primary" type="submit">Save</button>
+    {% if call_next %}<span class="muted small">Next free times: {% for day, free in call_next %}{{ day }} {{ free[:3]|map(attribute=1)|join(', ') }}{{ '; ' if not loop.last }}{% endfor %}</span>{% endif %}
   </form>
 </div>
 {% endblock %}
