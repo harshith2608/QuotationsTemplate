@@ -347,9 +347,9 @@ def trial_request():
     # The trades QuoteRoom is for can set up their app straight away (app/signup.py)
     setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
     emailed = None
-    if setup and mailer.enabled():               # the link goes to their email: proves the address is theirs
+    if setup and mailer.enabled():               # set up straight away here; the same link by email, to find it later
         if signup.email_setup_link(data['email'], data['name'], data['company_name'], setup, lead_id=lead_id):
-            emailed, setup = mailer.mask(data['email']), None
+            emailed = mailer.mask(data['email'])
     if wants_json:
         return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup, 'emailed_to': emailed})
     return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, name=data['name'],

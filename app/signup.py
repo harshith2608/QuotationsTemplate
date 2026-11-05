@@ -90,7 +90,7 @@ def turnstile_ok(response, ip=''):
 
 
 def email_setup_link(email, name, company, url, lead_id=None):
-    """Email the set-up link (the website sends it instead of showing it, once email is set up). True if sent.
+    """Email the set-up link (a copy of the one the website shows, once email is set up). True if sent.
     lead_id: the request, so the console can see the email opened (app/emails.py)."""
     from . import emails, mailer
     first = (name or '').split(' ')[0] or 'there'
@@ -98,7 +98,7 @@ def email_setup_link(email, name, company, url, lead_id=None):
 
 Thanks for asking for a QuoteRoom free trial{f' for {company}' if company else ''}.
 
-Set up your app here (choose a password; it takes a minute):
+If you haven't set up your app yet, do it here (choose a password; it takes a minute):
 {url}
 
 The link works for {TOKEN_HOURS // 24} days. Your free 7-day trial starts when you set it up.

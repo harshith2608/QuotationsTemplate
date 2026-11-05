@@ -430,7 +430,7 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    the GoDaddy email dashboard), `PLATFORM_SMTP_PORT=465`, `PLATFORM_SMTP_USER=hello@quote-room.co.in`,
    `PLATFORM_SMTP_PASSWORD` (the mailbox password; type it in Vercel only). Optional `OPERATOR_EMAIL` (who gets the
    "Payment:" notes; default hello@). With email set up:
-   - the website **emails** the set-up link instead of showing it (proves the email is theirs);
+   - the website shows **Set up my app now** straight away and **emails a copy** of the link, so they can find it later;
    - every payment sends "Payment received" with the receipt to the business, and a note to you;
    - the daily task emails "trial ends in 2 days / has ended" and "plan ends in 15 / 3 days / has ended", once each,
      with the link to Choose a plan.

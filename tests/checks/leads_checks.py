@@ -159,7 +159,8 @@ r = c5.post('/trial-request', data=dict(good, phone='9811100047', email='kiran@k
             environ_base={'REMOTE_ADDR': '10.9.0.4'}); d = r.get_json()
 from email import policy as _policy
 mails = [_email.message_from_bytes(open(f, 'rb').read(), policy=_policy.default) for f in sorted(glob.glob(box + '/*.eml'))]
-ok('email set up: the set-up link is emailed, not shown (the page says where it went)', d['ok'] and d['setup_url'] is None
+ok('email set up: the set-up link is shown straight away, and a copy emailed (the page says where)', d['ok']
+   and d['setup_url'] and d['setup_url'].startswith('https://ops.quote-room.test/start?t=')
    and d['emailed_to'] == 'ki***@kiraninteriors.example' and len(mails) == 1
    and mails[0]['To'] == 'kiran@kiraninteriors.example' and mails[0]['Subject'] == 'Set up your QuoteRoom app'
    and 'https://ops.quote-room.test/start?t=' in mails[0].get_body(('plain',)).get_content()
@@ -168,7 +169,8 @@ ok('…with a hidden copy to hello@ (app emails don\'t show in the mailbox\'s Se
    mails[0]['Bcc'] == 'hello@quote-room.co.in')
 t = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
             environ_base={'REMOTE_ADDR': '10.9.0.5'}).text
-ok('…and the page without JavaScript says "Check your email"', 'Check your email' in t and 'x***@kiraninteriors.example' in t)
+ok('…and the page without JavaScript: Set up my app now, and the email copy', 'Set up my app now' in t
+   and 'also emailed this link to' in t and 'x***@kiraninteriors.example' in t and 'Check your email' not in t)
 # Buying a plan on the website: the plan buttons open the same form, then straight on to set up and pay (any business,
 # and the link is shown, not emailed: Razorpay checks the payer)
 lp = c5.get('/').text
