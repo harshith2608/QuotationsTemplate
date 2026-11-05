@@ -22,13 +22,13 @@ from datetime import datetime
 
 KEY = 'welcome_tour'
 SESSION_KEY = 'welcome_tour'     # set while under way, so other pages don't read the setting to know
-STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('rates', 'Your rates'),
+STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('pricing', 'Your work'), ('rates', 'Your rates'),
          ('quote', 'Your first quotation'), ('send', 'See it and send it')]
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
 
-KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes', 'turnkey': 'Turnkey interiors & civil',
-         'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium',
+KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes (plywood, PVC or WPC)', 'turnkey': 'Turnkey interiors & civil',
+         'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors (fabrication)', 'glass': 'Glass & aluminium',
          'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
          'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
          'curtains': 'Curtains, blinds & wallpaper', 'other': 'Something else'}
@@ -37,6 +37,8 @@ ICONS = {'interiors': 'house-door', 'turnkey': 'buildings', 'furniture': 'lamp',
          'ceiling': 'lightbulb', 'fabrication': 'tools', 'curtains': 'border-style', 'other': 'three-dots'}
 # Asked for an old quotation or rate Excel: the kinds that usually have one. The others start from typical items.
 FILE_KINDS = ('interiors', 'turnkey')
+# Asked how they price (by item or by material): the kinds that may quote by material. Every other kind is by item.
+PRICING_KINDS = ('interiors', 'turnkey', 'furniture')
 OLD_KINDS = {'kitchens': 'interiors'}      # kinds offered before, as they're now named
 
 # Typical items and rates (per sqft, rft, nos or point) for a business with no file: a starting point they change.
@@ -297,6 +299,74 @@ def set_kind(kind):
     business.set_kind(kind)
 
 
+def set_pricing(mode):
+    """How they price (step 3): by material or by item, as chosen; their rates step follows it."""
+    s = _state()
+    if s.get('pricing') != mode:
+        s['pricing'] = mode
+        _store(s)
+
+
+def by_material():
+    """Their rates are by material (a rate per sqft for each material and work type): chosen on How you price, or,
+    when that was skipped, set up that way from their old quotation."""
+    from . import boq, setup_guide
+    chosen = _state().get('pricing')
+    if chosen:
+        return chosen == 'material'
+    return not boq.enabled() and 'import' in (setup_guide._state().get('done') or [])
+
+
+def pricing_examples(kind):
+    """The top of the quotation PDF each way of pricing makes, to choose by on How you price (shown as the PDF looks:
+    templates/welcome/pricing.html): by item, the bill of quantities (sections A, B… of lines with a quantity and
+    rate: their own kind's items); by material, the customer quotation (items measured, one amount per material and
+    work type in each room, fittings apart). Sizes in the business's own unit."""
+    from . import boq, business, units
+
+    def amount(v):
+        return f'{v:,.2f}'
+
+    # By material: the wardrobe and loft are both Laminates – Box Work, so one rate (₹1,600/sqft) and one amount
+    rooms = [('Master Bedroom', 'Laminates – Box Work', 1600, [('Wardrobe', 7, 8), ('Loft', 7, 2)]),
+             ('Living Room', 'Laminates – Frame Work', 1100, [('TV Unit', 6, 4)])]
+    material = []
+    for n, (room, mat, rate, items) in enumerate(rooms, 1):
+        material.append({'n': n, 'room': room, 'material': mat, 'amount': amount(sum(l * w for _, l, w in items) * rate),
+                         'items': [{'name': i, 'length': units.length(l), 'width': units.length(w), 'count': 1}
+                                   for i, l, w in items]})
+    material.append({'n': 3, 'room': 'Living Room – Hardware', 'material': '', 'amount': amount(9000),
+                     'items': [{'name': 'Tandem Drawer', 'length': '—', 'width': '—', 'count': 2}]})
+    material_total = 70 * 1600 + 24 * 1100 + 9000
+
+    # By item: the same wardrobe, loft and TV unit for interiors (each at its own rate), else their own items
+    p = business.profile()
+    if kind in ('interiors', 'turnkey', 'furniture'):
+        found = {r[1]: r for r in typical_rows('interiors')}
+        lines = [found[n] for n in ('Wardrobe', 'Loft', 'TV Unit') if n in found]
+        names = ('Master Bedroom', 'Living Room')
+    else:
+        lines = [r for r in typical_rows(kind) if r[2] != boq.LUMP_SUM][:3] or typical_rows('interiors')[:3]
+        later = [x for x in p['section_suggestions'] + ['Bedroom', 'Kitchen'] if x != p['section_example']]
+        names = (p['section_example'], later[0])
+    sample = {'sqft': (56, 14, 24), 'sq m': (5.2, 1.3, 2.2), 'rft': (20, 12, 30), 'rmt': (6, 4, 9), 'nos': (2, 1, 4),
+              'point': (12, 6, 20), 'set': (1, 1, 1)}
+    rows = []
+    for n, (_, name, unit, rate, _) in enumerate(lines[:3]):
+        qty = sample.get(unit, (1, 1, 1))[n]
+        rows.append({'name': name, 'qty': f'{qty:g}', 'unit': boq.unit_text(unit), 'rate': f'{rate:,.0f}',
+                     'value': qty * rate})
+    services = [{'name': '3D Design', 'qty': '1', 'unit': 'LS', 'rate': '', 'value': 45000}] \
+        if kind in ('interiors', 'turnkey') else []                 # not in a room: its own section
+    sections = []
+    for letter, name, part in (('A', names[0], rows[:2]), ('B', names[1], rows[2:]), ('C', 'Design & Services', services)):
+        if part:
+            sections.append({'letter': letter, 'name': name, 'total': amount(sum(r['value'] for r in part)),
+                             'rows': [dict(r, n=i, amount=amount(r['value'])) for i, r in enumerate(part, 1)]})
+    return {'material': material, 'material_total': amount(material_total), 'item': sections,
+            'item_total': amount(sum(r['value'] for r in rows + services)), 'compare': kind in ('interiors', 'turnkey', 'furniture')}
+
+
 def remember_project(project_id):
     """The quotation rebuilt from their old one (Bring your old quotation): step 4 opens it."""
     s = _state()
@@ -358,7 +428,7 @@ def bar(endpoint, view_args):
         from . import business
         hint = (f'Add a {business.profile()["section"].lower()}, add an item, type its size, then tap '
                 '<strong>Save quotation</strong>.')
-        nxt, back = None, 'welcome.check'
+        nxt, back = None, 'welcome.materials' if by_material() else 'welcome.check'
     elif key == 'rates' and endpoint == 'admin.ai_import':
         from flask import request
         hint = ('Check the lines we read, then set up your app with them.' if request.method == 'POST' else
@@ -386,7 +456,7 @@ def console_text(raw):
     tail = f' (skipped {", ".join(skipped)})' if skipped else ''
     kind = OLD_KINDS.get(s.get('kind'), s.get('kind'))
     if kind in KINDS:
-        tail += f' · {KINDS[kind].lower()}'
+        tail += f' · {KINDS[kind]}'
     if s.get('finished') == 'done':
         return 'finished' + tail
     where = TITLES.get(s['step'], s['step']).lower()

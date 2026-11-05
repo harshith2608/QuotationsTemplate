@@ -101,14 +101,14 @@ with app.test_request_context():
     types = [k for k, _ in marketing._context()['business_types']]
 ok('…the website\'s trial form shows only those', types == ['interiors', 'kitchens', 'tiles', 'painting', 'other'])
 c.post('/welcome/restart')
-kp = c.get('/welcome/rates').text
+kp = c.get('/welcome/work').text
 ok('…the guided setup offers only those', 'value="tiles"' in kp and 'value="painting"' in kp and 'value="upvc"' not in kp
    and 'value="interiors"' in kp)
 kind('upvc')
 with app.app_context():
     from app import welcome as W
     s = W.state(); s['kind'] = 'upvc'; W._store(s); db.session.commit()
-ok('…a business that chose a kind since switched off still sees it', 'value="upvc"' in c.get('/welcome/rates').text)
+ok('…a business that chose a kind since switched off still sees it', 'value="upvc"' in c.get('/welcome/work').text)
 
 from app import seed
 with app.app_context():

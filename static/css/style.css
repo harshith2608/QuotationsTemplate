@@ -706,3 +706,28 @@ body > main { flex: 1 0 auto; }
 @media (max-width: 575.98px) { .ki-welcome-kinds { grid-template-columns: 1fr; } }
 .ki-welcome-rates tr.ki-w-removed input:not([type=hidden]), .ki-welcome-rates tr.ki-w-removed select {
   opacity: .45; text-decoration: line-through; pointer-events: none; background: var(--bs-light, #f8f9fa); }
+/* Guided setup, How you price: two small example quotations */
+.ki-welcome:has(.ki-welcome-price) { max-width: 760px; }
+/* the quotation PDF, drawn as it looks (app/pdf_utils.py: primary for ink, tints for headers, accent rule) */
+.ki-pdf-paper { background: #fff; color: #212121; border: 1px solid #dcdcdc; border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08); overflow-x: auto; font-family: Helvetica, Arial, sans-serif; }
+.ki-pdf-inner { min-width: 520px; padding: 18px 18px 14px; font-size: 11px; }
+.ki-pdf-brand { text-align: center; font-size: 20px; font-weight: 700; color: var(--ki-primary); line-height: 1.1; }
+.ki-pdf-sub { text-align: center; color: #607d8b; font-size: 11px; }
+.ki-pdf-rule { height: 2px; background: var(--ki-accent); margin: 6px 0 8px; }
+.ki-pdf-bar { display: flex; justify-content: space-between; align-items: center; font-weight: 700;
+  background: linear-gradient(90deg, var(--ki-primary) 0 65%, color-mix(in srgb, var(--ki-primary) 10%, #fff) 65%); }
+.ki-pdf-bar span { padding: 4px 10px; font-size: 11px; }
+.ki-pdf-bar span:first-child { color: #fff; width: 65%; text-align: center; }
+.ki-pdf-bar span:last-child { color: var(--ki-primary); font-weight: 400; }
+.ki-pdf-h { color: var(--ki-primary); font-weight: 700; font-size: 12px; margin: 12px 0 5px; }
+.ki-pdf-table { width: 100%; border-collapse: collapse; }
+.ki-pdf-table th, .ki-pdf-table td { border: 1px solid #d0d0d0; padding: 4px 6px; vertical-align: top; }
+.ki-pdf-table th { background: color-mix(in srgb, var(--ki-primary) 15%, #fff); color: var(--ki-primary); font-weight: 700; text-align: left; }
+.ki-pdf-table .r { text-align: right; } .ki-pdf-table .c { text-align: center; } .ki-pdf-table .b { font-weight: 700; }
+.ki-pdf-table .m { color: #607d8b; }
+.ki-pdf-table tr.sec td { background: color-mix(in srgb, var(--ki-primary) 10%, #fff); font-weight: 700; color: #212121; }
+.ki-pdf-table tr.sec td:first-child, .ki-pdf-table tr.sec td:last-child { color: var(--ki-primary); }
+.ki-pdf-total { display: flex; justify-content: flex-end; gap: 40px; margin-top: 8px; padding: 6px 10px; font-weight: 700;
+  font-size: 13px; color: var(--ki-primary); background: color-mix(in srgb, var(--ki-primary) 25%, #fff); }
+@media (max-width: 575.98px) { .ki-pdf-inner { zoom: .5; } .ki-welcome-price > .card-body { padding: .75rem !important; } }   /* the whole page width, like a PDF on a phone */

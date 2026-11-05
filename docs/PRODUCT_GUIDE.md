@@ -75,14 +75,17 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Getting started
 - **★ Guided first setup.** On their first sign-in a new business's admin sees "Let's set up your QuoteRoom": one
   question a page, each with **Skip for now**: (1) business name, phone, logo; (2) how you measure (ft & in, mm, cm,
-  in); (3) what you mostly do: interiors (modular kitchens & wardrobes), turnkey, furniture, uPVC windows, glass & aluminium,
+  in); (3) their work: what they mostly do, and, for interiors, turnkey and furniture firms only, how they price:
+  **by item** or **by material**, each shown as the quotation PDF it makes (every other business prices by item,
+  without being asked; by material then gets a simple page of their materials' rates for Box Work and Frame Work);
+  (4) their rates, for what they do: interiors (modular kitchens & wardrobes), turnkey, furniture, uPVC windows, glass & aluminium,
   tiles & flooring, construction, painting, false ceiling, steel fabrication, curtains & blinds. Interiors and
   turnkey are asked for an old quotation or rate Excel; everyone else (and a "no") gets a ready list of typical
   items and rates for their business. Either way: **"These are your rates"**, in sections they can rename and add
-  to, to check and change; (4) the first
-  quotation (or their old one, rebuilt), with a strip saying what to do; (5) its PDF and Send on WhatsApp. Then
+  to, to check and change; (5) the first
+  quotation (or their old one, rebuilt), with a strip saying what to do; (6) its PDF and Send on WhatsApp. Then
   "When you have time": payment details, terms & conditions, invoices, team. The console's trial page shows where
-  each trial stopped. *Pitch: "Five short questions and you're making your first quotation."*
+  each trial stopped. *Pitch: "A few short questions and you're making your first quotation."*
 - **Made for their kind of business.** The app knows what the business does (from "What do you mostly do?" in the
   guided setup, filled in from the trial form): a uPVC, tiles, painting or construction firm sees its own examples
   ("e.g. Sliding Window"), its own item suggestions, no interiors tagline, a neutral thank-you on PDFs and messages,

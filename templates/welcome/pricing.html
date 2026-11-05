@@ -1,0 +1,74 @@
+{% extends "welcome/_frame.html" %}
+{# Each way of pricing with the top of the quotation PDF it makes, drawn as the PDF looks (app/pdf_utils.py) #}
+{% macro choice(mode, title, what, chosen, recommend) %}
+<div class="ki-welcome-price card mb-3 {{ 'border-primary' if chosen == mode else '' }}">
+  <div class="card-body p-3">
+    <div class="d-flex align-items-start gap-2 mb-1">
+      <h5 class="fw-bold mb-0 flex-grow-1">{{ title }}</h5>
+      {% if recommend == mode %}<span class="badge bg-success">Best for {{ label|lower }}</span>{% endif %}
+    </div>
+    <p class="small text-muted mb-2">{{ what|safe }}</p>
+    {{ caller() }}
+    <form method="post" class="mt-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn {{ 'btn-primary ki-btn-primary' if chosen == mode or recommend == mode else 'btn-outline-primary' }} w-100" type="submit" name="mode" value="{{ mode }}">
+        {{ 'Keep: ' if chosen == mode }}{{ title }} <i class="bi bi-arrow-right ms-1"></i></button>
+    </form>
+  </div>
+</div>
+{% endmacro %}
+{% macro paper_top(heading) %}
+  <div class="ki-pdf-brand">{{ brand.name }}</div>
+  {% set sub = [brand.address.replace('\n', ', ') if brand.address else '', 'Ph: ' ~ brand.phone if brand.phone else '']|select|join(' | ') %}
+  {% if sub %}<div class="ki-pdf-sub">{{ sub }}</div>{% endif %}
+  <div class="ki-pdf-rule"></div>
+  <div class="ki-pdf-bar"><span>CUSTOMER QUOTATION</span><span>Date: {{ now.strftime('%d %B %Y') }}</span></div>
+  <div class="ki-pdf-h">{{ heading }}</div>
+{% endmacro %}
+{% block step %}
+<h4 class="fw-bold mb-1">How do you price your work?</h4>
+<p class="text-muted mb-3">Pick the one that looks like your quotations. Below each is your quotation PDF as your customer
+  will see it. You can change this later in Settings.</p>
+
+{% call choice('item', 'By item', 'Each item has <strong>its own rate</strong>: quantity × rate. For windows, tiles, painting,
+  furniture by the piece, services and lump sums.' ~ (' Here the loft is cheaper than the wardrobe.' if examples.compare else ''), chosen, recommend) %}
+<div class="ki-pdf-paper"><div class="ki-pdf-inner">
+  {{ paper_top('Bill of Quantities') }}
+  <table class="ki-pdf-table">
+    <thead><tr><th style="width:9%">Sr. No.</th><th>Description</th><th class="r" style="width:9%">Qty</th><th class="c" style="width:10%">Unit</th>
+      <th class="r" style="width:12%">Rate</th><th class="r" style="width:18%">Amount (Rs.)</th></tr></thead>
+    <tbody>
+    {% for sec in examples.item %}
+      <tr class="sec"><td class="c">{{ sec.letter }}</td><td colspan="4">{{ sec.name }}</td><td class="r">{{ sec.total }}</td></tr>
+      {% for r in sec.rows %}<tr><td class="c">{{ r.n }}</td><td class="b">{{ r.name }}</td><td class="r">{{ r.qty }}</td>
+        <td class="c">{{ r.unit }}</td><td class="r">{{ r.rate }}</td><td class="r">{{ r.amount }}</td></tr>{% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="ki-pdf-total"><span>TOTAL</span><span>Rs. {{ examples.item_total }}</span></div>
+</div></div>
+{% endcall %}
+
+{% call choice('material', 'By material', 'You measure each item; the app works out its area and prices it at
+  <strong>one rate for each material and work type</strong>: every Laminates – Box Work item, like the wardrobe and the
+  loft here, is at the same rate. Fittings are priced by the piece. How interior firms usually quote.', chosen, recommend) %}
+<div class="ki-pdf-paper"><div class="ki-pdf-inner">
+  {{ paper_top('Quotation') }}
+  <table class="ki-pdf-table">
+    <thead><tr><th class="c" style="width:5%">#</th><th style="width:17%">Room</th><th style="width:20%">Material Description</th><th>Item</th>
+      <th class="c" style="width:10%">Length</th><th class="c" style="width:10%">Width</th><th class="c" style="width:7%">No's</th><th class="r" style="width:15%">Amount (Rs.)</th></tr></thead>
+    <tbody>
+    {% for g in examples.material %}{% for it in g['items'] %}
+      <tr>{% if loop.first %}<td class="c" rowspan="{{ g['items']|length }}">{{ g.n }}</td><td class="b" rowspan="{{ g['items']|length }}">{{ g.room }}</td>
+        <td class="m" rowspan="{{ g['items']|length }}">{{ g.material }}</td>{% endif %}
+        <td>{{ it.name }}</td><td class="c">{{ it.length }}</td><td class="c">{{ it.width }}</td><td class="c">{{ it.count }}</td>
+        {% if loop.first %}<td class="r b" rowspan="{{ g['items']|length }}">{{ g.amount }}</td>{% endif %}</tr>
+    {% endfor %}{% endfor %}
+    </tbody>
+  </table>
+  <div class="ki-pdf-total"><span>TOTAL</span><span>Rs. {{ examples.material_total }}</span></div>
+</div></div>
+<div class="small text-muted mt-2"><i class="bi bi-info-circle me-1"></i>You also get a <strong>Full Quotation</strong> with every
+  item's area and amount, room by room, for your records.</div>
+{% endcall %}
+{% endblock %}
