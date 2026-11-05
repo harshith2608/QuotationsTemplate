@@ -20,8 +20,8 @@
 <h4 class="fw-bold mb-1">How do you price your work?</h4>
 <p class="text-muted mb-3">Pick the one that looks like your quotations. You can change it later in Settings.</p>
 
-{% call choice('item', 'By item', 'Each item has its own rate: <strong>quantity × rate</strong>. For windows, tiles, painting,
-  furniture by the piece, services and lump sums.', chosen, recommend) %}
+{% call choice('item', 'By item', 'Each item has <strong>its own rate</strong>: quantity × rate. For windows, tiles, painting,
+  furniture by the piece, services and lump sums.' ~ (' Here the loft is cheaper than the wardrobe.' if examples.compare else ''), chosen, recommend) %}
 <div class="table-responsive"><table class="table table-sm small mb-0 ki-welcome-eg">
   <thead><tr><th>Item</th><th class="text-end">Qty</th><th>Unit</th><th class="text-end d-none d-sm-table-cell">Rate</th><th class="text-end">Amount</th></tr></thead>
   <tbody>{% for r in examples.item %}<tr><td>{{ r.name }}</td><td class="text-end">{{ r.qty }}</td><td>{{ r.unit }}</td>
@@ -30,8 +30,8 @@
 {% endcall %}
 
 {% call choice('material', 'By material', 'You measure each item; the app works out its area and prices it at
-  <strong>your rate for its material and work type</strong> (Laminates – Box Work). Fittings are priced by the piece.
-  How interior firms usually quote.', chosen, recommend) %}
+  <strong>one rate for each material and work type</strong>: every Laminates – Box Work item, like the wardrobe and the
+  loft here, is at the same rate. Fittings are priced by the piece. How interior firms usually quote.', chosen, recommend) %}
 <div class="table-responsive"><table class="table table-sm small mb-0 ki-welcome-eg">
   <thead><tr><th>Item</th><th>Size</th><th>Material</th><th class="text-end d-none d-sm-table-cell">Area</th><th class="text-end d-none d-sm-table-cell">Rate</th><th class="text-end">Amount</th></tr></thead>
   <tbody>{% for r in examples.material %}<tr><td>{{ r.name }}</td><td class="text-nowrap">{{ r.size }}</td><td>{{ r.material }}</td>

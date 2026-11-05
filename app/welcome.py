@@ -322,14 +322,19 @@ def pricing_examples(kind):
     from . import boq, units
     def money(v):
         return f'₹{v:,.0f}'
-    measured = [('Wardrobe', 7, 8, 'Laminates – Box Work', 1600), ('Loft', 7, 2, 'Laminates – Box Work', 1100),
-                ('TV Unit', 6, 4, 'Acrylic – Frame Work', 1400)]
+    # one rate per material and work type: the wardrobe and loft are both Laminates – Box Work, so both ₹1,600
+    measured = [('Wardrobe', 7, 8, 'Laminates – Box Work', 1600), ('Loft', 7, 2, 'Laminates – Box Work', 1600),
+                ('TV Unit', 6, 4, 'Laminates – Frame Work', 1100)]
     by_material = [{'name': n, 'size': f'{units.length(l)} × {units.length(w)}', 'material': m,
                     'area': units.area(l * w, 1), 'rate': money(units.rate_value(r)) + units.rate_label(),
                     'amount': money(l * w * r)} for n, l, w, m, r in measured]
     by_material.append({'name': 'Tandem Drawer', 'size': '2 nos', 'material': 'Fitting', 'area': '',
                         'rate': money(4500), 'amount': money(9000)})
     rows, seen = [], set()
+    if kind in ('interiors', 'turnkey', 'furniture'):   # the same items as by material, each at its own rate
+        found = {r[1]: r for r in typical_rows('interiors')}
+        rows = [found[n] for n in ('Wardrobe', 'Loft', 'TV Unit') if n in found]
+        seen = {r[0] for r in typical_rows('interiors')}
     for row in typical_rows(kind) or typical_rows('interiors'):   # the first item of each section, up to 3
         if row[0] not in seen and row[2] != boq.LUMP_SUM:
             seen.add(row[0])
@@ -337,7 +342,7 @@ def pricing_examples(kind):
     for row in typical_rows(kind):                                   # one section only: its next items
         if len(rows) < 3 and row not in rows and row[2] != boq.LUMP_SUM:
             rows.append(row)
-    sample = {'sqft': (56, 24, 30), 'sq m': (5.2, 2.2, 2.8), 'rft': (20, 12, 30), 'rmt': (6, 4, 9), 'nos': (2, 1, 4),
+    sample = {'sqft': (56, 14, 24), 'sq m': (5.2, 1.3, 2.2), 'rft': (20, 12, 30), 'rmt': (6, 4, 9), 'nos': (2, 1, 4),
               'point': (12, 6, 20), 'set': (1, 1, 1)}
     by_item = []
     for n, (_, name, unit, rate, _) in enumerate(rows[:3]):
@@ -346,7 +351,7 @@ def pricing_examples(kind):
                         'amount': money(qty * rate)})
     if kind in ('interiors', 'turnkey'):
         by_item.append({'name': '3D Design', 'qty': '1', 'unit': 'LS', 'rate': money(45000), 'amount': money(45000)})
-    return {'material': by_material, 'item': by_item}
+    return {'material': by_material, 'item': by_item, 'compare': kind in ('interiors', 'turnkey', 'furniture')}
 
 
 def remember_project(project_id):

@@ -44,6 +44,11 @@ with app.app_context():
 t = c.get('/welcome/pricing').text
 ok('step 3: how you price, a small example quotation for each (in their units: mm)', 'Step 3 of 6' in t
    and 'By item' in t and 'By material' in t and 'Laminates – Box Work' in t and '2,134 mm' in t and 'Qty' in t)
+with app.app_context():
+    eg = W.pricing_examples('interiors')
+    ok('…by item: each item its own rate (the loft cheaper); by material: one rate for Laminates – Box Work',
+       [r['rate'] for r in eg['item'][:2]] == ['₹1,600', '₹1,100']
+       and len({r['rate'] for r in eg['material'] if r['material'] == 'Laminates – Box Work'}) == 1)
 r = c.post('/welcome/pricing', data={'mode': 'item'})
 with app.app_context():
     from app import boq as B
