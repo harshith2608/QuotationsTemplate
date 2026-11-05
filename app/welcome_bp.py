@@ -124,7 +124,8 @@ def business():
         return _next('business')
     db.session.commit()
     s = AppSetting.get_many([name_key, phone_key])
-    return _page('welcome/business.html', 'business', name=s[name_key] or '', phone=s[phone_key] or '',
+    phone = s[phone_key] or ''
+    return _page('welcome/business.html', 'business', name=s[name_key] or '', phone=_phone(phone) or phone,
                  locked=locked, lock_enabled=branding.lock_enabled(), logo_url=branding.get_brand().get('logo_url'))
 
 
