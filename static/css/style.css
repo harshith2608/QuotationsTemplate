@@ -731,3 +731,5 @@ body > main { flex: 1 0 auto; }
 .ki-pdf-total { display: flex; justify-content: flex-end; gap: 40px; margin-top: 8px; padding: 6px 10px; font-weight: 700;
   font-size: 13px; color: var(--ki-primary); background: color-mix(in srgb, var(--ki-primary) 25%, #fff); }
 @media (max-width: 575.98px) { .ki-pdf-inner { zoom: .5; } .ki-welcome-price > .card-body { padding: .75rem !important; } }   /* the whole page width, like a PDF on a phone */
+/* A trial's help card: on a phone the two buttons share the width */
+@media (max-width: 575.98px) { .ki-help-actions { width: 100%; } .ki-help-actions .btn { flex: 1 1 0; } }

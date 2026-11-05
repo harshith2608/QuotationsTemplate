@@ -35,6 +35,9 @@ login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'warning'
 
 
+HELP_CARD_PAGES = ('projects.list_projects', 'welcome.done')     # where a trial sees "Get your rates set up for you"
+
+
 def create_app(config_name='default'):
     cfg = config[config_name]
     missing = [k for k in getattr(cfg, 'REQUIRED_ENV', ()) if not os.environ.get(k)]
@@ -208,8 +211,13 @@ def create_app(config_name='default'):
         if demo_enabled() and current_user.is_authenticated:
             from . import demo
             demo_guide = demo.guide()
+        help_card = None
+        if current_user.is_authenticated and current_user.is_admin and request.endpoint in HELP_CARD_PAGES:
+            from . import callbook                # Get your rates set up for you: a call, or WhatsApp
+            if callbook.available():
+                help_card = {'booked': callbook.booked(), 'whatsapp': callbook.whatsapp_url()}
         from . import business
-        return {'biz': business.profile(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
+        return {'biz': business.profile(), 'help_card': help_card, 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
