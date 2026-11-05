@@ -15,8 +15,7 @@ def admins_only():
         abort(404)
 
 
-BACK = {'units': 'welcome.business', 'pricing': 'welcome.units', 'rates': 'welcome.pricing', 'file': 'welcome.rates',
-        'check': 'welcome.rates', 'materials': 'welcome.rates'}
+BACK = {'units': 'welcome.business', 'work': 'welcome.units', 'pricing': 'welcome.work', 'rates': 'welcome.work'}
 
 
 def _page(template, key, back=None, back_args=None, **kw):
@@ -48,7 +47,7 @@ def resume():
         from .models import Project
         last = Project.query.get(pid) if pid else Project.query.order_by(Project.id.desc()).first()
         return redirect(url_for('projects.view_project', project_id=last.id) if last else url_for('welcome.done'))
-    return redirect(url_for(f'welcome.{key}'))
+    return redirect(url_for('welcome.work' if key == 'pricing' else f'welcome.{key}'))
 
 
 @welcome_bp.route('/skip/<key>', methods=['POST'])
@@ -152,13 +151,47 @@ def units():
     return _page('welcome/units.html', 'units', back=BACK['units'], size=U.size_unit(), area=U.area_unit())
 
 
-# ── 3. How you price ─────────────────────────────────────────────────────────
+# ── 3. Your work: what you mostly do, and (interiors) how you price ─────────────
+
+def _kinds_page(chosen):
+    """The kinds to choose from: those the console offers, and the one already chosen."""
+    from . import business
+    offered = business.kinds_offered()
+    return {k: v for k, v in W.KINDS.items() if k in offered or k == chosen}   # the console's Kinds of business
+
+
+@welcome_bp.route('/work', methods=['GET', 'POST'])
+def work():
+    """What they mostly do. Interiors, turnkey and furniture firms are then asked how they price; every other kind
+    prices by item, without being asked."""
+    from . import boq
+    W.go_to('pricing')
+    if request.method == 'POST':
+        k = request.form.get('kind')
+        if k not in W.KINDS:
+            flash('Choose what you mostly do.', 'danger')
+            return redirect(url_for('welcome.work'))
+        W.set_kind(k)
+        if k in W.PRICING_KINDS:
+            db.session.commit()
+            return redirect(url_for('welcome.pricing'))
+        boq.set_pricing(boq.ITEM, starter=False)
+        W.set_pricing(boq.ITEM)
+        return _next('pricing')
+    db.session.commit()
+    chosen = W.state().get('kind') or _trial_kind()
+    return _page('welcome/kind.html', 'pricing', back=BACK['work'], kinds=_kinds_page(chosen), icons=W.ICONS,
+                 chosen=chosen, action=url_for('welcome.work'), has_items=False)
+
 
 @welcome_bp.route('/pricing', methods=['GET', 'POST'])
 def pricing():
-    """By material or by item, each with a small example quotation to choose by."""
+    """By material or by item (interiors, turnkey and furniture), each with the quotation PDF it makes."""
     from . import boq, business
     W.go_to('pricing')
+    if (W.state().get('kind') or 'interiors') not in W.PRICING_KINDS:
+        db.session.commit()
+        return redirect(url_for('welcome.work'))
     if request.method == 'POST':
         mode = request.form.get('mode')
         if mode not in (boq.MATERIAL, boq.ITEM):
@@ -169,10 +202,8 @@ def pricing():
         return _next('pricing')
     db.session.commit()
     p = business.profile()
-    chosen = W.state().get('pricing')
-    recommend = boq.ITEM if not p['interiors'] and _trial_kind() else None
     return _page('welcome/pricing.html', 'pricing', back=BACK['pricing'], examples=W.pricing_examples(p['kind']),
-                 chosen=chosen, recommend=recommend, label=p['label'])
+                 chosen=W.state().get('pricing'), recommend=None, label=p['label'])
 
 
 # ── 4. Your rates ────────────────────────────────────────────────────────────
@@ -196,26 +227,28 @@ def _has_items():
 
 @welcome_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
-    """What they mostly do. Interiors and turnkey firms are then asked for an old quotation or rate Excel (when Bring
-    your old quotation is on); every other kind goes straight to its typical items. Nothing is saved here: the
-    choice travels in the address to "These are your rates"."""
+    """Their rates, by what they do (step 3): interiors and turnkey firms are first asked for an old quotation or rate
+    Excel (when Bring your old quotation is on); then their materials (by material) or their items (by item). When
+    step 3 was skipped, it asks what they mostly do here."""
     from . import ai_import
     W.go_to('rates')
     db.session.commit()
-    if request.method == 'POST':
-        k = request.form.get('kind')
-        if k not in W.KINDS:
-            flash('Choose what you mostly do.', 'danger')
-            return redirect(url_for('welcome.rates'))
+    k = request.form.get('kind') if request.method == 'POST' else W.state().get('kind')
+    if request.method == 'POST' and k not in W.KINDS:
+        flash('Choose what you mostly do.', 'danger')
+        return redirect(url_for('welcome.rates'))
+    if k in W.KINDS:
         if k in W.FILE_KINDS and ai_import.available() and not _has_items():
             return redirect(url_for('welcome.file', kind=k))
         return _your_rates(k)
-    from . import business
-    chosen = request.args.get('kind') or W.state().get('kind') or _trial_kind()
-    offered = business.kinds_offered()
-    kinds = {k: v for k, v in W.KINDS.items() if k in offered or k == chosen}   # the console's Kinds of business
-    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=kinds, icons=W.ICONS,
-                 chosen=chosen, has_items=_has_items())
+    chosen = _trial_kind()
+    return _page('welcome/kind.html', 'rates', back=BACK['rates'], kinds=_kinds_page(chosen), icons=W.ICONS,
+                 chosen=chosen, action=url_for('welcome.rates'), has_items=_has_items())
+
+
+def _back_from_rates(k):
+    """Back from step 4's pages: how you price (interiors), else what you do."""
+    return 'welcome.pricing' if (k or W.state().get('kind')) in W.PRICING_KINDS else 'welcome.work'
 
 
 @welcome_bp.route('/rates/file', methods=['GET', 'POST'])
@@ -231,7 +264,7 @@ def file():
         return _your_rates(k)
     if not ai_import.available():
         return _your_rates(k)
-    return _page('welcome/rates.html', 'rates', back=BACK['file'], back_args={'kind': k}, has_items=_has_items())
+    return _page('welcome/rates.html', 'rates', back=_back_from_rates(k), has_items=_has_items())
 
 
 def _your_rates(k):
@@ -322,8 +355,8 @@ def check():
             if name.lower() not in have:
                 groups.setdefault(group, ([], []))[1].append(
                     {'name': name, 'unit': unit, 'rate': rate, 'description': description})
-    return _page('welcome/check.html', 'rates', back=BACK['check'], groups=[(g, a, b) for g, (a, b) in groups.items()],
-                 units_list=boq.units_for_business(), back_args={'kind': k} if k else None)
+    return _page('welcome/check.html', 'rates', back=_back_from_rates(k), groups=[(g, a, b) for g, (a, b) in groups.items()],
+                 units_list=boq.units_for_business())
 
 
 @welcome_bp.route('/rates/materials', methods=['GET', 'POST'])
@@ -399,7 +432,7 @@ def materials():
     db.session.commit()
     rows = [{'m': m, 'rates': {w: current(m.name, w) for w in (WORK_TYPES if m.uses_work_types else [''])}}
             for m in mats]
-    return _page('welcome/materials.html', 'rates', back=BACK['materials'], back_args={'kind': k} if k else None,
+    return _page('welcome/materials.html', 'rates', back=_back_from_rates(k),
                  rows=rows, work_types=WORK_TYPES, rate_label=units.rate_label())
 
 

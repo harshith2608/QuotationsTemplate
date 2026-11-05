@@ -41,8 +41,23 @@ ok('step 2: how you measure, four units', loc(r).endswith('/welcome/units') and 
 c.post('/welcome/units', data={'size_unit': 'mm', 'area_unit': 'sqft'})
 with app.app_context():
     ok('…saved (mm, per sqft), then step 3', AppSetting.get('size_unit') == 'mm' and W.step() == 'pricing')
+with app.app_context():                     # every kind switched on (console → Features → Kinds of business)
+    from app import business
+    AppSetting.set(business.KINDS_KEY, json.dumps(list(W.KINDS))); db.session.commit()
+t = c.get('/welcome/work').text
+ok('step 3 asks what you mostly do first: interiors and the businesses that measure', 'Step 3 of 6' in t and all(k in t for k in (
+   'Interiors, modular kitchens &amp; wardrobes', 'Turnkey', 'uPVC windows', 'Tiles, flooring', 'Construction', 'Painting',
+   'False ceiling', 'Steel fabrication', 'Curtains', 'Glass &amp; aluminium', 'Something else')))
+r = c.post('/welcome/work', data={'kind': 'upvc'})
+with app.app_context():
+    from app import boq as B
+    ok('…uPVC (not interiors): priced by item without being asked, on to step 4', loc(r).endswith('/welcome/')
+       and B.enabled() and W.step() == 'rates' and W.state()['pricing'] == 'item' and W.state()['kind'] == 'upvc')
+ok('…and not offered the by material page', loc(c.get('/welcome/pricing')).endswith('/welcome/work'))
+r = c.post('/welcome/work', data={'kind': 'interiors'})
+ok('…interiors: asked how they price', loc(r).endswith('/welcome/pricing'))
 t = c.get('/welcome/pricing').text
-ok('step 3: how you price, a small example quotation for each (in their units: mm)', 'Step 3 of 6' in t
+ok('how you price: the quotation PDF each makes (in their units: mm)', 'Step 3 of 6' in t
    and 'By item' in t and 'By material' in t and 'Laminates – Box Work' in t and '2,134 mm' in t
    and 'Bill of Quantities' in t and 'CUSTOMER QUOTATION' in t)
 with app.app_context():
@@ -57,15 +72,7 @@ with app.app_context():
        and eg['item_total'] == '183,600.00')
 r = c.post('/welcome/pricing', data={'mode': 'item'})
 with app.app_context():
-    from app import boq as B
     ok('…by item chosen: priced by item, on to step 4', B.enabled() and W.step() == 'rates' and W.state()['pricing'] == 'item')
-with app.app_context():                     # every kind switched on (console → Features → Kinds of business)
-    from app import business
-    AppSetting.set(business.KINDS_KEY, json.dumps(list(W.KINDS))); db.session.commit()
-t = c.get('/welcome/rates').text
-ok('step 3 asks what you mostly do first: interiors and the businesses that measure', all(k in t for k in (
-   'Interiors, modular kitchens &amp; wardrobes', 'Turnkey', 'uPVC windows', 'Tiles, flooring', 'Construction', 'Painting',
-   'False ceiling', 'Steel fabrication', 'Curtains', 'Glass &amp; aluminium', 'Something else')))
 with app.app_context():
     before = AppSetting.query.count(), BoqItem.query.count()
 r = c.post('/welcome/rates', data={'kind': 'upvc'})
@@ -118,9 +125,9 @@ with app.app_context():
     ok('…and what they do, for the console', W.state()['kind'] == 'interiors')
 ok('Back on every step after the first (keeping the business chosen)', 'id="wBack"' not in c.get('/welcome/business').text
    and 'href="/welcome/business" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/units').text
-   and 'href="/welcome/units" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/pricing').text
-   and 'href="/welcome/pricing" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates').text
-   and 'href="/welcome/rates?kind=interiors" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check?kind=interiors').text)
+   and 'href="/welcome/units" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/work').text
+   and 'href="/welcome/work" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/pricing').text
+   and 'href="/welcome/pricing" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check?kind=interiors').text)
 with app.app_context():
     ok('…opening a step again puts the tour back on it', W.step() == 'rates')
 t = c.get('/welcome/rates/check?kind=upvc').text
@@ -204,7 +211,7 @@ r = c.post('/welcome/rates', data={'kind': 'interiors'})
 t = c.get('/welcome/rates/file?kind=interiors').text
 ok('interiors with Bring your old quotation on: do you have a file?', loc(r).endswith('/welcome/rates/file?kind=interiors')
    and 'old quotation or your rate list' in t and 'Yes, upload it' in t and 'No, start with typical rates' in t
-   and 'href="/welcome/rates?kind=interiors" class="text-decoration-none me-2" id="wBack"' in t)
+   and 'href="/welcome/pricing" class="text-decoration-none me-2" id="wBack"' in t)
 r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'no'})
 ok('…no: its typical items, not saved yet', loc(r).endswith('/welcome/rates/check?kind=interiors'))
 r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'yes'})

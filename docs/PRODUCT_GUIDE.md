@@ -75,8 +75,10 @@ Explain features as **problem → what QuoteRoom does → what the customer gets
 ### Getting started
 - **★ Guided first setup.** On their first sign-in a new business's admin sees "Let's set up your QuoteRoom": one
   question a page, each with **Skip for now**: (1) business name, phone, logo; (2) how you measure (ft & in, mm, cm,
-  in); (3) how you price: **by item** or **by material**, each shown as a small example quotation (by material then
-  gets a simple page of their materials' rates for Box Work and Frame Work, instead of item lines); (4) what you mostly do: interiors (modular kitchens & wardrobes), turnkey, furniture, uPVC windows, glass & aluminium,
+  in); (3) their work: what they mostly do, and, for interiors, turnkey and furniture firms only, how they price:
+  **by item** or **by material**, each shown as the quotation PDF it makes (every other business prices by item,
+  without being asked; by material then gets a simple page of their materials' rates for Box Work and Frame Work);
+  (4) their rates, for what they do: interiors (modular kitchens & wardrobes), turnkey, furniture, uPVC windows, glass & aluminium,
   tiles & flooring, construction, painting, false ceiling, steel fabrication, curtains & blinds. Interiors and
   turnkey are asked for an old quotation or rate Excel; everyone else (and a "no") gets a ready list of typical
   items and rates for their business. Either way: **"These are your rates"**, in sections they can rename and add

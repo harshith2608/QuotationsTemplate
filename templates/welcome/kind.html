@@ -2,7 +2,7 @@
 {% block step %}
 <h4 class="fw-bold mb-1">What do you mostly do?</h4>
 <p class="text-muted mb-4">We'll start you with the usual items for it. You change the rates and add your own.</p>
-<form method="post" action="{{ url_for('welcome.rates') }}" class="ki-welcome-kinds">
+<form method="post" action="{{ action }}" class="ki-welcome-kinds">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% for k, label in kinds.items() %}
   <button class="btn {{ 'btn-primary' if chosen == k else 'btn-outline-primary' }} text-start" type="submit" name="kind" value="{{ k }}">

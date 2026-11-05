@@ -22,7 +22,7 @@ from datetime import datetime
 
 KEY = 'welcome_tour'
 SESSION_KEY = 'welcome_tour'     # set while under way, so other pages don't read the setting to know
-STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('pricing', 'How you price'), ('rates', 'Your rates'),
+STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('pricing', 'Your work'), ('rates', 'Your rates'),
          ('quote', 'Your first quotation'), ('send', 'See it and send it')]
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
@@ -37,6 +37,8 @@ ICONS = {'interiors': 'house-door', 'turnkey': 'buildings', 'furniture': 'lamp',
          'ceiling': 'lightbulb', 'fabrication': 'tools', 'curtains': 'border-style', 'other': 'three-dots'}
 # Asked for an old quotation or rate Excel: the kinds that usually have one. The others start from typical items.
 FILE_KINDS = ('interiors', 'turnkey')
+# Asked how they price (by item or by material): the kinds that may quote by material. Every other kind is by item.
+PRICING_KINDS = ('interiors', 'turnkey', 'furniture')
 OLD_KINDS = {'kitchens': 'interiors'}      # kinds offered before, as they're now named
 
 # Typical items and rates (per sqft, rft, nos or point) for a business with no file: a starting point they change.
