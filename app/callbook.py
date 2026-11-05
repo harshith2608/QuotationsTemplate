@@ -1,4 +1,5 @@
-"""A free 10-minute set-up call, booked by a trial business from inside its app (or a WhatsApp chat with us instead).
+"""A free 10-minute set-up call (on WhatsApp), booked by a trial business from inside its app (or a WhatsApp chat with
+us instead).
 
 Shown to a trial's admins in the shared app: at the end of the guided setup and as a card on the quotations. They
 pick a free slot; it goes on the console's Schedule (followups.book, in the trials database the shared app runs on),
@@ -128,12 +129,13 @@ def book(value, phone, note, user_name):
         raise ValueError('That time was just taken or has passed. Please choose another.')
     digits = re.sub(r'\D', '', phone or '')
     if not 10 <= len(digits) <= 13:
-        raise ValueError('Type the phone number we should call, e.g. 98765 43210.')
+        raise ValueError('Type your WhatsApp number, e.g. 98765 43210.')
     at_ist = datetime.strptime(value, '%Y-%m-%dT%H:%M')
     slug = tenancy.current_slug()
     brand = branding.get_brand()
     note = ' '.join((note or '').split())[:300]
-    text = f'Set-up call booked in the app by {user_name or "their admin"}, on {phone.strip()}' + (f'. {note}' if note else '')
+    text = (f'Set-up call booked in the app by {user_name or "their admin"}, WhatsApp {phone.strip()}'
+            + (f'. {note}' if note else ''))
     aid = followups.book(slug, at_ist, mode='call', note=text)
     at = at_ist - IST
     AppSetting.set(BOOKED_KEY, json.dumps({'at': at.isoformat(), 'id': aid}))
@@ -141,8 +143,8 @@ def book(value, phone, note, user_name):
     if mailer.enabled():                            # so we see it straight away
         when = followups.when_text(at)
         mailer.send(mailer.operator(), f'Call booked: {brand["name"]}, {when}',
-                    f'{brand["name"]} ({slug}) booked a free set-up call.\n\nWhen: {when} (India time)\n'
-                    f'Call: {phone.strip()}\nBooked by: {user_name or "their admin"}\n'
+                    f'{brand["name"]} ({slug}) booked a free set-up call.\n\n'
+                    f'When: {when} (India time)\nWhatsApp: {phone.strip()}\nBooked by: {user_name or "their admin"}\n'
                     + (f'Note: {note}\n' if note else '') + '\nIt\'s on the console\'s Schedule.\n')
     return booked()
 

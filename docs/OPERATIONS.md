@@ -683,7 +683,7 @@ sheets often have no customer mobile number: they add it when they next edit the
 ### Trials book a set-up call with you (console → Features → Call bookings)
 
 Every trial sees **Get your rates set up for you** on its quotations and at the end of the guided setup: **Book a free
-call** (they pick a free half-hour slot, at least an hour ahead, up to a week) or **Chat on WhatsApp** (to
+call**, 10 minutes on WhatsApp, where you can share your screen from your laptop (they pick a free half-hour slot, at least an hour ahead, up to a week) or **Chat on WhatsApp** (to
 `SUPPORT_WHATSAPP`, the message saying who they are). A booking lands on the console's **Schedule**, marks the trial
 hot, and emails you (with email set up). Set your free times on **Features → Call bookings**, India time, one line a
 day (`09:00-10:15, 12:00-20:00`; empty = off). Until saved: weekdays not 10:15–12:00, Wednesday and Thursday only from

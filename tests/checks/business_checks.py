@@ -205,6 +205,6 @@ with app.test_request_context():
                                   help_card={'booked': None, 'whatsapp': 'https://wa.me/919999999999?text=Hi'})
     done = render_template_string('{% include "partials/_help_card.html" %}',
                                   help_card={'booked': {'when': 'Mon 9 Nov, 5:00 PM'}, 'whatsapp': ''})
-ok('…the card: Book a free call and Chat on WhatsApp; once booked, when', 'Get your rates set up for you' in card
+ok('…the card: a WhatsApp video call to book, or chat; once booked, when', 'A free 10-minute call' in card and 'Get your rates set up for you' in card
    and '/welcome/call' in card and 'wa.me/919999999999' in card and 'WhatsApp us' in card and 'Your free set-up call: Mon 9 Nov, 5:00 PM' in done
    and '/welcome/call' not in done and 'Hide for a week' in card)
