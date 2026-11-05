@@ -46,7 +46,9 @@ def setup():
     setup_guide.note_seen()
     setup_guide.stop()
     db.session.commit()
-    return render_template('admin/setup.html', title='Setup guide', guide=setup_guide.status())
+    from . import welcome
+    return render_template('admin/setup.html', title='Setup guide', guide=setup_guide.status(),
+                           welcome_steps=len(welcome.ORDER))
 
 
 @admin_bp.route('/import', methods=['GET', 'POST'])

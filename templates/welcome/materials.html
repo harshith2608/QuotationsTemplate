@@ -1,0 +1,60 @@
+{% extends "welcome/_frame.html" %}
+{% macro remove(name, field) %}
+<button type="button" class="btn btn-sm btn-link text-muted px-1 ki-w-del" title="Remove" aria-label="Remove {{ name }}"><i class="bi bi-trash3"></i></button>
+<input type="hidden" name="{{ field }}" value="">
+{% endmacro %}
+{% block step %}
+<h4 class="fw-bold mb-1">These are your rates</h4>
+<p class="text-muted mb-3">Your rate {{ rate_label }} for each material: for <strong>Box Work</strong> and
+  <strong>Frame Work</strong>, or one rate. Change anything that's different from yours and add your own materials.</p>
+<form method="post" data-unsaved>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="table-responsive">
+  <table class="table table-sm align-middle ki-welcome-rates mb-2" id="wRates">
+    <thead><tr class="small text-muted"><th>Material</th>{% for w in work_types %}<th style="width:120px">{{ w }} (₹)</th>{% endfor %}<th style="width:36px"></th></tr></thead>
+    <tbody>
+    {% for r in rows %}{% set m = r.m %}
+    <tr>
+      <td class="fw-semibold">{{ m.name }}</td>
+      {% if m.uses_work_types %}
+      {% for w in work_types %}<td><span class="d-sm-none small text-muted">{{ w }}</span><input class="form-control form-control-sm text-end" name="m{{ m.id }}_{{ w }}" value="{{ '%g' % r.rates[w] }}" inputmode="decimal" aria-label="{{ m.name }}, {{ w }}"></td>{% endfor %}
+      {% else %}
+      <td colspan="{{ work_types|length }}"><div class="input-group input-group-sm" style="max-width:240px">
+        <input class="form-control text-end" name="m{{ m.id }}_rate" value="{{ '%g' % r.rates[''] }}" inputmode="decimal" aria-label="{{ m.name }}, one rate">
+        <span class="input-group-text">one rate</span></div></td>
+      {% endif %}
+      <td class="text-center">{{ remove(m.name, 'm%d_hide' % m.id) }}</td>
+    </tr>
+    {% endfor %}
+    <tr data-grow data-grow-prefix="nm">
+      <td><input class="form-control form-control-sm" name="nm_name" maxlength="60" placeholder="Add a material, e.g. PU" aria-label="New material"></td>
+      <td><input class="form-control form-control-sm text-end" name="nm_rate" inputmode="decimal" placeholder="₹ 0" aria-label="Rate"></td>
+      <td><select class="form-select form-select-sm" name="nm_type" aria-label="Rate for">
+        <option value="work">Box & Frame Work</option><option value="one">One rate</option></select></td>
+      <td></td>
+    </tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="small text-muted mb-3"><i class="bi bi-trash3 me-1"></i>Tap the bin on a material you don't use: it's
+    hidden when you save (tap <i class="bi bi-arrow-counterclockwise"></i> to keep it). A new material starts with the same
+    rate for Box Work and Frame Work: change either later in Admin → Rates.</div>
+  <button class="btn btn-primary ki-btn-primary btn-lg w-100" type="submit">Save my rates <i class="bi bi-arrow-right ms-1"></i></button>
+  <div class="small text-muted text-center mt-2">Fittings (hinges, Magic Corner…) and plywood: Admin → Rates, any time.</div>
+</form>
+<script>
+// Remove: greyed out and crossed through until Save my rates hides it; tap again to keep it
+document.getElementById('wRates').addEventListener('click', (e) => {
+  const btn = e.target.closest('.ki-w-del');
+  if (!btn) return;
+  const row = btn.closest('tr'), flag = btn.nextElementSibling;
+  const removing = !row.classList.contains('ki-w-removed');
+  flag.value = removing ? '1' : '';
+  row.classList.toggle('ki-w-removed', removing);
+  row.querySelectorAll('input:not([type=hidden])').forEach(f => { f.readOnly = removing; });
+  btn.innerHTML = removing ? '<i class="bi bi-arrow-counterclockwise"></i>' : '<i class="bi bi-trash3"></i>';
+  btn.title = removing ? 'Keep it' : 'Remove';
+  flag.dispatchEvent(new Event('change', { bubbles: true }));
+});
+</script>
+{% endblock %}

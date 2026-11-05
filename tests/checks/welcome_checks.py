@@ -23,8 +23,8 @@ ok('first sign-in of a new business\'s admin opens the guided setup', r.status_c
 r = c.get('/welcome/')
 ok('…at step 1, your business', loc(r).endswith('/welcome/business'))
 t = c.get('/welcome/business').text
-ok('step 1: one question, no menu, step 1 of 5, Skip for now and I\'ll explore on my own', 'Your business' in t
-   and 'Step 1 of 5' in t and 'Skip for now' in t and 'explore on my own' in t and 'id="ki-navbar"' not in t)
+ok('step 1: one question, no menu, step 1 of 6, Skip for now and I\'ll explore on my own', 'Your business' in t
+   and 'Step 1 of 6' in t and 'Skip for now' in t and 'explore on my own' in t and 'id="ki-navbar"' not in t)
 r = c.post('/welcome/business', data={'name': 'Nest & Grain Interiors', 'phone': '90000 00021', 'confirm': '1'})
 with app.app_context():
     ok('…saves the name and phone, then step 2', loc(r).endswith('/welcome/') and AppSetting.get('company_name') == 'Nest & Grain Interiors'
@@ -37,10 +37,17 @@ with app.app_context():
 r = c.get('/welcome/')
 t = c.get('/welcome/units').text
 ok('step 2: how you measure, four units', loc(r).endswith('/welcome/units') and 'Feet &amp; inches' in t and 'Millimetres' in t
-   and 'Step 2 of 5' in t)
+   and 'Step 2 of 6' in t)
 c.post('/welcome/units', data={'size_unit': 'mm', 'area_unit': 'sqft'})
 with app.app_context():
-    ok('…saved (mm, per sqft), then step 3', AppSetting.get('size_unit') == 'mm' and W.step() == 'rates')
+    ok('…saved (mm, per sqft), then step 3', AppSetting.get('size_unit') == 'mm' and W.step() == 'pricing')
+t = c.get('/welcome/pricing').text
+ok('step 3: how you price, a small example quotation for each (in their units: mm)', 'Step 3 of 6' in t
+   and 'By item' in t and 'By material' in t and 'Laminates – Box Work' in t and '2,134 mm' in t and 'Qty' in t)
+r = c.post('/welcome/pricing', data={'mode': 'item'})
+with app.app_context():
+    from app import boq as B
+    ok('…by item chosen: priced by item, on to step 4', B.enabled() and W.step() == 'rates' and W.state()['pricing'] == 'item')
 with app.app_context():                     # every kind switched on (console → Features → Kinds of business)
     from app import business
     AppSetting.set(business.KINDS_KEY, json.dumps(list(W.KINDS))); db.session.commit()
@@ -100,7 +107,8 @@ with app.app_context():
     ok('…and what they do, for the console', W.state()['kind'] == 'interiors')
 ok('Back on every step after the first (keeping the business chosen)', 'id="wBack"' not in c.get('/welcome/business').text
    and 'href="/welcome/business" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/units').text
-   and 'href="/welcome/units" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates').text
+   and 'href="/welcome/units" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/pricing').text
+   and 'href="/welcome/pricing" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates').text
    and 'href="/welcome/rates?kind=interiors" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check?kind=interiors').text)
 with app.app_context():
     ok('…opening a step again puts the tour back on it', W.step() == 'rates')
@@ -112,7 +120,7 @@ with app.app_context():
 r = c.get('/welcome/', follow_redirects=True)
 t = r.text
 ok('…and the strip on the quotation form goes back to the rates', 'href="/welcome/rates/check"' in t and '> Back</a>' in t)
-ok('step 4: the new quotation form, with the strip saying what to do', 'New Quotation' in t and 'step 4 of 5' in t
+ok('step 5: the new quotation form, with the strip saying what to do', 'New Quotation' in t and 'step 5 of 6' in t
    and 'Your first quotation' in t and 'Save quotation' in t)
 ok('…the app\'s menu is there on the real pages', 'id="ki-navbar"' in t)
 t = c.get('/projects').text
@@ -124,7 +132,7 @@ with app.app_context():
     db.session.add(p); db.session.commit()
     pid = p.id
 t = c.get(f'/projects/{pid}').text
-ok('step 5 on the saved quotation: its PDF and Send on WhatsApp, Finish', 'step 5 of 5' in t and 'Quotation PDF' in t
+ok('step 6 on the saved quotation: its PDF and Send on WhatsApp, Finish', 'step 6 of 6' in t and 'Quotation PDF' in t
    and 'Finish' in t)
 r = c.post('/welcome/skip/send', data={'done': '1'})
 t = c.get('/welcome/done').text
@@ -133,7 +141,7 @@ with app.app_context():
        and 'Payment details' in t and 'Terms &amp; conditions' in t and not W.active())
     ok('the console says it\'s finished, and what they do', W.console_text(AppSetting.get(W.KEY)) == 'finished · interiors, modular kitchens & wardrobes')
 ok('the strip is gone once finished', 'Continue setting up' not in c.get('/projects').text
-   and 'step 4 of 5' not in c.get('/projects/new').text)
+   and 'step 5 of 6' not in c.get('/projects/new').text)
 c.get('/logout')
 r = c.post('/login', data={'username': 'owner', 'password': 'owner-pass-123'})
 ok('later sign-ins go to the quotations as usual', loc(r).endswith('/projects'))
@@ -189,7 +197,7 @@ ok('interiors with Bring your old quotation on: do you have a file?', loc(r).end
 r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'no'})
 ok('…no: its typical items, not saved yet', loc(r).endswith('/welcome/rates/check?kind=interiors'))
 r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'yes'})
-ok('…yes: the upload page, with the strip', loc(r).endswith('/admin/import') and 'step 3 of 5' in c.get('/admin/import').text)
+ok('…yes: the upload page, with the strip', loc(r).endswith('/admin/import') and 'step 4 of 6' in c.get('/admin/import').text)
 form = {'job_title': '2 BHK interiors', 'discount': '0', 'gst': '', 'sections': '1', 'charges': '0', 's0_name': 'Master Bedroom',
         's0_lines': '2', 's0_0_keep': '1', 's0_0_name': 'Wardrobe', 's0_0_unit': 'sqft', 's0_0_quantity': '70', 's0_0_rate': '1450',
         's0_1_keep': '1', 's0_1_name': 'Loft', 's0_1_unit': 'sqft', 's0_1_quantity': '20', 's0_1_rate': '1200',
@@ -202,8 +210,8 @@ with app.app_context():
        and BoqItem.query.filter_by(name='Wardrobe').first().rate == 1450)
 c.post('/welcome/rates/check', data={})
 r = c.get('/welcome/quote')
-ok('step 4 after a file: their old quotation, rebuilt here', loc(r).endswith(f'/projects/{rebuilt}')
-   and 'step 5 of 5' in c.get(f'/projects/{rebuilt}').text)
+ok('step 5 after a file: their old quotation, rebuilt here', loc(r).endswith(f'/projects/{rebuilt}')
+   and 'step 6 of 6' in c.get(f'/projects/{rebuilt}').text)
 
 # Not for staff, not for businesses already using the app
 with app.app_context():
@@ -222,3 +230,36 @@ with app.app_context():
     AppSetting.set('company_mobile', '+9876543210'); db.session.commit()
 c.post('/welcome/restart')
 ok('…a number saved the old way is shown right on step 1', 'value="+91 98765 43210"' in c.get('/welcome/business').text)
+
+
+# ── Priced by material: their materials and rates on step 4 ──
+import re as _re
+c.post('/welcome/restart')
+r = c.post('/welcome/pricing', data={'mode': 'material'})
+with app.app_context():
+    from app import boq as B
+    ok('by material chosen: priced by material', not B.enabled() and W.by_material() and W.step() == 'rates')
+r = c.post('/welcome/rates', data={'kind': 'furniture'})
+ok('…what you do → your materials and rates (not item lines)', loc(r).endswith('/welcome/rates/materials?kind=furniture'))
+ok('…and the item lines page sends you there too', loc(c.get('/welcome/rates/check?kind=furniture')).endswith(
+   '/welcome/rates/materials?kind=furniture'))
+t = c.get('/welcome/rates/materials?kind=furniture').text
+ids = dict((n, i) for i, n in _re.findall(r'name="m(\d+)_[^"]+"[^>]*aria-label="([^,"]+)', t))
+ok('…each material with its Box Work and Frame Work rates, or one rate', 'Laminates' in ids and 'Box Work' in t
+   and 'one rate' in t)
+lam, ven = ids['Laminates'], ids.get('Veneer')
+form = {f'm{lam}_Box Work': '1650', f'm{lam}_Frame Work': '1250', 'nm_name': 'PU', 'nm_rate': '2200', 'nm_type': 'work',
+        'nm2_name': 'Wallpaper', 'nm2_rate': '120', 'nm2_type': 'one'}
+if ven:
+    form[f'm{ven}_hide'] = '1'
+r = c.post('/welcome/rates/materials?kind=furniture', data=form)
+with app.app_context():
+    from app.models import ItemRate, Material
+    rate = lambda w, k: (ItemRate.query.filter_by(wood_type=w, work_type=k).first() or ItemRate(rate_per_sqft=-1)).rate_per_sqft
+    ok('…saved: rates changed, new materials (Box & Frame Work, one rate), a hidden one', rate('Laminates', 'Box Work') == 1650
+       and rate('Laminates', 'Frame Work') == 1250 and rate('PU', 'Box Work') == 2200 and rate('PU', 'Frame Work') == 2200
+       and rate('Wallpaper', '') == 120 and (not ven or not Material.query.filter_by(name='Veneer').first().active))
+    ok('…still priced by material, on to the first quotation', not B.enabled() and W.step() == 'quote'
+       and W.state()['kind'] == 'furniture')
+t = c.get('/projects/new').text
+ok('…the strip on the quotation form goes back to the materials', 'href="/welcome/rates/materials"' in t)

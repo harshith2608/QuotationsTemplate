@@ -22,7 +22,7 @@ from datetime import datetime
 
 KEY = 'welcome_tour'
 SESSION_KEY = 'welcome_tour'     # set while under way, so other pages don't read the setting to know
-STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('rates', 'Your rates'),
+STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('pricing', 'How you price'), ('rates', 'Your rates'),
          ('quote', 'Your first quotation'), ('send', 'See it and send it')]
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
@@ -297,6 +297,58 @@ def set_kind(kind):
     business.set_kind(kind)
 
 
+def set_pricing(mode):
+    """How they price (step 3): by material or by item, as chosen; their rates step follows it."""
+    s = _state()
+    if s.get('pricing') != mode:
+        s['pricing'] = mode
+        _store(s)
+
+
+def by_material():
+    """Their rates are by material (a rate per sqft for each material and work type): chosen on How you price, or,
+    when that was skipped, set up that way from their old quotation."""
+    from . import boq, setup_guide
+    chosen = _state().get('pricing')
+    if chosen:
+        return chosen == 'material'
+    return not boq.enabled() and 'import' in (setup_guide._state().get('done') or [])
+
+
+def pricing_examples(kind):
+    """Two small quotations to choose between on How you price, in the business's units: by material (an interiors
+    job: measured items at a rate per sqft for their material and work type, and a fitting) and by item (lines with
+    a quantity and rate: their own kind's typical items)."""
+    from . import boq, units
+    def money(v):
+        return f'₹{v:,.0f}'
+    measured = [('Wardrobe', 7, 8, 'Laminates – Box Work', 1600), ('Loft', 7, 2, 'Laminates – Box Work', 1100),
+                ('TV Unit', 6, 4, 'Acrylic – Frame Work', 1400)]
+    by_material = [{'name': n, 'size': f'{units.length(l)} × {units.length(w)}', 'material': m,
+                    'area': units.area(l * w, 1), 'rate': money(units.rate_value(r)) + units.rate_label(),
+                    'amount': money(l * w * r)} for n, l, w, m, r in measured]
+    by_material.append({'name': 'Tandem Drawer', 'size': '2 nos', 'material': 'Fitting', 'area': '',
+                        'rate': money(4500), 'amount': money(9000)})
+    rows, seen = [], set()
+    for row in typical_rows(kind) or typical_rows('interiors'):   # the first item of each section, up to 3
+        if row[0] not in seen and row[2] != boq.LUMP_SUM:
+            seen.add(row[0])
+            rows.append(row)
+    for row in typical_rows(kind):                                   # one section only: its next items
+        if len(rows) < 3 and row not in rows and row[2] != boq.LUMP_SUM:
+            rows.append(row)
+    sample = {'sqft': (56, 24, 30), 'sq m': (5.2, 2.2, 2.8), 'rft': (20, 12, 30), 'rmt': (6, 4, 9), 'nos': (2, 1, 4),
+              'point': (12, 6, 20), 'set': (1, 1, 1)}
+    by_item = []
+    for n, (_, name, unit, rate, _) in enumerate(rows[:3]):
+        qty = sample.get(unit, (1, 1, 1))[n]
+        by_item.append({'name': name, 'qty': f'{qty:g}', 'unit': boq.unit_text(unit), 'rate': money(rate),
+                        'amount': money(qty * rate)})
+    if kind in ('interiors', 'turnkey'):
+        by_item.append({'name': '3D Design', 'qty': '1', 'unit': 'LS', 'rate': money(45000), 'amount': money(45000)})
+    return {'material': by_material, 'item': by_item}
+
+
 def remember_project(project_id):
     """The quotation rebuilt from their old one (Bring your old quotation): step 4 opens it."""
     s = _state()
@@ -358,7 +410,7 @@ def bar(endpoint, view_args):
         from . import business
         hint = (f'Add a {business.profile()["section"].lower()}, add an item, type its size, then tap '
                 '<strong>Save quotation</strong>.')
-        nxt, back = None, 'welcome.check'
+        nxt, back = None, 'welcome.materials' if by_material() else 'welcome.check'
     elif key == 'rates' and endpoint == 'admin.ai_import':
         from flask import request
         hint = ('Check the lines we read, then set up your app with them.' if request.method == 'POST' else

@@ -706,3 +706,7 @@ body > main { flex: 1 0 auto; }
 @media (max-width: 575.98px) { .ki-welcome-kinds { grid-template-columns: 1fr; } }
 .ki-welcome-rates tr.ki-w-removed input:not([type=hidden]), .ki-welcome-rates tr.ki-w-removed select {
   opacity: .45; text-decoration: line-through; pointer-events: none; background: var(--bs-light, #f8f9fa); }
+/* Guided setup, How you price: two small example quotations */
+.ki-welcome:has(.ki-welcome-price) { max-width: 760px; }
+.ki-welcome-eg th, .ki-welcome-eg td { font-size: .8rem; padding: .3rem .4rem; }
+.ki-welcome-eg thead th { color: var(--bs-secondary-color); font-weight: 600; }

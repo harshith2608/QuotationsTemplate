@@ -15,7 +15,8 @@ def admins_only():
         abort(404)
 
 
-BACK = {'units': 'welcome.business', 'rates': 'welcome.units', 'file': 'welcome.rates', 'check': 'welcome.rates'}
+BACK = {'units': 'welcome.business', 'pricing': 'welcome.units', 'rates': 'welcome.pricing', 'file': 'welcome.rates',
+        'check': 'welcome.rates', 'materials': 'welcome.rates'}
 
 
 def _page(template, key, back=None, back_args=None, **kw):
@@ -151,7 +152,30 @@ def units():
     return _page('welcome/units.html', 'units', back=BACK['units'], size=U.size_unit(), area=U.area_unit())
 
 
-# ── 3. Your rates ────────────────────────────────────────────────────────────
+# ── 3. How you price ─────────────────────────────────────────────────────────
+
+@welcome_bp.route('/pricing', methods=['GET', 'POST'])
+def pricing():
+    """By material or by item, each with a small example quotation to choose by."""
+    from . import boq, business
+    W.go_to('pricing')
+    if request.method == 'POST':
+        mode = request.form.get('mode')
+        if mode not in (boq.MATERIAL, boq.ITEM):
+            flash('Choose how you price your work.', 'danger')
+            return redirect(url_for('welcome.pricing'))
+        boq.set_pricing(mode, starter=False)
+        W.set_pricing(mode)
+        return _next('pricing')
+    db.session.commit()
+    p = business.profile()
+    chosen = W.state().get('pricing')
+    recommend = boq.ITEM if not p['interiors'] and _trial_kind() else None
+    return _page('welcome/pricing.html', 'pricing', back=BACK['pricing'], examples=W.pricing_examples(p['kind']),
+                 chosen=chosen, recommend=recommend, label=p['label'])
+
+
+# ── 4. Your rates ────────────────────────────────────────────────────────────
 
 def _trial_kind():
     """What they picked on the trial form (set up with the trial), to start with it chosen."""
@@ -185,7 +209,7 @@ def rates():
             return redirect(url_for('welcome.rates'))
         if k in W.FILE_KINDS and ai_import.available() and not _has_items():
             return redirect(url_for('welcome.file', kind=k))
-        return redirect(url_for('welcome.check', kind=k))
+        return _your_rates(k)
     from . import business
     chosen = request.args.get('kind') or W.state().get('kind') or _trial_kind()
     offered = business.kinds_offered()
@@ -204,10 +228,17 @@ def file():
     if request.method == 'POST':
         if request.form.get('file') == 'yes' and ai_import.available():
             return redirect(url_for('admin.ai_import'))
-        return redirect(url_for('welcome.check', kind=k))
+        return _your_rates(k)
     if not ai_import.available():
-        return redirect(url_for('welcome.check', kind=k))
+        return _your_rates(k)
     return _page('welcome/rates.html', 'rates', back=BACK['file'], back_args={'kind': k}, has_items=_has_items())
+
+
+def _your_rates(k):
+    """Their rates to check: by material, the materials page; by item, their lines and the typical ones for `k`."""
+    if W.by_material():
+        return redirect(url_for('welcome.materials', kind=k))
+    return redirect(url_for('welcome.check', kind=k))
 
 
 @welcome_bp.route('/rates/kind')
@@ -225,9 +256,9 @@ def check():
     from .models import BoqItem
     W.go_to('rates')
     k = request.args.get('kind') if request.args.get('kind') in W.KINDS else None
-    if not boq.enabled() and _has_items():        # priced by material (set up from their file): the Rates page
+    if W.by_material():                           # priced by material: their materials and rates
         db.session.commit()
-        return redirect(url_for('admin.rates'))
+        return redirect(url_for('welcome.materials', kind=k))
     if request.method == 'POST':
         if not boq.ready():
             flash('Your app needs its latest update first. Please contact support.', 'danger')
@@ -293,6 +324,83 @@ def check():
                     {'name': name, 'unit': unit, 'rate': rate, 'description': description})
     return _page('welcome/check.html', 'rates', back=BACK['check'], groups=[(g, a, b) for g, (a, b) in groups.items()],
                  units_list=boq.units_for_business(), back_args={'kind': k} if k else None)
+
+
+@welcome_bp.route('/rates/materials', methods=['GET', 'POST'])
+def materials():
+    """"These are your rates", priced by material: each material's rate per sqft (or sq m) for Box Work and Frame
+    Work, or one rate; a bin hides one (old quotations keep it); new materials in the empty rows. Fittings and plywood
+    stay in Admin → Rates."""
+    import re
+    from . import boq, materials as M, units
+    from .catalog import WORK_TYPES
+    from .models import ItemRate, Material
+    W.go_to('rates')
+    k = request.args.get('kind') if request.args.get('kind') in W.KINDS else None
+    if not M.table_ready():
+        db.session.commit()
+        return redirect(url_for('admin.rates'))
+    mats = Material.query.filter_by(active=True).order_by(Material.sort_order, Material.id).all()
+    rates = {(r.wood_type, r.work_type): r for r in ItemRate.query.all()}
+
+    def current(name, work):                       # the rate in the business's area unit
+        r = rates.get((name, work))
+        return units.rate_value(r.rate_per_sqft or 0) if r else 0
+
+    def set_rate(name, work, value):
+        row = rates.get((name, work))
+        if row is None:
+            row = rates[(name, work)] = ItemRate(wood_type=name, work_type=work, rate_per_sqft=0)
+            db.session.add(row)
+        row.rate_per_sqft = units.rate_to_sqft(value)
+
+    if request.method == 'POST':
+        errors = []
+        for m in mats:
+            if request.form.get(f'm{m.id}_hide'):
+                m.active = False
+                continue
+            for work in (WORK_TYPES if m.uses_work_types else ['']):
+                raw = request.form.get(f'm{m.id}_{work or "rate"}')
+                if raw is not None:
+                    set_rate(m.name, work, _money(raw, current(m.name, work)))
+        top = max([m.sort_order for m in mats] or [0])
+        names = {n.lower() for (n,) in db.session.query(Material.name)}
+        for key in request.form:                     # new materials: nm_, nm2_… (one per row)
+            if not re.fullmatch(r'nm\d*_name', key):
+                continue
+            p = key[:-len('name')]
+            try:
+                name = M.clean_name(request.form.get(key)) if (request.form.get(key) or '').strip() else ''
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+            if not name or name.lower() in names:
+                continue
+            uses_work = request.form.get(p + 'type') == 'work'
+            top += 1
+            db.session.add(Material(name=name, uses_work_types=uses_work, active=True, sort_order=top))
+            for work in (WORK_TYPES if uses_work else ['']):
+                set_rate(name, work, _money(request.form.get(p + 'rate'), 0))
+            names.add(name.lower())
+        if errors:
+            db.session.rollback()
+            for e in errors:
+                flash(e, 'danger')
+            return redirect(url_for('welcome.materials', kind=k))
+        if k:
+            W.set_kind(k)
+        boq.set_pricing(boq.MATERIAL, starter=False)
+        from . import setup_guide
+        setup_guide.mark('rates')
+        db.session.commit()
+        flash('Your rates are saved.', 'success')
+        return _next('rates')
+    db.session.commit()
+    rows = [{'m': m, 'rates': {w: current(m.name, w) for w in (WORK_TYPES if m.uses_work_types else [''])}}
+            for m in mats]
+    return _page('welcome/materials.html', 'rates', back=BACK['materials'], back_args={'kind': k} if k else None,
+                 rows=rows, work_types=WORK_TYPES, rate_label=units.rate_label())
 
 
 def _phone(raw):
