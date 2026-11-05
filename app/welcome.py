@@ -354,15 +354,15 @@ def pricing_examples(kind):
         qty = sample.get(unit, (1, 1, 1))[n]
         rows.append({'name': name, 'qty': f'{qty:g}', 'unit': boq.unit_text(unit), 'rate': f'{rate:,.0f}',
                      'value': qty * rate})
-    if kind in ('interiors', 'turnkey'):
-        rows.append({'name': '3D Design', 'qty': '1', 'unit': 'LS', 'rate': '', 'value': 45000})
+    services = [{'name': '3D Design', 'qty': '1', 'unit': 'LS', 'rate': '', 'value': 45000}] \
+        if kind in ('interiors', 'turnkey') else []                 # not in a room: its own section
     sections = []
-    for letter, name, part in (('A', names[0], rows[:2]), ('B', names[1], rows[2:])):
+    for letter, name, part in (('A', names[0], rows[:2]), ('B', names[1], rows[2:]), ('C', 'Design & Services', services)):
         if part:
             sections.append({'letter': letter, 'name': name, 'total': amount(sum(r['value'] for r in part)),
                              'rows': [dict(r, n=i, amount=amount(r['value'])) for i, r in enumerate(part, 1)]})
     return {'material': material, 'material_total': amount(material_total), 'item': sections,
-            'item_total': amount(sum(r['value'] for r in rows)), 'compare': kind in ('interiors', 'turnkey', 'furniture')}
+            'item_total': amount(sum(r['value'] for r in rows + services)), 'compare': kind in ('interiors', 'turnkey', 'furniture')}
 
 
 def remember_project(project_id):

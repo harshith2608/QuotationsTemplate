@@ -51,7 +51,10 @@ with app.app_context():
        [r['rate'] for r in eg['item'][0]['rows']] == ['1,600', '1,100']
        and eg['material'][0]['material'] == 'Laminates – Box Work'
        and [i['name'] for i in eg['material'][0]['items']] == ['Wardrobe', 'Loft']
-       and eg['material'][0]['amount'] == '112,000.00')
+       and eg['material'][0]['amount'] == '112,000.00'
+       and [(x['name'], [r['name'] for r in x['rows']]) for x in eg['item']] == [
+           ('Master Bedroom', ['Wardrobe', 'Loft']), ('Living Room', ['TV Unit']), ('Design & Services', ['3D Design'])]
+       and eg['item_total'] == '183,600.00')
 r = c.post('/welcome/pricing', data={'mode': 'item'})
 with app.app_context():
     from app import boq as B
