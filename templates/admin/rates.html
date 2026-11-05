@@ -157,20 +157,21 @@
   <!-- Plywood -->
   <div class="col-12 {{ hide }}" id="plywood">
     <div class="card shadow-sm border-0">
-      <div class="card-header ki-card-header"><i class="bi bi-stack me-2"></i>Plywood</div>
+      <div class="card-header ki-card-header"><i class="bi bi-stack me-2"></i>Board (plywood, PVC, WPC)</div>
       <div class="card-body">
         <p class="small text-muted mb-3">
-          Your material rates above are for your <strong>default</strong> plywood. For any other plywood, enter how much
+          The boards you make with: plywood, PVC foam board or WPC (e.g. 18mm BWP, 18mm PVC board).
+          Your material rates above are for your <strong>default</strong> board. For any other board, enter how much
           more (or less) it costs <strong>per {{ units.area_label() }}</strong>, e.g. <code>100</code> or <code>-200</code>. A quotation picks
-          one plywood (the default is pre-selected) and any item can use its own; materials ticked
-          <strong>On plywood</strong> are priced at their rate + this difference. The customer sees the final rate.
+          one board (the default is pre-selected) and any item can use its own; materials ticked
+          <strong>On plywood</strong> (on board) are priced at their rate + this difference. The customer sees the final rate.
         </p>
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="table-responsive">
             <table class="table table-bordered align-middle mb-3 ki-materials-table">
               <thead class="ki-table-head"><tr>
-                <th class="text-center" style="width:80px">Default</th><th style="min-width:180px">Plywood</th>
+                <th class="text-center" style="width:80px">Default</th><th style="min-width:180px">Board</th>
                 <th class="text-center" style="min-width:170px">Price difference (&#8377;{{ units.rate_label() }})</th>
                 {% if ply_details %}<th style="min-width:220px" title="Brand, grade, thickness, warranty: printed where Material Specifications say {plywood_details}">Details</th>{% endif %}
                 <th class="text-center" style="width:90px">Show</th><th class="text-center" style="width:90px">Delete</th></tr></thead>
@@ -210,7 +211,7 @@
                 <tr>
                   <td class="text-center small text-muted" data-label="">New</td>
                   <td data-label="New plywood"><input type="text" name="ply_new_name" class="form-control form-control-sm" maxlength="60"
-                           placeholder="e.g. 18mm BWP (Marine)" aria-label="New plywood name"></td>
+                           placeholder="e.g. 18mm BWP (Marine), 18mm PVC board" aria-label="New board name"></td>
                   <td data-label="Price difference"><div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
                       <input type="text" name="ply_new_adj" class="form-control text-end" inputmode="decimal" placeholder="e.g. 150 or -100"
@@ -224,7 +225,7 @@
             </table>
           </div>
           <button type="submit" name="plywood_submit" value="1" class="btn btn-primary ki-btn-primary">
-            <i class="bi bi-check-circle me-2"></i>Save Plywood
+            <i class="bi bi-check-circle me-2"></i>Save Boards
           </button>
           <p class="small text-muted mt-2 mb-0">Changing the default keeps every price difference: the new default becomes &#8377;0
             and the others move with it. Rename one and existing quotations follow.

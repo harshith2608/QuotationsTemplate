@@ -27,8 +27,8 @@ STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('pricing'
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
 
-KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes', 'turnkey': 'Turnkey interiors & civil',
-         'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors', 'glass': 'Glass & aluminium',
+KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes (plywood, PVC or WPC)', 'turnkey': 'Turnkey interiors & civil',
+         'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors (fabrication)', 'glass': 'Glass & aluminium',
          'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
          'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
          'curtains': 'Curtains, blinds & wallpaper', 'other': 'Something else'}
@@ -456,7 +456,7 @@ def console_text(raw):
     tail = f' (skipped {", ".join(skipped)})' if skipped else ''
     kind = OLD_KINDS.get(s.get('kind'), s.get('kind'))
     if kind in KINDS:
-        tail += f' · {KINDS[kind].lower()}'
+        tail += f' · {KINDS[kind]}'
     if s.get('finished') == 'done':
         return 'finished' + tail
     where = TITLES.get(s['step'], s['step']).lower()
