@@ -342,6 +342,7 @@ footer nav { display: flex; gap: 1.2rem; }
 </style>
 </head>
 <body>
+{% if qa_mode %}<div title="QA copy: built from the dev branch, its own database. Not the live site." style="position:fixed;left:8px;bottom:8px;z-index:2000;background:#e65100;color:#fff;font:700 12px/1 system-ui,sans-serif;padding:6px 9px;border-radius:6px;letter-spacing:.05em;pointer-events:none">QA</div>{% endif %}
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="{{ home_url }}#top" aria-label="{{ product }} home"><span class="brand-mark"><span></span></span>{{ product }}</a>

@@ -115,3 +115,13 @@ with app.app_context():
     seed._clear_all_tables()
     ok('the website keeps the choice on the demo\'s nightly reset', AppSetting.get(business.KINDS_KEY) is not None
        and AppSetting.get(business.KEY) is None)
+
+# ── A QA copy (QA_MODE=1): marked on every page, kept out of search engines; the live app isn't ──
+import os
+live = app.test_client().get('/login')
+os.environ['QA_MODE'] = '1'
+qa = create_app('development').test_client().get('/login')
+os.environ.pop('QA_MODE')
+ok('QA copy: the orange QA label and noindex; the live app has neither', '>QA</div>' in qa.text
+   and qa.headers.get('X-Robots-Tag') == 'noindex, nofollow' and '>QA</div>' not in live.text
+   and 'X-Robots-Tag' not in live.headers)

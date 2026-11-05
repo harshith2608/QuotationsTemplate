@@ -445,6 +445,77 @@ Vercel **Pro** is needed before the first real payment (section 6, step 0).
 
 ---
 
+### 3i. QA: a copy to test on before it goes live (one-time setup, ≈45 minutes)
+
+Every Vercel project builds from `main`, so a merge goes straight to the website, every trial and every customer.
+QA is a second, separate copy built from the **`dev`** branch, on its **own empty database**: every push to `dev`
+updates it, you test there, and only then is `dev` merged into `main`.
+
+| QA piece | Vercel project (new) | Address | Database |
+|---|---|---|---|
+| Trials app | `qa-trials` | `NAME.qa.quote-room.co.in` | new Neon project `qa` |
+| Console | `qa-console` | `ops.qa.quote-room.co.in` | the same `qa` database |
+| Website + demo (optional) | `qa-www` | `qa.quote-room.co.in` | new Neon project `qa-demo` |
+
+**Never copy real data into QA**, and never give a QA project a live URL, key or secret. QA has its own database,
+keys, console password and 2FA key. Every QA page shows an orange **QA** label (bottom left) and is hidden from
+search engines (`QA_MODE=1`).
+
+**Step 1: databases (Neon).** New project `qa`, region **AWS Asia Pacific (Singapore)**. Save its pooled and direct
+URLs in your password manager as "QA". (For the website: a second project `qa-demo`, the same way.)
+
+**Step 2: keys (on your Mac).** Make a new `SECRET_KEY` for each QA project and **one** `DATA_ENCRYPTION_KEY` for the
+`qa` database (section 2). Run `python -m flask console-setup` again for a separate QA console password and 2FA
+key (account "QuoteRoom QA console" in your authenticator app).
+
+**Step 3: the QA trials app.** Vercel → **Add New → Project** → import `QuotationsTemplate`, name it `qa-trials`.
+Before the first deploy: **Settings → Git → Production Branch** → `dev`. Env vars (Production):
+
+| Name | Value |
+|---|---|
+| `FLASK_ENV` | `production` |
+| `QA_MODE` | `1` |
+| `DEPLOY_BRANCH` | `dev` (so it builds `dev`; the live projects skip it) |
+| `SECRET_KEY` | new (step 2) |
+| `DATA_ENCRYPTION_KEY` | the QA key (step 2) |
+| `DATABASE_URL` | `qa` **pooled** URL |
+| `TENANT_MODE` | `1` |
+| `TENANT_BASE_DOMAIN` | `qa.quote-room.co.in` |
+| `SUPPORT_WHATSAPP` | your number, digits only |
+| `ANTHROPIC_API_KEY` | optional, to test the AI helpers (the same key is fine: it's only billed when used) |
+
+Don't set `CRON_SECRET` (QA sends no reminders), `MARKETING_SITE`, `DEMO_MODE`, live Razorpay keys or mail settings.
+Region **Singapore (sin1)**, then deploy. **Settings → Domains → Add** → `*.qa.quote-room.co.in`.
+
+**Step 4: the QA console.** Same again, name `qa-console`, **Production Branch** `dev`, env vars as the live console
+(section 3f) with these differences:
+
+| Name | Value |
+|---|---|
+| `QA_MODE` / `DEPLOY_BRANCH` | `1` / `dev` |
+| `DATABASE_URL`, `DATA_ENCRYPTION_KEY` | the **QA** ones (as `qa-trials`) |
+| `TENANT_BASE_DOMAIN` | `qa.quote-room.co.in` |
+| `CONSOLE_PASSWORD_HASH`, `CONSOLE_TOTP_SECRET` | the **QA** ones (step 2) |
+| `CUSTOMERS_ADMIN_DATABASE_URL` | optional: the `qa` **direct** URL, to test converting a trial |
+| `LEADS_DATABASE_URL`, `LEADS_DATA_ENCRYPTION_KEY` | only with the QA website: the `qa-demo` pooled URL and its key. **Never the live demo's** (real people's requests) |
+
+Leave out every mail, Razorpay and `SIGNUP_*` setting unless you're testing that, and then use **test** keys only.
+Functions **Max Duration** at least 30 seconds. **Settings → Domains → Add** → `ops.qa.quote-room.co.in`.
+
+**Step 5 (optional): the QA website.** `qa-www`, Production Branch `dev`, env vars as the live website (section 3b)
+with `QA_MODE=1`, `DEPLOY_BRANCH=dev`, the `qa-demo` URL and a new key, **no** `META_PIXEL_ID`, `GOOGLE_ADS_*` or
+`CRON_SECRET` (QA visits must never reach the ads). Domain `qa.quote-room.co.in`. Once: from your Mac, with the
+`qa-demo` **direct** URL, `python -m flask db upgrade && python -m flask seed-demo`.
+
+**Step 6: check it.** Push anything to `dev` (or **Redeploy** each QA project). Open `https://ops.qa.quote-room.co.in`,
+sign in with the QA password and code, create a trial (e.g. `test1`) and open `https://test1.qa.quote-room.co.in`.
+You should see the orange **QA** label. The live projects show the `dev` push as **Canceled** ("Ignored Build Step"):
+that's expected.
+
+**Using it** (section 7): I push to `dev` → QA updates in a few minutes → you try it on QA → you say "merge" →
+`main` → live. A database change is rehearsed on QA first: QA console → **Updates → Update all** runs the `dev`
+code's update on the QA database, before any real one. Delete QA trials whenever you like; nothing in QA matters.
+
 ## 4. Plans: 7-day free trial → 6 or 12 months
 
 Prices: **6 months ₹4,999 · 12 months ₹8,999**; with AI (100 AI uses a month instead of 20) **₹5,999 · ₹9,999**;
@@ -797,6 +868,8 @@ and create staff logins in **Admin → Users**.
 > **merge → push → wait for the deploys → Updates → Update all**. For any other database change, update from
 > your Mac on the branch **before** merging (steps below).
 
+0. **With QA (section 3i):** every push to `dev` updates QA. Try the change there (and run **Update all** on the QA
+   console if it changes the database) before merging.
 1. Work on a `dev` branch and run the tests (in the venv; first time: `pip install -r requirements-dev.txt`):
    ```bash
    python -m pytest tests -q
