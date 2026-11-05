@@ -70,7 +70,8 @@ def create_app(config_name='default'):
         if tenancy.tenant_mode():
             raise RuntimeError('CONSOLE_MODE and TENANT_MODE cannot both be on.')
         if config_name == 'production':
-            missing = [k for k in ('CONSOLE_PASSWORD_HASH', 'CONSOLE_TOTP_SECRET') if not os.environ.get(k)]
+            needed = ('CONSOLE_PASSWORD_HASH',) if qa.enabled() else ('CONSOLE_PASSWORD_HASH', 'CONSOLE_TOTP_SECRET')
+            missing = [k for k in needed if not os.environ.get(k)]   # (the QA console: 2FA optional)
             if missing:
                 raise RuntimeError(f"Missing required environment variable(s): {', '.join(missing)}")
         from .console import console_bp, platform_webhook
