@@ -341,6 +341,9 @@ sign in. Bookmark it on your phone.
 
 ### 3g. Paying customers in the console (one-time setup)
 
+> **Superseded by section 3h:** paying customers' databases are created in the **`trials`** Neon project. The separate
+> `customers` project below was never used, and is now the **QA** database (section 3i).
+
 Each paying customer gets **their own database and login** inside one shared Neon project called
 `customers` (their login can open only their own database), **their own Vercel project** (`qr-NAME`) with
 their own keys, and their address `NAME.quote-room.co.in`. The console's **Customers** page creates all of
@@ -462,16 +465,21 @@ keys, console password and 2FA key. Every QA page asks for the **QA key** first 
 per browser, and it opens every QA address), shows an orange **QA** label (bottom left) and is hidden from search
 engines (`QA_MODE=1`). Without `QA_ACCESS_KEY` set, QA stays closed to everyone.
 
-**Step 1: databases (Neon).** New project `qa`, region **AWS Asia Pacific (Singapore)**. Save its pooled and direct
-URLs in your password manager as "QA". (For the website: a second project `qa-demo`, the same way.)
+**Step 1: databases (Neon).** The QA database is the Neon project **`qa`**: the old `customers` project of section
+3g, renamed (it was never used: paying customers' databases are in `trials`, section 3h). Region **AWS Asia Pacific
+(Singapore)**. Its pooled and direct URLs are in the password manager as "QA – pooled URL" / "QA – direct URL".
+(For the website: a second project `qa-demo`, the same way.)
 
-**Step 2: keys (on your Mac).** Make a new `SECRET_KEY` for each QA project and **one** `DATA_ENCRYPTION_KEY` for the
+**Step 2: keys (on your Mac).** First bring the Mac's libraries up to date (`python -m pip install -r
+requirements.txt` in the venv: an old venv fails with "No module named 'pydantic'"). Then make a new `SECRET_KEY` for each QA project and **one** `DATA_ENCRYPTION_KEY` for the
 `qa` database (section 2). Run `python -m flask console-setup --no-2fa` for a separate QA console password (QA signs
 in with the password alone, behind the QA key; the live console always needs 2FA). Make the **QA key** too, the same way as a
 `SECRET_KEY` (section 2), and save it in your password manager as "QA key": the same key goes on every QA project.
 
-**Step 3: the QA trials app.** Vercel → **Add New → Project** → import `QuotationsTemplate`, name it `qa-trials`.
-Before the first deploy: **Settings → Git → Production Branch** → `dev`. Env vars (Production):
+**Step 3: the QA trials app.** Vercel → **Create New → Project** → import `QuotationsTemplate`, name it `qa-trials`,
+add the env vars below and **Deploy**. That first deployment is of `main`: cancel it (or let it end as **Canceled**,
+"Ignored Build Step"). Then **Settings → Environments → Production → Branch Tracking** (older screens: **Settings →
+Git → Production Branch**) → `dev`, and **Deployments → Create Deployment** → branch `dev`. Env vars (Production):
 
 | Name | Value |
 |---|---|
