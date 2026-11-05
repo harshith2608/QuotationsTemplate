@@ -466,8 +466,8 @@ engines (`QA_MODE=1`). Without `QA_ACCESS_KEY` set, QA stays closed to everyone.
 URLs in your password manager as "QA". (For the website: a second project `qa-demo`, the same way.)
 
 **Step 2: keys (on your Mac).** Make a new `SECRET_KEY` for each QA project and **one** `DATA_ENCRYPTION_KEY` for the
-`qa` database (section 2). Run `python -m flask console-setup` again for a separate QA console password and 2FA
-key (account "QuoteRoom QA console" in your authenticator app). Make the **QA key** too, the same way as a
+`qa` database (section 2). Run `python -m flask console-setup --no-2fa` for a separate QA console password (QA signs
+in with the password alone, behind the QA key; the live console always needs 2FA). Make the **QA key** too, the same way as a
 `SECRET_KEY` (section 2), and save it in your password manager as "QA key": the same key goes on every QA project.
 
 **Step 3: the QA trials app.** Vercel → **Add New → Project** → import `QuotationsTemplate`, name it `qa-trials`.
@@ -500,7 +500,7 @@ Region **Singapore (sin1)**, then deploy. **Settings → Domains → Add** → `
 | `QA_ACCESS_KEY` / `QA_COOKIE_DOMAIN` | the QA key / `qa.quote-room.co.in` (as `qa-trials`) |
 | `DATABASE_URL`, `DATA_ENCRYPTION_KEY` | the **QA** ones (as `qa-trials`) |
 | `TENANT_BASE_DOMAIN` | `qa.quote-room.co.in` |
-| `CONSOLE_PASSWORD_HASH`, `CONSOLE_TOTP_SECRET` | the **QA** ones (step 2) |
+| `CONSOLE_PASSWORD_HASH` | the **QA** one (step 2). No `CONSOLE_TOTP_SECRET`: QA signs in with the password alone |
 | `CUSTOMERS_ADMIN_DATABASE_URL` | optional: the `qa` **direct** URL, to test converting a trial |
 | `LEADS_DATABASE_URL`, `LEADS_DATA_ENCRYPTION_KEY` | only with the QA website: the `qa-demo` pooled URL and its key. **Never the live demo's** (real people's requests) |
 
@@ -514,7 +514,7 @@ new key, **no** `META_PIXEL_ID`, `GOOGLE_ADS_*` or
 `qa-demo` **direct** URL, `python -m flask db upgrade && python -m flask seed-demo`.
 
 **Step 6: check it.** Push anything to `dev` (or **Redeploy** each QA project). Open `https://ops.qa.quote-room.co.in`:
-it asks for the QA key first. Then sign in with the QA password and code, create a trial (e.g. `test1`) and open `https://test1.qa.quote-room.co.in`.
+it asks for the QA key first. Then sign in with the QA console password, create a trial (e.g. `test1`) and open `https://test1.qa.quote-room.co.in`.
 You should see the orange **QA** label. The live projects show the `dev` push as **Canceled** ("Ignored Build Step"):
 that's expected.
 
