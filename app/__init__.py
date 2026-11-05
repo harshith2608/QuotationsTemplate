@@ -57,16 +57,9 @@ def create_app(config_name='default'):
     login_manager.init_app(app)
     csrf.init_app(app)
 
-    # A QA copy (QA_MODE=1: built from the dev branch, on its own database): marked on every page, kept out of search
-    if os.environ.get('QA_MODE', '').strip().lower() in ('1', 'true', 'yes', 'on'):
-        @app.after_request
-        def qa_noindex(response):
-            response.headers['X-Robots-Tag'] = 'noindex, nofollow'
-            return response
-
-        @app.context_processor
-        def qa_flag():
-            return {'qa_mode': True}
+    # A QA copy (QA_MODE=1: built from the dev branch, on its own database): behind the QA key, marked QA, not indexed
+    from . import qa
+    qa.init(app)
 
     # Operator console deployment: serves only the console (no business app, no tenants)
     from .plan import short as plan_short

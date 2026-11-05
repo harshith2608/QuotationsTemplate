@@ -458,15 +458,17 @@ updates it, you test there, and only then is `dev` merged into `main`.
 | Website + demo (optional) | `qa-www` | `qa.quote-room.co.in` | new Neon project `qa-demo` |
 
 **Never copy real data into QA**, and never give a QA project a live URL, key or secret. QA has its own database,
-keys, console password and 2FA key. Every QA page shows an orange **QA** label (bottom left) and is hidden from
-search engines (`QA_MODE=1`).
+keys, console password and 2FA key. Every QA page asks for the **QA key** first (`QA_ACCESS_KEY`: you enter it once
+per browser, and it opens every QA address), shows an orange **QA** label (bottom left) and is hidden from search
+engines (`QA_MODE=1`). Without `QA_ACCESS_KEY` set, QA stays closed to everyone.
 
 **Step 1: databases (Neon).** New project `qa`, region **AWS Asia Pacific (Singapore)**. Save its pooled and direct
 URLs in your password manager as "QA". (For the website: a second project `qa-demo`, the same way.)
 
 **Step 2: keys (on your Mac).** Make a new `SECRET_KEY` for each QA project and **one** `DATA_ENCRYPTION_KEY` for the
 `qa` database (section 2). Run `python -m flask console-setup` again for a separate QA console password and 2FA
-key (account "QuoteRoom QA console" in your authenticator app).
+key (account "QuoteRoom QA console" in your authenticator app). Make the **QA key** too, the same way as a
+`SECRET_KEY` (section 2), and save it in your password manager as "QA key": the same key goes on every QA project.
 
 **Step 3: the QA trials app.** Vercel → **Add New → Project** → import `QuotationsTemplate`, name it `qa-trials`.
 Before the first deploy: **Settings → Git → Production Branch** → `dev`. Env vars (Production):
@@ -476,6 +478,8 @@ Before the first deploy: **Settings → Git → Production Branch** → `dev`. E
 | `FLASK_ENV` | `production` |
 | `QA_MODE` | `1` |
 | `DEPLOY_BRANCH` | `dev` (so it builds `dev`; the live projects skip it) |
+| `QA_ACCESS_KEY` | the QA key (step 2) |
+| `QA_COOKIE_DOMAIN` | `qa.quote-room.co.in` (one key entry opens every QA address) |
 | `SECRET_KEY` | new (step 2) |
 | `DATA_ENCRYPTION_KEY` | the QA key (step 2) |
 | `DATABASE_URL` | `qa` **pooled** URL |
@@ -493,6 +497,7 @@ Region **Singapore (sin1)**, then deploy. **Settings → Domains → Add** → `
 | Name | Value |
 |---|---|
 | `QA_MODE` / `DEPLOY_BRANCH` | `1` / `dev` |
+| `QA_ACCESS_KEY` / `QA_COOKIE_DOMAIN` | the QA key / `qa.quote-room.co.in` (as `qa-trials`) |
 | `DATABASE_URL`, `DATA_ENCRYPTION_KEY` | the **QA** ones (as `qa-trials`) |
 | `TENANT_BASE_DOMAIN` | `qa.quote-room.co.in` |
 | `CONSOLE_PASSWORD_HASH`, `CONSOLE_TOTP_SECRET` | the **QA** ones (step 2) |
@@ -503,14 +508,17 @@ Leave out every mail, Razorpay and `SIGNUP_*` setting unless you're testing that
 Functions **Max Duration** at least 30 seconds. **Settings → Domains → Add** → `ops.qa.quote-room.co.in`.
 
 **Step 5 (optional): the QA website.** `qa-www`, Production Branch `dev`, env vars as the live website (section 3b)
-with `QA_MODE=1`, `DEPLOY_BRANCH=dev`, the `qa-demo` URL and a new key, **no** `META_PIXEL_ID`, `GOOGLE_ADS_*` or
+with `QA_MODE=1`, `DEPLOY_BRANCH=dev`, `QA_ACCESS_KEY` and `QA_COOKIE_DOMAIN` as above, the `qa-demo` URL and a
+new key, **no** `META_PIXEL_ID`, `GOOGLE_ADS_*` or
 `CRON_SECRET` (QA visits must never reach the ads). Domain `qa.quote-room.co.in`. Once: from your Mac, with the
 `qa-demo` **direct** URL, `python -m flask db upgrade && python -m flask seed-demo`.
 
-**Step 6: check it.** Push anything to `dev` (or **Redeploy** each QA project). Open `https://ops.qa.quote-room.co.in`,
-sign in with the QA password and code, create a trial (e.g. `test1`) and open `https://test1.qa.quote-room.co.in`.
+**Step 6: check it.** Push anything to `dev` (or **Redeploy** each QA project). Open `https://ops.qa.quote-room.co.in`:
+it asks for the QA key first. Then sign in with the QA password and code, create a trial (e.g. `test1`) and open `https://test1.qa.quote-room.co.in`.
 You should see the orange **QA** label. The live projects show the `dev` push as **Canceled** ("Ignored Build Step"):
 that's expected.
+
+To lock everyone out (e.g. a key shared by mistake), change `QA_ACCESS_KEY` on every QA project and **Redeploy**.
 
 **Using it** (section 7): I push to `dev` → QA updates in a few minutes → you try it on QA → you say "merge" →
 `main` → live. A database change is rehearsed on QA first: QA console → **Updates → Update all** runs the `dev`
