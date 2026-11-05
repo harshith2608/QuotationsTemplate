@@ -117,5 +117,31 @@
     <button class="btn btn-sm btn-primary" type="submit">Save</button>
     {% if call_next %}<span class="muted small">Next free times: {% for day, free in call_next %}{{ day }} {{ free[:3]|map(attribute=1)|join(', ') }}{{ '; ' if not loop.last }}{% endfor %}</span>{% endif %}
   </form>
+
+  <h3 style="margin-top:18px">Block a day or a time</h3>
+  <p class="small muted" style="margin-top:0">Not free one day (or part of it)? Block it here: trials can't book it. Leave the
+    times empty to block the whole day. Already-booked calls stay on the Schedule.</p>
+  <form method="post" action="{{ url_for('console.call_blocks') }}" class="row" style="align-items:flex-end;gap:8px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label for="blockDate">Day</label><input type="date" id="blockDate" name="date" min="{{ today_ist }}" required></div>
+    <div><label for="blockStart">From</label><input type="time" id="blockStart" name="start" step="900"></div>
+    <div><label for="blockEnd">To</label><input type="time" id="blockEnd" name="end" step="900"></div>
+    <div class="grow"><label for="blockNote">Note <span class="muted small">(only you see it)</span></label>
+      <input type="text" id="blockNote" name="note" maxlength="80" placeholder="e.g. site visit"></div>
+    <button class="btn btn-sm" type="submit">Block</button>
+  </form>
+  {% set upcoming = call_blocks|selectattr('date', 'ge', today_ist)|list %}
+  {% if upcoming %}
+  <table class="small" style="margin-top:10px">
+    <tr><th>Day</th><th>Time</th><th>Note</th><th></th></tr>
+    {% for b in upcoming %}
+    <tr><td>{{ b.date }}</td><td>{{ b.start ~ '–' ~ b.end if b.start else 'All day' }}</td><td>{{ b.note or '' }}</td>
+      <td><form method="post" action="{{ url_for('console.call_blocks') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="remove" value="{{ loop.index0 }}">
+        <button class="btn btn-sm" type="submit">Unblock</button></form></td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="small muted">Nothing blocked.</p>{% endif %}
 </div>
 {% endblock %}

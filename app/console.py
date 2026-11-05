@@ -749,11 +749,12 @@ def features_page():
              'website': _leads_engine_or_none() is not None}
     from . import callbook
     try:
-        call_hours, call_next = callbook.hours(), callbook.slots()[:2]
+        call_hours, call_next, call_blocks = callbook.hours(), callbook.slots()[:2], callbook.blocks()
     except Exception:
-        call_hours, call_next = dict(callbook.DEFAULT_HOURS), []
+        call_hours, call_next, call_blocks = dict(callbook.DEFAULT_HOURS), [], []
     return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers, kinds=kinds,
-                           call_hours=call_hours, call_days=callbook.DAYS, call_next=call_next,
+                           call_hours=call_hours, call_days=callbook.DAYS, call_next=call_next, call_blocks=call_blocks,
+                           today_ist=(datetime.utcnow() + callbook.IST).date().isoformat(),
                            allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
                            addon_price=subscription.prices()[plan_mod.ADDON])
 
@@ -802,6 +803,35 @@ def call_hours():
     platform_switch.set_value(callbook.SWITCH_KEY, json.dumps(found))
     audit('call_hours', None, '; '.join(f'{callbook.DAYS[int(d)][:3]} {v or "off"}' for d, v in found.items()))
     flash('Call hours saved. Trials see the new times within a minute.', 'ok')
+    return redirect(url_for('console.features_page') + '#calls')
+
+
+@console_bp.route('/features/call-blocks', methods=['POST'])
+@login_required
+def call_blocks():
+    """Block a day or a time for set-up calls (or unblock one): those slots go from what trials can book."""
+    import json
+    from . import callbook, platform_switch
+    today = (datetime.utcnow() + callbook.IST).date().isoformat()
+    found = [b for b in callbook.blocks() if b['date'] >= today]             # past ones dropped
+    if request.form.get('remove') is not None:
+        i = request.form.get('remove', type=int)
+        if i is not None and 0 <= i < len(found):
+            gone = found.pop(i)
+            audit('call_unblock', None, f"{gone['date']} {gone.get('start') or 'all day'}")
+            flash('Unblocked.', 'ok')
+    else:
+        try:
+            block = callbook.new_block(request.form.get('date'), request.form.get('start'), request.form.get('end'),
+                                       request.form.get('note'))
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('console.features_page') + '#calls')
+        found.append(block)
+        audit('call_block', None, f"{block['date']} {block['start'] + '-' + block['end'] if block['start'] else 'all day'}")
+        flash('Blocked. Trials no longer see those times (within a minute).', 'ok')
+    found.sort(key=lambda b: (b['date'], b.get('start') or ''))
+    platform_switch.set_value(callbook.BLOCKS_KEY, json.dumps(found))
     return redirect(url_for('console.features_page') + '#calls')
 
 

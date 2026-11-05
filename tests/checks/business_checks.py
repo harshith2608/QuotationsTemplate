@@ -188,10 +188,24 @@ with app.app_context():
     ok('…Monday: 9:00 and 9:30, nothing 10:15–12:00 (a 10:00 call would run into it), from 12:00 to 7:30 PM',
        mon[:3] == ['9:00 AM', '9:30 AM', '12:00 PM'] and mon[-1] == '7:30 PM' and '10:00 AM' not in mon
        and '11:30 AM' not in mon)
-    ok('…Wednesday and Thursday only after office (6:30 PM); Saturday all day; Sunday off',
+    ok('…Wednesday and Thursday only after office (6:30 PM); Saturday and Sunday all day',
        [l for _, l in days['Wednesday 11 Nov']] == ['6:30 PM', '7:00 PM', '7:30 PM']
        and [l for _, l in days['Thursday 12 Nov']] == ['6:30 PM', '7:00 PM', '7:30 PM']
-       and days['Saturday 14 Nov'][0][1] == '9:00 AM' and 'Sunday 15 Nov' not in days)
+       and days['Saturday 14 Nov'][0][1] == '9:00 AM' and days['Sunday 15 Nov'][-1][1] == '7:30 PM')
+    blocked = [CB.new_block('2026-11-10', '', '', 'day off', now=_dt(2026, 11, 9, 0, 30)),
+               CB.new_block('2026-11-14', '14:00', '16:00', 'site visit', now=_dt(2026, 11, 9, 0, 30))]
+    bd = dict(CB.slots(now=_dt(2026, 11, 9, 0, 30), taken=[], blocked=blocked))
+    sat = [l for _, l in bd['Saturday 14 Nov']]
+    ok('…a blocked day is gone (Tuesday, "Tomorrow"); a blocked 2:00–4:00 takes its slots, 1:30 and 4:00 stay',
+       'Tomorrow' not in bd and 'Wednesday 11 Nov' in bd and '1:30 PM' in sat and '2:00 PM' not in sat
+       and '3:30 PM' not in sat and '4:00 PM' in sat)
+    errs = []
+    for args in (('2026-11-01', '', ''), ('2026-11-12', '16:00', '14:00'), ('', '', '')):
+        try:
+            CB.new_block(*args, '', now=_dt(2026, 11, 9, 0, 30))
+        except ValueError as exc:
+            errs.append(str(exc))
+    ok('…a past day, a time ending before it starts, or no day: refused', len(errs) == 3)
     soon = dict(CB.slots(now=_dt(2026, 11, 9, 6, 0), taken=[_dt(2026, 11, 9, 8, 30)]))   # Monday 11:30 AM India time
     today = [l for _, l in soon['Today']]
     ok('…not within the next hour, and a booked time (2:00 PM) is taken',

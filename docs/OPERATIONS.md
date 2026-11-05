@@ -687,7 +687,8 @@ call**, 10 minutes on WhatsApp, where you can share your screen from your laptop
 `SUPPORT_WHATSAPP`, the message saying who they are). A booking lands on the console's **Schedule**, marks the trial
 hot, and emails you (with email set up). Set your free times on **Features → Call bookings**, India time, one line a
 day (`09:00-10:15, 12:00-20:00`; empty = off). Until saved: weekdays not 10:15–12:00, Wednesday and Thursday only from
-18:30, Saturday 9:00–20:00, Sunday off.
+18:30, Saturday and Sunday 9:00–20:00. **Block a day or a time** on the same card (a day off, a site visit): trials stop
+seeing those slots within a minute; **Unblock** puts them back.
 
 ### Following up trials (console → Follow-ups)
 Every running trial has a stage, worked out from its own data: **not signed in → no company details → no quotation yet →
