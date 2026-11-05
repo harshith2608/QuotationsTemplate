@@ -191,10 +191,13 @@ PREFILLED_NAME_KEY = 'company_name_prefilled'
 
 
 def phone_display(digits):
-    """'919876543210' → '+91 98765 43210' (as typed elsewhere in the app); other numbers get a leading +."""
+    """An Indian mobile ('919876543210', '9876543210', '09876543210') → '+91 98765 43210' (as typed elsewhere in the
+    app); another number with a country code gets a leading +."""
+    from .marketing import normalise_phone
+    mobile = normalise_phone(digits)
+    if mobile:
+        return f'+91 {mobile[2:7]} {mobile[7:]}'
     digits = re.sub(r'\D', '', digits or '')
-    if len(digits) == 12 and digits.startswith('91'):
-        return f'+91 {digits[2:7]} {digits[7:]}'
     return f'+{digits}' if digits else ''
 
 

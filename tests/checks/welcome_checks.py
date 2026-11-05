@@ -213,3 +213,12 @@ s = app.test_client()
 r = s.post('/login', data={'username': 'rahul', 'password': 'rahul-pass-123'})
 ok('staff never see it', loc(r).endswith('/projects') and s.get('/welcome/business').status_code == 404
    and 'Continue setting up' not in s.get('/projects').text)
+
+# ── A trial's phone from the trial request, without the 91: shown as an Indian mobile, not "+7675801918" ──
+from app.ops import phone_display
+ok('trial phone: a 10-digit mobile → +91 98765 43210, with or without 91 / 0 / +',
+   {phone_display(x) for x in ('9876543210', '919876543210', '09876543210', '+9876543210')} == {'+91 98765 43210'})
+with app.app_context():
+    AppSetting.set('company_mobile', '+9876543210'); db.session.commit()
+c.post('/welcome/restart')
+ok('…a number saved the old way is shown right on step 1', 'value="+91 98765 43210"' in c.get('/welcome/business').text)
