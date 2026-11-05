@@ -21,9 +21,13 @@
       {% if slots %}
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label fw-semibold" for="callDay">Day</label>
+        <select class="form-select" id="callDay" aria-label="Day of the call">
+          {% for day, free in slots %}<option value="{{ loop.index0 }}">{{ day }} ({{ free|length }} free time{{ 's' if free|length != 1 }})</option>{% endfor %}
+        </select>
+        <div class="fw-semibold mt-3 mb-1">Time</div>
         {% for day, free in slots %}
-        <div class="fw-semibold small mt-3 mb-1">{{ day }}</div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap gap-2 {{ 'd-none' if not loop.first }}" data-call-day="{{ loop.index0 }}">
           {% for value, label in free %}
           <input type="radio" class="btn-check" name="slot" id="slot{{ value|replace(':', '')|replace('-', '') }}" value="{{ value }}" required>
           <label class="btn btn-sm btn-outline-primary" for="slot{{ value|replace(':', '')|replace('-', '') }}">{{ label }}</label>
@@ -48,4 +52,21 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// One day at a time: the day chosen above shows its free times (a time picked on another day is cleared)
+(function () {
+  const day = document.getElementById('callDay');
+  if (!day) return;
+  day.addEventListener('change', () => {
+    document.querySelectorAll('[data-call-day]').forEach(box => {
+      const on = box.dataset.callDay === day.value;
+      box.classList.toggle('d-none', !on);
+      if (!on) box.querySelectorAll('input[name=slot]').forEach(r => { r.checked = false; });
+    });
+  });
+})();
+</script>
 {% endblock %}
