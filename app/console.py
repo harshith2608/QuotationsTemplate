@@ -150,8 +150,15 @@ def _recent_failures():
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
+def _two_factor():
+    """Sign-in asks for a 6-digit code too. Always for the live console; the QA console (behind the QA key, on its own
+    database: app/qa.py) may go without, when CONSOLE_TOTP_SECRET isn't set."""
+    from . import qa
+    return bool(_env('CONSOLE_TOTP_SECRET')) or not qa.enabled()
+
+
 def _configured():
-    return bool(_env('CONSOLE_PASSWORD_HASH') and _env('CONSOLE_TOTP_SECRET'))
+    return bool(_env('CONSOLE_PASSWORD_HASH') and (_env('CONSOLE_TOTP_SECRET') or not _two_factor()))
 
 
 def _session_tag():
@@ -208,10 +215,14 @@ def login():
             error = f'Too many failed attempts. Sign-in is locked for {LOCK_MINUTES} minutes.'
         else:
             pw_ok = check_password_hash(_env('CONSOLE_PASSWORD_HASH'), request.form.get('password', ''))
-            counter = totp_match(_env('CONSOLE_TOTP_SECRET'), request.form.get('code', ''))
-            last = int(_state('totp_last') or 0)
+            if _two_factor():
+                counter = totp_match(_env('CONSOLE_TOTP_SECRET'), request.form.get('code', ''))
+            else:
+                counter = int(time.time())                   # QA without 2FA: the password alone
+            last = int(_state('totp_last') or 0) if _two_factor() else 0
             if pw_ok and counter is not None and counter > last:
-                _set_state('totp_last', str(counter))       # each code works once
+                if _two_factor():
+                    _set_state('totp_last', str(counter))   # each code works once
                 session.clear()
                 session.permanent = True
                 session['console_at'] = time.time()
@@ -219,9 +230,9 @@ def login():
                 audit('login')
                 return redirect(url_for('console.dashboard'))
             audit('login_failed')
-            error = 'Wrong password or code.' if not (pw_ok and counter is not None) else \
-                'That code was already used. Wait for the next one.'
-    return render_template('console/login.html', error=error)
+            error = ('Wrong password or code.' if _two_factor() else 'Wrong password.') \
+                if not (pw_ok and counter is not None) else 'That code was already used. Wait for the next one.'
+    return render_template('console/login.html', error=error, two_factor=_two_factor())
 
 
 @console_bp.route('/logout', methods=['POST'])

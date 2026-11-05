@@ -341,6 +341,9 @@ sign in. Bookmark it on your phone.
 
 ### 3g. Paying customers in the console (one-time setup)
 
+> **Superseded by section 3h:** paying customers' databases are created in the **`trials`** Neon project. The separate
+> `customers` project below was never used, and is now the **QA** database (section 3i).
+
 Each paying customer gets **their own database and login** inside one shared Neon project called
 `customers` (their login can open only their own database), **their own Vercel project** (`qr-NAME`) with
 their own keys, and their address `NAME.quote-room.co.in`. The console's **Customers** page creates all of
@@ -427,7 +430,7 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    the GoDaddy email dashboard), `PLATFORM_SMTP_PORT=465`, `PLATFORM_SMTP_USER=hello@quote-room.co.in`,
    `PLATFORM_SMTP_PASSWORD` (the mailbox password; type it in Vercel only). Optional `OPERATOR_EMAIL` (who gets the
    "Payment:" notes; default hello@). With email set up:
-   - the website **emails** the set-up link instead of showing it (proves the email is theirs);
+   - the website shows **Set up my app now** straight away and **emails a copy** of the link, so they can find it later;
    - every payment sends "Payment received" with the receipt to the business, and a note to you;
    - the daily task emails "trial ends in 2 days / has ended" and "plan ends in 15 / 3 days / has ended", once each,
      with the link to Choose a plan.
@@ -444,6 +447,90 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
 Vercel **Pro** is needed before the first real payment (section 6, step 0).
 
 ---
+
+### 3i. QA: a copy to test on before it goes live (one-time setup, ≈45 minutes)
+
+Every Vercel project builds from `main`, so a merge goes straight to the website, every trial and every customer.
+QA is a second, separate copy built from the **`dev`** branch, on its **own empty database**: every push to `dev`
+updates it, you test there, and only then is `dev` merged into `main`.
+
+| QA piece | Vercel project (new) | Address | Database |
+|---|---|---|---|
+| Trials app | `qa-trials` | `NAME.qa.quote-room.co.in` | new Neon project `qa` |
+| Console | `qa-console` | `ops.qa.quote-room.co.in` | the same `qa` database |
+| Website + demo (optional) | `qa-www` | `qa.quote-room.co.in` | new Neon project `qa-demo` |
+
+**Never copy real data into QA**, and never give a QA project a live URL, key or secret. QA has its own database,
+keys, console password and 2FA key. Every QA page asks for the **QA key** first (`QA_ACCESS_KEY`: you enter it once
+per browser, and it opens every QA address), shows an orange **QA** label (bottom left) and is hidden from search
+engines (`QA_MODE=1`). Without `QA_ACCESS_KEY` set, QA stays closed to everyone.
+
+**Step 1: databases (Neon).** The QA database is the Neon project **`qa`**: the old `customers` project of section
+3g, renamed (it was never used: paying customers' databases are in `trials`, section 3h). Region **AWS Asia Pacific
+(Singapore)**. Its pooled and direct URLs are in the password manager as "QA – pooled URL" / "QA – direct URL".
+(For the website: a second project `qa-demo`, the same way.)
+
+**Step 2: keys (on your Mac).** First bring the Mac's libraries up to date (`python -m pip install -r
+requirements.txt` in the venv: an old venv fails with "No module named 'pydantic'"). Then make a new `SECRET_KEY` for each QA project and **one** `DATA_ENCRYPTION_KEY` for the
+`qa` database (section 2). Run `python -m flask console-setup --no-2fa` for a separate QA console password (QA signs
+in with the password alone, behind the QA key; the live console always needs 2FA). Make the **QA key** too, the same way as a
+`SECRET_KEY` (section 2), and save it in your password manager as "QA key": the same key goes on every QA project.
+
+**Step 3: the QA trials app.** Vercel → **Create New → Project** → import `QuotationsTemplate`, name it `qa-trials`,
+add the env vars below and **Deploy**. That first deployment is of `main`: cancel it (or let it end as **Canceled**,
+"Ignored Build Step"). Then **Settings → Environments → Production → Branch Tracking** (older screens: **Settings →
+Git → Production Branch**) → `dev`, and **Deployments → Create Deployment** → branch `dev`. Env vars (Production):
+
+| Name | Value |
+|---|---|
+| `FLASK_ENV` | `production` |
+| `QA_MODE` | `1` |
+| `DEPLOY_BRANCH` | `dev` (so it builds `dev`; the live projects skip it) |
+| `QA_ACCESS_KEY` | the QA key (step 2) |
+| `QA_COOKIE_DOMAIN` | `qa.quote-room.co.in` (one key entry opens every QA address) |
+| `SECRET_KEY` | new (step 2) |
+| `DATA_ENCRYPTION_KEY` | the QA key (step 2) |
+| `DATABASE_URL` | `qa` **pooled** URL |
+| `TENANT_MODE` | `1` |
+| `TENANT_BASE_DOMAIN` | `qa.quote-room.co.in` |
+| `SUPPORT_WHATSAPP` | your number, digits only |
+| `ANTHROPIC_API_KEY` | optional, to test the AI helpers (the same key is fine: it's only billed when used) |
+
+Don't set `CRON_SECRET` (QA sends no reminders), `MARKETING_SITE`, `DEMO_MODE`, live Razorpay keys or mail settings.
+Region **Singapore (sin1)**, then deploy. **Settings → Domains → Add** → `*.qa.quote-room.co.in`.
+
+**Step 4: the QA console.** Same again, name `qa-console`, **Production Branch** `dev`, env vars as the live console
+(section 3f) with these differences:
+
+| Name | Value |
+|---|---|
+| `QA_MODE` / `DEPLOY_BRANCH` | `1` / `dev` |
+| `QA_ACCESS_KEY` / `QA_COOKIE_DOMAIN` | the QA key / `qa.quote-room.co.in` (as `qa-trials`) |
+| `DATABASE_URL`, `DATA_ENCRYPTION_KEY` | the **QA** ones (as `qa-trials`) |
+| `TENANT_BASE_DOMAIN` | `qa.quote-room.co.in` |
+| `CONSOLE_PASSWORD_HASH` | the **QA** one (step 2). No `CONSOLE_TOTP_SECRET`: QA signs in with the password alone |
+| `CUSTOMERS_ADMIN_DATABASE_URL` | optional: the `qa` **direct** URL, to test converting a trial |
+| `LEADS_DATABASE_URL`, `LEADS_DATA_ENCRYPTION_KEY` | only with the QA website: the `qa-demo` pooled URL and its key. **Never the live demo's** (real people's requests) |
+
+Leave out every mail, Razorpay and `SIGNUP_*` setting unless you're testing that, and then use **test** keys only.
+Functions **Max Duration** at least 30 seconds. **Settings → Domains → Add** → `ops.qa.quote-room.co.in`.
+
+**Step 5 (optional): the QA website.** `qa-www`, Production Branch `dev`, env vars as the live website (section 3b)
+with `QA_MODE=1`, `DEPLOY_BRANCH=dev`, `QA_ACCESS_KEY` and `QA_COOKIE_DOMAIN` as above, the `qa-demo` URL and a
+new key, **no** `META_PIXEL_ID`, `GOOGLE_ADS_*` or
+`CRON_SECRET` (QA visits must never reach the ads). Domain `qa.quote-room.co.in`. Once: from your Mac, with the
+`qa-demo` **direct** URL, `python -m flask db upgrade && python -m flask seed-demo`.
+
+**Step 6: check it.** Push anything to `dev` (or **Redeploy** each QA project). Open `https://ops.qa.quote-room.co.in`:
+it asks for the QA key first. Then sign in with the QA console password, create a trial (e.g. `test1`) and open `https://test1.qa.quote-room.co.in`.
+You should see the orange **QA** label. The live projects show the `dev` push as **Canceled** ("Ignored Build Step"):
+that's expected.
+
+To lock everyone out (e.g. a key shared by mistake), change `QA_ACCESS_KEY` on every QA project and **Redeploy**.
+
+**Using it** (section 7): I push to `dev` → QA updates in a few minutes → you try it on QA → you say "merge" →
+`main` → live. A database change is rehearsed on QA first: QA console → **Updates → Update all** runs the `dev`
+code's update on the QA database, before any real one. Delete QA trials whenever you like; nothing in QA matters.
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
 
@@ -797,6 +884,8 @@ and create staff logins in **Admin → Users**.
 > **merge → push → wait for the deploys → Updates → Update all**. For any other database change, update from
 > your Mac on the branch **before** merging (steps below).
 
+0. **With QA (section 3i):** every push to `dev` updates QA. Try the change there (and run **Update all** on the QA
+   console if it changes the database) before merging.
 1. Work on a `dev` branch and run the tests (in the venv; first time: `pip install -r requirements-dev.txt`):
    ```bash
    python -m pytest tests -q

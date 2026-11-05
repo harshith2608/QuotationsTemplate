@@ -57,6 +57,10 @@ def create_app(config_name='default'):
     login_manager.init_app(app)
     csrf.init_app(app)
 
+    # A QA copy (QA_MODE=1: built from the dev branch, on its own database): behind the QA key, marked QA, not indexed
+    from . import qa
+    qa.init(app)
+
     # Operator console deployment: serves only the console (no business app, no tenants)
     from .plan import short as plan_short
     app.add_template_filter(plan_short, 'plan_short')   # '12 months with AI', '40 AI uses' (the app and the console)
@@ -66,7 +70,8 @@ def create_app(config_name='default'):
         if tenancy.tenant_mode():
             raise RuntimeError('CONSOLE_MODE and TENANT_MODE cannot both be on.')
         if config_name == 'production':
-            missing = [k for k in ('CONSOLE_PASSWORD_HASH', 'CONSOLE_TOTP_SECRET') if not os.environ.get(k)]
+            needed = ('CONSOLE_PASSWORD_HASH',) if qa.enabled() else ('CONSOLE_PASSWORD_HASH', 'CONSOLE_TOTP_SECRET')
+            missing = [k for k in needed if not os.environ.get(k)]   # (the QA console: 2FA optional)
             if missing:
                 raise RuntimeError(f"Missing required environment variable(s): {', '.join(missing)}")
         from .console import console_bp, platform_webhook

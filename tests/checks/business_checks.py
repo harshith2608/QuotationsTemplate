@@ -115,3 +115,60 @@ with app.app_context():
     seed._clear_all_tables()
     ok('the website keeps the choice on the demo\'s nightly reset', AppSetting.get(business.KINDS_KEY) is not None
        and AppSetting.get(business.KEY) is None)
+
+# ── A QA copy (QA_MODE=1): behind the QA key, marked on every page, kept out of search engines; the live app isn't ──
+import os
+live = app.test_client().get('/login')
+os.environ['QA_MODE'] = '1'
+closed = create_app('development').test_client().get('/login')
+ok('QA copy with no key set: closed', closed.status_code == 503 and 'QA_ACCESS_KEY is not set' in closed.text
+   and 'Username' not in closed.text)
+os.environ.update(QA_ACCESS_KEY='qa-test-key-123', QA_COOKIE_DOMAIN='qa.example.test')
+qapp = create_app('development')
+qc = qapp.test_client()
+r = qc.get('/login', base_url='https://test1.qa.example.test')
+ok('…every page asks for the QA key first, nothing else shown', r.status_code == 401 and 'Enter the QA key' in r.text
+   and 'Username' not in r.text and r.headers.get('X-Robots-Tag') == 'noindex, nofollow')
+r = qc.post('/qa-access?next=/login', data={'key': 'wrong'}, base_url='https://test1.qa.example.test')
+ok('…a wrong key: still the key page', r.status_code == 401 and 'not right' in r.text)
+r = qc.post('/qa-access?next=/login', data={'key': 'qa-test-key-123'}, base_url='https://test1.qa.example.test')
+cookie = r.headers.get('Set-Cookie', '')
+ok('…the right key: back to the page, remembered for every QA address', r.status_code == 302
+   and r.headers['Location'].endswith('/login') and 'qa_access=' in cookie and 'Domain=qa.example.test' in cookie
+   and 'HttpOnly' in cookie)
+r = qc.get('/login', base_url='https://test1.qa.example.test')
+ok('…then the app, with the QA label and noindex', r.status_code == 200 and '>QA</div>' in r.text
+   and r.headers.get('X-Robots-Tag') == 'noindex, nofollow')
+r = qc.post('/qa-access?next=//evil.example', data={'key': 'qa-test-key-123'}, base_url='https://test1.qa.example.test')
+ok('…never sends you to another site', r.headers['Location'].endswith('/') and 'evil' not in r.headers['Location'])
+for k in ('QA_MODE', 'QA_ACCESS_KEY', 'QA_COOKIE_DOMAIN'):
+    os.environ.pop(k)
+ok('the live app: no key page, no QA label, indexed as usual', live.status_code == 200 and '>QA</div>' not in live.text
+   and 'X-Robots-Tag' not in live.headers)
+
+# ── The QA console may sign in with its password alone; the live console never ──
+import subprocess, sys
+from cryptography.fernet import Fernet
+from werkzeug.security import generate_password_hash
+start = ("import os; os.environ.update(FLASK_ENV='production', SECRET_KEY='x', CONSOLE_MODE='1', "
+         "CONSOLE_PASSWORD_HASH='h', DATA_ENCRYPTION_KEY='" + Fernet.generate_key().decode() + "'); "
+         "os.environ.pop('CONSOLE_TOTP_SECRET', None); {qa}from app import create_app; create_app('production'); print('started')")
+env = {k: v for k, v in os.environ.items() if k not in ('QA_MODE', 'QA_ACCESS_KEY', 'TENANT_MODE')}
+live_run = subprocess.run([sys.executable, '-c', start.format(qa='')], capture_output=True, text=True, env=env)
+qa_run = subprocess.run([sys.executable, '-c', start.format(qa="os.environ['QA_MODE']='1'; ")], capture_output=True,
+                        text=True, env=env)
+ok('the live console still refuses to start without 2FA; the QA console starts without it',
+   live_run.returncode != 0 and 'CONSOLE_TOTP_SECRET' in live_run.stderr and 'started' in qa_run.stdout)
+from app import console as CON
+os.environ.pop('CONSOLE_TOTP_SECRET', None)
+os.environ['CONSOLE_PASSWORD_HASH'] = generate_password_hash('qa-console-pass-1')
+with app.test_request_context():
+    live_2fa = CON._two_factor()
+    os.environ['QA_MODE'] = '1'
+    qa_2fa, qa_ready = CON._two_factor(), CON._configured()
+    os.environ['CONSOLE_TOTP_SECRET'] = CON.new_totp_secret()
+    qa_with_secret = CON._two_factor()
+for k in ('QA_MODE', 'CONSOLE_TOTP_SECRET', 'CONSOLE_PASSWORD_HASH'):
+    os.environ.pop(k, None)
+ok('…sign-in: the live console always asks for the code; QA only when it has a 2FA secret',
+   live_2fa and not qa_2fa and qa_ready and qa_with_secret)

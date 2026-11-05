@@ -47,6 +47,7 @@
   {% block head %}{% endblock %}
 </head>
 <body class="ki-header-{{ brand.header_style }}">
+{% if qa_mode %}<div title="QA copy: built from the dev branch, its own database. Not the live site." style="position:fixed;left:8px;bottom:8px;z-index:2000;background:#e65100;color:#fff;font:700 12px/1 system-ui,sans-serif;padding:6px 9px;border-radius:6px;letter-spacing:.05em;pointer-events:none">QA</div>{% endif %}
 
 {% if demo_mode %}
 {% set dg = demo_guide %}

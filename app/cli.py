@@ -70,7 +70,8 @@ def register_cli(app):
         return tenancy.tenant_context(slug, row[0])
 
     @app.cli.command('console-setup')
-    def console_setup_command():
+    @click.option('--no-2fa', 'no_2fa', is_flag=True, help='Password only: for the QA console (QA_MODE), never the live one.')
+    def console_setup_command(no_2fa):
         """Create the operator console's password hash and authenticator (2FA) secret."""
         from urllib.parse import quote
         from werkzeug.security import generate_password_hash
@@ -79,6 +80,12 @@ def register_cli(app):
                                 confirmation_prompt=True)
         if len(password) < 12:
             raise click.ClickException('Use at least 12 characters.')
+        if no_2fa:
+            click.echo('\nAdd this env var to the QA console Vercel project (Production), with QA_MODE=1 and no '
+                       'CONSOLE_TOTP_SECRET, then redeploy:\n')
+            click.echo(f'   CONSOLE_PASSWORD_HASH = {generate_password_hash(password, method="pbkdf2:sha256:600000")}\n')
+            click.echo('The live console always needs 2FA: run this without --no-2fa for it.')
+            return
         secret = new_totp_secret()
         grouped = ' '.join(secret[i:i + 4] for i in range(0, len(secret), 4))
         click.echo('\n1) In your authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, …)')

@@ -342,6 +342,7 @@ footer nav { display: flex; gap: 1.2rem; }
 </style>
 </head>
 <body>
+{% if qa_mode %}<div title="QA copy: built from the dev branch, its own database. Not the live site." style="position:fixed;left:8px;bottom:8px;z-index:2000;background:#e65100;color:#fff;font:700 12px/1 system-ui,sans-serif;padding:6px 9px;border-radius:6px;letter-spacing:.05em;pointer-events:none">QA</div>{% endif %}
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="{{ home_url }}#top" aria-label="{{ product }} home"><span class="brand-mark"><span></span></span>{{ product }}</a>
@@ -509,14 +510,14 @@ footer nav { display: flex; gap: 1.2rem; }
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;
-        if (data.emailed_to) {              // the trades it's for: the set-up link is in their email
-          done.querySelector('[data-emailed-to]').textContent = data.emailed_to;
-          done.querySelector('[data-emailed]').hidden = false;
-          done.querySelector('[data-wait]').hidden = true;
-        } else if (data.setup_url) {        // (email not set up: set up the app straight away)
+        if (data.setup_url) {               // the trades it's for: set up the app straight away
           done.querySelector('[data-setup-link]').href = data.setup_url;
           done.querySelector('[data-setup]').hidden = false;
           done.querySelector('[data-wait]').hidden = true;
+          if (data.emailed_to) {            // and the same link by email, to find it later
+            done.querySelector('[data-emailed-to]').textContent = data.emailed_to;
+            done.querySelector('[data-emailed]').hidden = false;
+          }
         }
         done.hidden = false;
         done.querySelector('[data-done-title]').focus();
