@@ -615,6 +615,14 @@ r2 = anon.get('/start?t=' + _su.make_token(fresh2_id))
 ok('a deleted app, or one made before this request, isn\'t "already set up": they get the set-up form',
    'already set up' not in r.text and 'name="password"' in r.text and 'gone-app' not in r.text
    and 'already set up' not in r2.text and 'name="password"' in r2.text and 'taken-one' not in r2.text)
+with app.app_context():
+    _ops.top_up_spares(1)
+_r3 = anon.post('/start', data=dict(t=_su.make_token(fresh_id), company='Fresh Interiors', username='fresh',
+                                    password='fresh-pass-123', password2='fresh-pass-123', terms='1'))
+with app.app_context(), db.engine.connect() as conn:
+    _fresh_slug = conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': fresh_id}).scalar()
+ok('…and creating it replaces the old link (no error)', _r3.status_code == 200 and 'Your app is ready' in _r3.text
+   and _fresh_slug and _fresh_slug != 'gone-app')
 r = anon.get(f'/start?t={_su.make_token(again_id)}&plan=1y')
 ok('…buying a plan from the website with it: they pay for the app they already have (not a new trial)',
    r.status_code == 302 and _calls[-1]['notes']['slug'] == 'shah-studio'

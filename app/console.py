@@ -2513,7 +2513,8 @@ def start_trial():
     earlier = earlier_trial(lead_id, lead)
     if earlier and plan:                          # buying: pay for the app they already have (their data is in it)
         with db.engine.begin() as conn:           # so /start/paid matches the payment to it
-            conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s)'), {'i': lead_id, 's': earlier})
+            conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s) ON CONFLICT (lead_id) DO UPDATE '
+                              "SET slug = :s, created_at = (now() AT TIME ZONE 'utc')"), {'i': lead_id, 's': earlier})
         audit('website_buy_existing', earlier, f'lead #{lead_id}, {plan}')
         return _go_pay(earlier, plan, lead, token)
     if earlier:                                   # one free trial per business: open the one they have
@@ -2559,8 +2560,9 @@ def start_trial():
                     break
         if t is not None:
             with db.engine.begin() as conn:
-                conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h)'),
-                             {'i': lead_id, 's': t['slug'], 'h': ip_hash})
+                conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h) ON CONFLICT '
+                                  "(lead_id) DO UPDATE SET slug = :s, ip_hash = :h, created_at = (now() AT TIME ZONE 'utc')"),
+                             {'i': lead_id, 's': t['slug'], 'h': ip_hash})   # (replaces a link to an app since deleted)
             _link_lead(lead_id, 'trial', t['slug'])
             audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}' + (f', buying {plan}' if plan else ''))
             if plan:
