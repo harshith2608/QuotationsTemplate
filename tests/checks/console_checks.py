@@ -600,6 +600,21 @@ ok('a second request with the same number (or email): "already had a free trial"
    "already had a free trial" in _h.unescape(r.text) and 'https://shah-studio.quote-room.test/login' in r.text
    and 'name="password"' not in r.text and "already had a free trial" in _h.unescape(r2.text)
    and 'shah-studio.quote-room.test' in r3.text and spares_again2 == spares_again)
+# A link left behind (a deleted trial, or an older row with this request's number) never opens someone else's app
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    fresh_id = conn.execute(Lead.__table__.insert().values(name='Fresh Firm', phone='919811100077', business_type='interiors',
+                            company_name='Fresh Interiors', created_at=datetime.utcnow())).inserted_primary_key[0]
+    fresh2_id = conn.execute(Lead.__table__.insert().values(name='Fresh Two', phone='919811100078', business_type='interiors',
+                             company_name='Fresh Two', created_at=datetime.utcnow())).inserted_primary_key[0]
+with app.app_context(), db.engine.begin() as conn:
+    conn.execute(text("INSERT INTO public.signups (lead_id, slug) VALUES (:i, 'gone-app')"), {'i': fresh_id})
+    conn.execute(text("INSERT INTO public.signups (lead_id, slug, created_at) VALUES (:i, 'taken-one', :at)"),
+                 {'i': fresh2_id, 'at': datetime.utcnow() - _td(days=40)})
+r = anon.get('/start?t=' + _su.make_token(fresh_id))
+r2 = anon.get('/start?t=' + _su.make_token(fresh2_id))
+ok('a deleted app, or one made before this request, isn\'t "already set up": they get the set-up form',
+   'already set up' not in r.text and 'name="password"' in r.text and 'gone-app' not in r.text
+   and 'already set up' not in r2.text and 'name="password"' in r2.text and 'taken-one' not in r2.text)
 r = anon.get(f'/start?t={_su.make_token(again_id)}&plan=1y')
 ok('…buying a plan from the website with it: they pay for the app they already have (not a new trial)',
    r.status_code == 302 and _calls[-1]['notes']['slug'] == 'shah-studio'

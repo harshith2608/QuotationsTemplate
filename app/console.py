@@ -2352,13 +2352,18 @@ def _free_address(text_):
     return ''
 
 
-def _signup(lead_id):
+def _signup(lead_id, lead=None):
     """The app already made for this request: set up by them (/start) or by you from the console (Create trial on the
-    request), so the emailed link opens it instead of making a second one."""
+    request), so the emailed link opens it instead of making a second one. Only an app that still exists and was made
+    after the request (a row left from a deleted trial, or from an older request with the same number, doesn't count)."""
+    since = (lead or {}).get('created_at')
+    since = since - timedelta(minutes=10) if since else None
     with db.engine.connect() as conn:
-        return (conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': lead_id}).scalar()
-                or conn.execute(text("SELECT slug FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial' "
-                                     "AND slug IS NOT NULL"), {'i': lead_id}).scalar())
+        rows = conn.execute(text(
+            "SELECT slug, created_at FROM public.signups WHERE lead_id = :i UNION ALL SELECT slug, updated_at "
+            "FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial' AND slug IS NOT NULL"),
+            {'i': lead_id}).all()
+    return next((slug for slug, at in rows if (since is None or at is None or at >= since) and _app_exists(slug)), None)
 
 
 def _app_exists(slug):
@@ -2379,20 +2384,23 @@ def earlier_trial(lead_id, lead):
     phone = normalise_phone(lead.get('phone') or '')
     email = (lead.get('email') or '').strip().lower()
     with db.engine.connect() as conn:
-        apps = {r[0]: r[1] for r in conn.execute(text(
-            "SELECT lead_id, slug FROM public.signups UNION ALL SELECT lead_id, slug FROM public.console_lead_links "
-            "WHERE status = 'trial' AND slug IS NOT NULL")) if r[0] != lead_id}
+        links = [r for r in conn.execute(text(
+            "SELECT lead_id, slug, created_at FROM public.signups UNION ALL SELECT lead_id, slug, updated_at "
+            "FROM public.console_lead_links WHERE status = 'trial' AND slug IS NOT NULL")) if r[0] != lead_id]
+    apps = {r[0]: r[1] for r in links}
+    made = {r[0]: r[2] for r in links}
     engine = _leads_engine_or_none() if apps and (phone or email) else None
     if engine is None:
         return None
     t = Lead.__table__
     with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
-        cols = [t.c.id, t.c.phone] + ([t.c.email] if 'email' in {c['name'] for c in inspect(conn).get_columns('leads')}
+        cols = [t.c.id, t.c.phone, t.c.created_at] + ([t.c.email] if 'email' in {c['name'] for c in inspect(conn).get_columns('leads')}
                                       else [])
         rows = conn.execute(select(*cols).where(t.c.id.in_(list(apps)))).mappings().all()
     found = [apps[r['id']] for r in sorted(rows, key=lambda r: -r['id'])
-             if (phone and normalise_phone(r['phone'] or '') == phone)
-             or (email and (r.get('email') or '').strip().lower() == email)]
+             if (not made[r['id']] or made[r['id']] >= r['created_at'] - timedelta(minutes=10))   # not a stale link
+             and ((phone and normalise_phone(r['phone'] or '') == phone)
+                  or (email and (r.get('email') or '').strip().lower() == email))]
     if not found:
         return None
     live = next((s for s in found if _app_exists(s)), None)
@@ -2445,7 +2453,7 @@ def start_trial():
         except Exception:
             pass
     price = subscription.prices()[plan] if plan else None
-    done = _signup(lead_id)
+    done = _signup(lead_id, lead)
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
                                plan=plan, price=price, token=token, paid=_paid_plan(done))
@@ -2624,7 +2632,7 @@ def start_pay():
     lead_id = signup.read_token(request.form.get('t', ''))
     plan = request.form.get('plan')
     lead = load_lead(lead_id) if lead_id else None
-    slug = _signup(lead_id) if lead else None
+    slug = _signup(lead_id, lead) if lead else None
     if not slug or plan not in signup.PLANS:
         abort(404)
     return _go_pay(slug, plan, lead, request.form.get('t', ''))
@@ -2637,7 +2645,7 @@ def start_paid():
     from . import signup, subscription
     token = request.args.get('t', '')
     lead_id = signup.read_token(token)
-    slug = _signup(lead_id) if lead_id else None
+    slug = _signup(lead_id, load_lead(lead_id)) if lead_id else None
     row = subscription.get_by_order(request.args.get('razorpay_payment_link_id', ''))
     if not slug or not row or row['slug'] != slug:
         return render_template('console/start.html', problem='We couldn\'t match this payment to your app. If you were '

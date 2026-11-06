@@ -521,6 +521,7 @@ footer nav { display: flex; gap: 1.2rem; }
           done.querySelector('[data-setup-link]').href = data.setup_url;
           done.querySelector('[data-setup]').hidden = false;
           done.querySelector('[data-wait]').hidden = true;
+          done.querySelector('[data-demo-wait]').hidden = true;
           if (data.emailed_to) {            // and the same link by email, to find it later
             done.querySelector('[data-emailed-to]').textContent = data.emailed_to;
             done.querySelector('[data-emailed]').hidden = false;

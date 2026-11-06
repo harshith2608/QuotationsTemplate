@@ -149,7 +149,8 @@ ok('…uPVC, glass and kitchen firms set up their own app too', r.get_json()['ok
    and all(f'value="{v}"' in c5.get('/free-trial').text for v in ('kitchens', 'upvc', 'glass'))
    and 'uPVC windows &amp; doors' in c5.get('/free-trial').text)
 t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
-ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
+ok('…and the page without JavaScript shows the button too, with no demo button beside it (one clear next step)',
+   'Set up my app now' in t and '/start?t=' in t and '<div data-demo-wait hidden>' in t)
 
 # With email set up, the link goes to their email instead (proves the address is theirs)
 import glob, tempfile, email as _email
