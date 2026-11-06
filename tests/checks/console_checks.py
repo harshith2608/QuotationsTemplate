@@ -624,6 +624,13 @@ for k in ('PLATFORM_RAZORPAY_KEY_ID', 'PLATFORM_RAZORPAY_KEY_SECRET'):
     os.environ.pop(k, None)
 with app.app_context():
     _ops.delete_trial('rao-made')
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    rao_again = conn.execute(Lead.__table__.insert().values(name='Ravi Rao', phone='919811100024', business_type='interiors',
+                             company_name='Rao Studio', email='ravi@rao.example',
+                             created_at=datetime.utcnow())).inserted_primary_key[0]
+r = anon.get('/start?t=' + _su.make_token(rao_again))
+ok('a trial you deleted frees the number: a new request gets the set-up form with its new details',
+   'already had a free trial' not in _h.unescape(r.text) and 'name="password"' in r.text and 'Rao Studio' in r.text)
 _r = signed.post('/trials', data={'slug': 'meera-again', 'lead_id': str(self_id), 'name': 'Meera Shah', 'days': '7'})
 ok('Create trial on a request they already set up themselves: no error, it opens their trial',
    _r.status_code == 302 and _r.headers['Location'].endswith('/trials/shah-studio'))

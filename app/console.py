@@ -2375,8 +2375,9 @@ def _app_exists(slug):
 
 
 def earlier_trial(lead_id, lead):
-    """(slug, still there) of an app an earlier request with this phone number or email got, or None: one free trial
-    per business, so a new request (another firm name, another link) doesn't start a second one."""
+    """The app an earlier request with this phone number or email got, if it still exists, or None: one free trial
+    per business, so a new request (another firm name, another link) doesn't start a second one. A trial you deleted
+    doesn't count: they can start again."""
     from sqlalchemy import inspect, select
     from . import crypto
     from .marketing import normalise_phone
@@ -2401,10 +2402,7 @@ def earlier_trial(lead_id, lead):
              if (not made[r['id']] or made[r['id']] >= r['created_at'] - timedelta(minutes=10))   # not a stale link
              and ((phone and normalise_phone(r['phone'] or '') == phone)
                   or (email and (r.get('email') or '').strip().lower() == email))]
-    if not found:
-        return None
-    live = next((s for s in found if _app_exists(s)), None)
-    return (live, True) if live else (found[0], False)
+    return next((s for s in found if _app_exists(s)), None)
 
 
 @console_bp.route('/e/o/<token>.gif')
@@ -2458,15 +2456,14 @@ def start_trial():
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
                                plan=plan, price=price, token=token, paid=_paid_plan(done))
     earlier = earlier_trial(lead_id, lead)
-    if earlier and earlier[1] and plan:           # buying: pay for the app they already have (their data is in it)
+    if earlier and plan:                          # buying: pay for the app they already have (their data is in it)
         with db.engine.begin() as conn:           # so /start/paid matches the payment to it
-            conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s)'), {'i': lead_id, 's': earlier[0]})
-        audit('website_buy_existing', earlier[0], f'lead #{lead_id}, {plan}')
-        return _go_pay(earlier[0], plan, lead, token)
-    if earlier and not plan:                      # one free trial per business: open the one they had
-        audit('trial_again_blocked', earlier[0], f'lead #{lead_id}')
-        return render_template('console/start.html', had_trial=earlier[0], still_there=earlier[1],
-                               base=tenancy.base_domain(), site=_site_url())
+            conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s)'), {'i': lead_id, 's': earlier})
+        audit('website_buy_existing', earlier, f'lead #{lead_id}, {plan}')
+        return _go_pay(earlier, plan, lead, token)
+    if earlier:                                   # one free trial per business: open the one they have
+        audit('trial_again_blocked', earlier, f'lead #{lead_id}')
+        return render_template('console/start.html', had_trial=earlier, base=tenancy.base_domain(), site=_site_url())
     form = {'company': lead.get('company_name') or '', 'username': 'admin'}
     errors = {}
     if request.method == 'POST':
