@@ -34,6 +34,49 @@
     <a class="btn" href="https://{{ ready }}.{{ base }}/login">Open my app</a>
     <p class="hint" style="text-align:center;margin-top:14px">Bookmark it, or add it to your phone's home screen.
       Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a> or message us on WhatsApp.</p>
+  {% elif ready and autopay_checkout %}
+    <div class="tick">✓</div>
+    <h1>Your app is ready!</h1>
+    <p class="lead">It's at <strong>{{ ready }}.{{ base }}</strong>. Now approve the autopay for the {{ plan_title }}:
+      ₹{{ price|inr(0) }} a month, the first month paid now. Cancel any time from your app.</p>
+    <button type="button" id="startAutopay">Start autopay · ₹{{ price|inr(0) }} a month</button>
+    <p class="hint" style="text-align:center">UPI Autopay or card, through Razorpay.</p>
+    <p class="hint" id="autopayMsg" style="text-align:center"></p>
+    <form method="post" action="{{ url_for('console.start_subscribed') }}" id="autopayDone">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="t" value="{{ token }}">
+      <input type="hidden" name="razorpay_payment_id"><input type="hidden" name="razorpay_subscription_id">
+      <input type="hidden" name="razorpay_signature">
+    </form>
+    <p class="hint" style="text-align:center;margin-top:14px">Not now? <a href="https://{{ ready }}.{{ base }}/login">Open my app</a>
+      and use the free trial first.</p>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      (function () {
+        const c = {{ autopay_checkout|tojson }};
+        const btn = document.getElementById('startAutopay'), msg = document.getElementById('autopayMsg');
+        function open() {
+          btn.disabled = true;
+          const rzp = new Razorpay({
+            key: c.key_id, subscription_id: c.subscription_id, name: 'QuoteRoom', description: c.description,
+            prefill: c.prefill, theme: { color: '#1f4d3f' },
+            modal: { ondismiss: () => { btn.disabled = false; } },
+            handler: (r) => {
+              msg.textContent = 'Autopay approved. Activating your plan…';
+              const f = document.getElementById('autopayDone');
+              f.razorpay_payment_id.value = r.razorpay_payment_id;
+              f.razorpay_subscription_id.value = r.razorpay_subscription_id;
+              f.razorpay_signature.value = r.razorpay_signature;
+              f.submit();
+            }
+          });
+          rzp.on('payment.failed', (e) => { msg.textContent = (e.error && e.error.description) || 'The payment failed. Please try again.'; btn.disabled = false; });
+          rzp.open();
+        }
+        btn.addEventListener('click', open);
+        open();                                   // straight on, as they chose to pay
+      })();
+    </script>
   {% elif ready and plan and pay_failed %}
     <div class="tick">✓</div>
     <h1>Your app is ready!</h1>

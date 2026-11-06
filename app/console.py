@@ -2661,10 +2661,14 @@ def _go_pay(slug, plan, lead, token, company=''):
             audit('website_pay_failed', slug, str(exc)[:200])
             return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(),
                                    new=True, plan=plan, pay_failed=True)
-        if sub.get('short_url'):
-            return redirect(sub['short_url'])
+        # Razorpay's Checkout on this page (its own subscription page can't send them back here): /start/subscribed
+        price = subscription.prices()[plan]
+        digits = ''.join(ch for ch in (lead.get('phone') or '') if ch.isdigit())[-12:]
+        checkout = {'key_id': _env('PLATFORM_RAZORPAY_KEY_ID'), 'subscription_id': sub['sub_id'],
+                    'description': f'QuoteRoom: {plan_mod.PLANS[plan]}, ₹{price} a month',
+                    'prefill': {'name': lead.get('name') or '', 'email': lead.get('email') or '', 'contact': digits}}
         return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), new=True,
-                               plan=plan, pay_failed=True)
+                               plan=plan, price=price, token=token, autopay_checkout=checkout)
     try:
         row = subscription.open_link(slug, plan) or subscription.create_payment_link(
             slug, plan, company or lead.get('company_name') or '', lead.get('phone') or '', lead.get('email') or '',
@@ -2689,6 +2693,30 @@ def start_pay():
     if not slug or not signup.plan_ok(plan):
         abort(404)
     return _go_pay(slug, plan, lead, request.form.get('t', ''))
+
+
+@console_bp.route('/start/subscribed', methods=['POST'])
+def start_subscribed():
+    """Public: Razorpay Checkout approved the monthly autopay on /start (first month paid). Recorded once: the
+    webhook does the same if this never arrives."""
+    from . import signup, subscription
+    token = request.form.get('t', '')
+    lead_id = signup.read_token(token)
+    lead = load_lead(lead_id) if lead_id else None
+    slug = _signup(lead_id, lead) if lead else None
+    payment_id, sub_id = request.form.get('razorpay_payment_id', ''), request.form.get('razorpay_subscription_id', '')
+    sub = subscription.get_subscription(sub_id)
+    if not slug or not sub or sub['slug'] != slug or not subscription.verify_subscription_checkout(
+            payment_id, sub_id, request.form.get('razorpay_signature', '')):
+        return render_template('console/start.html', problem='We couldn\'t match this payment to your app. If you were '
+                               'charged, message us on WhatsApp and we\'ll sort it out straight away.', site=_site_url()), 404
+    try:
+        subscription.record_charge(sub, payment_id, None, 'website')
+    except Exception:
+        current_app.logger.exception('Recording the website autopay failed (the webhook will retry)')
+    audit('website_paid', slug, sub['plan'])
+    return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), token=token,
+                           plan=sub['plan'], price=subscription.prices()[sub['plan']], paid=sub['plan'], just_paid=True)
 
 
 @console_bp.route('/start/paid')
