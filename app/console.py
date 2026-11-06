@@ -2361,6 +2361,44 @@ def _signup(lead_id):
                                      "AND slug IS NOT NULL"), {'i': lead_id}).scalar())
 
 
+def _app_exists(slug):
+    with db.engine.connect() as conn:
+        if conn.execute(text("SELECT 1 FROM public.tenants WHERE slug = :s AND status <> 'spare'"), {'s': slug}).first():
+            return True
+        return bool(conn.execute(text("SELECT to_regclass('public.customers')")).scalar() and conn.execute(
+            text("SELECT 1 FROM public.customers WHERE slug = :s AND status <> 'deleted'"), {'s': slug}).first())
+
+
+def earlier_trial(lead_id, lead):
+    """(slug, still there) of an app an earlier request with this phone number or email got, or None: one free trial
+    per business, so a new request (another firm name, another link) doesn't start a second one."""
+    from sqlalchemy import inspect, select
+    from . import crypto
+    from .marketing import normalise_phone
+    from .models import Lead
+    phone = normalise_phone(lead.get('phone') or '')
+    email = (lead.get('email') or '').strip().lower()
+    with db.engine.connect() as conn:
+        apps = {r[0]: r[1] for r in conn.execute(text(
+            "SELECT lead_id, slug FROM public.signups UNION ALL SELECT lead_id, slug FROM public.console_lead_links "
+            "WHERE status = 'trial' AND slug IS NOT NULL")) if r[0] != lead_id}
+    engine = _leads_engine_or_none() if apps and (phone or email) else None
+    if engine is None:
+        return None
+    t = Lead.__table__
+    with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
+        cols = [t.c.id, t.c.phone] + ([t.c.email] if 'email' in {c['name'] for c in inspect(conn).get_columns('leads')}
+                                      else [])
+        rows = conn.execute(select(*cols).where(t.c.id.in_(list(apps)))).mappings().all()
+    found = [apps[r['id']] for r in sorted(rows, key=lambda r: -r['id'])
+             if (phone and normalise_phone(r['phone'] or '') == phone)
+             or (email and (r.get('email') or '').strip().lower() == email)]
+    if not found:
+        return None
+    live = next((s for s in found if _app_exists(s)), None)
+    return (live, True) if live else (found[0], False)
+
+
 @console_bp.route('/e/o/<token>.gif')
 def email_opened(token):
     """Public: the open image in an email (app/emails.py)."""
@@ -2411,6 +2449,16 @@ def start_trial():
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
                                plan=plan, price=price, token=token, paid=_paid_plan(done))
+    earlier = earlier_trial(lead_id, lead)
+    if earlier and earlier[1] and plan:           # buying: pay for the app they already have (their data is in it)
+        with db.engine.begin() as conn:           # so /start/paid matches the payment to it
+            conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s)'), {'i': lead_id, 's': earlier[0]})
+        audit('website_buy_existing', earlier[0], f'lead #{lead_id}, {plan}')
+        return _go_pay(earlier[0], plan, lead, token)
+    if earlier and not plan:                      # one free trial per business: open the one they had
+        audit('trial_again_blocked', earlier[0], f'lead #{lead_id}')
+        return render_template('console/start.html', had_trial=earlier[0], still_there=earlier[1],
+                               base=tenancy.base_domain(), site=_site_url())
     form = {'company': lead.get('company_name') or '', 'username': 'admin'}
     errors = {}
     if request.method == 'POST':

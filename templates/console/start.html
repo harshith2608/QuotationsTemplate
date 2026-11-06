@@ -19,6 +19,19 @@
     <h1>Link not valid</h1>
     <p class="lead">{{ problem }}</p>
     <a class="btn" href="{{ site }}">Go to the website</a>
+  {% elif had_trial %}
+    <h1>You've already had a free trial</h1>
+    {% if still_there %}
+    <p class="lead">Your app is at <strong>{{ had_trial }}.{{ base }}</strong>, with everything you made in it.
+      Sign in there, and to keep using it, choose a plan in <strong>Admin → Plan &amp; billing</strong>.</p>
+    <a class="btn" href="https://{{ had_trial }}.{{ base }}/login">Open my app</a>
+    {% else %}
+    <p class="lead">This number or email has already used the free trial. To start using QuoteRoom, choose a plan on
+      the website.</p>
+    <a class="btn" href="{{ site }}/#pricing">See the plans</a>
+    {% endif %}
+    <p class="hint" style="text-align:center;margin-top:14px">Forgot your password, or need more time to try it?
+      Message us on WhatsApp.</p>
   {% elif ready and just_paid %}
     <div class="tick">✓</div>
     <h1>Payment received. Thank you!</h1>
