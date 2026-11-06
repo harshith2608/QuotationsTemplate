@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Quotation #{{ project.id }} – Rev {{ older.number }} vs Rev {{ newer.number }}{% endblock %}
 
-{% macro money(v) %}&#8377;{{ "{:,.2f}".format(v or 0) }}{% endmacro %}
+{% macro money(v) %}&#8377;{{ (v or 0)|inr }}{% endmacro %}
 {% macro diff(a, b) -%}
   {%- set d = (b or 0) - (a or 0) -%}
-  {%- if d|round(2) != 0 -%}<span class="{{ 'text-danger' if d > 0 else 'text-success' }} small fw-semibold text-nowrap">{{ '+' if d > 0 else '−' }}&#8377;{{ "{:,.2f}".format(d|abs) }}</span>{%- endif -%}
+  {%- if d|round(2) != 0 -%}<span class="{{ 'text-danger' if d > 0 else 'text-success' }} small fw-semibold text-nowrap">{{ '+' if d > 0 else '−' }}&#8377;{{ (d|abs)|inr }}</span>{%- endif -%}
 {%- endmacro %}
 
 {% block content %}

@@ -53,7 +53,7 @@
     <hr>
     <div class="d-flex justify-content-between align-items-end">
       <div class="q-muted">Total{% if snap.gst %} (incl. GST){% endif %}</div>
-      <div class="q-total">&#8377;{{ "{:,.2f}".format(snap.payable or snap.total) }}</div>
+      <div class="q-total">&#8377;{{ (snap.payable or snap.total)|inr }}</div>
     </div>
     {% set l = status.latest %}
     {% if l and status.latest_is_current and l.kind == 'accepted' %}
@@ -78,12 +78,12 @@
         <tbody>
         {% for it in room['items'] %}
           <tr>
-            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{% if it.length %}{{ it.length|ft_in }}{% if it.width %} × {{ it.width|ft_in }}{% endif %}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {% endif %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.tbc %}, price to follow{% elif it.unit_price %} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ "{:,.0f}".format(it.unit_price) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
-            <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(it.amount) }}</td>
+            <td>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}<div class="q-muted">{% if it.type == 'boq' %}{% if it.length %}{{ it.length|ft_in }}{% if it.width %} × {{ it.width|ft_in }}{% endif %}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {% endif %}{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.tbc %}, price to follow{% elif it.unit_price %} × &#8377;{{ (it.unit_price)|inr(0) }}{% endif %}{% elif it.type == 'fixed' %}{{ '%g'|format(it.quantity) }} × &#8377;{{ (it.unit_price)|inr(0) }}{% else %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }} · {{ it.material }}{% endif %}</div></td>
+            <td class="text-end text-nowrap">&#8377;{{ (it.amount)|inr }}</td>
           </tr>
         {% endfor %}
           <tr class="fw-semibold"><td class="text-end">{{ room.name }} total</td>
-            <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(room['items']|sum(attribute='amount')) }}</td></tr>
+            <td class="text-end text-nowrap">&#8377;{{ (room['items']|sum(attribute='amount'))|inr }}</td></tr>
         </tbody>
       </table></div>
     {% endfor %}
@@ -100,7 +100,7 @@
           {% for it in r['items'] %}<li>{{ it.name }}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count is string %} · {{ it.count }}{% elif it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
         </ul>
       </div>
-      <div class="fw-semibold small text-nowrap">&#8377;{{ "{:,.2f}".format(r.amount) }}</div>
+      <div class="fw-semibold small text-nowrap">&#8377;{{ (r.amount)|inr }}</div>
     </div>
     {% endfor %}
   </div>
@@ -109,7 +109,7 @@
     <div class="fw-semibold mb-2">Bill of quantities</div>
     {% for sec in boq_sections %}
     <div class="fw-semibold small mt-3 mb-1 d-flex justify-content-between" style="color:var(--p)"><span>{{ sec.letter }}. {{ sec.name }}</span>
-      {% if sec.total %}<span class="text-nowrap">&#8377;{{ "{:,.2f}".format(sec.total) }}</span>{% endif %}</div>
+      {% if sec.total %}<span class="text-nowrap">&#8377;{{ (sec.total)|inr }}</span>{% endif %}</div>
     {% if sec.description %}<div class="small q-muted" style="white-space:pre-line">{{ sec.description }}</div>{% endif %}
     <div class="table-responsive"><table class="table table-sm small mb-0">
       <tbody>
@@ -117,9 +117,9 @@
         <tr>
           <td class="text-muted" style="width:2em">{{ ln.no }}</td>
           <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
-            {% if ln.qty %}<div class="q-muted">{{ '{:,.2f}'.format(ln.qty).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ "{:,.0f}".format(ln.rate) }}{% endif %}</div>
-            {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ "{:,.0f}".format(ln.rate) }} per {{ ln.unit }}</div>{% endif %}</td>
-          <td class="text-end text-nowrap">{% if ln.tbc %}price to follow{% elif ln.amount %}&#8377;{{ "{:,.2f}".format(ln.amount) }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>
+            {% if ln.qty %}<div class="q-muted">{{ ((ln.qty)|inr).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ (ln.rate)|inr(0) }}{% endif %}</div>
+            {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ (ln.rate)|inr(0) }} per {{ ln.unit }}</div>{% endif %}</td>
+          <td class="text-end text-nowrap">{% if ln.tbc %}price to follow{% elif ln.amount %}&#8377;{{ (ln.amount)|inr }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -141,24 +141,24 @@
     <table class="table table-sm small mb-0">
       <tbody>
       {% if room_rows or boq_sections %}
-      <tr><td>Basic Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>
+      <tr><td>Basic Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.subtotal)|inr }}</td></tr>
       {% else %}
-      {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ s.area|area }})</span></td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(s.amount) }}</td></tr>{% endfor %}
-      {% if snap.fittings_total %}<tr><td>{{ snap.fittings_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.fittings_total) }}</td></tr>{% endif %}
-      {% if snap.boq_total %}<tr><td>{{ snap.boq_label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.boq_total) }}</td></tr>{% endif %}
+      {% for s in snap.summary %}<tr><td>{{ s.label }} <span class="q-muted">({{ s.area|area }})</span></td><td class="text-end text-nowrap">&#8377;{{ (s.amount)|inr }}</td></tr>{% endfor %}
+      {% if snap.fittings_total %}<tr><td>{{ snap.fittings_label }}</td><td class="text-end text-nowrap">&#8377;{{ (snap.fittings_total)|inr }}</td></tr>{% endif %}
+      {% if snap.boq_total %}<tr><td>{{ snap.boq_label }}</td><td class="text-end text-nowrap">&#8377;{{ (snap.boq_total)|inr }}</td></tr>{% endif %}
       {% endif %}
       {% if snap.discount.amount %}
-        {% if not (room_rows or boq_sections) %}<tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.subtotal) }}</td></tr>{% endif %}
-        <tr class="text-danger"><td>Discount{% if snap.discount.type == 'percentage' %} ({{ '%g'|format(snap.discount.value) }}%){% endif %}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(snap.discount.amount) }}</td></tr>
+        {% if not (room_rows or boq_sections) %}<tr><td>Subtotal</td><td class="text-end text-nowrap">&#8377;{{ (snap.subtotal)|inr }}</td></tr>{% endif %}
+        <tr class="text-danger"><td>Discount{% if snap.discount.type == 'percentage' %} ({{ '%g'|format(snap.discount.value) }}%){% endif %}</td><td class="text-end text-nowrap">− &#8377;{{ (snap.discount.amount)|inr }}</td></tr>
       {% endif %}
       {% if snap.gst %}
-      <tr><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>
-      <tr><td>GST @ {{ '%g' % snap.gst_rate }}%</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.gst) }}</td></tr>
-      <tr class="fw-bold"><td>Grand total (incl. GST)</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.payable) }}</td></tr>
+      <tr><td>Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.total)|inr }}</td></tr>
+      <tr><td>GST @ {{ '%g' % snap.gst_rate }}%</td><td class="text-end text-nowrap">&#8377;{{ (snap.gst)|inr }}</td></tr>
+      <tr class="fw-bold"><td>Grand total (incl. GST)</td><td class="text-end text-nowrap">&#8377;{{ (snap.payable)|inr }}</td></tr>
       {% else %}
-      <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(snap.total) }}</td></tr>
+      <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.total)|inr }}</td></tr>
       {% endif %}
-      {% if paid %}<tr class="text-success"><td>Paid</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(paid) }}</td></tr>{% endif %}
+      {% if paid %}<tr class="text-success"><td>Paid</td><td class="text-end text-nowrap">&#8377;{{ (paid)|inr }}</td></tr>{% endif %}
       </tbody>
     </table>
     {% if pay.upi_id or pay.account_number %}
@@ -179,7 +179,7 @@
       <input id="accName" name="name" class="form-control mb-2" maxlength="80" required value="{{ snap.customer.name }}" autocomplete="name">
       <div class="form-check mb-2">
         <input class="form-check-input" type="checkbox" name="agree" value="1" id="accAgree" required>
-        <label class="form-check-label small" for="accAgree">I accept this quotation for &#8377;{{ "{:,.2f}".format(snap.payable or snap.total) }}{% if snap.gst %} (incl. GST){% endif %} from {{ brand.name }}.</label>
+        <label class="form-check-label small" for="accAgree">I accept this quotation for &#8377;{{ (snap.payable or snap.total)|inr }}{% if snap.gst %} (incl. GST){% endif %} from {{ brand.name }}.</label>
       </div>
       <button class="btn btn-brand w-100" type="submit"><i class="bi bi-check2-circle me-1"></i>Accept quotation</button>
     </form>

@@ -27,6 +27,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 from . import ai_import, db
+from .numbers import inr
 
 MODEL = ai_import.MODEL
 TIMEOUT = 50
@@ -148,7 +149,7 @@ def limit_text(feature=None):
                 'helpers' + (' (Your plan).' if subscription.enabled() else '.'))
     if not p['can_buy']:
         return f'You\'ve used this month\'s {p["allowance"]} AI uses. Message us on WhatsApp if you need more.'
-    more = f'buy {plan_mod.ADDON_USES} more for ₹{subscription.prices()[plan_mod.ADDON]:,} on Your plan'
+    more = f'buy {plan_mod.ADDON_USES} more for ₹{inr(subscription.prices()[plan_mod.ADDON], 0)} on Your plan'
     if p['tier'] == 'standard':
         more += f', or move to a plan with AI ({allowance("ai")} a month)'
     return f'You\'ve used this month\'s {p["allowance"]} AI uses. To carry on now, {more}.'
@@ -180,7 +181,7 @@ def _ask(feature, prompt, schema, max_tokens, n=1):
 
 
 def _money(value):
-    return f'₹{value:,.0f}' if value == int(value) else f'₹{value:,.2f}'
+    return f'₹{inr(value, 0)}' if value == int(value) else f'₹{inr(value)}'
 
 
 # ── Draft from a message ─────────────────────────────────────────────────────

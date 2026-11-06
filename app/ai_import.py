@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from . import db
+from .numbers import inr
 
 MODEL = 'claude-haiku-5-5'
 STATE_KEY = 'ai_import'
@@ -477,7 +478,7 @@ def by_material(data):
             mine = [(r, item) for w, r, item in rows if (not both or (w or 'Box Work') == work)]
             rate = Counter(r for r, _ in mine).most_common(1)[0][0]
             rates[work] = rate
-            mixed += [f"{mat}{' ' + work if work else ''}: ₹{r:,.0f} ({item})" for r, item in mine if r != rate]
+            mixed += [f"{mat}{' ' + work if work else ''}: ₹{inr(r, 0)} ({item})" for r, item in mine if r != rate]
         materials.append({'name': mat, 'rates': rates})
     for r in rooms:            # one rate for the material: no work type on its items; with both, unsaid is box work
         for it in r['items']:

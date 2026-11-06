@@ -1,6 +1,7 @@
 import hmac, hashlib, json, os
 from app import create_app, db
 from app.models import AppSetting, Payment, Project, Notification, PaymentLink
+from app.numbers import inr
 os.environ.pop('DEMO_MODE', None)
 app = create_app('development'); c = app.test_client()
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
@@ -34,7 +35,7 @@ with app.app_context():
     ok('admin notification created', sum('25,000.00' in n.message for n in Notification.query.all()) == 1)
     paid_now = sum(x.amount for x in Payment.query.filter_by(project_id=3).all())
     note = next(n for n in Notification.query.all() if '25,000.00' in n.message)
-    ok(f'notification counts the new payment once (Total Paid ₹{paid_now:,.2f})', f'Total Paid: ₹{paid_now:,.2f}' in note.message)
+    ok(f'notification counts the new payment once (Total Paid ₹{inr(paid_now)})', f'Total Paid: ₹{inr(paid_now)}' in note.message)
 r = post(payload(3, 'pay_REAL1', 2500000), secret='whsec_test')
 with app.app_context():
     ok('duplicate delivery ignored', r.get_json().get('status') == 'duplicate' and Payment.query.filter_by(razorpay_payment_id='pay_REAL1').count() == 1)

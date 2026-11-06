@@ -5,13 +5,14 @@ from sqlalchemy import text
 from app import create_app, db, billing, plywood
 from app.models import (CostRate, Item, ItemRate, Material, PlywoodOption, Project, QuoteRevision)
 from sqlalchemy.orm import undefer
+from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 staff = app.test_client(); staff.post('/login', data={'username': 'demo-staff', 'password': 'demo1234'})
 pdftext = lambda u: '\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(c.get(u).data)).pages)
-money = lambda v: f'{v:,.2f}'
+money = lambda v: f'{inr(v)}'
 
 
 def rate(wood, work):
@@ -90,7 +91,7 @@ cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('Initial Quotation PDF: same total, plywood lines', money(expect) in cust and '18mm BWP' in cust)
 wa = c.get(f'/projects/{pid}/whatsapp').headers.get('Location', '')
 from urllib.parse import unquote
-ok('WhatsApp summary names the plywood and the right total', 'Plywood: 18mm BWP' in unquote(wa) and f'{expect:,.2f}' in unquote(wa))
+ok('WhatsApp summary names the plywood and the right total', 'Plywood: 18mm BWP' in unquote(wa) and f'{inr(expect)}' in unquote(wa))
 with app.app_context():
     snap = json.loads(QuoteRevision.query.filter_by(project_id=pid).first().snapshot)
 ok('revision snapshot records the plywood and the item override', snap.get('plywood_choice') == '18mm BWP'

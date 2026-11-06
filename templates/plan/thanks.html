@@ -10,7 +10,7 @@
     <h4 class="fw-bold mt-2">Thank you! Your plan is active.</h4>
     <p class="mb-1">{{ status.label }} until <strong>{{ status.ends_on.strftime('%d %b %Y') }}</strong>.</p>
     {% endif %}
-    <p class="text-muted small">₹{{ '{:,.0f}'.format(row.amount_paise / 100) }} received · receipt {{ row.receipt_no }}</p>
+    <p class="text-muted small">₹{{ (row.amount_paise / 100)|inr(0) }} received · receipt {{ row.receipt_no }}</p>
     {% if moving and not addon %}
     <div class="alert alert-info small text-start">
       <i class="bi bi-database-check me-1"></i>In the next few minutes your app moves to its own private database.

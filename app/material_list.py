@@ -32,6 +32,7 @@ from datetime import datetime
 from flask import g, has_app_context
 
 from . import db
+from .numbers import inr
 
 GROUPS_KEY = 'material_list_groups'          # JSON list of the business's groups, in order
 ITEM_GROUPS_KEY = 'material_list_items'      # JSON {item name lower-case: group, or '' = leave off the list}
@@ -727,7 +728,7 @@ def save_selection(lst, form):
 def qty_text(qty):
     if qty is None:
         return ''
-    return f'{qty:,.2f}'.rstrip('0').rstrip('.')
+    return f'{inr(qty)}'.rstrip('0').rstrip('.')
 
 
 def line_text(ln):

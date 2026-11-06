@@ -235,6 +235,13 @@ section { padding-block: 80px; }
 .plan li::before { content: "✓"; color: var(--pine); font-weight: 700; margin-right: .5rem; }
 .plan .btn { margin-top: auto; justify-content: center; }
 .price-note { margin-top: 22px; font-size: .9rem; color: var(--muted); }
+.call-band { padding-block: 44px; }
+.call-band .wrap { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: center; justify-content: space-between;
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 28px; }
+.call-band h2 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); margin: 0 0 .4rem; }
+.call-band p { margin: 0; color: var(--muted); max-width: 52ch; }
+.call-band-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 560px) { .call-band-actions, .call-band-actions .btn { width: 100%; } }
 @media (max-width: 900px) { .plans { grid-template-columns: minmax(0, 1fr); max-width: 520px; } }
 
 /* FAQ */

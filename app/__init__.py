@@ -67,6 +67,8 @@ def create_app(config_name='default'):
     # Operator console deployment: serves only the console (no business app, no tenants)
     from .plan import short as plan_short
     app.add_template_filter(plan_short, 'plan_short')   # '12 months with AI', '40 AI uses' (the app and the console)
+    from .numbers import inr
+    app.add_template_filter(inr, 'inr')                  # 15,50,000.00: numbers the Indian way, on every page
 
     from .console import console_mode
     if console_mode():
@@ -217,7 +219,8 @@ def create_app(config_name='default'):
             if callbook.available():
                 help_card = {'booked': callbook.booked(), 'whatsapp': callbook.whatsapp_url()}
         from . import business
-        return {'biz': business.profile(), 'help_card': help_card, 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
+        from .marketing import call_url
+        return {'biz': business.profile(), 'help_card': help_card, 'call_url': call_url(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}

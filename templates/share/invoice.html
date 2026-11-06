@@ -52,11 +52,11 @@
     <hr>
     <div class="d-flex justify-content-between align-items-end">
       <div class="q-muted">Invoice total</div>
-      <div class="q-total">&#8377;{{ "{:,.2f}".format(d.total) }}</div>
+      <div class="q-total">&#8377;{{ (d.total)|inr }}</div>
     </div>
     {% if inv.status == 'issued' and paid %}
-    <div class="d-flex justify-content-between small mt-1"><span class="text-success">Paid</span><span class="text-success">&#8377;{{ "{:,.2f}".format(paid) }}</span></div>
-    <div class="d-flex justify-content-between fw-semibold"><span>Amount due</span><span>&#8377;{{ "{:,.2f}".format(due) }}</span></div>
+    <div class="d-flex justify-content-between small mt-1"><span class="text-success">Paid</span><span class="text-success">&#8377;{{ (paid)|inr }}</span></div>
+    <div class="d-flex justify-content-between fw-semibold"><span>Amount due</span><span>&#8377;{{ (due)|inr }}</span></div>
     {% endif %}
     <div class="mt-3">
       <a class="btn btn-brand" href="{{ url_for('share.invoice_pdf', token=token) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>Download PDF</a>
@@ -73,18 +73,18 @@
           <tr><td colspan="2" class="fw-semibold pt-3" style="color:var(--p)">{{ l.room }}</td></tr>
         {% endif %}
         <tr>
-          <td>{{ l.description }}<div class="q-muted">{% if l.detail %}{{ l.detail }} · {% endif %}{{ "{:,.2f}".format(l.qty) if l.unit in ('sqft', 'sq m') else '%g'|format(l.qty) }} {{ l.unit }} × &#8377;{{ "{:,.2f}".format(l.rate) }}</div></td>
-          <td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(l.amount) }}</td>
+          <td>{{ l.description }}<div class="q-muted">{% if l.detail %}{{ l.detail }} · {% endif %}{{ (l.qty)|inr if l.unit in ('sqft', 'sq m') else '%g'|format(l.qty) }} {{ l.unit }} × &#8377;{{ (l.rate)|inr }}</div></td>
+          <td class="text-end text-nowrap">&#8377;{{ (l.amount)|inr }}</td>
         </tr>
       {% endfor %}
-      <tr><td class="pt-3">Total of items</td><td class="text-end text-nowrap pt-3">&#8377;{{ "{:,.2f}".format(d.gross) }}</td></tr>
-      {% if d.discount %}<tr class="text-danger"><td>{{ d.discount_label }}</td><td class="text-end text-nowrap">− &#8377;{{ "{:,.2f}".format(d.discount) }}</td></tr>{% endif %}
+      <tr><td class="pt-3">Total of items</td><td class="text-end text-nowrap pt-3">&#8377;{{ (d.gross)|inr }}</td></tr>
+      {% if d.discount %}<tr class="text-danger"><td>{{ d.discount_label }}</td><td class="text-end text-nowrap">− &#8377;{{ (d.discount)|inr }}</td></tr>{% endif %}
       {% if d.gst %}
-        <tr><td>Taxable value</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(d.taxable) }}</td></tr>
-        {% for t in d.taxes %}<tr><td>{{ t.label }}</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(t.amount) }}</td></tr>{% endfor %}
+        <tr><td>Taxable value</td><td class="text-end text-nowrap">&#8377;{{ (d.taxable)|inr }}</td></tr>
+        {% for t in d.taxes %}<tr><td>{{ t.label }}</td><td class="text-end text-nowrap">&#8377;{{ (t.amount)|inr }}</td></tr>{% endfor %}
       {% endif %}
-      {% if d.round_off %}<tr><td>Round off</td><td class="text-end text-nowrap">{{ '+' if d.round_off > 0 else '−' }} &#8377;{{ "{:,.2f}".format(d.round_off|abs) }}</td></tr>{% endif %}
-      <tr class="fw-bold"><td>Invoice total</td><td class="text-end text-nowrap">&#8377;{{ "{:,.2f}".format(d.total) }}</td></tr>
+      {% if d.round_off %}<tr><td>Round off</td><td class="text-end text-nowrap">{{ '+' if d.round_off > 0 else '−' }} &#8377;{{ (d.round_off|abs)|inr }}</td></tr>{% endif %}
+      <tr class="fw-bold"><td>Invoice total</td><td class="text-end text-nowrap">&#8377;{{ (d.total)|inr }}</td></tr>
       </tbody>
     </table>
     <div class="small q-muted mt-2">{{ d.total_words }}</div>

@@ -18,6 +18,7 @@ from .catalog import BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
 from . import materials as M
 from . import units
 from .branding import get_brand, tint, luminance, readable_text_on, load_logo_png
+from .numbers import inr
 
 
 DEFAULT_TERMS = (
@@ -75,8 +76,9 @@ def _styles():
     return styles
 
 
-def _money(value, spec=',.2f'):
-    return format(value, spec)
+def _money(value, dp=2):
+    """Amounts the Indian way: 15,50,000.00 (app/numbers.py)."""
+    return inr(value, dp)
 
 
 def _build(doc, elements):
@@ -361,11 +363,11 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
                 text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
             amount = 'Price to follow' if ln.get('tbc') else _money(ln['amount']) if ln['amount'] else '—'
             if not rate_col and not ln['qty'] and ln['rate']:          # a rate-only line still says its rate
-                amount = f"Rate {_money(ln['rate'], ',.0f')}"
+                amount = f"Rate {_money(ln['rate'], 0)}"
             data.append([str(ln['no']), Paragraph(text, small)]
                         + ([item_images.pdf_image(photos.get(ln.get('image_id')), 2.6, 2.6) or ''] if photos else [])
-                        + [f'{ln["qty"]:,.2f}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']]
-                        + ([_money(ln['rate'], ',.0f') if ln['rate'] else ''] if rate_col else []) + [amount])
+                        + [f'{inr(ln["qty"])}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']]
+                        + ([_money(ln['rate'], 0) if ln['rate'] else ''] if rate_col else []) + [amount])
     table = Table(data, colWidths=cw, repeatRows=1)
     table.setStyle(TableStyle(cmds))
     return [table] + _totals_elements(snap, page_width, palette)
@@ -538,11 +540,11 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 if item.price_to_follow:
                     cells = [f'{item.quantity:g}' if item.quantity else '—', unit, '—', 'Price to follow']
                 elif not item.quantity:                     # rate only: printed with its rate, not added
-                    cells = ['—', unit, _money(item.unit_price, ',.0f'), '—']
+                    cells = ['—', unit, _money(item.unit_price, 0), '—']
                 elif item.is_boq and item.unit_text == 'LS':
-                    cells = ['1', 'LS', _money(item.unit_price, ',.0f'), _money(amount)]
+                    cells = ['1', 'LS', _money(item.unit_price, 0), _money(amount)]
                 else:
-                    cells = [f'{item.quantity:g}', unit, _money(item.unit_price, ',.0f'), _money(amount)]
+                    cells = [f'{item.quantity:g}', unit, _money(item.unit_price, 0), _money(amount)]
                 rows.append([_name_cell(item, _size_note(item))] + cells)
             rates_only = room_total_cost == 0 and all(not i.quantity for i in items if not i.price_to_follow)
             rows.append(['Rates for reference, not added to the total' if rates_only else 'Section Total', '', '', '',
@@ -565,11 +567,11 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                     if item.price_to_follow:
                         what = f'{item.quantity:g} {item.unit_text}, price to follow' if item.quantity else 'Price to follow'
                     elif item.is_boq and not item.quantity:
-                        what = f'Rate only: Rs. {_money(item.unit_price, ",.0f")} / {item.unit_text}'
+                        what = f'Rate only: Rs. {_money(item.unit_price, 0)} / {item.unit_text}'
                     elif item.is_boq:
-                        what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, ",.0f")}'
+                        what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, 0)}'
                     else:
-                        what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, ",.0f")}'
+                        what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, 0)}'
                     sized = item.is_boq and item.length
                     rows.append([_name_cell(item), ft_in(item.length) if sized else '—',
                                  ft_in(item.width) if sized and item.width else '—', Paragraph(escape(what), material_style),
@@ -585,7 +587,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                     ft_in(item.length),
                     ft_in(item.width),
                     Paragraph(escape(plywood.finish_label(_key, project)), material_style),   # wraps: never cut off
-                    f'{units.area_value(item.area):,.2f}',
+                    f'{inr(units.area_value(item.area))}',
                     f'{_money(subtotal)}'
                 ])
             rows.append(['', '', '', 'Room Total:', units.area(room_total_area), f'Rs. {_money(room_total_cost)}'])
@@ -645,7 +647,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             subtotal = area * rate
             combo_total += subtotal
             combo_area_total += area
-            combo_data.append([plywood.label(key, project), f'{units.area_value(area):,.2f}', f'{_money(subtotal)}'])
+            combo_data.append([plywood.label(key, project), f'{inr(units.area_value(area))}', f'{_money(subtotal)}'])
     if by_sections:
         for r_i, (room, amount) in enumerate((r, a) for r, a in section_totals if a > 0):
             combo_total += amount
@@ -1199,7 +1201,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
                                 ('ALIGN', (0, r), (-1, r), 'LEFT')])
         n += 1
         room_sum += l['amount']
-        qty = f"{l['qty']:,.2f} {l['unit']}" if l['unit'] in ('sqft', 'sq m') else f"{l['qty']:g} {l['unit']}"
+        qty = f"{inr(l['qty'])} {l['unit']}" if l['unit'] in ('sqft', 'sq m') else f"{l['qty']:g} {l['unit']}"
         desc = [Paragraph(escape(l['description']), small)]
         if l.get('detail'):
             desc.append(Paragraph(escape(l['detail']), detail_style))

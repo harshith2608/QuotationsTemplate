@@ -15,6 +15,7 @@ import httpx2
 
 from app import create_app, db, boq, ai_tools as T
 from app.models import AppSetting, BoqItem, PriceListItem, Project
+from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 for k in ('AI_DRAFT', 'AI_CHECK', 'AI_PHOTOS', 'ANTHROPIC_API_KEY', 'DEMO_MODE'):
@@ -249,7 +250,7 @@ prompt = calls[-1]['messages'][0]['content']
 text = r.text
 ok('the check page: exact checks and the AI\'s', r.status_code == 200 and 'Check before sending' in text
    and 'The kitchen has drawers but no cabinets.' in text)
-ok('a rate different from the business\'s own', f'your usual rate is ₹{TANDEM_PRICE:,.0f}' in text)
+ok('a rate different from the business\'s own', f'your usual rate is ₹{inr(TANDEM_PRICE, 0)}' in text)
 ok('a very large size', 'is very large' in text)
 ok('the same line twice', 'on the quotation twice' in text)
 ok('a bigger discount than usual', '25% discount; your quotations usually have' in text)

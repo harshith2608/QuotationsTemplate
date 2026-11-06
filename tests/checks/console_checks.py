@@ -419,6 +419,36 @@ code_ = ("import os; os.environ.update(FLASK_ENV='production', SECRET_KEY='x', C
 r = subprocess.run([sys.executable, '-c', code_], capture_output=True, text=True, env=dict(os.environ))
 ok('production console refuses to start without its 2FA secret', r.returncode != 0 and 'CONSOLE_TOTP_SECRET' in r.stderr)
 
+# ── "Book a call with us" from the website: the public /call page, a trial request and the Schedule ──
+from app import callbook as _cb
+anon_call = app.test_client()
+page = anon_call.get('/call')
+with app.app_context():
+    free = _cb.slots()
+ok('/call without signing in: our free times by day, name, WhatsApp, business', page.status_code == 200
+   and 'Book a call with us' in page.text and 'name="slot"' in page.text and 'Your WhatsApp number' in page.text)
+slot = free[0][1][0][0]
+r = anon_call.post('/call', data={'slot': slot, 'name': 'Asha Rao', 'phone': '98111 00099', 'company': 'Rao Windows',
+                                  'business': 'upvc', 'note': 'we make sliding windows'})
+ok('booked: "Your call is booked", with when and their number', 'Your call is booked' in r.text
+   and '+91 98111 00099' in r.text)
+with crypto.using_key(LEADS_KEY), le.connect() as conn:
+    lead = conn.execute(Lead.__table__.select().order_by(Lead.__table__.c.id.desc())).mappings().first()
+ok('…saved as a trial request, marked as a booked call', lead['phone'] == '919811100099'
+   and lead['business_type'] == 'upvc' and (lead['source'] or '').startswith('Booked a call'))
+with app.app_context():
+    taken = [v for _, f in _cb.slots() for v, _ in f]
+ok('…that time is no longer free', slot not in taken)
+c.get('/calls')
+sched = c.get('/calls').text
+ok('…on the Schedule with the name, company and number', 'Rao Windows' in sched and 'Asha Rao' in sched
+   and '98111 00099' in sched)
+r = anon_call.post('/call', data={'slot': slot, 'name': 'Someone Else', 'phone': '9811100098', 'business': 'tiles'})
+ok('…the same time can\'t be booked twice', 'just taken' in r.text)
+r = anon_call.post('/call', data={'slot': taken[0], 'name': 'Bot', 'phone': '9811100097', 'business': 'tiles',
+                                  'website': 'http://spam.example'})
+ok('…a bot (the hidden field filled) books nothing', 'Your call is booked' not in r.text)
+
 # ── Self-serve trials: the website's link → the public /start page → a ready-made trial, renamed ──
 import html as _h
 os.environ['SIGNUP_SECRET'] = 'signup-secret-for-tests'

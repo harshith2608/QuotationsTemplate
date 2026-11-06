@@ -14,6 +14,7 @@ update that adds items.description and items.unit (ready()).
 from flask import g, has_app_context
 
 from . import db
+from .numbers import inr
 
 KEY = 'feature_boq'
 UNITS = ['sqft', 'rft', 'nos', 'point', 'sq m', 'rmt', 'set', 'lump sum']
@@ -159,7 +160,7 @@ def unit_text(unit):
 
 
 def qty_text(quantity):
-    return f'{quantity:,.2f}'.rstrip('0').rstrip('.') if quantity else '—'
+    return f'{inr(quantity)}'.rstrip('0').rstrip('.') if quantity else '—'
 
 
 # ── Saved BOQ lines (Admin → Rates → BOQ lines) ──────────────────────────────

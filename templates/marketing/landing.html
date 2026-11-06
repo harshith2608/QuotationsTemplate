@@ -170,6 +170,21 @@
     </div>
   </section>
 
+  {% if call_url %}
+  <section class="call-band">
+    <div class="wrap">
+      <div>
+        <h2>Rather see it with someone?</h2>
+        <p>10 minutes on WhatsApp: we show you QuoteRoom with your own items and rates, and answer your questions. Free.</p>
+      </div>
+      <div class="call-band-actions">
+        <a class="btn btn-primary" href="{{ call_url }}" data-call>&#127911; Book a call with us</a>
+        <a class="btn btn-ghost" href="https://wa.me/{{ wa_number }}?text={{ ('Hi! I saw ' ~ product ~ ' and would like to know more.')|urlencode }}" target="_blank" rel="noopener" data-cta>Or WhatsApp us</a>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <section id="pricing">
     <div class="wrap">
       <div class="section-head">
@@ -220,7 +235,8 @@
         </div>
         {% endfor %}
       </div>
-      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.</p>
+      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.{% if call_url %}
+        Not sure which plan? <a href="{{ call_url }}" data-call>Book a call with us</a>.{% endif %}</p>
     </div>
   </section>
 

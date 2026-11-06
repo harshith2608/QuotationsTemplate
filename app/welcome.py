@@ -19,6 +19,7 @@ guide's steps. Progress is one app_settings row (JSON): no database update. The 
 """
 import json
 from datetime import datetime
+from .numbers import inr
 
 KEY = 'welcome_tour'
 SESSION_KEY = 'welcome_tour'     # set while under way, so other pages don't read the setting to know
@@ -325,7 +326,7 @@ def pricing_examples(kind):
     from . import boq, business, units
 
     def amount(v):
-        return f'{v:,.2f}'
+        return f'{inr(v)}'
 
     # By material: the wardrobe and loft are both Laminates – Box Work, so one rate (₹1,600/sqft) and one amount
     rooms = [('Master Bedroom', 'Laminates – Box Work', 1600, [('Wardrobe', 7, 8), ('Loft', 7, 2)]),
@@ -354,7 +355,7 @@ def pricing_examples(kind):
     rows = []
     for n, (_, name, unit, rate, _) in enumerate(lines[:3]):
         qty = sample.get(unit, (1, 1, 1))[n]
-        rows.append({'name': name, 'qty': f'{qty:g}', 'unit': boq.unit_text(unit), 'rate': f'{rate:,.0f}',
+        rows.append({'name': name, 'qty': f'{qty:g}', 'unit': boq.unit_text(unit), 'rate': f'{inr(rate, 0)}',
                      'value': qty * rate})
     services = [{'name': '3D Design', 'qty': '1', 'unit': 'LS', 'rate': '', 'value': 45000}] \
         if kind in ('interiors', 'turnkey') else []                 # not in a room: its own section

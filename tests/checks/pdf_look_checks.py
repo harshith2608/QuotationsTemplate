@@ -4,6 +4,7 @@ import io, re
 from pypdf import PdfReader
 from app import create_app, db, pdf_look, presentation
 from app.models import Invoice, Project
+from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
@@ -76,7 +77,7 @@ ok('classic font: every font in the customer PDF, the full PDF and the invoice i
    all(fonts(u) and all(f.startswith('Times') for f in fonts(u)) for u in urls) and {'Times-Roman', 'Times-Bold'} <= fonts(urls[0]))
 text = lambda u: re.sub(r'\s+', ' ', ' '.join(p.extract_text() for p in PdfReader(io.BytesIO(c.get(u).data)).pages))
 ok('classic font: the quotation still reads the same (customer name and total)', cname in text(urls[0])
-   and f'{ctotal:,.2f}' in text(urls[0]))
+   and f'{inr(ctotal)}' in text(urls[0]))
 
 # Header: centred by default, or the logo on the left and the details on the right
 first = lambda u: PdfReader(io.BytesIO(c.get(u).data)).pages

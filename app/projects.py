@@ -12,6 +12,7 @@ from .decorators import admin_required
 from .catalog import STAGES, BOQ_ITEMS_LABEL, FIXED_ITEMS_LABEL
 from .branding import get_brand
 from . import billing
+from .numbers import inr
 
 projects_bp = Blueprint('projects', __name__)
 
@@ -965,7 +966,7 @@ def add_payment(project_id):
         recorded_by=current_user.id
     ))
     db.session.commit()
-    flash(f'Payment of ₹{amount:,.2f} recorded successfully.', 'success')
+    flash(f'Payment of ₹{inr(amount)} recorded successfully.', 'success')
     return redirect(url_for('projects.view_project', project_id=project_id))
 
 
@@ -1012,7 +1013,7 @@ def generate_payment_link(project_id):
         if amount < 1:
             return jsonify({'error': 'The amount must be at least ₹1.'}), 400
         if amount > remaining:
-            return jsonify({'error': f'That is more than the balance due (₹{remaining:,.2f}).'}), 400
+            return jsonify({'error': f'That is more than the balance due (₹{inr(remaining)}).'}), 400
 
     try:
         short_url = create_razorpay_link(project, amount, remaining)
@@ -1069,7 +1070,7 @@ def create_razorpay_link(project, amount, remaining):
         except ValueError:
             message = f'Razorpay error (HTTP {e.code}).'
         if 'maximum amount' in message.lower():
-            message = (f'Razorpay won\'t accept ₹{amount:,.0f} in one payment: it is above your Razorpay account\'s '
+            message = (f'Razorpay won\'t accept ₹{inr(amount, 0)} in one payment: it is above your Razorpay account\'s '
                        'per-payment limit. Request a smaller amount (e.g. the advance), or ask Razorpay support '
                        'to raise your maximum transaction amount.')
         raise RazorpayLinkError(message)
@@ -1220,14 +1221,14 @@ def whatsapp_share(project_id):
                 lines.append(f"  • {item.display_name}: price to follow")
             elif item.is_boq:
                 _size = (_ft_in(item.length) + (f" × {_ft_in(item.width)}" if item.width else '') + ' = ') if item.length else ''
-                lines.append((f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{item.unit_price:,.0f}"
+                lines.append((f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{inr(item.unit_price, 0)}"
                               if _show_rate else
-                              f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} = Rs.{item.quantity * item.unit_price:,.0f}")
+                              f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} = Rs.{inr(item.quantity * item.unit_price, 0)}")
                              if item.unit_price and item.quantity else
-                             f"  • {item.display_name}: rate Rs.{item.unit_price:,.0f} per {item.unit_text}" if item.unit_price
+                             f"  • {item.display_name}: rate Rs.{inr(item.unit_price, 0)} per {item.unit_text}" if item.unit_price
                              else f"  • {item.display_name}")
             elif item.is_fixed:
-                lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{item.unit_price:,.0f}")
+                lines.append(f"  • {item.name}: {item.quantity:g} × Rs.{inr(item.unit_price, 0)}")
             else:
                 own_ply = plywood.item_plywood(item)
                 ply_note = f", {own_ply}" if own_ply and item.wood_type in plywood.context()['materials'] else ''
@@ -1240,28 +1241,28 @@ def whatsapp_share(project_id):
         area = combo_totals[key]
         if area > 0:
             rate = item_rates.get(key, 0.0)
-            lines.append(f"  • {plywood.label(key, project)}: {units.area(area)} × Rs.{units.rate_value(rate):,.0f}{units.rate_label()} = Rs.{area * rate:,.0f}")
+            lines.append(f"  • {plywood.label(key, project)}: {units.area(area)} × Rs.{inr(units.rate_value(rate), 0)}{units.rate_label()} = Rs.{inr(area * rate, 0)}")
     if fixed_total > 0:
-        lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{fixed_total:,.0f}")
+        lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{inr(fixed_total, 0)}")
     boq_total = project.boq_items_total(rooms)
     if boq_total > 0:
-        lines.append(f"  • {BOQ_ITEMS_LABEL}: Rs.{boq_total:,.0f}")
+        lines.append(f"  • {BOQ_ITEMS_LABEL}: Rs.{inr(boq_total, 0)}")
 
     lines.append("")
     if project.discount_amount > 0:
-        lines.append(f"Subtotal: Rs.{project.grand_total:,.2f}")
-        lines.append(f"Discount: - Rs.{project.discount_amount:,.2f}")
+        lines.append(f"Subtotal: Rs.{inr(project.grand_total)}")
+        lines.append(f"Discount: - Rs.{inr(project.discount_amount)}")
     if project.gst_amount:
         from . import quote_gst
-        lines.append(f"Total: Rs.{project.final_total:,.2f}")
-        lines.append(f"GST @ {quote_gst.rate():g}%: Rs.{project.gst_amount:,.2f}")
-        lines.append(f"💰 *Grand Total (incl. GST): Rs.{project.total_payable:,.2f}*")
+        lines.append(f"Total: Rs.{inr(project.final_total)}")
+        lines.append(f"GST @ {quote_gst.rate():g}%: Rs.{inr(project.gst_amount)}")
+        lines.append(f"💰 *Grand Total (incl. GST): Rs.{inr(project.total_payable)}*")
     else:
-        lines.append(f"💰 *Grand Total: Rs.{project.final_total:,.2f}*")
+        lines.append(f"💰 *Grand Total: Rs.{inr(project.final_total)}*")
 
     if total_paid > 0:
-        lines.append(f"✅ Amount Paid: Rs.{total_paid:,.2f}")
-        lines.append(f"⏳ Balance Due: Rs.{balance:,.2f}")
+        lines.append(f"✅ Amount Paid: Rs.{inr(total_paid)}")
+        lines.append(f"⏳ Balance Due: Rs.{inr(balance)}")
 
     # Payment instructions
     pay_lines = []
@@ -1383,9 +1384,9 @@ def razorpay_webhook():
 
     # ── 6. In-app notification for admin
     notif_msg = (
-        f"₹{amount_rupees:,.2f} received from {project.customer_name} "
+        f"₹{inr(amount_rupees)} received from {project.customer_name} "
         f"(Quotation #{project.id}) via Razorpay.\n"
-        f"Total Paid: ₹{total_paid:,.2f}  |  Balance: ₹{balance:,.2f}"
+        f"Total Paid: ₹{inr(total_paid)}  |  Balance: ₹{inr(balance)}"
     )
     db.session.add(Notification(
         title=f'Payment received – {project.customer_name}',
@@ -1398,10 +1399,10 @@ def razorpay_webhook():
     if project.email:
         customer_body = (
             f"Dear {project.customer_name},\n\n"
-            f"We have received your payment of ₹{amount_rupees:,.2f} for "
+            f"We have received your payment of ₹{inr(amount_rupees)} for "
             f"Quotation #{project.id}.\n\n"
-            f"Total Paid : ₹{total_paid:,.2f}\n"
-            f"Balance Due: ₹{balance:,.2f}\n\n"
+            f"Total Paid : ₹{inr(total_paid)}\n"
+            f"Balance Due: ₹{inr(balance)}\n\n"
             f"{'Thank you — your account is fully settled!' if balance == 0 else 'Please clear the remaining balance at your earliest convenience.'}\n\n"
             f"Thank you for choosing {get_brand()['name']}!\n"
             f"{__import__('app.business', fromlist=['profile']).profile()['thank_you']}."
@@ -1420,15 +1421,15 @@ def razorpay_webhook():
             f"Customer   : {project.customer_name}\n"
             f"Mobile     : {project.mobile}\n"
             f"Quotation  : #{project.id}\n"
-            f"Amount Paid: ₹{amount_rupees:,.2f}\n"
-            f"Total Paid : ₹{total_paid:,.2f}\n"
-            f"Balance Due: ₹{balance:,.2f}\n"
+            f"Amount Paid: ₹{inr(amount_rupees)}\n"
+            f"Total Paid : ₹{inr(total_paid)}\n"
+            f"Balance Due: ₹{inr(balance)}\n"
             f"Razorpay ID: {razorpay_pay_id}\n\n"
             f"{'✅ Fully Paid' if balance == 0 else '⏳ Partial Payment'}"
         )
         _send_email(
             admin_email,
-            f"[{get_brand()['name']}] Payment ₹{amount_rupees:,.2f} – {project.customer_name}",
+            f"[{get_brand()['name']}] Payment ₹{inr(amount_rupees)} – {project.customer_name}",
             admin_body
         )
 

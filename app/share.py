@@ -10,6 +10,7 @@ from flask import Blueprint, abort, flash, make_response, redirect, render_templ
 from flask_login import current_user, login_required
 
 from . import billing, db
+from .numbers import inr
 
 share_bp = Blueprint('share', __name__)
 
@@ -220,7 +221,7 @@ def respond(token):
         if project.stage == 'pending':
             project.set_stage('confirmed', None, note=f'Accepted online by {who}')
         title = f'Quotation #{project.id} accepted'
-        message = f'{who} accepted the quotation for ₹{project.total_payable:,.2f} online' + (f' (revision {rev})' if rev else '') + '.'
+        message = f'{who} accepted the quotation for ₹{inr(project.total_payable)} online' + (f' (revision {rev})' if rev else '') + '.'
     else:
         title = f'Changes requested on quotation #{project.id}'
         message = f'{who} asked for changes: {note}'

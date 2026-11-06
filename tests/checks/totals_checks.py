@@ -2,6 +2,7 @@ import re
 from sqlalchemy import event
 from app import create_app, db
 from app.models import Project, User
+from app.numbers import inr
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 
@@ -23,9 +24,9 @@ with app.app_context():
 
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 m = re.search(r'ki-kpi-value">&#8377;([\d,]+)', c.get('/admin/dashboard').text)
-ok('dashboard KPI uses discounted totals', m and m.group(1) == f'{py_sum:,.0f}')
+ok('dashboard KPI uses discounted totals', m and m.group(1) == f'{inr(py_sum, 0)}')
 l = c.get('/projects').text
-ok('list shows discounted total, not pre-discount', f'{priya_final:,.2f}' in l and f'{priya_gross:,.2f}' not in l)
+ok('list shows discounted total, not pre-discount', f'{inr(priya_final)}' in l and f'{inr(priya_gross)}' not in l)
 
 # Query budget: pages must not issue one query per room/item (N+1)
 stmts = []

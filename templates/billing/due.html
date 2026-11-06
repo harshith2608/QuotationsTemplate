@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between mt-3 mb-3 gap-2">
   <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-cash-coin me-2 text-primary"></i>Balances due</h4>
-  {% if rows %}<div class="fs-5 fw-bold text-danger">&#8377;{{ "{:,.2f}".format(total) }} <span class="small text-muted fw-normal">to collect</span></div>{% endif %}
+  {% if rows %}<div class="fs-5 fw-bold text-danger">&#8377;{{ (total)|inr }} <span class="small text-muted fw-normal">to collect</span></div>{% endif %}
 </div>
 <p class="small text-muted">Confirmed and invoiced quotations with money still to collect, biggest first.
   <strong>Remind</strong> opens WhatsApp with a polite message ready to send{% if razorpay %}, with an online payment link if you tick it{% endif %}.</p>
@@ -23,9 +23,9 @@
         <a class="fw-semibold text-decoration-none" href="{{ url_for('projects.view_project', project_id=p.id) }}">{{ p.customer_name }}</a>
         <span class="text-muted small">#{{ p.id }}{% if r.invoice %} · {{ r.invoice.number }}{% endif %}</span>
         {{ stage_badge(p.stage, True) }}
-        <span class="ms-auto fw-bold text-danger">&#8377;{{ "{:,.2f}".format(r.balance) }}</span>
+        <span class="ms-auto fw-bold text-danger">&#8377;{{ (r.balance)|inr }}</span>
       </div>
-      <div class="small text-muted mt-1">Total &#8377;{{ "{:,.2f}".format(r.total) }} · paid &#8377;{{ "{:,.2f}".format(r.paid) }}
+      <div class="small text-muted mt-1">Total &#8377;{{ (r.total)|inr }} · paid &#8377;{{ (r.paid)|inr }}
         · {% if r.last_reminder %}last reminded {{ r.last_reminder.strftime('%d %b') }}{% else %}not reminded yet{% endif %}</div>
       {% if ready %}
       <form method="POST" action="{{ url_for('billing.send_reminder', project_id=p.id) }}" target="_blank"

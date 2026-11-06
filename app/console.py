@@ -35,6 +35,7 @@ from werkzeug.security import check_password_hash
 
 from . import db, ops, tenancy
 from . import plan as plan_mod
+from .numbers import inr
 
 console_bp = Blueprint('console', __name__, template_folder='../templates')
 
@@ -1109,13 +1110,30 @@ def _demo_confirm(a, row):
     return _wa_link(row.get('phone'), body)
 
 
+def _lead_row(slug):
+    """A call booked on the website (slug 'lead:<id>', no trial yet): its trial request, shaped like a trial's row."""
+    if not slug.startswith('lead:') or not slug[5:].isdigit():
+        return None
+    try:
+        lead = load_lead(int(slug[5:]))
+    except Exception:
+        lead = None
+    if not lead:
+        return None
+    phone = lead.get('phone') or ''
+    return {'slug': slug, 'contact': {'name': lead.get('name'), 'company': lead.get('company_name')},
+            'company_name': lead.get('company_name'), 'phone': phone,
+            'phone_shown': f'+{phone[:2]} {phone[2:7]} {phone[7:]}' if len(phone) == 12 else phone,
+            'qr': _call_qr(phone), 'last_call': None, 'mark': {}}
+
+
 def _schedule(rows):
     """Booked demos and call-backs for the next 7 days, by day, each with what's needed to call (and the links)."""
     from . import followups
     by_slug = {r['slug']: r for r in rows}
     items = []
     for a in followups.appointments(days=7):
-        r = by_slug.get(a['slug'])
+        r = by_slug.get(a['slug']) or _lead_row(a['slug'])
         if not r:
             continue
         items.append(dict(kind='demo', a=a, r=r, at=a['at'] + followups.IST, missed=a['missed'],
@@ -2196,7 +2214,7 @@ def payments_manual():
     except subscription.PaymentError as exc:
         flash(f'Could not record the payment: {exc}', 'error')
         return redirect(url_for('console.payments') + '#record')
-    audit('payment_manual', row['slug'], f"{row['receipt_no']} ₹{row['amount_paise'] / 100:,.0f} {row['paid_by']}")
+    audit('payment_manual', row['slug'], f"{row['receipt_no']} ₹{inr(row['amount_paise'] / 100, 0)} {row['paid_by']}")
     if f.get('notify') == '1':
         subscription.notify_paid(row)
     moved = ''
@@ -2206,7 +2224,7 @@ def payments_manual():
             moved = ' Moved to its own database.' if out.get(row['slug']) == 'active' else ''
         except Exception:
             pass
-    flash(f"Payment recorded: {row['receipt_no']}, ₹{row['amount_paise'] / 100:,.0f} from {row['business_name'] or row['slug']}"
+    flash(f"Payment recorded: {row['receipt_no']}, ₹{inr(row['amount_paise'] / 100, 0)} from {row['business_name'] or row['slug']}"
           + (f", plan until {row['plan_end']:%d %b %Y}." if row.get('plan_end') else '.') + moved, 'ok')
     return redirect(url_for('console.payments'))
 
@@ -2219,8 +2237,8 @@ def payments_delete(payment_id):
     row = subscription.delete_payment(payment_id)
     if not row:
         abort(404)
-    audit('payment_delete', row['slug'], f"{row.get('receipt_no') or row['order_id']} ₹{row['amount_paise'] / 100:,.0f}")
-    flash(f"Removed payment {row.get('receipt_no') or ''} (₹{row['amount_paise'] / 100:,.0f}, {row['slug']}). "
+    audit('payment_delete', row['slug'], f"{row.get('receipt_no') or row['order_id']} ₹{inr(row['amount_paise'] / 100, 0)}")
+    flash(f"Removed payment {row.get('receipt_no') or ''} (₹{inr(row['amount_paise'] / 100, 0)}, {row['slug']}). "
           "Their plan wasn't changed.", 'ok')
     return redirect(url_for('console.payments'))
 
@@ -2439,6 +2457,72 @@ def start_trial():
     return render_template('console/start.html', form=form, errors=errors, token=token, lead=lead, plan=plan, price=price,
                            address=_free_address(form['company'] or lead['name']), base=tenancy.base_domain(),
                            site=_site_url(), turnstile=signup.turnstile_site_key())
+
+
+CALL_PER_IP_PER_HOUR = 3
+
+
+@console_bp.route('/call', methods=['GET', 'POST'])
+def website_call():
+    """Public: "Book a call with us" from the website: name, WhatsApp, company, business and a free time (our hours,
+    blocks and bookings: app/callbook.py). Saved as a trial request (marked "Booked a call") and put on the Schedule."""
+    from . import callbook, signup
+    from .marketing import BUSINESS_TYPES, normalise_phone
+    if _leads_engine_or_none() is None:
+        abort(404)
+    form = {k: ' '.join((request.form.get(k) or '').split()) for k in ('name', 'phone', 'company', 'business', 'slot',
+                                                                         'note')}
+    errors, booked = {}, None
+    kinds = [(k, v) for k, v in BUSINESS_TYPES.items() if k != 'kitchens']
+    if request.method == 'POST' and not request.form.get('website'):            # (the honeypot: bots fill it)
+        if len(form['name']) < 2:
+            errors['name'] = 'Type your name.'
+        phone = normalise_phone(form['phone'])
+        if not phone:
+            errors['phone'] = 'Type your 10-digit WhatsApp number.'
+        if form['business'] not in BUSINESS_TYPES:
+            errors['business'] = 'Choose your business.'
+        if form['slot'] not in {v for _, free in callbook.slots() for v, _ in free}:
+            errors['slot'] = 'That time was just taken or has passed. Please choose another.'
+        with db.engine.connect() as conn:
+            recent = conn.execute(text("SELECT count(*) FROM public.console_audit WHERE action = 'website_call' "
+                                       "AND ip = :ip AND at > :since"),
+                                  {'ip': _client_ip(), 'since': datetime.utcnow() - timedelta(hours=1)}).scalar()
+        if not errors and recent >= CALL_PER_IP_PER_HOUR:
+            errors['form'] = 'Too many bookings from here. Please message us on WhatsApp instead.'
+        if not errors and not signup.turnstile_ok(request.form.get('cf-turnstile-response'), _client_ip()):
+            errors['form'] = 'Please tick "I\'m not a robot" and try again.'
+        if not errors:
+            booked = _book_website_call(form, phone)
+    return render_template('console/call.html', form=form, errors=errors, booked=booked, kinds=kinds,
+                           slots=callbook.slots() if not booked else [], site=_site_url(),
+                           whatsapp=_env('MARKETING_WHATSAPP') or _env('SUPPORT_WHATSAPP'),
+                           turnstile=signup.turnstile_site_key())
+
+
+def _book_website_call(form, phone):
+    """Save the visitor as a trial request and book their call. Returns {'when', 'phone'}."""
+    from sqlalchemy import inspect
+    from . import crypto, followups, mailer
+    from .models import Lead
+    at_ist = datetime.strptime(form['slot'], '%Y-%m-%dT%H:%M')
+    when = followups.when_text(at_ist - followups.IST)
+    t = Lead.__table__
+    values = {'name': form['name'][:80], 'phone': phone, 'business_type': form['business'], 'business_other': None,
+              'company_name': form['company'][:80] or None, 'source': f'Booked a call: {when}'[:200]}
+    with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), _leads_engine_or_none().begin() as conn:
+        present = {c['name'] for c in inspect(conn).get_columns('leads')}
+        lead_id = conn.execute(t.insert().values(**{k: v for k, v in values.items() if k in present})).inserted_primary_key[0]
+    note = 'Booked a call on the website' + (f': {form["note"][:200]}' if form['note'] else '')
+    followups.book(f'lead:{lead_id}', at_ist, mode='call', note=note)
+    audit('website_call', f'lead #{lead_id}', when)
+    shown = f'+91 {phone[2:7]} {phone[7:]}'
+    if mailer.enabled():
+        mailer.send(mailer.operator(), f'Call booked: {form["company"] or form["name"]}, {when}',
+                    f'{form["name"]}{" (" + form["company"] + ")" if form["company"] else ""} booked a call on the website.'
+                    f'\n\nWhen: {when} (India time)\nWhatsApp: {shown}\nBusiness: {form["business"]}\n'
+                    + (f'Note: {form["note"]}\n' if form['note'] else '') + '\nIt\'s on the console\'s Schedule.\n')
+    return {'when': when, 'phone': shown}
 
 
 def _paid_plan(slug):

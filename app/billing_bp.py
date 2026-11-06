@@ -8,6 +8,7 @@ from flask_login import current_user, login_required
 
 from . import billing, db
 from .decorators import admin_required
+from .numbers import inr
 
 billing_bp = Blueprint('billing', __name__)
 
@@ -73,7 +74,7 @@ def create_invoice(project_id):
     if project.stage == 'pending':
         project.set_stage('confirmed', current_user, note=f'Invoice {inv.number} issued')
     db.session.commit()
-    flash(f'Invoice {inv.number} issued for ₹{inv.total:,.2f}.', 'success')
+    flash(f'Invoice {inv.number} issued for ₹{inr(inv.total)}.', 'success')
     return _back(project, '#invoice')
 
 
@@ -231,7 +232,7 @@ def send_reminder(project_id):
     except ValueError:
         amount = due
     if not 1 <= amount <= due:
-        flash(f'Enter an amount between ₹1 and the balance due (₹{due:,.2f}).', 'danger')
+        flash(f'Enter an amount between ₹1 and the balance due (₹{inr(due)}).', 'danger')
         return redirect(back_url)
     link = ''
     if request.form.get('with_link'):

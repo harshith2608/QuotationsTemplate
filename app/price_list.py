@@ -44,6 +44,7 @@ fittings price.
 import json
 
 from . import db
+from .numbers import inr
 
 MAX_BYTES = 512 * 1024
 SETTINGS = ('important_notes', 'payment_terms', 'terms_conditions', 'material_specs', 'delivery_terms', 'about_us',
@@ -220,7 +221,7 @@ def parse(raw):
                            'discount': discount, 'rooms': qrooms, 'total': float(expect) if expect else None})
         got = round(sum(i['quantity'] * i['unit_price'] for r in qrooms for i in r['items']), 2)
         if expect is not None and abs(got - float(expect)) > 0.5:
-            raise PriceListError(f'Quotation {n} ("{q["customer_name"]}") adds up to {got:,.2f}, not {float(expect):,.2f}.')
+            raise PriceListError(f'Quotation {n} ("{q["customer_name"]}") adds up to {inr(got)}, not {inr(float(expect))}.')
     if any(l['finish'] for l in lines) and not finishes:
         raise PriceListError('Some lines say "finish": true, but the file has no "finishes".')
     if not lines and not templates and not materials and not fittings and not quotations and not options:

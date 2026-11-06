@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app import create_app, db, billing
 from app.models import (AppSetting, Invoice, Notification, Payment, PaymentReminder, Project, QuoteRevision,
                         QuoteShare, CostRate, User, ProjectAccess, Material)
+from app.numbers import inr
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
@@ -182,7 +183,7 @@ with app.app_context():
 c.post(f'/projects/{rid}/revisions/2/restore')
 with app.app_context():
     p_ = db.session.get(Project, rid)
-    ok('restore at today\'s rates: total matches the preview', p_.final_total == expect and f"{expect:,.2f}" in t)
+    ok('restore at today\'s rates: total matches the preview', p_.final_total == expect and f"{inr(expect)}" in t)
     lam = ItemRate.query.filter_by(wood_type='Laminates', work_type='Box Work').first(); lam.rate_per_sqft = 850; db.session.commit()
 
 # ── GST invoice ──
@@ -472,8 +473,8 @@ with app.app_context():
     ok('reports: GST column = GST on issued invoices', abs(rep['total']['gst'] - round(sum(
         sum(t['amount'] for t in billing.invoice_data(i)['taxes']) for i in Invoice.query.filter_by(status='issued')), 2)) < 0.01)
 t = c.get(f'/projects/{rahul.id}').text
-ok('quotation page: "Price before GST" and how GST was taken out', 'Price before GST' in t and '&#8377;1,48,729' not in t
-   and '&#8377;148,729' in t and 'includes GST, so GST is taken out' in t)
+ok('quotation page: "Price before GST" and how GST was taken out', 'Price before GST' in t and '&#8377;148,729' not in t
+   and '&#8377;1,48,729' in t and 'includes GST, so GST is taken out' in t)
 
 # ── Costs & profit ──
 t = c.get('/admin/costs').text
@@ -527,7 +528,7 @@ with demo_app.app_context():
     rahul_inv = Invoice.query.filter_by(project_id=rahul_id).first()
 dtxt = pdftext(dc, f'/projects/{rahul_inv.project_id}/invoices/{rahul_inv.id}/pdf')
 ok('demo invoice PDF: DEMO notice, real amounts with the amount in words', 'DEMO' in dtxt and 'Amount in words' in dtxt
-   and f'{rahul_inv.total:,.2f}' in dtxt)
+   and f'{inr(rahul_inv.total)}' in dtxt)
 ok('demo cannot save costs', 'disabled in the demo' in dc.post('/admin/costs', data={}, follow_redirects=True).text)
 os.environ.pop('DEMO_MODE')
 

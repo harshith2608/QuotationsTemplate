@@ -82,6 +82,7 @@
       <span class="d-none d-md-inline">Everything resets every night.</span>
     {% endif %}
     {% if trial_url and dg.step != 3 %}<a href="{{ trial_url }}" class="ki-demo-trial fw-semibold">Start free trial →</a>{% endif %}
+    {% if call_url %}<a href="{{ call_url }}" class="fw-semibold small"><i class="bi bi-headset me-1"></i>Book a call with us</a>{% endif %}
   </div>
   {% else %}
   <i class="bi bi-stars me-1"></i>You're exploring the demo. Saving settings is turned off and everything resets every night.

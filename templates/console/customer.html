@@ -54,7 +54,7 @@
     <input type="hidden" name="name" value="{{ row.name }}">
     <div class="row">
       <div><label for="plplan">Plan</label>
-        <select id="plplan" name="plan">{% for k in ['1y', '6m', '1y_ai', '6m_ai'] %}<option value="{{ k }}">{{ k|plan_short }} · ₹{{ '{:,}'.format(prices[k]) }}</option>{% endfor %}</select></div>
+        <select id="plplan" name="plan">{% for k in ['1y', '6m', '1y_ai', '6m_ai'] %}<option value="{{ k }}">{{ k|plan_short }} · ₹{{ (prices[k])|inr(0) }}</option>{% endfor %}</select></div>
       <div class="grow"><label for="plpayer">Their name</label><input id="plpayer" type="text" name="payer" value="{{ contact_name or '' }}" maxlength="120"></div>
       <div class="grow"><label for="plphone">WhatsApp number</label><input id="plphone" type="tel" name="phone" value="{{ row.phone or "" }}"></div>
       <div class="grow"><label for="plemail">Email</label><input id="plemail" type="email" name="email" value="{{ pay_email }}"></div>
