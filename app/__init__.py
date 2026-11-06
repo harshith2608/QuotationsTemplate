@@ -217,7 +217,8 @@ def create_app(config_name='default'):
             if callbook.available():
                 help_card = {'booked': callbook.booked(), 'whatsapp': callbook.whatsapp_url()}
         from . import business
-        return {'biz': business.profile(), 'help_card': help_card, 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
+        from .marketing import call_url
+        return {'biz': business.profile(), 'help_card': help_card, 'call_url': call_url(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}

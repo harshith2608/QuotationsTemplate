@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Book a call with us · QuoteRoom</title>
+{% include "console/_public_style.html" %}
+<style>
+  select, input[type=tel] { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 1rem; background:#fff; }
+  .slots { display:flex; flex-wrap:wrap; gap:8px; }
+  .slots label { margin:0; font-weight:600; font-size:.9rem; }
+  .slots input { position:absolute; opacity:0; pointer-events:none; }
+  .slots span { display:inline-block; padding:8px 12px; border:1px solid var(--pine); border-radius:10px; color:var(--pine); cursor:pointer; }
+  .slots input:checked + span { background: var(--pine); color:#fff; }
+  .slots input:focus-visible + span { outline: 2px solid var(--tape); }
+  .day[hidden] { display:none; }
+  .hp { position:absolute; left:-9999px; }
+  .wa { background:#1e7a4c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span>✓</span><span>Quote<b>Room</b></span></div>
+  <div class="card">
+  {% if booked %}
+    <div class="tick">✓</div>
+    <h1>Your call is booked</h1>
+    <p class="lead"><strong>{{ booked.when }}</strong> (India time). We'll call you on WhatsApp at {{ booked.phone }} and show
+      you QuoteRoom with your own items and rates. Keep an old quotation or your rate list handy if you have one.</p>
+    <a class="btn" href="{{ site }}/demo">Try the live demo meanwhile</a>
+  {% else %}
+    <h1>Book a call with us</h1>
+    <p class="lead">10 minutes on WhatsApp: we show you QuoteRoom with your own items and rates, and answer your questions.
+      Free, no obligation.</p>
+    {% if errors.form %}<div class="formerr">{{ errors.form }}</div>{% endif %}
+    {% if slots %}
+    <form method="post" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="hp" aria-hidden="true"><label>Website <input name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
+      <label for="day">Day</label>
+      <select id="day" aria-label="Day of the call">
+        {% for day, free in slots %}<option value="{{ loop.index0 }}" {{ 'selected' if form.slot and form.slot in free|map(attribute=0)|list }}>{{ day }} ({{ free|length }} free time{{ 's' if free|length != 1 }})</option>{% endfor %}
+      </select>
+      <label>Time (India time)</label>
+      {% for day, free in slots %}
+      <div class="slots day" data-day="{{ loop.index0 }}" {% if not (form.slot in free|map(attribute=0)|list or (not form.slot and loop.first)) %}hidden{% endif %}>
+        {% for value, label in free %}<label><input type="radio" name="slot" value="{{ value }}" {{ 'checked' if form.slot == value }}><span>{{ label }}</span></label>{% endfor %}
+      </div>
+      {% endfor %}
+      {% if errors.slot %}<div class="err">{{ errors.slot }}</div>{% endif %}
+      <label for="name">Your name</label>
+      <input type="text" id="name" name="name" value="{{ form.name }}" maxlength="80" required autocomplete="name">
+      {% if errors.name %}<div class="err">{{ errors.name }}</div>{% endif %}
+      <label for="phone">Your WhatsApp number</label>
+      <input type="tel" id="phone" name="phone" value="{{ form.phone }}" maxlength="15" inputmode="tel" required placeholder="98765 43210">
+      {% if errors.phone %}<div class="err">{{ errors.phone }}</div>{% endif %}
+      <label for="company">Company name <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="company" name="company" value="{{ form.company }}" maxlength="80" autocomplete="organization">
+      <label for="business">Your business</label>
+      <select id="business" name="business" required>
+        <option value="">Choose…</option>
+        {% for k, label in kinds %}<option value="{{ k }}" {{ 'selected' if form.business == k }}>{{ 'Others' if k == 'other' else label }}</option>{% endfor %}
+      </select>
+      {% if errors.business %}<div class="err">{{ errors.business }}</div>{% endif %}
+      <label for="note">Anything we should know? <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="note" name="note" value="{{ form.note }}" maxlength="300" placeholder="e.g. we do kitchens and wardrobes">
+      {% if turnstile %}<div class="cf-turnstile" data-sitekey="{{ turnstile }}" style="margin-top:14px"></div>{% endif %}
+      <button type="submit">Book this time</button>
+    </form>
+    {% else %}
+    <p>No free times in the next week just now.</p>
+    {% endif %}
+    {% if whatsapp %}<a class="btn wa" href="https://wa.me/{{ whatsapp }}?text={{ 'Hi! I saw QuoteRoom and would like to know more.'|urlencode }}" target="_blank" rel="noopener">Rather chat? WhatsApp us</a>{% endif %}
+  {% endif %}
+  </div>
+</div>
+<script>
+(function () {
+  const day = document.getElementById('day');
+  if (!day) return;
+  day.addEventListener('change', () => {
+    document.querySelectorAll('.day').forEach(box => {
+      const on = box.dataset.day === day.value;
+      box.hidden = !on;
+      if (!on) box.querySelectorAll('input[name=slot]').forEach(r => { r.checked = false; });
+    });
+  });
+})();
+</script>
+{% if turnstile %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}
+</body>
+</html>

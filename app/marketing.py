@@ -95,6 +95,12 @@ PLAN_NAMES = {'6m': ('6-month plan', '₹4,999'), '1y': ('12-month plan', '₹8,
 PLAN_VALUES = {'6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999}                    # for the ads' InitiateCheckout
 
 
+def call_url():
+    """"Book a call with us": the console's public booking page (next to SIGNUP_URL's set-up page), or ''."""
+    base = _env('SIGNUP_URL').rstrip('/')
+    return f'{base}/call' if base and marketing_enabled() else ''
+
+
 def ai_plans():
     """The pricing cards offer the plans with AI too (AI_PLANS=1 on the website: once the AI helpers are on)."""
     return _env('AI_PLANS').lower() in ('1', 'true', 'yes', 'on')

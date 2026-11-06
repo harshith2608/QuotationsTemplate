@@ -690,6 +690,13 @@ day (`09:00-10:15, 12:00-20:00`; empty = off). Until saved: weekdays not 10:15�
 18:30, Saturday and Sunday 9:00–20:00. **Block a day or a time** on the same card (a day off, a site visit): trials stop
 seeing those slots within a minute; **Unblock** puts them back.
 
+**Book a call with us (the website).** Visitors who aren't a trial yet book the same way: a band before Pricing, a line
+under the plans and a link in the live demo open the console's public page `/call` (`SIGNUP_URL` + `/call`): day, time,
+name, WhatsApp number, company and business. It's saved as a **trial request** (source "Booked a call: …"), goes on the
+**Schedule** with their name and number, and emails you. The same hours and blocks apply. Optional on the console:
+`MARKETING_WHATSAPP` (adds "Rather chat? WhatsApp us" there) and, on the QA console only, `MARKETING_SITE_URL` =
+`https://qa.quote-room.co.in` (its "Try the live demo" link).
+
 ### Following up trials (console → Follow-ups)
 Every running trial has a stage, worked out from its own data: **not signed in → no company details → no quotation yet →
 quoting → ending soon → ended**. Follow-ups shows how many are at each stage and who's **due today** (not messaged about

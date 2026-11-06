@@ -188,7 +188,13 @@ ok('…without JavaScript: redirected there', r.status_code == 302 and r.headers
 with app.app_context():
     ok('…the request notes the plan they\'re buying', any('buying 6m' in (l.source or '') for l in Lead.query.all()))
 os.environ.pop('MAIL_OUTBOX_DIR', None)
+lp = c5.get('/').text
+ok('"Book a call with us": a band before the pricing and a line under it, to the console\'s booking page',
+   lp.count('href="https://ops.quote-room.test/call"') >= 2 and 'Rather see it with someone?' in lp
+   and lp.index('Rather see it with someone?') < lp.index('id="pricing"') and 'Not sure which plan?' in lp)
 for k in ('AUTO_TRIALS', 'SIGNUP_URL', 'SIGNUP_SECRET'):
     os.environ.pop(k, None)
 lp = create_app('development').test_client().get('/').text
 ok('self-serve off: the plan buttons still open WhatsApp', 'interested%20in%20the' in lp and 'data-plan=' not in lp)
+
+ok('…and none without the console link (SIGNUP_URL)', 'Rather see it with someone?' not in create_app('development').test_client().get('/').text)
