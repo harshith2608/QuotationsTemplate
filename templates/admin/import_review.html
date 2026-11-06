@@ -41,7 +41,7 @@
           <thead><tr><th>Material</th><th>Work</th><th class="text-end">Rate</th></tr></thead>
           <tbody>
           {% for m in mat.materials %}{% for w, r in m.rates.items() %}
-            <tr><td>{{ m.name }}</td><td class="text-muted">{{ w or '–' }}</td><td class="text-end">₹{{ '{:,.0f}'.format(r) }}</td></tr>
+            <tr><td>{{ m.name }}</td><td class="text-muted">{{ w or '–' }}</td><td class="text-end">₹{{ (r)|inr(0) }}</td></tr>
           {% endfor %}{% endfor %}
           </tbody>
         </table>

@@ -234,24 +234,24 @@
             {% for room in rooms %}
             {% set rc = namespace(val=0) %}
             {% for item in room.item_list %}{% set rc.val = rc.val + item.cost(item_rates, project_ply) %}{% endfor %}
-            {% if rc.val %}<tr><td>{{ room.name }}</td><td class="text-end fw-semibold">{{ "{:,.2f}".format(rc.val) }}</td></tr>{% endif %}
+            {% if rc.val %}<tr><td>{{ room.name }}</td><td class="text-end fw-semibold">{{ (rc.val)|inr }}</td></tr>{% endif %}
             {% endfor %}
           </tbody>
           <tfoot>
             <tr><td class="fw-semibold text-end text-muted">Subtotal</td>
-                <td class="fw-semibold text-end text-muted text-nowrap">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</td></tr>
+                <td class="fw-semibold text-end text-muted text-nowrap">&#8377;{{ (project.grand_total)|inr }}</td></tr>
             {% if project.discount_type != 'none' and project.discount_value %}
             <tr><td class="fw-semibold text-end text-danger">Discount{% if project.discount_type == 'percentage' %} ({{ project.discount_value | int }}%){% endif %}</td>
-                <td class="fw-semibold text-end text-danger text-nowrap">- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</td></tr>
+                <td class="fw-semibold text-end text-danger text-nowrap">- &#8377;{{ (project.discount_amount)|inr }}</td></tr>
             {% endif %}
             {% if project.gst_amount %}
             <tr><td class="fw-semibold text-end">Total</td>
-                <td class="fw-semibold text-end text-nowrap">&#8377;{{ "{:,.2f}".format(project.final_total) }}</td></tr>
+                <td class="fw-semibold text-end text-nowrap">&#8377;{{ (project.final_total)|inr }}</td></tr>
             <tr><td class="fw-semibold text-end text-muted">GST @ {{ '%g' % quote_gst_rate }}%</td>
-                <td class="fw-semibold text-end text-muted text-nowrap">&#8377;{{ "{:,.2f}".format(project.gst_amount) }}</td></tr>
+                <td class="fw-semibold text-end text-muted text-nowrap">&#8377;{{ (project.gst_amount)|inr }}</td></tr>
             {% endif %}
             <tr class="ki-grand-total-row"><td class="fw-bold text-end fs-6">{{ 'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL' }}</td>
-                <td class="fw-bold text-end fs-5 text-success text-nowrap">&#8377;{{ "{:,.2f}".format(project.total_payable) }}</td></tr>
+                <td class="fw-bold text-end fs-5 text-success text-nowrap">&#8377;{{ (project.total_payable)|inr }}</td></tr>
           </tfoot>
         </table>
         {% else %}
@@ -263,41 +263,41 @@
           <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
             <div>
               <span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }} d-block mb-1">{{ row.label }}</span>
-              <span class="text-muted small">{{ row.area|area }} &times; &#8377;{{ "{:,.0f}".format(row.rate|rate) }}{{ units.rate_label() }}</span>
+              <span class="text-muted small">{{ row.area|area }} &times; &#8377;{{ (row.rate|rate)|inr(0) }}{{ units.rate_label() }}</span>
             </div>
-            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(row.subtotal) }}</span>
+            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ (row.subtotal)|inr }}</span>
           </div>
           {% endfor %}
           {% if fixed_total %}
           <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
             <span class="badge ki-badge-fitting">{{ catalog.FIXED_ITEMS_LABEL }}</span>
-            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(fixed_total) }}</span>
+            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ (fixed_total)|inr }}</span>
           </div>
           {% endif %}
           {% if boq_total %}
           <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
             <span class="badge ki-badge-boq">{{ catalog.BOQ_ITEMS_LABEL }}</span>
-            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(boq_total) }}</span>
+            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ (boq_total)|inr }}</span>
           </div>
           {% endif %}
           <div class="d-flex justify-content-between py-2 text-muted small">
-            <span>Subtotal</span><span>&#8377;{{ "{:,.2f}".format(project.grand_total) }}</span>
+            <span>Subtotal</span><span>&#8377;{{ (project.grand_total)|inr }}</span>
           </div>
           {% if project.discount_type != 'none' and project.discount_value %}
           <div class="d-flex justify-content-between py-2 text-danger small fw-semibold">
             <span>Discount{% if project.discount_type == 'percentage' %} ({{ project.discount_value | int }}%){% endif %}</span>
-            <span>- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</span>
+            <span>- &#8377;{{ (project.discount_amount)|inr }}</span>
           </div>
           {% endif %}
           {% if project.gst_amount %}
           <div class="d-flex justify-content-between py-1 small fw-semibold"><span>Total</span>
-            <span>&#8377;{{ "{:,.2f}".format(project.final_total) }}</span></div>
+            <span>&#8377;{{ (project.final_total)|inr }}</span></div>
           <div class="d-flex justify-content-between py-1 small text-muted fw-semibold"><span>GST @ {{ '%g' % quote_gst_rate }}%</span>
-            <span>&#8377;{{ "{:,.2f}".format(project.gst_amount) }}</span></div>
+            <span>&#8377;{{ (project.gst_amount)|inr }}</span></div>
           {% endif %}
           <div class="d-flex justify-content-between align-items-center py-2 ki-grand-total-row mt-1 px-2 rounded">
             <span class="fw-bold fs-6">{{ 'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL' }}</span>
-            <span class="fw-bold fs-5 text-success">&#8377;{{ "{:,.2f}".format(project.total_payable) }}</span>
+            <span class="fw-bold fs-5 text-success">&#8377;{{ (project.total_payable)|inr }}</span>
           </div>
         </div>
         <!-- Desktop: table -->
@@ -315,9 +315,9 @@
             {% for row in item_summary %}
             <tr>
               <td><span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }}">{{ row.label }}</span></td>
-              <td class="text-end">{{ "{:,.2f}".format(units.area_value(row.area)) }}</td>
-              <td class="text-end">{{ "{:,.0f}".format(row.rate|rate) }}</td>
-              <td class="text-end fw-semibold">{{ "{:,.2f}".format(row.subtotal) }}</td>
+              <td class="text-end">{{ (units.area_value(row.area))|inr }}</td>
+              <td class="text-end">{{ (row.rate|rate)|inr(0) }}</td>
+              <td class="text-end fw-semibold">{{ (row.subtotal)|inr }}</td>
             </tr>
             {% endfor %}
             {% if fixed_total %}
@@ -325,7 +325,7 @@
               <td><span class="badge ki-badge-fitting">{{ catalog.FIXED_ITEMS_LABEL }}</span></td>
               <td class="text-end text-muted">—</td>
               <td class="text-end text-muted">—</td>
-              <td class="text-end fw-semibold">{{ "{:,.2f}".format(fixed_total) }}</td>
+              <td class="text-end fw-semibold">{{ (fixed_total)|inr }}</td>
             </tr>
             {% endif %}
             {% if boq_total %}
@@ -333,14 +333,14 @@
               <td><span class="badge ki-badge-boq">{{ catalog.BOQ_ITEMS_LABEL }}</span></td>
               <td class="text-end text-muted">—</td>
               <td class="text-end text-muted">—</td>
-              <td class="text-end fw-semibold">{{ "{:,.2f}".format(boq_total) }}</td>
+              <td class="text-end fw-semibold">{{ (boq_total)|inr }}</td>
             </tr>
             {% endif %}
           </tbody>
           <tfoot>
             <tr>
               <td colspan="3" class="fw-semibold text-end text-muted">Subtotal</td>
-              <td class="fw-semibold text-end text-muted">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</td>
+              <td class="fw-semibold text-end text-muted">&#8377;{{ (project.grand_total)|inr }}</td>
             </tr>
             {% if project.discount_type != 'none' and project.discount_value %}
             <tr>
@@ -352,19 +352,19 @@
                   <span class="badge bg-danger ms-1">Fixed</span>
                 {% endif %}
               </td>
-              <td class="fw-semibold text-end text-danger">- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</td>
+              <td class="fw-semibold text-end text-danger">- &#8377;{{ (project.discount_amount)|inr }}</td>
             </tr>
             {% endif %}
             {% if project.gst_amount %}
             <tr><td colspan="3" class="fw-semibold text-end">Total</td>
-                <td class="fw-semibold text-end">&#8377;{{ "{:,.2f}".format(project.final_total) }}</td></tr>
+                <td class="fw-semibold text-end">&#8377;{{ (project.final_total)|inr }}</td></tr>
             <tr><td colspan="3" class="fw-semibold text-end text-muted">GST @ {{ '%g' % quote_gst_rate }}%</td>
-                <td class="fw-semibold text-end text-muted">&#8377;{{ "{:,.2f}".format(project.gst_amount) }}</td></tr>
+                <td class="fw-semibold text-end text-muted">&#8377;{{ (project.gst_amount)|inr }}</td></tr>
             {% endif %}
             <tr class="ki-grand-total-row">
               <td colspan="3" class="fw-bold text-end fs-6">{{ 'GRAND TOTAL (incl. GST)' if project.gst_amount else 'FINAL TOTAL' }}</td>
               <td class="fw-bold text-end fs-5 text-success">
-                &#8377;{{ "{:,.2f}".format(project.total_payable) }}
+                &#8377;{{ (project.total_payable)|inr }}
               </td>
             </tr>
           </tfoot>
@@ -412,7 +412,7 @@
         <div class="ki-room-title d-flex justify-content-between align-items-center">
           <span><i class="bi bi-door-open me-2"></i>{{ room.name }}</span>
           <span class="badge bg-white text-primary">
-            {% if priced_only %}&#8377;{{ "{:,.2f}".format(room_cost.val) }}{% else %}Room Total: {{ room.total_area|area }}{% endif %}
+            {% if priced_only %}&#8377;{{ (room_cost.val)|inr }}{% else %}Room Total: {{ room.total_area|area }}{% endif %}
           </span>
         </div>
         {% if priced_only %}
@@ -432,15 +432,15 @@
                   {% if item.is_boq and item.length %}<div class="small text-muted fw-normal">Size: {{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }} Nos.{% endif %}</div>{% endif %}</td>
                 <td class="text-center text-nowrap">{{ '%g' % item.quantity if item.quantity else '—' }}</td>
                 <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
-                <td class="text-end text-nowrap">{% if item.price_to_follow %}—{% else %}{{ "{:,.0f}".format(item.unit_price or 0) }}{% endif %}</td>
-                <td class="text-end fw-semibold text-success text-nowrap">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ "{:,.2f}".format(amount) }}{% endif %}</td>
+                <td class="text-end text-nowrap">{% if item.price_to_follow %}—{% else %}{{ (item.unit_price or 0)|inr(0) }}{% endif %}</td>
+                <td class="text-end fw-semibold text-success text-nowrap">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
               </tr>
               {% endfor %}
             </tbody>
             <tfoot>
               <tr class="table-light">
                 <td colspan="4" class="fw-semibold text-muted text-end small">{{ 'Section Total' if room_cost.val else 'Rates for reference, not added to the total' }}</td>
-                <td class="text-end fw-bold text-primary text-nowrap">{{ '&#8377;'|safe ~ "{:,.2f}".format(room_cost.val) if room_cost.val else '—' }}</td>
+                <td class="text-end fw-bold text-primary text-nowrap">{{ '&#8377;'|safe ~ (room_cost.val)|inr if room_cost.val else '—' }}</td>
               </tr>
             </tfoot>
           </table>
@@ -470,18 +470,18 @@
                 <td class="text-center">
                   {% if item.is_boq %}<span class="badge ki-badge-boq">{{ 'Lump sum' if item.unit_text == 'LS' else 'BOQ' }}</span>
                   {% if item.length %}<div class="small text-muted mt-1">{{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }}{% endif %}</div>{% endif %}
-                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %} &times; &#8377;{{ "{:,.0f}".format(item.unit_price) }}{% endif %}{% else %}Rate &#8377;{{ "{:,.0f}".format(item.unit_price) }} / {{ item.unit_text }}{% endif %}</div>
+                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %} &times; &#8377;{{ (item.unit_price)|inr(0) }}{% endif %}{% else %}Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}{% endif %}</div>
                   {% else %}<span class="badge ki-badge-fitting">Fitting</span>
-                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }} &times; &#8377;{{ "{:,.0f}".format(item.unit_price) }}</div>{% endif %}
+                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }} &times; &#8377;{{ (item.unit_price)|inr(0) }}</div>{% endif %}
                 </td>
-                <td class="text-end fw-semibold text-success">&#8377;{{ "{:,.2f}".format(item_subtotal) }}</td>
+                <td class="text-end fw-semibold text-success">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>
               {% else %}
               <tr>
                 <td class="fw-medium">{{ item.name }}{% if item.count > 1 %} <span class="badge bg-light text-dark border">× {{ item.count }}</span>{% endif %}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}{% if item.photo_id %}<a href="{{ url_for('projects.item_image', image_id=item.photo_id) }}" target="_blank" rel="noopener"><img class="ki-line-photo" src="{{ url_for('projects.item_image', image_id=item.photo_id) }}" alt="Photo of {{ item.name }}" loading="lazy"></a>{% endif %}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.length | ft_in }}</td>
                 <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.width | ft_in }}</td>
-                <td class="text-center fw-semibold">{{ "{:,.2f}".format(units.area_value(item.area)) }}</td>
+                <td class="text-center fw-semibold">{{ (units.area_value(item.area))|inr }}</td>
                 <td class="text-center">
                   <span class="badge ki-badge-material ki-badge-{{ item.wood_type|lower|replace(' ', '-') }}">{{ item.wood_type }}</span>
                   {% if ply_materials and item.wood_type in ply_materials and item.plywood %}<span class="badge bg-light text-dark border ms-1">{{ item.plywood }}</span>{% endif %}
@@ -492,7 +492,7 @@
                         style="{% if item.work_type == 'Box Work' %}background:#7c3aed{% endif %}">{{ item.work_type }}</span>
                   {% endif %}
                 </td>
-                <td class="text-end fw-semibold text-success">&#8377;{{ "{:,.2f}".format(item_subtotal) }}</td>
+                <td class="text-end fw-semibold text-success">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>
               {% endif %}
               {% endfor %}
@@ -503,7 +503,7 @@
                 <td class="fw-semibold text-muted text-end small d-md-none">Room Total</td>
                 <td class="text-center fw-semibold">{{ room.total_area|area }}</td>
                 <td></td>
-                <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>
+                <td class="text-end fw-bold text-primary">&#8377;{{ (room_cost.val)|inr }}</td>
               </tr>
             </tfoot>
           </table>
@@ -530,16 +530,16 @@
     <div class="row g-2 mb-3 text-center">
       <div class="col-4">
         <div class="small text-muted">{{ 'Invoice total' if q2c.invoice else 'Total' }}</div>
-        <div class="fw-bold text-dark">&#8377;{{ "{:,.2f}".format(amount_due) }}</div>
+        <div class="fw-bold text-dark">&#8377;{{ (amount_due)|inr }}</div>
       </div>
       <div class="col-4">
         <div class="small text-muted">Paid</div>
-        <div class="fw-bold text-success">&#8377;{{ "{:,.2f}".format(total_paid) }}</div>
+        <div class="fw-bold text-success">&#8377;{{ (total_paid)|inr }}</div>
       </div>
       <div class="col-4">
         <div class="small text-muted">Balance</div>
         <div class="fw-bold {% if balance > 0 %}text-danger{% else %}text-success{% endif %}">
-          &#8377;{{ "{:,.2f}".format(balance) }}
+          &#8377;{{ (balance)|inr }}
         </div>
       </div>
     </div>
@@ -572,7 +572,7 @@
         {% for p in payments %}
         <tr>
           <td class="text-muted">{{ p.recorded_at|ist_time('%d %b %Y') }}</td>
-          <td class="fw-semibold text-success">&#8377;{{ "{:,.2f}".format(p.amount) }}</td>
+          <td class="fw-semibold text-success">&#8377;{{ (p.amount)|inr }}</td>
           <td class="text-muted">{{ p.note or '—' }}</td>
           <td>
             {% if p.source == 'razorpay' %}
@@ -680,7 +680,7 @@
           <td class="fw-semibold">{{ inv.number }}{% if inv.status == 'cancelled' %} <span class="badge bg-secondary">cancelled</span>{% endif %}
             {% if not inv.with_gst %}<span class="badge bg-light text-muted border">without GST</span>{% endif %}</td>
           <td>{{ inv.issued_on.strftime('%d %b %Y') }}</td>
-          <td class="text-end">&#8377;{{ "{:,.2f}".format(inv.total) }}</td>
+          <td class="text-end">&#8377;{{ (inv.total)|inr }}</td>
           <td class="text-end text-nowrap">
             <a class="btn btn-sm btn-outline-primary py-0" target="_blank" rel="noopener"
                href="{{ url_for('billing.invoice_pdf', project_id=project.id, invoice_id=inv.id) }}"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>
@@ -780,7 +780,7 @@
       {% set l = sh.latest %}
       <div class="alert {{ 'alert-success' if l.kind == 'accepted' else 'alert-info' }} small py-2">
         {% if l.kind == 'accepted' %}<i class="bi bi-check-circle-fill me-1"></i><strong>Accepted</strong> by {{ l.name }} on {{ l.created_at|ist_time }}
-          for &#8377;{{ "{:,.2f}".format(l.total or 0) }}{% if l.revision %} (revision {{ l.revision }}){% endif %}.
+          for &#8377;{{ (l.total or 0)|inr }}{% if l.revision %} (revision {{ l.revision }}){% endif %}.
         {% else %}<i class="bi bi-chat-dots me-1"></i><strong>Changes requested</strong> on {{ l.created_at|ist_time('%d %b %Y') }}: “{{ l.note }}”{% endif %}
         {% if not sh.latest_is_current %}<div class="mt-1">The quotation has changed since. The customer can accept the new version from the same link.</div>{% endif %}
       </div>
@@ -845,13 +845,13 @@
     {% set pr = q2c.profit %}
     {% if pr %}
     <div class="row g-2 text-center">
-      <div class="col-4"><div class="small text-muted">Price before GST</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.selling) }}</div></div>
-      <div class="col-4"><div class="small text-muted">Your cost</div><div class="fw-bold">&#8377;{{ "{:,.0f}".format(pr.cost) }}</div></div>
+      <div class="col-4"><div class="small text-muted">Price before GST</div><div class="fw-bold">&#8377;{{ (pr.selling)|inr(0) }}</div></div>
+      <div class="col-4"><div class="small text-muted">Your cost</div><div class="fw-bold">&#8377;{{ (pr.cost)|inr(0) }}</div></div>
       <div class="col-4"><div class="small text-muted">Profit</div>
-        <div class="fw-bold {{ 'text-success' if pr.profit >= 0 else 'text-danger' }}">&#8377;{{ "{:,.0f}".format(pr.profit) }} <span class="small">({{ pr.margin }}%)</span></div></div>
+        <div class="fw-bold {{ 'text-success' if pr.profit >= 0 else 'text-danger' }}">&#8377;{{ (pr.profit)|inr(0) }} <span class="small">({{ pr.margin }}%)</span></div></div>
     </div>
     <div class="small text-muted mt-2">
-      {% if pr.gst_removed %}The quoted &#8377;{{ "{:,.2f}".format(pr.quoted) }} includes GST, so GST is taken out: &#8377;{{ "{:,.2f}".format(pr.selling) }}{% if pr.invoiced %} (the invoice's taxable value){% endif %}.
+      {% if pr.gst_removed %}The quoted &#8377;{{ (pr.quoted)|inr }} includes GST, so GST is taken out: &#8377;{{ (pr.selling)|inr }}{% if pr.invoiced %} (the invoice's taxable value){% endif %}.
       {% elif pr.invoiced %}Based on the invoice{% if pr.selling != pr.quoted %} (taxable value){% endif %}, without GST.
       {% else %}Quoted prices are before GST, so GST isn't part of this.{% endif %}
       Profit = price before GST − your costs.</div>
@@ -881,7 +881,7 @@
         <div class="d-flex flex-wrap gap-2">
           <strong>Rev {{ rev.number }}</strong>{% if loop.first %}<span class="badge bg-success">current</span>{% endif %}{% if snap.restored_from %}<span class="badge bg-light text-dark border">restored from Rev {{ snap.restored_from }}</span>{% endif %}
           <span class="text-muted">{{ rev.created_at|ist_time }}{% if rev.user %} · {{ rev.user.display_name }}{% endif %}</span>
-          <span class="ms-auto fw-semibold">&#8377;{{ "{:,.2f}".format(rev.total) }}</span>
+          <span class="ms-auto fw-semibold">&#8377;{{ (rev.total)|inr }}</span>
         </div>
         {% if changes %}<div class="text-muted">{{ changes[:3]|join(' · ') }}{% if changes|length > 3 %} · +{{ changes|length - 3 }} more{% endif %}</div>{% endif %}
       </a>

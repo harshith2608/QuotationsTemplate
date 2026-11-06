@@ -333,7 +333,7 @@
           {% for c in material_combos if '(hidden)' not in c.label %}
           <li class="list-group-item d-flex justify-content-between py-2">
             <span class="small fw-medium">{{ c.label }}</span>
-            <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(item_rates.get(c.value, 0)|rate) }}{{ units.rate_label() }}</span>
+            <span class="small text-success fw-bold">&#8377;{{ (item_rates.get(c.value, 0)|rate)|inr(0) }}{{ units.rate_label() }}</span>
           </li>
           {% endfor %}
         </ul>

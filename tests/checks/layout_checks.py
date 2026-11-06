@@ -5,12 +5,13 @@ from sqlalchemy import text
 from app import create_app, db, billing, layout
 from app.models import Item, ItemRate, Project, QuoteRevision, Room
 from sqlalchemy.orm import undefer
+from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
 c = app.test_client(); c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 pdftext = lambda u: re.sub(r'\s+', ' ', ' '.join(p.extract_text() for p in PdfReader(io.BytesIO(c.get(u).data)).pages))
-money = lambda v: f'{v:,.2f}'
+money = lambda v: f'{inr(v)}'
 
 
 def rate(wood, work):
@@ -55,7 +56,7 @@ cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('Initial Quotation PDF is room by room by default', 'Kitchen – Hardware' in cust and "No's" in cust
    and 'Material Description' in cust and 'Carcass: BWP 710 ply' in cust and 'Basic Total' in cust)
 ok('…with sizes, one amount per room, discount and total; no rates or areas', '8 ft' in cust and money(kitchen_measured) in cust
-   and money(subtotal) in cust and money(subtotal - 1000) in cust and f'{LAM:,.0f}' not in cust.replace(money(subtotal), '')
+   and money(subtotal) in cust and money(subtotal - 1000) in cust and f'{inr(LAM, 0)}' not in cust.replace(money(subtotal), '')
    and 'sqft' not in cust)
 full = pdftext(f'/projects/{pid}/pdf')
 ok('Full Quotation keeps every rate and shows the count', 'Glass Shutters × 2' in full and money(subtotal - 1000) in full)
@@ -63,7 +64,7 @@ ok('Full Quotation: each item\'s material as a finish (Laminates Finish), work t
    'Laminates Finish' in full and 'Acrylic Finish' in full and 'Laminates – Box Work' in full.split('Cost Summary')[1]
    and 'Laminates – Box Work' not in full.split('Cost Summary')[0])
 ok('Full Quotation Cost Summary: area and amount per material, no rate per area', 'Total Area' in full
-   and 'Rate (Rs.' not in full and f'{LAM:,.0f}' not in full.split('Cost Summary')[1].split('Subtotal')[0].replace(money(LAM * 20), ''))
+   and 'Rate (Rs.' not in full and f'{inr(LAM, 0)}' not in full.split('Cost Summary')[1].split('Subtotal')[0].replace(money(LAM * 20), ''))
 
 # Sections
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms', 'material_specs': 'BWP 710 ply for carcass',

@@ -35,6 +35,7 @@ from werkzeug.security import check_password_hash
 
 from . import db, ops, tenancy
 from . import plan as plan_mod
+from .numbers import inr
 
 console_bp = Blueprint('console', __name__, template_folder='../templates')
 
@@ -2213,7 +2214,7 @@ def payments_manual():
     except subscription.PaymentError as exc:
         flash(f'Could not record the payment: {exc}', 'error')
         return redirect(url_for('console.payments') + '#record')
-    audit('payment_manual', row['slug'], f"{row['receipt_no']} ₹{row['amount_paise'] / 100:,.0f} {row['paid_by']}")
+    audit('payment_manual', row['slug'], f"{row['receipt_no']} ₹{inr(row['amount_paise'] / 100, 0)} {row['paid_by']}")
     if f.get('notify') == '1':
         subscription.notify_paid(row)
     moved = ''
@@ -2223,7 +2224,7 @@ def payments_manual():
             moved = ' Moved to its own database.' if out.get(row['slug']) == 'active' else ''
         except Exception:
             pass
-    flash(f"Payment recorded: {row['receipt_no']}, ₹{row['amount_paise'] / 100:,.0f} from {row['business_name'] or row['slug']}"
+    flash(f"Payment recorded: {row['receipt_no']}, ₹{inr(row['amount_paise'] / 100, 0)} from {row['business_name'] or row['slug']}"
           + (f", plan until {row['plan_end']:%d %b %Y}." if row.get('plan_end') else '.') + moved, 'ok')
     return redirect(url_for('console.payments'))
 
@@ -2236,8 +2237,8 @@ def payments_delete(payment_id):
     row = subscription.delete_payment(payment_id)
     if not row:
         abort(404)
-    audit('payment_delete', row['slug'], f"{row.get('receipt_no') or row['order_id']} ₹{row['amount_paise'] / 100:,.0f}")
-    flash(f"Removed payment {row.get('receipt_no') or ''} (₹{row['amount_paise'] / 100:,.0f}, {row['slug']}). "
+    audit('payment_delete', row['slug'], f"{row.get('receipt_no') or row['order_id']} ₹{inr(row['amount_paise'] / 100, 0)}")
+    flash(f"Removed payment {row.get('receipt_no') or ''} (₹{inr(row['amount_paise'] / 100, 0)}, {row['slug']}). "
           "Their plan wasn't changed.", 'ok')
     return redirect(url_for('console.payments'))
 

@@ -12,6 +12,7 @@ import re
 from datetime import date, datetime
 
 from . import db, tenancy
+from .numbers import inr
 
 _ready_forever = {}
 
@@ -255,9 +256,9 @@ def _describe(item):
         size = boq.size_text(item)
         if item.get('tbc'):
             return (f"{size} = " if size else '') + f"{item['quantity']:g} {item.get('unit') or 'nos'}, price to follow"
-        return (f"{size} = " if size else '') + f"{item['quantity']:g} {item.get('unit') or 'nos'} × ₹{item['unit_price']:,.0f}"
+        return (f"{size} = " if size else '') + f"{item['quantity']:g} {item.get('unit') or 'nos'} × ₹{inr(item['unit_price'], 0)}"
     if item['type'] == 'fixed':
-        return f"{item['quantity']:g} × ₹{item['unit_price']:,.0f}"
+        return f"{item['quantity']:g} × ₹{inr(item['unit_price'], 0)}"
     count = f" × {item['count']}" if item.get('count', 1) > 1 else ''
     return f"{_fmt_dim(item['length'])} × {_fmt_dim(item['width'])}{count}, {item['material']}"
 
@@ -356,7 +357,7 @@ def diff_snapshots(old, new):
         changes.append(f"Plywood {old.get('plywood_choice') or 'default'} → {new['plywood_choice']}")
     od, nd = old.get('discount', {}), new.get('discount', {})
     if round(od.get('amount', 0), 2) != round(nd.get('amount', 0), 2):
-        changes.append(f"Discount ₹{od.get('amount', 0):,.0f} → ₹{nd.get('amount', 0):,.0f}")
+        changes.append(f"Discount ₹{inr(od.get('amount', 0), 0)} → ₹{inr(nd.get('amount', 0), 0)}")
     oc, nc = old.get('customer', {}), new.get('customer', {})
     for key, label in (('name', 'Customer name'), ('mobile', 'Mobile'), ('email', 'Email'), ('address', 'Address')):
         if (oc.get(key) or '') != (nc.get(key) or ''):
@@ -364,7 +365,7 @@ def diff_snapshots(old, new):
     if not changes and round(old.get('total', 0), 2) != round(new.get('total', 0), 2):
         changes.append('Rates changed')
     if round(old.get('total', 0), 2) != round(new.get('total', 0), 2):
-        changes.append(f"Total ₹{old.get('total', 0):,.2f} → ₹{new.get('total', 0):,.2f}")
+        changes.append(f"Total ₹{inr(old.get('total', 0))} → ₹{inr(new.get('total', 0))}")
     return changes
 
 
@@ -676,9 +677,9 @@ def invoice_message(project, invoice, url):
     brand = get_brand()
     due = balance(project, invoice) if invoice.status == 'issued' else 0
     lines = [f'Hello {project.customer_name},', '',
-             f'Here is your invoice {invoice.number} from {brand["name"]} for Rs.{invoice.total:,.2f}.']
+             f'Here is your invoice {invoice.number} from {brand["name"]} for Rs.{inr(invoice.total)}.']
     if due and due < invoice.total:
-        lines.append(f'Amount due: Rs.{due:,.2f}')
+        lines.append(f'Amount due: Rs.{inr(due)}')
     lines += ['', 'View and download it here:', url, '', 'Thank you for your business!']
     if demo_enabled():
         lines = ['*DEMO — NOT A REAL INVOICE*', ''] + lines
@@ -698,7 +699,7 @@ def quotation_email_text(project, link=''):
     brand = get_brand()
     lines = [f'Hello {project.customer_name},', '',
              f'Thank you for considering {brand["name"]}. Please find your quotation attached '
-             f'(total Rs.{project.final_total:,.2f}).']
+             f'(total Rs.{inr(project.final_total)}).']
     if link:
         lines += ['', 'You can also view it and accept it online:', link]
     lines += ['', 'Please reply to this email if you have any questions.', '', f'Regards,', brand['name']]
@@ -789,10 +790,10 @@ def reminder_message(project, amount, pay_link='', pay_settings=None):
     ref = f'Invoice {inv.number}' if inv else 'your quotation'
     lines = [f'Hello {project.customer_name},', '',
              f'This is a friendly reminder from *{brand["name"]}* about the payment for {ref}.', '',
-             f'Total: Rs.{total:,.2f}']
+             f'Total: Rs.{inr(total)}']
     if paid:
-        lines.append(f'Received so far: Rs.{paid:,.2f}')
-    lines.append(f'*Amount due: Rs.{amount:,.2f}*')
+        lines.append(f'Received so far: Rs.{inr(paid)}')
+    lines.append(f'*Amount due: Rs.{inr(amount)}*')
     if pay_link:
         lines += ['', f'Pay online: {pay_link}']
     ps = pay_settings or {}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Reports{% endblock %}
-{% macro rs(v) %}&#8377;{{ "{:,.0f}".format(v or 0) }}{% endmacro %}
+{% macro rs(v) %}&#8377;{{ (v or 0)|inr(0) }}{% endmacro %}
 
 {% block content %}
 {% set c = r.current %}{% set pj = r.projection %}

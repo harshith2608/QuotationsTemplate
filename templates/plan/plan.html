@@ -24,8 +24,8 @@
           {% if key == '1y' %}<span class="badge text-bg-light border">Best value</span>{% elif key == '1y_ai' %}<span class="badge bg-primary">Most AI</span>{% endif %}
           {% if status.plan == key and not status.is_trial %}<span class="badge text-bg-success">Your plan</span>{% endif %}
         </div>
-        <div class="display-6 fw-bold my-2">₹{{ '{:,}'.format(prices[key]) }}</div>
-        <div class="small text-muted mb-3">{{ 'Pay for 6 months' if length == '6m' else 'Save ₹' ~ '{:,}'.format(prices['6m' ~ ('_ai' if ai else '')] * 2 - prices[key]) ~ ' a year' }}
+        <div class="display-6 fw-bold my-2">₹{{ (prices[key])|inr(0) }}</div>
+        <div class="small text-muted mb-3">{{ 'Pay for 6 months' if length == '6m' else 'Save ₹' ~ (prices['6m' ~ ('_ai' if ai else '')] * 2 - prices[key])|inr(0) ~ ' a year' }}
           · your whole team · all features · no GST</div>
         <ul class="small mb-3 ps-3">
           <li>Unlimited quotations, staff logins and customers</li>
@@ -33,7 +33,7 @@
           <li>{{ when }}</li>
         </ul>
         <button type="button" class="btn {{ 'btn-primary' if key == '1y_ai' else 'btn-outline-primary' }} mt-auto fw-semibold"
-                onclick="buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>Pay ₹{{ '{:,}'.format(prices[key]) }}</button>
+                onclick="buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>Pay ₹{{ (prices[key])|inr(0) }}</button>
       </div>
     </div>
   </div>
@@ -53,7 +53,7 @@
     </div>
     {% if ai_pool.can_buy %}
     <button type="button" class="btn btn-outline-primary fw-semibold" onclick="buyPlan('{{ addon }}', this)">
-      <i class="bi bi-plus-lg me-1"></i>Buy {{ addon_uses }} AI uses · ₹{{ '{:,}'.format(prices[addon]) }}</button>
+      <i class="bi bi-plus-lg me-1"></i>Buy {{ addon_uses }} AI uses · ₹{{ (prices[addon])|inr(0) }}</button>
     {% elif ai_pool.tier == 'trial' %}<span class="small text-muted">Choose a plan for more.</span>{% endif %}
   </div>
 </div>
@@ -70,7 +70,7 @@
   <tbody>
   {% for p in payments %}
     <tr><td>{{ p.paid_at.strftime('%d %b %Y') }}</td><td>{{ p.plan|plan_short }}</td>
-        <td class="text-end">₹{{ '{:,.0f}'.format(p.amount_paise / 100) }}</td>
+        <td class="text-end">₹{{ (p.amount_paise / 100)|inr(0) }}</td>
         <td><a href="{{ url_for('plan.receipt', payment_id=p.id) }}" target="_blank" rel="noopener">{{ p.receipt_no }}</a></td></tr>
   {% endfor %}
   </tbody>

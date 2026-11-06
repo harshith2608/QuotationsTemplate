@@ -67,6 +67,8 @@ def create_app(config_name='default'):
     # Operator console deployment: serves only the console (no business app, no tenants)
     from .plan import short as plan_short
     app.add_template_filter(plan_short, 'plan_short')   # '12 months with AI', '40 AI uses' (the app and the console)
+    from .numbers import inr
+    app.add_template_filter(inr, 'inr')                  # 15,50,000.00: numbers the Indian way, on every page
 
     from .console import console_mode
     if console_mode():

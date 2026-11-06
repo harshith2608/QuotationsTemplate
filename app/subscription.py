@@ -30,6 +30,7 @@ from sqlalchemy import text
 
 from . import db, tenancy
 from . import plan as plan_mod
+from .numbers import inr
 
 API = 'https://api.razorpay.com/v1'
 DDL = """
@@ -180,7 +181,7 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
 def _link_text(row, after=''):
     from . import texts
     return texts.render('pay_link', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
-                        amount=f'₹{row["amount_paise"] / 100:,.0f}', link=row['link_url'], after=after)
+                        amount=f'₹{inr(row["amount_paise"] / 100, 0)}', link=row['link_url'], after=after)
 
 
 def link_message(row):
@@ -527,12 +528,12 @@ def send_receipt(row, to=None):
     first = (row.get('payer_name') or '').split(' ')[0]
     if row['plan'] == plan_mod.ADDON:
         subject, body = texts.render('pay_addon', hello=f'Hello {first}' if first else 'Hello',
-                                     amount=f'₹{row["amount_paise"] / 100:,.0f}', uses=plan_mod.ADDON_USES,
+                                     amount=f'₹{inr(row["amount_paise"] / 100, 0)}', uses=plan_mod.ADDON_USES,
                                      business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
                                      receipt_no=row.get('receipt_no'))
     else:
         subject, body = texts.render('pay_receipt', hello=f'Hello {first}' if first else 'Hello',
-                                     amount=f'₹{row["amount_paise"] / 100:,.0f}', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
+                                     amount=f'₹{inr(row["amount_paise"] / 100, 0)}', plan=plan_mod.PLANS.get(row['plan'], row['plan']),
                                      business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
                                      plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
                                      receipt_no=row.get('receipt_no'))
@@ -547,7 +548,7 @@ def notify_paid(row):
         return
     fmt = lambda d: d.strftime('%d %b %Y') if d else '—'
     plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
-    amount = f'₹{row["amount_paise"] / 100:,.0f}'
+    amount = f'₹{inr(row["amount_paise"] / 100, 0)}'
     name = row.get('business_name') or row['slug']
     sent = send_receipt(row)
     mailer.send(mailer.operator(), f'Payment: {amount} from {name}',
@@ -618,8 +619,8 @@ def send_reminders():
                          delete=fmt(st.delete_on))
             p = prices()
             from . import texts
-            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), price_6m=f"{p['6m']:,}",
-                                         price_1y=f"{p['1y']:,}", **words)
+            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), price_6m=f"{inr(p['6m'], 0)}",
+                                         price_1y=f"{inr(p['1y'], 0)}", **words)
             mailer.send(email, subject, body)
             out[slug] = kind
         except Exception as exc:                           # one business's problem mustn't stop the others
@@ -649,7 +650,7 @@ def receipt_pdf(row):
     small = ParagraphStyle('s', parent=st['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#455a64'))
     dark = colors.HexColor('#163a30')
     fmt = lambda d: d.strftime('%d %b %Y') if d else '—'
-    rupees = lambda p: f'Rs. {p / 100:,.2f}'
+    rupees = lambda p: f'Rs. {inr(p / 100)}'
     plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
     period = f'{fmt(row.get("plan_start"))} – {fmt(row.get("plan_end"))}' if row.get('plan_end') else '—'
     contact = ' · '.join(x for x in (who['address'], who['email'], who['phone']) if x)
@@ -711,7 +712,7 @@ def proforma_pdf(row, bill_to='', address=''):
     dark = colors.HexColor('#163a30')
     made = row.get('created_at') or datetime.utcnow()
     fmt = lambda d: d.strftime('%d %b %Y')
-    rupees = lambda p: f'Rs. {p / 100:,.2f}'
+    rupees = lambda p: f'Rs. {inr(p / 100)}'
     plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
     contact = ' · '.join(x for x in (who['address'], who['email'], who['phone']) if x)
     title = ParagraphStyle('t', parent=st['Normal'], fontSize=18, leading=24, textColor=dark)

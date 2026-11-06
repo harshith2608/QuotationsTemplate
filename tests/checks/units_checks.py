@@ -5,6 +5,7 @@ from pypdf import PdfReader
 from urllib.parse import unquote
 from app import create_app, db, units
 from app.models import AppSetting, ItemRate, Project
+from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
@@ -33,15 +34,15 @@ ok('ft & in / sqft (default): sizes and areas as before', '10 ft' in t and '7 ft
 r = c.post('/admin/settings', data={'section': 'units', 'size_unit': 'mm', 'area_unit': 'sqm'}, follow_redirects=True)
 ok('Settings → Units saves mm and sq m', 'Settings saved' in r.text and 'id="su_mm" value="mm" checked' in r.text)
 t = c.get(f'/projects/{pid}').text
-ok('quotation page in mm and sq m, same total', '3,048 mm' in t and '2,286 mm' in t and f'{75 * SQM:,.2f} sq m' in t
-   and f'{total:,.2f}' in t and '/sq m' in t)
+ok('quotation page in mm and sq m, same total', '3,048 mm' in t and '2,286 mm' in t and f'{inr(75 * SQM)} sq m' in t
+   and f'{inr(total)}' in t and '/sq m' in t)
 full = pdftext(f'/projects/{pid}/pdf')
 ok('Full Quotation PDF in mm and sq m, same total', '3,048 mm' in full and 'sq m' in full and 'sqft' not in full
-   and f'{total:,.2f}' in full)
+   and f'{inr(total)}' in full)
 cust = pdftext(f'/projects/{pid}/pdf/customer')
-ok('Initial Quotation PDF (room by room): sizes in mm, same total', f'{total:,.2f}' in cust and '3,048 mm' in cust)
+ok('Initial Quotation PDF (room by room): sizes in mm, same total', f'{inr(total)}' in cust and '3,048 mm' in cust)
 wa = unquote(c.get(f'/projects/{pid}/whatsapp').headers.get('Location', ''))
-ok('WhatsApp in mm and sq m', '3,048 mm × 2,286 mm' in wa and 'sq m' in wa and f'{total:,.2f}' in wa)
+ok('WhatsApp in mm and sq m', '3,048 mm × 2,286 mm' in wa and 'sq m' in wa and f'{inr(total)}' in wa)
 
 t = c.get('/admin/rates').text
 ok('Rates page shows rates per sq m', f'value="{round(LAM / SQM, 2)}"' in t and '/sq m' in t)

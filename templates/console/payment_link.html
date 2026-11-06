@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Payment link</h1>
 <p class="muted small">{{ row.business_name or row.slug }} · {{ row.plan|plan_short }} ·
-  ₹{{ '{:,.0f}'.format(row.amount_paise / 100) }} · {{ 'paid ✓' if row.status == 'paid' else 'waiting for payment (valid 7 days)' }}
+  ₹{{ (row.amount_paise / 100)|inr(0) }} · {{ 'paid ✓' if row.status == 'paid' else 'waiting for payment (valid 7 days)' }}
   {% if row.kind == 'new' %}· their app is made when they pay{% endif %}</p>
 
 <div class="card stack">

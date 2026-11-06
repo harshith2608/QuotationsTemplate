@@ -222,3 +222,8 @@ with app.test_request_context():
 ok('…the card: a WhatsApp video call to book, or chat; once booked, when', 'A free 10-minute call' in card and 'Get your rates set up for you' in card
    and '/welcome/call' in card and 'wa.me/919999999999' in card and 'WhatsApp us' in card and 'Your free set-up call: Mon 9 Nov, 5:00 PM' in done
    and '/welcome/call' not in done and 'Hide for a week' in card)
+
+# ── Numbers the Indian way, everywhere (app/numbers.py) ──
+from app.numbers import inr
+ok('numbers the Indian way: 15,50,000.00 · 1,23,45,678.90 · 99,999.50 · -41,950 · 0', [inr(1550000), inr(12345678.9),
+   inr(99999.5), inr(-41950, 0), inr(0, 0)] == ['15,50,000.00', '1,23,45,678.90', '99,999.50', '-41,950', '0'])

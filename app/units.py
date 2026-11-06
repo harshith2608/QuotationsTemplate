@@ -8,6 +8,7 @@ measurement or a price:
     area unit:  'sqft' (default) · 'sqm'   (rates follow it: ₹/sqft or ₹/sq m)
 """
 from flask import g, has_app_context
+from .numbers import inr
 
 SIZE_UNITS = {'ftin': 'Feet & inches', 'mm': 'Millimetres (mm)', 'cm': 'Centimetres (cm)', 'in': 'Inches (in)'}
 AREA_UNITS = {'sqft': 'Square feet (sqft)', 'sqm': 'Square metres (sq m)'}
@@ -79,7 +80,7 @@ def length(feet, unit=None):
     if unit == 'ftin':
         return ft_in(feet)
     if unit == 'mm':
-        return f'{round(feet * PER_FOOT["mm"]):,} mm'
+        return f'{inr(round(feet * PER_FOOT["mm"]), 0)} mm'
     return f'{_trim(feet * PER_FOOT[unit], 1)} {unit}'
 
 

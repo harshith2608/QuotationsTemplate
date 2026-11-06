@@ -3,6 +3,7 @@ from urllib.parse import unquote
 from pypdf import PdfReader
 from app import create_app, db
 from app.models import AppSetting, Project, User, Payment
+from app.numbers import inr
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 def make(**env):
     for k in ['DEMO_MODE', 'CRON_SECRET', 'MARKETING_SITE', 'DEMO_USER']: os.environ.pop(k, None)
@@ -16,7 +17,7 @@ app = make(); c = app.test_client()
 ok('off: /demo and /demo/reset 404', c.get('/demo').status_code == 404 and c.get('/demo/reset').status_code == 404)
 c.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
 with app.app_context():
-    p1 = db.session.get(Project, 1); REAL = [f'{p1.final_total:,.2f}', f'{p1.grand_total:,.2f}']
+    p1 = db.session.get(Project, 1); REAL = [f'{inr(p1.final_total)}', f'{inr(p1.grand_total)}']
 off_txt = pdftext(c, '/projects/1/pdf')
 ok('off: no watermark on PDFs', 'NOT A VALID QUOTATION' not in off_txt and 'DEMO QUOTATION' not in off_txt)
 ok('off: PDFs show the real totals', all(v in off_txt for v in REAL))

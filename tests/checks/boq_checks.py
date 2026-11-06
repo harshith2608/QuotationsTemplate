@@ -4,6 +4,7 @@ import io, json, re
 from pypdf import PdfReader
 from app import create_app, db, billing, boq, layout
 from app.models import AppSetting, BoqItem, Item, ItemRate, Project, Room
+from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
@@ -230,7 +231,7 @@ cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('customer PDF in BOQ layout: Sr. No., Qty, Unit, Rate, sections, descriptions',
    'Bill of Quantities' in cust and 'Sr. No.' in cust and 'Other Service' in cust and 'Living Room: 192+104=296' in cust
    and 'Sq.ft' in cust and '83,520.00' in cust and '60,350.00' in cust and '45,000.00' in cust and 'LS' in cust)
-ok('…with Basic Total, discount and Total', 'Basic Total' in cust and '10,577.00' in cust and f'{subtotal - 10577:,.2f}' in cust)
+ok('…with Basic Total, discount and Total', 'Basic Total' in cust and '10,577.00' in cust and f'{inr(subtotal - 10577)}' in cust)
 r = c.post(f'/projects/{pid}/share', data={'detail': 'summary'}, follow_redirects=True)
 with app.app_context():
     from app.models import QuoteShare

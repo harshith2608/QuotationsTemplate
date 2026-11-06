@@ -37,7 +37,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="t" value="{{ token }}">
       <input type="hidden" name="plan" value="{{ plan }}">
-      <button type="submit">Pay ₹{{ '{:,}'.format(price) }} securely</button>
+      <button type="submit">Pay ₹{{ (price)|inr(0) }} securely</button>
     </form>
     <p class="hint" style="text-align:center">UPI, cards or net banking, through Razorpay.</p>
     <p class="hint" style="text-align:center;margin-top:14px">Not now? <a href="https://{{ ready }}.{{ base }}/login">Open my app</a>
@@ -54,7 +54,7 @@
     <h1>Set up your app</h1>
     {% if plan %}
     <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }},
-      ₹{{ '{:,}'.format(price) }}</strong>. Check your company name and choose a password, then pay.</p>
+      ₹{{ (price)|inr(0) }}</strong>. Check your company name and choose a password, then pay.</p>
     {% else %}
     <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>
     {% endif %}
@@ -87,7 +87,7 @@
 
       {% if turnstile %}<div class="cf-turnstile" data-sitekey="{{ turnstile }}" style="margin-top:14px"></div>{% endif %}
       {% if plan %}
-      <button type="submit" id="go" data-busy="Setting up your app…">Create my app and pay ₹{{ '{:,}'.format(price) }}</button>
+      <button type="submit" id="go" data-busy="Setting up your app…">Create my app and pay ₹{{ (price)|inr(0) }}</button>
       <p class="hint" style="text-align:center">Next, pay securely through Razorpay: UPI, cards or net banking.</p>
       {% else %}
       <button type="submit" id="go" data-busy="Setting up your app…">Create my app</button>
