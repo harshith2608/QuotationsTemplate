@@ -892,7 +892,7 @@ def receipt_pdf(row):
         el[-1:-1] = [Spacer(1, 6), Paragraph(
             '<b>Autopay:</b> this plan renews every month by autopay until you cancel it. Cancel any time at '
             f'<a href="{escape(link)}" color="#1f4d3f"><u>{escape(link)}</u></a> (Plan &amp; billing → Cancel autopay), '
-            'or cancel the mandate in your UPI app. Nothing more is charged after you cancel.', small)]
+            'or cancel the mandate in your UPI app. Nothing more is charged after you cancel.', small), Spacer(1, 6)]
     doc.build(el)
     buf.seek(0)
     return buf
