@@ -93,13 +93,13 @@ with app.app_context():
        business.kinds_offered() == ['interiors', 'furniture', 'upvc', 'glass', 'other'])
     AppSetting.set(business.KINDS_KEY, json.dumps(['tiles', 'painting'])); db.session.commit()
 with app.app_context():
-    ok('saved: those kinds, with interiors and something else always',
-       business.kinds_offered() == ['interiors', 'tiles', 'painting', 'other'])
+    ok('saved: those kinds, with interiors always (something else only when switched on)',
+       business.kinds_offered() == ['interiors', 'tiles', 'painting'])
     ok('…the trial form\'s types follow (modular kitchens is interiors)', business.offered('tiles')
        and business.offered('kitchens') and not business.offered('upvc') and not business.offered('construction'))
 with app.test_request_context():
     types = [k for k, _ in marketing._context()['business_types']]
-ok('…the website\'s trial form shows only those', types == ['interiors', 'kitchens', 'tiles', 'painting', 'other'])
+ok('…the website\'s trial form shows only those', types == ['interiors', 'kitchens', 'tiles', 'painting'])
 c.post('/welcome/restart')
 kp = c.get('/welcome/work').text
 ok('…the guided setup offers only those', 'value="tiles"' in kp and 'value="painting"' in kp and 'value="upvc"' not in kp

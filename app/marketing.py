@@ -193,7 +193,7 @@ def terms():
 # The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Everyone sets up their own app
 # (signup.ELIGIBLE); every one but 'other' is a trade QuoteRoom is for and counts as a Lead for the ads.
 # The trial form's choices (the app's own kinds: welcome.KINDS; 'kitchens' is set up as interiors)
-BUSINESS_TYPES = {'interiors': 'Interiors (plywood, PVC or WPC)', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
+BUSINESS_TYPES = {'interiors': 'Interiors (plywood, PVC, uPVC or WPC)', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
                   'furniture': 'Furniture works', 'upvc': 'uPVC windows & doors (fabrication)', 'glass': 'Glass & aluminium works',
                   'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
                   'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
@@ -234,7 +234,8 @@ def _validate_lead(form):
         errors['email'] = 'Please enter your email address.'
     elif not EMAIL_RE.match(email):
         errors['email'] = 'Please check your email address.'
-    if btype not in BUSINESS_TYPES:
+    from . import business
+    if btype not in BUSINESS_TYPES or not business.offered(btype):    # (a type switched off in the console)
         errors['business_type'] = 'Please choose your type of business.'
     elif btype == 'other' and len(other) < 2:
         errors['business_other'] = 'Please tell us what your business does.'

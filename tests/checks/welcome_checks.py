@@ -162,7 +162,7 @@ t = c.get('/welcome/done').text
 with app.app_context():
     ok('Finish: "You\'re set up", with what\'s left for later', loc(r).endswith('/welcome/done') and "You're set up" in t
        and 'Payment details' in t and 'Terms &amp; conditions' in t and not W.active())
-    ok('the console says it\'s finished, and what they do', W.console_text(AppSetting.get(W.KEY)) == 'finished · Interiors, modular kitchens & wardrobes (plywood, PVC or WPC)')
+    ok('the console says it\'s finished, and what they do', W.console_text(AppSetting.get(W.KEY)) == 'finished · Interiors, modular kitchens & wardrobes (plywood, PVC, uPVC or WPC)')
 ok('the strip is gone once finished', 'Continue setting up' not in c.get('/projects').text
    and 'step 5 of 6' not in c.get('/projects/new').text)
 c.get('/logout')

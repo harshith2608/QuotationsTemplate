@@ -2543,7 +2543,8 @@ def website_call():
     form = {k: ' '.join((request.form.get(k) or '').split()) for k in ('name', 'phone', 'company', 'business', 'slot',
                                                                          'note')}
     errors, booked = {}, None
-    kinds = [(k, v) for k, v in BUSINESS_TYPES.items() if k != 'kitchens']
+    from . import business
+    kinds = [(k, v) for k, v in BUSINESS_TYPES.items() if k != 'kitchens' and business.offered(k)]
     if request.method == 'POST' and not request.form.get('website'):            # (the honeypot: bots fill it)
         if len(form['name']) < 2:
             errors['name'] = 'Type your name.'

@@ -15,7 +15,7 @@ KEY = 'business_kind'
 # A JSON list of kinds, in console_state for the shared app and in the website's app_settings (kept on the demo's
 # nightly reset). Interiors and "Something else" are always offered; until the console says, the ones offered before.
 KINDS_KEY = 'business_kinds'
-ALWAYS_OFFERED = ('interiors', 'other')
+ALWAYS_OFFERED = ('interiors',)          # 'other' too can be switched off (interiors only)
 OFFERED_BEFORE = ('interiors', 'furniture', 'upvc', 'glass', 'other')
 INTERIORS = ('interiors', 'turnkey', 'furniture')     # the app's own words (wardrobe, plywood, BHK) fit these
 BY_ROOM = INTERIORS + ('upvc', 'glass', 'tiles', 'painting', 'ceiling', 'curtains')   # work done room by room

@@ -28,7 +28,7 @@ STEPS = [('business', 'Your business'), ('units', 'How you measure'), ('pricing'
 ORDER = [k for k, _ in STEPS]
 TITLES = dict(STEPS)
 
-KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes (plywood, PVC or WPC)', 'turnkey': 'Turnkey interiors & civil',
+KINDS = {'interiors': 'Interiors, modular kitchens & wardrobes (plywood, PVC, uPVC or WPC)', 'turnkey': 'Turnkey interiors & civil',
          'furniture': 'Furniture & carpentry', 'upvc': 'uPVC windows & doors (fabrication)', 'glass': 'Glass & aluminium',
          'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
          'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
