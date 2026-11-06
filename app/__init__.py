@@ -225,6 +225,21 @@ def create_app(config_name='default'):
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
 
+    def _lower_price(status, user):
+        """{'paying', 'now'} when this business's monthly autopay costs more than the plan's price today (it was
+        lowered in the console's Pricing): admins see a banner until they restart the autopay at the new price."""
+        if not (status.autopay and user.is_authenticated and user.is_admin):
+            return None
+        try:
+            from . import pricing, subscription, tenancy
+            sub = subscription.current_subscription(tenancy.current_slug())
+            now = pricing.prices()[sub['plan']] if sub else None
+            if sub and sub.get('amount_paise') and now and sub['amount_paise'] > now * 100:
+                return {'paying': sub['amount_paise'] // 100, 'now': now}
+        except Exception:
+            pass
+        return None
+
     def _plan_context(user):
         from flask import request
         from .plan import load_status, renew_message_url
@@ -233,7 +248,8 @@ def create_app(config_name='default'):
             return {'plan': status, 'renew_url': ''}
         from . import subscription
         if subscription.enabled():                   # pay in the app (Razorpay) instead of asking on WhatsApp
-            return {'plan': status, 'renew_url': url_for('plan.plan_page'), 'renew_in_app': True}
+            return {'plan': status, 'renew_url': url_for('plan.plan_page'), 'renew_in_app': True,
+                    'lower_price': _lower_price(status, user)}
         return {'plan': status, 'renew_url': renew_message_url(status, user, request.host_url)}
 
     from .cli import register_cli

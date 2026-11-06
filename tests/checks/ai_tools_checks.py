@@ -340,6 +340,13 @@ with app.test_request_context('/plan'):
     page_off = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
                                ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
                                addon_uses=40, ai_on=False, **_plan_vars)
+    page_lower = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
+                                 ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
+                                 addon_uses=40, ai_on=False, autopay={'plan': '1m', 'amount_paise': 69900, 'status': 'active'},
+                                 lower_price={'paying': 699, 'now': 599}, **_plan_vars)
+ok('price lowered since their autopay started: the bar shows what they pay and how to switch (no days lost)',
+   '₹699 a month' in page_lower and 'now ₹599' in page_lower
+   and 'Cancel autopay, then Start autopay again' in page_lower and 'no days are lost' in page_lower)
 ok('Your plan: four plans (20 or 100 AI uses a month) and Buy 40 AI uses · ₹99',
    all(p in page for p in ('₹599', '₹5,999', '₹749', '₹7,499', "startAutopay('1m'", "startAutopay('1m_ai'",
                            "buyPlan('1y_ai'", "buyPlan('ai40'"))

@@ -17,7 +17,9 @@
   <div class="flex-grow-1"><i class="bi bi-arrow-repeat me-1"></i><strong>Autopay is on:</strong>
     {{ autopay.plan|plan_short }} at ₹{{ ((autopay.amount_paise / 100) if autopay.amount_paise else prices[autopay.plan])|inr(0) }} a month{% if status.ends_on %}, next payment around
     {{ status.ends_on.strftime('%d %b %Y') }}{% endif %}{% if autopay.status == 'pending' %} <span class="badge text-bg-warning">last payment didn't go through: retrying</span>{% endif %}.
-    Cancel any time.</div>
+    Cancel any time.{% if lower_price %}<br><strong>The monthly plan is now ₹{{ lower_price.now|inr(0) }}.</strong> To pay
+    the new price: Cancel autopay, then Start autopay again below. Your current month is kept and the new one is added
+    after it, so no days are lost.{% endif %}</div>
   <form method="post" action="{{ url_for('plan.autopay_cancel') }}"
         onsubmit="return confirm('Stop the autopay? Nothing more will be charged. Your plan runs until its end date.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
