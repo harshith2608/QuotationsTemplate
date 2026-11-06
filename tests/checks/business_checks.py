@@ -266,3 +266,24 @@ with mock.patch.object(SUB, 'get_subscription', return_value=sub), \
 ok('webhook: a month charged is recorded (₹599); halted turns autopay off (reminders and grace come back)',
    r1 == 'autopay charged: acme' and rec.call_args[0][1:3] == ('pay_9', 59900) and r2 == 'autopay halted: acme'
    and st.call_args[0] == ('sub_9', 'halted') and ap.call_args[0] == ('acme', False))
+
+# ── Cancelling autopay is easy to find: Admin → Plan & billing, Settings, and every monthly receipt ──
+import tempfile, glob as _glob, io as _io
+box = tempfile.mkdtemp(); os.environ['MAIL_OUTBOX_DIR'] = box
+with app.app_context(), mock.patch.object(SUB, 'receipt_pdf', return_value=_io.BytesIO(b'%PDF')):
+    SUB.send_receipt({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900, 'payer_name': 'Ravi', 'business_name': 'Acme',
+                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001'}, to='ravi@acme.example')
+    SUB.send_receipt({'plan': '1y', 'slug': 'acme', 'amount_paise': 599900, 'payer_name': 'Ravi', 'business_name': 'Acme',
+                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0002'}, to='ravi@acme.example')
+mails = [open(f, 'rb').read().decode('utf-8', 'ignore') for f in sorted(_glob.glob(box + '/*.eml'))]
+os.environ.pop('MAIL_OUTBOX_DIR')
+ok('a monthly receipt says how to cancel (with the Plan page link); a 12-month one doesn\'t', len(mails) == 2
+   and 'Cancel autopay' in mails[0] and '/plan' in mails[0] and 'Cancel autopay' not in mails[1])
+base_src = open('templates/base.html').read()
+menu = '\n'.join(l for l in base_src.splitlines() if 'set admin_links' in l or l.startswith('                       ('))
+with app.test_request_context():
+    from flask import render_template_string
+    nav = render_template_string(menu + '{{ admin_links|map(attribute=2)|join("|") }}', renew_in_app=True, ai_import_on=False)
+    nav_off = render_template_string(menu + '{{ admin_links|map(attribute=2)|join("|") }}', renew_in_app=False, ai_import_on=False)
+ok('…and Admin → Plan & billing in the menu (where paying in the app is on)', 'Plan &amp; billing' in nav
+   and 'Plan &amp; billing' not in nav_off and 'Settings' in nav)

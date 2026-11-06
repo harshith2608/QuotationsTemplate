@@ -736,6 +736,10 @@ def send_receipt(row, to=None):
                                      business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
                                      plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
                                      receipt_no=row.get('receipt_no'))
+        if row['plan'] in plan_mod.AUTOPAY:          # every monthly receipt says how to stop it
+            body = body.rstrip() + (f'\n\nThis plan renews every month by autopay. To cancel any time: open '
+                                    f'{_app_link(row["slug"], "/plan")} and tap Cancel autopay (or cancel the mandate '
+                                    'in your UPI app). Nothing more is charged after you cancel.\n')
     return mailer.send(to, subject, body, bcc=mailer.sender(),
                        attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
 
