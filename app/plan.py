@@ -18,32 +18,37 @@ from typing import Optional
 from flask import g, has_app_context
 
 PLAN_KEY, STARTED_KEY, ENDS_KEY = 'plan_name', 'plan_started_on', 'plan_ends_on'
+AUTOPAY_KEY = 'plan_autopay'             # '1' while a monthly plan's autopay is on (app/subscription.py)
 
 PLANS = {
     'trial':  'Free trial',
-    '6m':     '6-month plan',
+    '1m':     'Monthly plan',
     '1y':     '12-month plan',
-    '6m_ai':  '6-month plan with AI',
+    '1m_ai':  'Monthly plan with AI',
     '1y_ai':  '12-month plan with AI',
+    '6m':     '6-month plan',            # no longer offered; kept for the businesses and payments that have it
+    '6m_ai':  '6-month plan with AI',
     'ai40':   '40 AI uses',            # the add-on (not a plan): ADDON_USES more AI uses, kept until used
     'custom': 'Plan',
 }
-DEFAULT_LENGTH = {'trial': '7d', '6m': '6m', '1y': '1y', '6m_ai': '6m', '1y_ai': '1y'}
-PAID = ('6m', '1y', '6m_ai', '1y_ai')    # the plans a business can buy, in the order they're offered
-AI_PLANS = ('6m_ai', '1y_ai')            # plans with the bigger AI allowance (app/ai_tools.py)
+DEFAULT_LENGTH = {'trial': '7d', '1m': '1m', '1y': '1y', '1m_ai': '1m', '1y_ai': '1y', '6m': '6m', '6m_ai': '6m'}
+PAID = ('1m', '1y', '1m_ai', '1y_ai')    # the plans a business can buy, in the order they're offered
+AUTOPAY = ('1m', '1m_ai')                # paid monthly by autopay (a Razorpay subscription), until cancelled
+LEGACY = ('6m', '6m_ai')                 # sold before; still valid (records, renewals by hand)
+AI_PLANS = ('1m_ai', '1y_ai', '6m_ai')   # plans with the bigger AI allowance (app/ai_tools.py)
 ADDON, ADDON_USES = 'ai40', 40           # bought on its own, on a paid plan: more AI uses
 
 
 def length_of(plan):
-    """'6m' / '1y' for a paid plan (with or without AI), else None."""
-    return DEFAULT_LENGTH.get(plan) if plan in PAID else None
+    """'1m' / '1y' / '6m' for a paid plan (with or without AI), else None."""
+    return DEFAULT_LENGTH.get(plan) if plan in PAID + LEGACY else None
 
 
 def short(plan):
-    """'6 months', '12 months with AI', '40 AI uses': a payment's plan in a few words."""
+    """'1 month', '12 months with AI', '40 AI uses': a payment's plan in a few words."""
     if plan == ADDON:
         return f'{ADDON_USES} AI uses'
-    months = {'6m': '6 months', '1y': '12 months'}.get(length_of(plan) or '', PLANS.get(plan, plan))
+    months = {'1m': '1 month', '6m': '6 months', '1y': '12 months'}.get(length_of(plan) or '', PLANS.get(plan, plan))
     return months + (' with AI' if plan in AI_PLANS else '')
 
 REMIND_DAYS = 15        # paid plans: reminder banner this many days before the end
@@ -89,6 +94,7 @@ class PlanStatus:
     started_on: Optional[date] = None
     ends_on: Optional[date] = None
     today: Optional[date] = None
+    autopay: bool = False               # a monthly plan renewed by autopay: no "renew" reminders while it's on
 
     @property
     def has_limit(self):
@@ -123,7 +129,7 @@ class PlanStatus:
         if not self.has_limit:
             return 'none'
         if self.today <= self.ends_on:
-            if self.is_trial or self.days_left < REMIND_DAYS:
+            if self.is_trial or (self.days_left < REMIND_DAYS and not self.autopay):
                 return 'reminder'
             return 'active'
         if self.today <= self.grace_until:
@@ -150,11 +156,13 @@ def load_status(on=None):
     try:
         from .branding import prefetch_common
         prefetch_common()                      # with the brand and other common settings: one query per request
-        rows = AppSetting.get_many([PLAN_KEY, STARTED_KEY, ENDS_KEY])
+        rows = AppSetting.get_many([PLAN_KEY, STARTED_KEY, ENDS_KEY, AUTOPAY_KEY])
     except Exception:
         rows = {}
-    status = PlanStatus(plan=(rows.get(PLAN_KEY) or None), started_on=_parse_date(rows.get(STARTED_KEY)),
-                        ends_on=_parse_date(rows.get(ENDS_KEY)), today=on or today())
+    plan = rows.get(PLAN_KEY) or None
+    status = PlanStatus(plan=plan, started_on=_parse_date(rows.get(STARTED_KEY)),
+                        ends_on=_parse_date(rows.get(ENDS_KEY)), today=on or today(),
+                        autopay=rows.get(AUTOPAY_KEY) == '1' and plan in AUTOPAY)
     if on is None:
         g.plan_status = status
     return status
@@ -178,7 +186,7 @@ def renew(length, plan_name=None):
     start = today()
     base = status.ends_on if status.has_limit and start <= status.grace_until else start
     key = length.strip().lower()
-    new_plan = {'6m': '6m', '1y': '1y', '12m': '1y'}.get(key)
+    new_plan = {'1m': '1m', '6m': '6m', '1y': '1y', '12m': '1y'}.get(key)
     if new_plan and status.plan in AI_PLANS:
         new_plan += '_ai'                    # renewing keeps the AI plan
     new_plan = plan_name or new_plan or status.plan or 'custom'
@@ -208,7 +216,7 @@ def renew_message_url(status, user=None, host_url=''):
     if user is not None and getattr(user, 'is_authenticated', False):
         who = user.username if user.display_name == user.username else f'{user.display_name} ({user.username})'
         lines.append(f'Requested by: {who}')
-    lines += ['', 'Plan I want: 6 months / 12 months']
+    lines += ['', 'Plan I want: monthly / 12 months']
     return f'{base}?text={quote(chr(10).join(lines))}'
 
 
@@ -219,7 +227,8 @@ def renew_message_url(status, user=None, host_url=''):
 ALWAYS_ALLOWED = {'auth.login', 'auth.logout', 'projects.razorpay_webhook', 'static',
                   'main.favicon', 'main.brand_logo', 'main.web_manifest', 'main.app_icon',
                   'share.view', 'share.pdf', 'share.respond', 'share.invoice_view', 'share.invoice_pdf',
-                  'plan.plan_page', 'plan.order', 'plan.paid', 'plan.thanks', 'plan.receipt'}   # paying for a plan   # the business's customers answering a quotation
+                  'plan.plan_page', 'plan.order', 'plan.paid', 'plan.thanks', 'plan.receipt',   # paying for a plan
+                  'plan.subscribe', 'plan.subscribed', 'plan.autopay_cancel'}   # the business's customers answering a quotation
 # Pages that only exist to edit — redirect away from them when read-only
 EDIT_PAGES = {'projects.create_project', 'projects.edit_project'}
 

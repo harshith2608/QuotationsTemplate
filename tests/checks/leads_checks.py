@@ -174,19 +174,22 @@ ok('…and the page without JavaScript: Set up my app now, and the email copy', 
 # Buying a plan on the website: the plan buttons open the same form, then straight on to set up and pay (any business,
 # and the link is shown, not emailed: Razorpay checks the payer)
 lp = c5.get('/').text
-ok('plan buttons: the same form for that plan (no WhatsApp)', 'data-plan="6m"' in lp and 'data-plan="1y"' in lp
+ok('plan buttons: the same form for that plan (no WhatsApp)', 'data-plan="1m"' in lp and 'data-plan="1y"' in lp
    and '/free-trial?plan=1y' in lp and 'interested%20in%20the' not in lp and 'Continue to payment' in lp)
 t = c5.get('/free-trial?plan=1y').text
-ok('/free-trial?plan=1y (no JavaScript): the 12-month plan and "Continue to payment"', '12-month plan · ₹8,999' in t
+ok('/free-trial?plan=1y (no JavaScript): the 12-month plan and "Continue to payment"', '12-month plan · ₹5,999' in t
    and 'name="plan" value="1y"' in t and 'Continue to payment' in t)
 r = c5.post('/trial-request', data=dict(good, phone='9811100049', business_type='other', business_other='Kitchens', plan='1y'),
             headers=J, environ_base={'REMOTE_ADDR': '10.9.0.6'}); d = r.get_json()
 ok('…submitted: on to /start for that plan (even "Others"; shown, not emailed)', d['ok'] and d['pay_url']
    and d['pay_url'].startswith('https://ops.quote-room.test/start?t=') and d['pay_url'].endswith('&plan=1y'))
-r = c5.post('/trial-request', data=dict(good, phone='9811100050', plan='6m'), environ_base={'REMOTE_ADDR': '10.9.0.7'})
-ok('…without JavaScript: redirected there', r.status_code == 302 and r.headers['Location'].endswith('&plan=6m'))
+r = c5.post('/trial-request', data=dict(good, phone='9811100050', plan='1m'), environ_base={'REMOTE_ADDR': '10.9.0.7'})
+ok('…without JavaScript: redirected there (the monthly plan too)', r.status_code == 302
+   and r.headers['Location'].endswith('&plan=1m'))
 with app.app_context():
-    ok('…the request notes the plan they\'re buying', any('buying 6m' in (l.source or '') for l in Lead.query.all()))
+    ok('…the request notes the plan they\'re buying', any('buying 1m' in (l.source or '') for l in Lead.query.all()))
+ok('pricing: monthly ₹599 by autopay, 12 months ₹5,999 with 2 months free; no 6-month plan', '₹599' in lp
+   and '₹5,999' in lp and '2 months free' in lp and 'renews' in lp and 'autopay' in lp.lower() and '₹4,999' not in lp)
 os.environ.pop('MAIL_OUTBOX_DIR', None)
 lp = c5.get('/').text
 ok('"Book a call with us": a band before the pricing and a line under it, to the console\'s booking page',

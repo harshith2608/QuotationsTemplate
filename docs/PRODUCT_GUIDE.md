@@ -43,10 +43,10 @@ branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed
 | Plan | Price | Works out to |
 |---|---|---|
 | Free trial | ₹0 for 7 days | every feature, real use |
-| 6 months | **₹4,999** (paid once) | about ₹833 a month |
-| 12 months | **₹8,999** (paid once) — best value, saves ₹999 | about ₹750 a month |
-| 6 months with AI | **₹5,999** (paid once) | about ₹1,000 a month |
-| 12 months with AI | **₹9,999** (paid once) | about ₹833 a month |
+| Monthly | **₹599 a month**, by UPI Autopay or card: cancel any time | ₹20 a day |
+| 12 months | **₹5,999** (paid once): 2 months free, saves ₹1,189 | about ₹500 a month |
+| Monthly with AI | **₹749 a month**, by autopay | |
+| 12 months with AI | **₹7,499** (paid once): 2 months free | about ₹625 a month |
 | More AI uses | **₹99** for 40 (on a paid plan) | kept until used |
 
 - **AI uses:** drafting a quotation from a customer's WhatsApp message, from a photo of site notes (each photo is one
@@ -64,7 +64,7 @@ branded PDF to send on WhatsApp in minutes, then helps you get the job confirmed
 **Price comparisons you can use**
 - A one-time custom quotation website: ₹30,000–40,000 up front, plus hosting and fixes.
 - Dzylo (interior ERP): ₹6,000–11,000 **per user per year + GST**; a 3-person team on their Pro plan ≈ ₹39,000/year, and their
-  white-label app costs ₹75,000+ extra. QuoteRoom: ₹8,999 for the whole team, already in their own brand.
+  white-label app costs ₹75,000+ extra. QuoteRoom: ₹599 a month or ₹5,999 a year for the whole team, already in their own brand.
 
 ---
 
@@ -279,7 +279,7 @@ password). Add a personal line:
 
 **Day 5–6: trial ending**
 > Hi {name}, your QuoteRoom trial ends on {date}. To keep everything you've set up (rates, quotations, logo), you can continue with
-> 6 months for ₹4,999 or 12 months for ₹8,999 (best value). One price for your whole team. Which would you like?
+> ₹599 a month with autopay, cancel any time, or ₹5,999 for 12 months (2 months free). One price for your whole team. Which would you like?
 
 **After the trial ended (no reply)**
 > Hi {name}, your trial has ended, so the app is read-only for now. Your quotations are safe until {deletion date}. Reply here and I'll switch it back on.
@@ -288,9 +288,9 @@ password). Add a personal line:
 > Thank you, {name}! Your QuoteRoom plan is active until {end date}. Same address, same login, everything you set up is still there.
 
 **"Too expensive" reply**
-> I understand. It's ₹8,999 for the whole year, about ₹750 a month, for your whole team, in your own brand. One extra job won,
+> I understand. It's ₹599 a month for your whole team, in your own brand, and you can stop any time. One extra job won,
 > or one quote sent the same day instead of next week, pays for the year. Many tools charge ₹6,000–11,000 *per person*
-> plus GST. Would the 6-month plan (₹4,999) be easier to start with?
+> plus GST. Shall we start you on the monthly plan?
 
 **Referral ask (happy customer)**
 > Glad QuoteRoom is working well for you! If you know another designer or carpenter who'd find it useful, send them my number and I'll set up a free trial for them.
@@ -301,7 +301,7 @@ password). Add a personal line:
 
 | They say | You say |
 |---|---|
-| "It's too expensive." | One price for the whole team, about ₹750/month on the yearly plan. One job won pays for the year. Start with 6 months (₹4,999). |
+| "It's too expensive." | ₹599 a month for the whole team, cancel any time (₹5,999 a year: 2 months free). One job won pays for the year. |
 | "I already use Excel." | Excel works, but it's slow on site, formulas break, and it doesn't send a branded PDF, track payments or remind customers. Try one real quote in both. |
 | "There's a cheaper app for carpenters." | Those are billing apps. QuoteRoom is built for room-by-room sqft quoting with your materials, two PDFs, your own brand and web address, staff logins, approval and reminders. |
 | "My staff aren't tech-savvy." | If they use WhatsApp, they can use this. Rooms, items, sizes: that's it. Staff only see their own quotes. |
@@ -324,7 +324,7 @@ any price other than the ones in section 3, or custom work you haven't agreed to
 | | QuoteRoom | Dzylo | FurniQuote |
 |---|---|---|---|
 | What it is | Quotation → approval → invoice → payment, for small interior/furniture firms | Full interior ERP + CRM (procurement, inventory, attendance, AI) | Android quotation & billing app for carpenters/workshops |
-| Price | ₹4,999 / 6 mo, ₹8,999 / yr, whole team | ₹6,000–12,500 per user/yr + GST | Not published ("ask on WhatsApp") |
+| Price | ₹599 / month (autopay) or ₹5,999 / yr, whole team | ₹6,000–12,500 per user/yr + GST | Not published ("ask on WhatsApp") |
 | Measurements → area quoting (ft & in, mm, cm, in; sqft or sq m) | Core feature | Measurement sheets on Pro plan | Not described |
 | Own brand & web address | Included | White-label ₹75,000+ (Enterprise) | Logo on PDF |
 | Works on iPhone / laptop | Yes (browser) | Yes | Android app |

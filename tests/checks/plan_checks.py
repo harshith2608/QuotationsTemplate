@@ -41,7 +41,7 @@ ok('trial: editing allowed', can_edit())
 m = re.search(r'href="(https://wa\.me/919876543210\?text=[^"]+)"', t)
 msg = unquote(html.unescape(m.group(1)).split('?text=')[1]) if m else ''
 ok('renew WhatsApp message has company, app, plan', 'subscribe after my free trial' in msg and 'Company: Demo Interiors' in msg
-   and 'App: http://localhost/' in msg and 'Free trial, ends' in msg and 'Plan I want: 6 months / 12 months' in msg)
+   and 'App: http://localhost/' in msg and 'Free trial, ends' in msg and 'Plan I want: monthly / 12 months' in msg)
 
 # Trial ended yesterday → read-only immediately (no grace for trials)
 setplan('trial', T - timedelta(days=8), T - timedelta(days=1))

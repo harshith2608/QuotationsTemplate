@@ -92,7 +92,7 @@ link `https://www.quote-room.co.in/free-trial?utm_source=facebook&utm_campaign=c
 > #interiordesigner #modularfurniture #gstinvoice #interiordesignindia
 
 **One price. Your whole team.**
-> One price for your whole team. No per-user fees, no setup fee, your own brand. ₹8,999 a year, about ₹750 a month, with unlimited staff and quotations.
+> One price for your whole team. No per-user fees, no setup fee, your own brand. ₹599 a month (or ₹5,999 a year, 2 months free), with unlimited staff and quotations.
 > Try QuoteRoom free for 7 days. Link in bio.
 > #interiordesigner #interiordesignbusiness #modularkitchen #smallbusinessindia
 

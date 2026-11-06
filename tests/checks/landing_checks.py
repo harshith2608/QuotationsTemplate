@@ -19,7 +19,7 @@ ok('plan buttons go to WhatsApp, no placeholder number', t.count('https://wa.me/
 ok('every free-trial button opens the trial form', t.count('href="/free-trial" data-trial') >= 4 and 'start%20a%20free%20trial' not in t)
 ok('trial pop-up with the form is on the page', 'id="trialDialog"' in t and 'name="business_type" value="other"' in t)
 ok('display number formatted', '+91 98765 43210' in t)
-ok('product name applied everywhere', 'QuoteRoom' not in t and t.count('Sitequote') >= 8 and 'Sitequote%206-month' in t)
+ok('product name applied everywhere', 'QuoteRoom' not in t and t.count('Sitequote') >= 8 and 'Sitequote%2012-month' in t)
 ok('1-minute demo video at the top: thumbnail only, YouTube loads on tap (no-cookie)',
    'data-yt="cJgZoWVaB80"' in t and t.index('class="hero-video"') < t.index('id="try"') and '<iframe' not in t
    and 'youtube-nocookie.com/embed/' in t)

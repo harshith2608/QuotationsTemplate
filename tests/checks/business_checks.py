@@ -227,3 +227,39 @@ ok('…the card: a WhatsApp video call to book, or chat; once booked, when', 'A 
 from app.numbers import inr
 ok('numbers the Indian way: 15,50,000.00 · 1,23,45,678.90 · 99,999.50 · -41,950 · 0', [inr(1550000), inr(12345678.9),
    inr(99999.5), inr(-41950, 0), inr(0, 0)] == ['15,50,000.00', '1,23,45,678.90', '99,999.50', '-41,950', '0'])
+
+# ── Monthly autopay (app/subscription.py): no "renew" reminders while it's on; Razorpay's signature; webhook events ──
+import hmac as _hmac, hashlib as _hl
+from datetime import date as _date
+from unittest import mock
+from app import plan as PM, subscription as SUB
+ends = _date(2026, 12, 6)
+on = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 1), autopay=True)
+off = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 1), autopay=False)
+late = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 9), autopay=True)
+ok('autopay on: no "plan ends" banner or reminder; off: the usual ones; a failed month still gets the grace reminder',
+   on.state == 'active' and SUB.due_reminder(on) is None and off.state == 'reminder' and SUB.due_reminder(off) == 'paid_15'
+   and late.state == 'grace' and SUB.due_reminder(late) == 'paid_end')
+ok('the monthly plans: autopay, a month at a time, AI on the AI one', PM.AUTOPAY == ('1m', '1m_ai')
+   and PM.length_of('1m') == '1m' and '1m_ai' in PM.AI_PLANS and str(PM.add_length(_date(2026, 1, 31), '1m')) == '2026-02-28')
+os.environ['PLATFORM_RAZORPAY_KEY_SECRET'] = 'test-secret'
+sig = _hmac.new(b'test-secret', b'pay_1|sub_1', _hl.sha256).hexdigest()
+ok("Razorpay's autopay signature (payment|subscription) is checked", SUB.verify_subscription_checkout('pay_1', 'sub_1', sig)
+   and not SUB.verify_subscription_checkout('pay_1', 'sub_2', sig))
+os.environ.pop('PLATFORM_RAZORPAY_KEY_SECRET')
+try:
+    SUB.create_order('x', '1m'); refused = False
+except SUB.PaymentError:
+    refused = True
+ok('the monthly plan is never sold as a one-off payment', refused)
+sub = {'slug': 'acme', 'plan': '1m', 'sub_id': 'sub_9', 'status': 'active'}
+charged = {'event': 'subscription.charged', 'payload': {'subscription': {'entity': {'id': 'sub_9'}},
+                                                         'payment': {'entity': {'id': 'pay_9', 'amount': 59900}}}}
+with mock.patch.object(SUB, 'get_subscription', return_value=sub), \
+        mock.patch.object(SUB, 'record_charge', return_value=({'id': 1}, True)) as rec, \
+        mock.patch.object(SUB, '_set_status') as st, mock.patch.object(SUB, 'set_autopay') as ap:
+    r1 = SUB.handle_webhook(charged)
+    r2 = SUB.handle_webhook({'event': 'subscription.halted', 'payload': {'subscription': {'entity': {'id': 'sub_9'}}}})
+ok('webhook: a month charged is recorded (₹599); halted turns autopay off (reminders and grace come back)',
+   r1 == 'autopay charged: acme' and rec.call_args[0][1:3] == ('pay_9', 59900) and r2 == 'autopay halted: acme'
+   and st.call_args[0] == ('sub_9', 'halted') and ap.call_args[0] == ('acme', False))

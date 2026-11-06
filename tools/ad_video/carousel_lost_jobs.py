@@ -165,7 +165,7 @@ def closing():
     y += 30
     d.rounded_rectangle([60, y, W - 60, y + 150], radius=26, outline=TAPE, width=3)
     d.text((W / 2, y + 52), 'One price for your whole team', font=font(40, 'bold'), fill=PAPER, anchor='mm')
-    rich_text(d, (W / 2, y + 108), '₹8,999 a year  ·  about ₹750 a month  ·  no per-user fees', 30, 'demi', MUTED, 'mm')
+    rich_text(d, (W / 2, y + 108), '₹599 a month  ·  or ₹5,999 a year  ·  no per-user fees', 30, 'demi', MUTED, 'mm')
     footer(img, W, H - 170, 44, 28)
     return img.convert('RGB')
 

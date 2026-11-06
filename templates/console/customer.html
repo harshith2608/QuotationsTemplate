@@ -54,7 +54,7 @@
     <input type="hidden" name="name" value="{{ row.name }}">
     <div class="row">
       <div><label for="plplan">Plan</label>
-        <select id="plplan" name="plan">{% for k in ['1y', '6m', '1y_ai', '6m_ai'] %}<option value="{{ k }}">{{ k|plan_short }} · ₹{{ (prices[k])|inr(0) }}</option>{% endfor %}</select></div>
+        <select id="plplan" name="plan">{% for k in ['1y', '1y_ai'] %}<option value="{{ k }}">{{ k|plan_short }} · ₹{{ (prices[k])|inr(0) }}</option>{% endfor %}</select></div>
       <div class="grow"><label for="plpayer">Their name</label><input id="plpayer" type="text" name="payer" value="{{ contact_name or '' }}" maxlength="120"></div>
       <div class="grow"><label for="plphone">WhatsApp number</label><input id="plphone" type="tel" name="phone" value="{{ row.phone or "" }}"></div>
       <div class="grow"><label for="plemail">Email</label><input id="plemail" type="email" name="email" value="{{ pay_email }}"></div>
@@ -96,7 +96,7 @@
   <form method="post" action="{{ url_for('console.customer_renew', slug=row.slug) }}" class="row"
         data-confirm="Renew this plan? Only after payment is received.">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div><label for="len">Renew by</label><select id="len" name="length"><option value="6m">6 months</option><option value="1y" selected>12 months</option></select></div>
+    <div><label for="len">Renew by</label><select id="len" name="length"><option value="1m">1 month</option><option value="6m">6 months</option><option value="1y" selected>12 months</option></select></div>
     <button class="btn btn-primary" type="submit">Renew</button>
   </form>
   <p class="muted small">On time, it adds to the current end date (no days lost); after the grace period it starts from today.</p>

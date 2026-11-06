@@ -386,9 +386,9 @@ How it works once set up:
    console's public page `/start` they confirm their firm name (the address comes from it) and choose a password → their app opens straight away (a
    ready-made trial is renamed for them). "Others" still come to you. You see every new trial on the dashboard,
    linked to the request, with the WhatsApp follow-ups.
-2. In their app, the admin taps **Choose a plan** (or **Renew**) → pays ₹4,999 / ₹8,999 by Razorpay → the plan is
+2. In their app, the admin taps **Choose a plan** (or **Renew**) → starts the monthly autopay (₹599) or pays ₹5,999 for 12 months by Razorpay → the plan is
    active at once (a trial's paid plan starts when the trial ends) → receipt (not a GST invoice).
-   **Buying straight from the website:** the pricing cards' **Choose 6 months / Choose 12 months** open the same
+   **Buying straight from the website:** the pricing cards' **Choose Monthly / Choose 12 months** open the same
    short form (any business), then `/start?plan=…` (firm name, login, password: **Create my app and pay**) → the app
    is made and they go straight to a Razorpay payment link for that plan → back on `/start/paid`, which adds the plan
    to their app at once (their 7 trial days are kept on top). Closed the page before paying? The same link opens
@@ -412,12 +412,15 @@ Setup (do it with Razorpay **test** keys first, then switch to live keys):
    console** set `PLATFORM_RAZORPAY_KEY_ID` and `PLATFORM_RAZORPAY_KEY_SECRET` (the console uses them for payment links),
    plus on both what the receipt shows:
    `PLATFORM_LEGAL_NAME` (e.g. "QuoteRoom (Harshith Pola)"), `PLATFORM_ADDRESS`, `PLATFORM_EMAIL`, `PLATFORM_PHONE`.
-   Prices default to ₹4,999 / ₹8,999 (`PLAN_PRICE_6M`, `PLAN_PRICE_1Y` to change), ₹5,999 / ₹9,999 with AI
+   Prices default to ₹599 a month / ₹5,999 a year (`PLAN_PRICE_1M`, `PLAN_PRICE_1Y` to change), ₹749 / ₹7,499 with AI
    (`PLAN_PRICE_6M_AI`, `PLAN_PRICE_1Y_AI`) and ₹99 for 40 AI uses (`AI_ADDON_PRICE`). Without the keys, the plan buttons
    keep opening WhatsApp to you, as before.
 4. **Razorpay webhook** (Razorpay → **Account & Settings → Webhooks → Add new webhook**): URL
    `https://ops.quote-room.co.in/billing/razorpay-webhook`, a secret you generate (`python -c "import secrets;
-   print(secrets.token_hex(24))"`), events **order.paid** and **payment_link.paid**. Console project → `PLATFORM_RAZORPAY_WEBHOOK_SECRET` = that secret.
+   print(secrets.token_hex(24))"`), events **order.paid**, **payment_link.paid** and, for the monthly autopay, **subscription.activated**,
+   **subscription.charged**, **subscription.pending**, **subscription.halted**, **subscription.cancelled** and
+   **subscription.completed**. (Razorpay → **Subscriptions** must be on: it is, with UPI Autopay and cards; the app
+   creates the monthly plans itself, so don't make plans in the dashboard.) Console project → `PLATFORM_RAZORPAY_WEBHOOK_SECRET` = that secret.
    (`AUTO_MOVE_PAID_TRIALS=0` if you'd rather press **Move now** on Payments yourself.)
 5. **Self-serve trials.** Generate another secret the same way. Set `SIGNUP_SECRET` to it on the **console** and on the
    **website** project (`quotations-template`). On the website also set `AUTO_TRIALS=1` and
@@ -534,9 +537,11 @@ code's update on the QA database, before any real one. Delete QA trials whenever
 
 ## 4. Plans: 7-day free trial → 6 or 12 months
 
-Prices: **6 months ₹4,999 · 12 months ₹8,999**; with AI (100 AI uses a month instead of 20) **₹5,999 · ₹9,999**;
-40 more AI uses ₹99. No GST added (not GST-registered for now; check
-with your CA as revenue grows). No auto-renewal, no refunds (the trial is free).
+Prices (launch prices from Nov 2026): **₹599 a month by autopay · ₹5,999 for 12 months** (2 months free); with AI
+(100 AI uses a month instead of 20) **₹749 a month · ₹7,499 a year**; 40 more AI uses ₹99. The 6-month plans are no
+longer sold (those who have one keep it). No GST added (not GST-registered for now; check with your CA as revenue
+grows). The monthly plan renews by autopay until cancelled (in their app or their UPI app); the 12-month plan never
+renews by itself. No refunds (the trial is free).
 
 What the app does by itself:
 - Trial: "Free trial ends in N days" banner for admins all week.

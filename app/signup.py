@@ -23,7 +23,7 @@ import urllib.request
 
 ELIGIBLE = {'interiors', 'kitchens', 'turnkey', 'furniture', 'upvc', 'glass', 'tiles', 'construction', 'painting',
             'ceiling', 'fabrication', 'curtains'}          # marketing.BUSINESS_TYPES but 'other'
-PLANS = ('6m', '1y', '6m_ai', '1y_ai')        # plan.PAID: what the website's pricing cards can buy
+PLANS = ('1m', '1y', '1m_ai', '1y_ai')        # plan.PAID: what the website's pricing cards can buy
 TOKEN_HOURS = 72
 MAX_PER_IP_PER_HOUR = 3
 

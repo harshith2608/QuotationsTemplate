@@ -190,7 +190,7 @@
       <div class="section-head">
         <p class="eyebrow">Pricing</p>
         <h2>One price for your whole team. No per-user fees.</h2>
-        <p>Try it free, then pay once for 6 or 12 months. Every plan includes unlimited quotations, unlimited staff logins, both PDFs,
+        <p>Try it free, then pay monthly with autopay (cancel any time) or for 12 months and get 2 months free. Every plan includes unlimited quotations, unlimited staff logins, both PDFs,
            GST invoices, online approval, payment tracking, your own branding, hosting, updates and support.
            A one-time quotation website typically costs ₹30,000–40,000 and still needs hosting and fixes.</p>
       </div>
@@ -210,20 +210,20 @@
           <ul><li>Full app, all features</li><li>Use it on real jobs</li><li>Keep everything if you subscribe</li></ul>
           <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Start free trial</a>
         </div>
-        {% for key, head, price, per, sub, badge in [('6m', '6 months', '₹4,999', '/6 months', 'About ₹833 a month for your whole team, paid once.', ''),
-                                                    ('1y', '12 months', '₹8,999', '/year', 'About ₹750 a month for your whole team, paid once.', 'Best value · save ₹999')] %}
+        {% for key, head, per, badge in [('1m', 'Monthly', '/month', ''), ('1y', '12 months', '/year', '2 months free')] %}
         <div class="plan{{ ' featured' if key == '1y' }}">
-          {% if badge %}<span class="badge tier-std">{{ badge }}</span>{% if ai_plans %}<span class="badge tier-ai">Best value · save ₹1,999</span>{% endif %}{% endif %}
+          {% if badge %}<span class="badge">{{ badge }}</span>{% endif %}
           <h3>{{ head }}</h3>
           {% for k in ([key, key ~ '_ai'] if ai_plans else [key]) %}{% set ai = k.endswith('_ai') %}
           <div class="tier-{{ 'ai' if ai else 'std' }}">
             <div class="price"><span class="amount">{{ plan_names[k][1] }}</span><span class="per">{{ per }}</span></div>
-            <p class="sub">{{ sub if not ai else ('About ₹1,000 a month' if key == '6m' else 'About ₹833 a month') ~ ' for your whole team, paid once.' }}</p>
+            <p class="sub">{{ ('For your whole team. Paid every month by UPI Autopay or card; cancel any time.' if key == '1m'
+                               else 'About ' ~ ('₹500' if not ai else '₹625') ~ ' a month for your whole team, paid once. Save ' ~ ('₹1,189' if not ai else '₹1,489') ~ '.') }}</p>
           </div>
           {% endfor %}
           <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li>
             {% if ai_plans %}<li class="tier-std">AI drafts &amp; checks: 20 a month</li><li class="tier-ai">AI drafts &amp; checks: 100 a month</li>{% endif %}
-            <li>{{ 'Priority support' if key == '1y' else 'Renewal reminders, no auto-charge' }}</li></ul>
+            <li>{{ 'Priority support · no auto-renewal' if key == '1y' else 'Launch price · cancel any time' }}</li></ul>
           {% for k in ([key, key ~ '_ai'] if ai_plans else [key]) %}{% set ai = k.endswith('_ai') %}
           {% if sells %}
           <a class="btn {{ 'btn-primary' if key == '1y' else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="{{ url_for('marketing.free_trial', plan=k) }}" data-trial data-plan="{{ k }}"
@@ -235,7 +235,9 @@
         </div>
         {% endfor %}
       </div>
-      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.{% if call_url %}
+      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. The monthly plan renews
+        by autopay until you cancel it (your bank or UPI app tells you a day before each payment); the 12-month plan doesn't
+        renew automatically, and we remind you before it ends.{% if call_url %}
         Not sure which plan? <a href="{{ call_url }}" data-call>Book a call with us</a>.{% endif %}</p>
     </div>
   </section>

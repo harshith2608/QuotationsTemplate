@@ -90,9 +90,9 @@ def _context():
     )
 
 
-PLAN_NAMES = {'6m': ('6-month plan', '₹4,999'), '1y': ('12-month plan', '₹8,999'),    # as on the pricing cards
-              '6m_ai': ('6-month plan with AI', '₹5,999'), '1y_ai': ('12-month plan with AI', '₹9,999')}
-PLAN_VALUES = {'6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999}                    # for the ads' InitiateCheckout
+PLAN_NAMES = {'1m': ('Monthly plan', '₹599'), '1y': ('12-month plan', '₹5,999'),      # as on the pricing cards
+              '1m_ai': ('Monthly plan with AI', '₹749'), '1y_ai': ('12-month plan with AI', '₹7,499')}
+PLAN_VALUES = {'1m': 599, '1y': 5999, '1m_ai': 749, '1y_ai': 7499}                      # for the ads' InitiateCheckout
 
 
 def call_url():

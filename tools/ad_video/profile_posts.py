@@ -41,7 +41,7 @@ def one_price():
     rows = [
         ('Custom quotation website', '₹30,000–40,000', 'up front, plus hosting and fixes', 0.92, (120, 140, 132)),
         ('Per-user software', '₹6,000–11,000', 'per person, per year, plus GST', 0.62, (120, 140, 132)),
-        ('QuoteRoom', '₹8,999 a year', 'whole team · your own brand · no extra fees', 0.30, TAPE),
+        ('QuoteRoom', '₹599 a month', 'whole team · your own brand · cancel any time', 0.30, TAPE),
     ]
     y += 34
     for name, price, note, frac, colour in rows:

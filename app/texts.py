@@ -63,12 +63,13 @@ STAGE_FIELDS = {'hello': '"Hello Ravi" (or "Hello")', 'url': 'their app address'
 _OUTRO = '\n\nQuestions? Just reply to this email or message us on WhatsApp.\n\nQuoteRoom\n'
 _REMIND_FIELDS = {'when': '"today", "tomorrow" or "in 3 days"', 'end': 'end date', 'plan': 'their plan',
                   'grace': 'last day before read-only', 'delete': 'date their data is deleted',
-                  'plan_link': 'their Plan page', 'price_6m': '6-month price', 'price_1y': '12-month price'}
+                  'plan_link': 'their Plan page', 'price_1m': 'monthly price', 'price_1y': '12-month price'}
 
 
 def _remind(first):
     return ('Hello,\n\n' + first + '\n\nChoose a plan in your app: {plan_link}\n'
-            '6 months ₹{price_6m} · 12 months ₹{price_1y} (your whole team, all features)\n\n'
+            '₹{price_1m} a month by autopay (cancel any time) · or ₹{price_1y} for 12 months (2 months free). '
+            'Your whole team, all features.\n\n'
             'Questions? Just reply to this email.\n\nQuoteRoom\n')
 
 
@@ -191,17 +192,18 @@ _CALLS = [
      "• One price for the whole team, on phone or laptop, nothing to install.\n\n"
      "Then ask: \"Which of these would help you most?\" and show that one."),
     ('price', '"It\'s too expensive"',
-     "• 12 months is ₹8,999: about ₹750 a month, ₹25 a day. 6 months is ₹4,999.\n"
+     "• ₹599 a month by autopay, cancel any time: about ₹20 a day. Or ₹5,999 for 12 months: 2 months free.\n"
      "• With AI (drafts from a WhatsApp message or a photo of site notes, checks before sending: 100 uses a month) "
-     "it's ₹9,999 a year or ₹5,999 for 6 months. Every plan gets 20 AI uses a month.\n"
+     "it's ₹749 a month or ₹7,499 a year. Every plan gets 20 AI uses a month.\n"
      "• One price for the whole team: every staff member gets a login at no extra cost.\n"
      "• One job won because the quotation went out the same day, in your brand, pays for the whole year.\n"
      "• It also saves the hours spent typing and re-checking totals in Excel, every quotation.\n"
      "• Ask: \"How much is one 2 BHK job worth to you?\" Then compare."),
     ('monthly', '"Can I pay monthly?" / "Lifetime?"',
-     "• No monthly plan: 6 months (₹4,999) is the shortest, about ₹833 a month.\n"
+     "• Yes: ₹599 a month (₹749 with AI), paid by UPI Autopay or card. Approve it once; cancel any time from the app.\n"
+     "• Paying for 12 months (₹5,999) is 2 months free.\n"
      "• No lifetime plan: the app runs on servers we pay for every month (hosting, backups, updates), and you get every "
-     "new feature as it comes.\n• Start with 6 months and see; renewing keeps everything as it is."),
+     "new feature as it comes."),
     ('later', '"I\'ll think about it" / "Later"',
      "• Sure. What would you like to think over: the price, or whether it fits how you work?\n"
      "• Everything you set up in the trial stays when you continue: rates, logo, quotations.\n"
@@ -242,7 +244,8 @@ _CALLS = [
      "• That's the best time to set it up, so the next enquiry gets a quotation the same day.\n"
      "• A quotation that goes out faster, in your brand, helps win the next job."),
     ('close', 'Closing: asking for the plan',
-     "• \"Shall I send you the payment link? 6 months or 12 months?\"\n"
+     "• \"Shall we start you on the monthly plan? It's ₹599 with autopay, cancel any time.\" (Or 12 months: 2 months free.)\n"
+     "• They start it from Choose a plan in their app; for 12 months you can also send a payment link.\n"
      "• Pay by UPI, card or net banking. The trial becomes the paid plan with everything kept: same address, same login.\n"
      "• Not ready? Agree a date and log Call back."),
 ]

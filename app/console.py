@@ -455,7 +455,8 @@ def _wa_link(phone, message):
 # Drafts for the trial page's "Message on WhatsApp" card. {name} is filled in on the page (it can be edited there);
 # the rest when the page is built. The message opens in the operator's own WhatsApp (wa.me): nothing is sent from here.
 
-PLAN_PRICES = '6 months ₹4,999 or 12 months ₹8,999 (with more AI: ₹5,999 / ₹9,999), one price for your whole team'
+PLAN_PRICES = ('₹599 a month by autopay or ₹5,999 for 12 months (with more AI: ₹749 / ₹7,499), one price for your '
+               'whole team')
 
 def _follow_up_texts():
     """[(key, label, text)] for the WhatsApp drafts (console → Messages can change them)."""
@@ -2189,7 +2190,11 @@ def payments():
     this_month = sum(r['amount_paise'] for r in rows if r['paid_at'] and r['paid_at'].strftime('%Y-%m') == month) / 100
     businesses = [(t['slug'], 'trial') for t in ops.list_trials() if t['status'] == 'active']
     businesses += [(c['slug'], 'customer') for c in _customers().all_customers() if c['status'] == 'active']
-    return render_template('console/payments.html', rows=rows, total=total, this_month=this_month,
+    try:
+        autopays = subscription.subscriptions()
+    except Exception:
+        autopays = []
+    return render_template('console/payments.html', rows=rows, total=total, this_month=this_month, autopays=autopays,
                            pending=subscription.paid_trials(), keys_set=bool(os.environ.get('PLATFORM_RAZORPAY_WEBHOOK_SECRET')),
                            auto=subscription.auto_move(), base_domain=tenancy.base_domain(),
                            businesses=sorted(businesses), methods=subscription.MANUAL_METHODS, prices=subscription.prices(),
@@ -2536,7 +2541,21 @@ def _paid_plan(slug):
 
 def _go_pay(slug, plan, lead, token, company=''):
     """Send a business buying on the website to Razorpay for its plan (a payment link, reused if they come back)."""
-    from . import emails, subscription
+    from . import emails, plan as plan_mod, subscription
+    if plan in plan_mod.AUTOPAY:                 # monthly: approve the autopay on Razorpay's page (first month paid then)
+        try:
+            sub = subscription.current_subscription(slug) or subscription.create_subscription(
+                slug, plan, company or lead.get('company_name') or '', 'website', lead.get('email') or '',
+                lead.get('phone') or '', payer_name=lead.get('name') or '')
+        except subscription.PaymentError as exc:
+            current_app.logger.warning('Website autopay failed for %s: %s', slug, exc)
+            audit('website_pay_failed', slug, str(exc)[:200])
+            return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(),
+                                   new=True, plan=plan, pay_failed=True)
+        if sub.get('short_url'):
+            return redirect(sub['short_url'])
+        return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), new=True,
+                               plan=plan, pay_failed=True)
     try:
         row = subscription.open_link(slug, plan) or subscription.create_payment_link(
             slug, plan, company or lead.get('company_name') or '', lead.get('phone') or '', lead.get('email') or '',
