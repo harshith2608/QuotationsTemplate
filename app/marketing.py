@@ -190,8 +190,8 @@ def terms():
 
 # ── Free-trial requests ──────────────────────────────────────────────────────
 
-# The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Every one but 'other' is a
-# trade QuoteRoom is for: they can set up their own app (signup.ELIGIBLE) and count as a Lead for the ads.
+# The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Everyone sets up their own app
+# (signup.ELIGIBLE); every one but 'other' is a trade QuoteRoom is for and counts as a Lead for the ads.
 # The trial form's choices (the app's own kinds: welcome.KINDS; 'kitchens' is set up as interiors)
 BUSINESS_TYPES = {'interiors': 'Interiors (plywood, PVC or WPC)', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
                   'furniture': 'Furniture works', 'upvc': 'uPVC windows & doors (fabrication)', 'glass': 'Glass & aluminium works',

@@ -476,8 +476,8 @@ r = anon.get('/start?t=' + tok)
 ok('/start without signing in: the setup form; the web address comes from the firm name (no address box)', r.status_code == 200
    and 'Hi Meera Shah' in r.text and 'shah-studio.quote-room.test' in r.text and 'Shah Design Studio' in r.text
    and 'name="slug"' not in r.text)
-ok('a bad or not-eligible link is refused', anon.get('/start?t=1.2.3').status_code == 404
-   and anon.get('/start?t=' + _su.make_token(other_id)).status_code == 404)
+ok('a bad link is refused; "Other" businesses set up their own app too', anon.get('/start?t=1.2.3').status_code == 404
+   and anon.get('/start?t=' + _su.make_token(other_id)).status_code == 200)
 ok('the address follows the firm name as they type; a taken one gets a number', anon.get(
        f'/start/check?t={tok}&company=Taken One Interiors').get_json()['address'] == 'taken-one-2.quote-room.test'
    and anon.get(f'/start/check?t={tok}&company=Shah Design Studio').get_json()['slug'] == 'shah-studio'
@@ -546,7 +546,7 @@ btok = _su.make_token(buy_id)
 r = anon.get(f'/start?t={btok}&plan=1y')
 ok('buying: any business can set up and pay (the plan and price shown, "Create my app and pay")', r.status_code == 200
    and '12-month plan' in r.text and 'Create my app and pay ₹5,999' in r.text and 'name="plan" value="1y"' in r.text
-   and anon.get('/start?t=' + btok).status_code == 404 and anon.get(f'/start?t={btok}&plan=99y').status_code == 404)
+   and 'Create my app and pay' not in anon.get(f'/start?t={btok}&plan=99y').text)
 r = anon.post('/start', data=dict(t=btok, plan='1y', company='Buyer Kitchens', username='kiran', password='kiran-pass-123',
                                   password2='kiran-pass-123', terms='1'))
 cb = (_calls[0] or {}).get('callback_url', '') if _calls else ''

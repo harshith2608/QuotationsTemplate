@@ -85,7 +85,7 @@ with app.app_context():
 from app import marketing, signup
 ok('the trial form offers every kind, and each can set up its own app',
    {'tiles', 'construction', 'painting', 'ceiling', 'fabrication', 'curtains', 'turnkey'} <= set(marketing.BUSINESS_TYPES)
-   and set(marketing.BUSINESS_TYPES) - {'other'} == signup.ELIGIBLE)
+   and set(marketing.BUSINESS_TYPES) == signup.ELIGIBLE)
 
 # ── Kinds of business offered (the console's Features → Kinds of business) ──
 with app.app_context():

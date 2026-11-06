@@ -1,9 +1,9 @@
 """Self-serve trials: a business that asks for a free trial on the website sets up its own app straight away.
 
-The website (MARKETING_SITE) stores the request as before. For the trades it's for (interiors, furniture, kitchens, uPVC, glass), its thank-you
+The website (MARKETING_SITE) stores the request as before. For every business ("Other" too), its thank-you
 step offers "Set up your app now": a link to the console's public /start page carrying only a signed, single-use
 token for that request (no name, phone or email in the address). There they choose their web address, login and
-password; the console renames a ready-made trial (ops.claim_trial) and they sign in. "Others" still wait for the
+password; the console renames a ready-made trial (ops.claim_trial) and they sign in. No one waits for the
 operator. Every self-started trial appears in the console linked to its request, with the WhatsApp follow-ups.
 
 Buying on the website: the plan buttons open the same form (any business), then /start?plan=6m|1y. After the app is
@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 
 ELIGIBLE = {'interiors', 'kitchens', 'turnkey', 'furniture', 'upvc', 'glass', 'tiles', 'construction', 'painting',
-            'ceiling', 'fabrication', 'curtains'}          # marketing.BUSINESS_TYPES but 'other'
+            'ceiling', 'fabrication', 'curtains', 'other'}  # marketing.BUSINESS_TYPES: everyone sets up their own app
 PLANS = ('1m', '1y', '1m_ai', '1y_ai')        # plan.PAID: what the website's pricing cards can buy
 TOKEN_HOURS = 72
 MAX_PER_IP_PER_HOUR = 3
@@ -61,9 +61,8 @@ def website_sells():
 
 
 def website_offers(business_type):
-    """True if the website should offer "Set up your app now" for this request."""
-    from . import business
-    return website_sells() and business_type in ELIGIBLE and business.offered(business_type)
+    """True if the website should offer "Set up your app now" for this request: every business, no waiting for us."""
+    return website_sells() and business_type in ELIGIBLE
 
 
 def setup_url(lead_id, base=None, plan=None):

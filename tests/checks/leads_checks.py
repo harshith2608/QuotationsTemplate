@@ -142,7 +142,7 @@ ok('self-serve on: an interior designer gets "set up my app now" (a signed link 
    and _su.read_token(d['setup_url'].split('t=', 1)[1].replace('%2E', '.')) is not None)
 r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type='other', business_other='Tiles'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.2'})
-ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
+ok('…"Others" set up their own app too (no waiting for us)', r.get_json()['ok'] and r.get_json()['setup_url'])
 r = c5.post('/trial-request', data=dict(good, phone='9811100051', business_type='upvc'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.8'})
 ok('…uPVC, glass and kitchen firms set up their own app too', r.get_json()['ok'] and r.get_json()['setup_url']
