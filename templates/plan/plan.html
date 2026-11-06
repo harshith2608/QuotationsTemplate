@@ -52,9 +52,11 @@
         <button type="button" class="btn {{ 'btn-primary' if not autopay else 'btn-outline-secondary' }} mt-auto fw-semibold"
                 onclick="startAutopay('{{ key }}', this)" {{ 'disabled' if autopay }}><i class="bi bi-arrow-repeat me-1"></i>{{ 'Autopay is on' if autopay else 'Start autopay · ₹' ~ (prices[key])|inr(0) ~ ' a month' }}</button>
         {% else %}
+        {% set switch_note = 'Your monthly autopay will stop, and your 12 months start on ' ~ status.ends_on.strftime('%d %b %Y')
+                             ~ ', when your paid month ends.' if autopay and status.ends_on else '' %}
         <button type="button" class="btn {{ 'btn-primary' if key == '1y' else 'btn-outline-primary' }} mt-auto fw-semibold"
-                onclick="buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>Pay ₹{{ (prices[key])|inr(0) }}</button>
-        {% if autopay %}<div class="small text-muted mt-2">Switching to 12 months? Cancel your autopay above first.</div>{% endif %}
+                onclick="{% if switch_note %}if (!confirm({{ (switch_note ~ ' Continue?')|tojson|forceescape }})) return; {% endif %}buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>{{ 'Switch to 12 months · ' if autopay }}Pay ₹{{ (prices[key])|inr(0) }}</button>
+        {% if switch_note %}<div class="small text-muted mt-2">{{ switch_note }}</div>{% endif %}
         {% endif %}
       </div>
     </div>

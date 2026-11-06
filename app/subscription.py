@@ -322,7 +322,21 @@ def apply_plan(row):
     with db.engine.begin() as conn:
         conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
                      {'a': status.started_on, 'b': status.ends_on, 'i': row['id']})
+    _stop_autopay_for(row)
     return status
+
+
+def _stop_autopay_for(row):
+    """A 12-month plan paid (any way) by a business on monthly autopay: stop the autopay, so it isn't charged
+    monthly on top of the year it bought. The year was added after the month already paid, so no days are lost."""
+    if row['plan'] in plan_mod.AUTOPAY or row['plan'] == plan_mod.ADDON:
+        return
+    sub = current_subscription(row['slug'])
+    if sub:
+        try:
+            cancel_subscription(sub)
+        except PaymentError:
+            pass                       # (Razorpay unreachable: the next charge's webhook finds the 12-month plan below)
 
 
 def apply_plan_for(slug, row):
@@ -342,6 +356,7 @@ def apply_plan_for(slug, row):
             conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
                          {'a': status.started_on, 'b': status.ends_on, 'i': row['id']})
         customers._update(slug, ends_on=status.ends_on, plan=status.plan)
+        _stop_autopay_for(row)
         return status
     raise PaymentError(f'No trial or customer "{slug}" to add the plan to.')
 
@@ -467,9 +482,19 @@ def record_charge(sub, payment_id, amount_paise, source, email=None):
             conn.execute(text('UPDATE public.platform_payments SET receipt_no = :r WHERE id = :i'),
                          {'r': f'QR{made[1]:%y%m}-{made[0]:04d}', 'i': made[0]})
     row = get_by_order(payment_id)
-    _set_status(sub['sub_id'], 'active', charged=True)
+    stopped = sub['status'] == 'cancelled'
+    if not stopped:
+        _set_status(sub['sub_id'], 'active', charged=True)
     if not made:
         return row, False
+    if stopped:                                # charged as it was being stopped (a 12-month plan bought meanwhile):
+        from . import mailer                   # recorded, the plan left as it is; the operator refunds it
+        if mailer.enabled():
+            mailer.send(mailer.operator(), f'Refund needed: {sub.get("business_name") or sub["slug"]}, ₹{inr((amount_paise or 0) / 100, 0)}',
+                        f'{sub.get("business_name") or sub["slug"]} ({sub["slug"]}) was charged {inr((amount_paise or 0) / 100, 0)} by '
+                        f'its monthly autopay just after it stopped (they switched to 12 months). Their plan was not changed.\n'
+                        f'Payment {payment_id}: refund it in Razorpay → Payments.\n')
+        return get(row['id']), True
     if tenancy.current_slug() == sub['slug']:
         apply_plan(row)
     else:

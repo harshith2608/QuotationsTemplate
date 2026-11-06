@@ -300,3 +300,12 @@ with app.app_context():
         'email': None})).pages)
 ok('…and the receipt PDF of a monthly payment says how to cancel; a 12-month one doesn\'t', 'Cancel autopay' in month_pdf
    and '/plan' in month_pdf and 'Cancel autopay' not in year_pdf)
+
+# ── Paying for 12 months while on monthly autopay stops the autopay (no monthly charges on top of the year) ──
+with mock.patch.object(SUB, 'current_subscription', return_value=dict(sub, status='active')), \
+        mock.patch.object(SUB, 'cancel_subscription') as cancel:
+    SUB._stop_autopay_for({'plan': '1y', 'slug': 'acme'})
+    stopped_for_year = cancel.called
+    cancel.reset_mock()
+    SUB._stop_autopay_for({'plan': '1m', 'slug': 'acme'}); SUB._stop_autopay_for({'plan': 'ai40', 'slug': 'acme'})
+ok('a 12-month plan paid on autopay stops the autopay; a month or AI uses don\'t', stopped_for_year and not cancel.called)
