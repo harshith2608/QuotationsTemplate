@@ -15,7 +15,7 @@
 {% if autopay %}
 <div class="alert alert-success d-flex flex-wrap align-items-center gap-2" id="autopayOn">
   <div class="flex-grow-1"><i class="bi bi-arrow-repeat me-1"></i><strong>Autopay is on:</strong>
-    {{ autopay.plan|plan_short }} at ₹{{ (prices[autopay.plan])|inr(0) }} a month{% if status.ends_on %}, next payment around
+    {{ autopay.plan|plan_short }} at ₹{{ ((autopay.amount_paise / 100) if autopay.amount_paise else prices[autopay.plan])|inr(0) }} a month{% if status.ends_on %}, next payment around
     {{ status.ends_on.strftime('%d %b %Y') }}{% endif %}{% if autopay.status == 'pending' %} <span class="badge text-bg-warning">last payment didn't go through: retrying</span>{% endif %}.
     Cancel any time.</div>
   <form method="post" action="{{ url_for('plan.autopay_cancel') }}"
@@ -25,22 +25,23 @@
   </form>
 </div>
 {% endif %}
-{% for group, ai in [('Standard', false), ('With AI', true)] if ai_on or not ai %}
+{% for group, ai in [('Standard', false), ('With AI', true)] if (ai_on or not ai) and pricing.offered(pricing_data, ai=ai) %}
 {% if ai_on %}<h6 class="fw-bold mt-2 mb-2">{{ group }} <span class="text-muted fw-normal small">· {{ ai_allowance['ai' if ai else 'standard'] }} AI uses a month{{ ' (drafts from a message or photos, checks before sending)' if ai }}</span></h6>{% endif %}
 <div class="row g-3 mb-4" id="planOptions{{ '' if not ai else 'AI' }}">
-  {% for length, head in [('1m', 'Monthly'), ('1y', '12 months')] %}{% set key = length ~ ('_ai' if ai else '') %}
-  {% set monthly = length == '1m' %}
-  <div class="col-12 col-md-6">
-    <div class="card shadow-sm border-0 h-100 {{ 'border border-2 border-primary' if key == '1y' }}">
+  {% set keys = pricing.offered(pricing_data, ai=ai) %}
+  {% for key in keys %}{% set length = pricing.length(key) %}{% set head = pricing.HEADS[length] %}
+  {% set monthly = length == '1m' %}{% set featured = length == '1y' %}{% set badge = pricing.badge(key, pricing_data) %}
+  <div class="col-12 col-md-{{ 6 if keys|length <= 2 else 4 if keys|length == 3 else 3 }}">
+    <div class="card shadow-sm border-0 h-100 {{ 'border border-2 border-primary' if featured }}">
       <div class="card-body d-flex flex-column">
         <div class="d-flex align-items-center justify-content-between">
           <span class="fw-bold fs-5">{{ head }}{{ ' with AI' if ai }}</span>
-          {% if not monthly %}<span class="badge {{ 'bg-primary' if key == '1y' else 'text-bg-light border' }}">2 months free</span>{% endif %}
+          {% if badge %}<span class="badge {{ 'bg-primary' if featured else 'text-bg-light border' }}">{{ badge }}</span>{% endif %}
           {% if status.plan == key and not status.is_trial %}<span class="badge text-bg-success">Your plan</span>{% endif %}
         </div>
-        <div class="display-6 fw-bold my-2">₹{{ (prices[key])|inr(0) }}<span class="fs-6 text-muted fw-normal">{{ ' / month' if monthly else ' / year' }}</span></div>
+        <div class="display-6 fw-bold my-2">₹{{ (prices[key])|inr(0) }}<span class="fs-6 text-muted fw-normal"> {{ pricing.per_word(key) }}</span></div>
         <div class="small text-muted mb-3">{% if monthly %}Paid every month by UPI Autopay or card · cancel any time
-          {% else %}Save ₹{{ (prices['1m' ~ ('_ai' if ai else '')] * 12 - prices[key])|inr(0) }} on paying monthly · paid once{% endif %}
+          {% else %}{% set saved = pricing.saving(key, pricing_data) %}{% if saved and pricing.monthly_of(key) in offered %}Save ₹{{ saved|inr(0) }} on paying monthly · {% endif %}paid once{% endif %}
           · your whole team · all features · no GST</div>
         <ul class="small mb-3 ps-3">
           <li>Unlimited quotations, staff logins and customers</li>
@@ -52,10 +53,10 @@
         <button type="button" class="btn {{ 'btn-primary' if not autopay else 'btn-outline-secondary' }} mt-auto fw-semibold"
                 onclick="startAutopay('{{ key }}', this)" {{ 'disabled' if autopay }}><i class="bi bi-arrow-repeat me-1"></i>{{ 'Autopay is on' if autopay else 'Start autopay · ₹' ~ (prices[key])|inr(0) ~ ' a month' }}</button>
         {% else %}
-        {% set switch_note = 'Your monthly autopay will stop, and your 12 months start on ' ~ status.ends_on.strftime('%d %b %Y')
+        {% set switch_note = 'Your monthly autopay will stop, and your ' ~ head ~ ' start on ' ~ status.ends_on.strftime('%d %b %Y')
                              ~ ', when your paid month ends.' if autopay and status.ends_on else '' %}
-        <button type="button" class="btn {{ 'btn-primary' if key == '1y' else 'btn-outline-primary' }} mt-auto fw-semibold"
-                onclick="{% if switch_note %}if (!confirm({{ (switch_note ~ ' Continue?')|tojson|forceescape }})) return; {% endif %}buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>{{ 'Switch to 12 months · ' if autopay }}Pay ₹{{ (prices[key])|inr(0) }}</button>
+        <button type="button" class="btn {{ 'btn-primary' if featured else 'btn-outline-primary' }} mt-auto fw-semibold"
+                onclick="{% if switch_note %}if (!confirm({{ (switch_note ~ ' Continue?')|tojson|forceescape }})) return; {% endif %}buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>{{ ('Switch to ' ~ head ~ ' · ') if autopay }}Pay ₹{{ (prices[key])|inr(0) }}</button>
         {% if switch_note %}<div class="small text-muted mt-2">{{ switch_note }}</div>{% endif %}
         {% endif %}
       </div>

@@ -23,7 +23,10 @@ import urllib.request
 
 ELIGIBLE = {'interiors', 'kitchens', 'turnkey', 'furniture', 'upvc', 'glass', 'tiles', 'construction', 'painting',
             'ceiling', 'fabrication', 'curtains', 'other'}  # marketing.BUSINESS_TYPES: everyone sets up their own app
-PLANS = ('1m', '1y', '1m_ai', '1y_ai')        # plan.PAID: what the website's pricing cards can buy
+def plan_ok(plan):
+    """A plan the website's pricing cards offer now (the console's Pricing)."""
+    from . import pricing
+    return plan in pricing.offered()
 TOKEN_HOURS = 72
 MAX_PER_IP_PER_HOUR = 3
 
@@ -68,7 +71,7 @@ def website_offers(business_type):
 def setup_url(lead_id, base=None, plan=None):
     """base: the console's address (the website uses SIGNUP_URL; the console its own). plan: buying 6m / 1y."""
     url = f'{(base or _env("SIGNUP_URL")).rstrip("/")}/start?t={urllib.parse.quote(make_token(lead_id))}'
-    return url + (f'&plan={plan}' if plan in PLANS else '')
+    return url + (f'&plan={plan}' if plan_ok(plan) else '')
 
 
 def turnstile_site_key():

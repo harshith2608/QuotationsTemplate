@@ -23,24 +23,28 @@ AUTOPAY_KEY = 'plan_autopay'             # '1' while a monthly plan's autopay is
 PLANS = {
     'trial':  'Free trial',
     '1m':     'Monthly plan',
+    '3m':     '3-month plan',
+    '6m':     '6-month plan',
     '1y':     '12-month plan',
     '1m_ai':  'Monthly plan with AI',
-    '1y_ai':  '12-month plan with AI',
-    '6m':     '6-month plan',            # no longer offered; kept for the businesses and payments that have it
+    '3m_ai':  '3-month plan with AI',
     '6m_ai':  '6-month plan with AI',
+    '1y_ai':  '12-month plan with AI',
     'ai40':   '40 AI uses',            # the add-on (not a plan): ADDON_USES more AI uses, kept until used
     'custom': 'Plan',
 }
-DEFAULT_LENGTH = {'trial': '7d', '1m': '1m', '1y': '1y', '1m_ai': '1m', '1y_ai': '1y', '6m': '6m', '6m_ai': '6m'}
-PAID = ('1m', '1y', '1m_ai', '1y_ai')    # the plans a business can buy, in the order they're offered
+DEFAULT_LENGTH = {'trial': '7d', '1m': '1m', '3m': '3m', '6m': '6m', '1y': '1y', '1m_ai': '1m', '3m_ai': '3m',
+                  '6m_ai': '6m', '1y_ai': '1y'}
+PAID = ('1m', '3m', '6m', '1y', '1m_ai', '3m_ai', '6m_ai', '1y_ai')   # every paid plan (pricing.ALL); which are
+                                         # offered now, and at what price: the console's Pricing (app/pricing.py)
 AUTOPAY = ('1m', '1m_ai')                # paid monthly by autopay (a Razorpay subscription), until cancelled
-LEGACY = ('6m', '6m_ai')                 # sold before; still valid (records, renewals by hand)
-AI_PLANS = ('1m_ai', '1y_ai', '6m_ai')   # plans with the bigger AI allowance (app/ai_tools.py)
+LEGACY = ()                              # (plans switched off in Pricing stay valid for records and payments by hand)
+AI_PLANS = ('1m_ai', '3m_ai', '6m_ai', '1y_ai')   # plans with the bigger AI allowance (app/ai_tools.py)
 ADDON, ADDON_USES = 'ai40', 40           # bought on its own, on a paid plan: more AI uses
 
 
 def length_of(plan):
-    """'1m' / '1y' / '6m' for a paid plan (with or without AI), else None."""
+    """'1m' / '3m' / '6m' / '1y' for a paid plan (with or without AI), else None."""
     return DEFAULT_LENGTH.get(plan) if plan in PAID + LEGACY else None
 
 
@@ -48,7 +52,7 @@ def short(plan):
     """'1 month', '12 months with AI', '40 AI uses': a payment's plan in a few words."""
     if plan == ADDON:
         return f'{ADDON_USES} AI uses'
-    months = {'1m': '1 month', '6m': '6 months', '1y': '12 months'}.get(length_of(plan) or '', PLANS.get(plan, plan))
+    months = {'1m': '1 month', '3m': '3 months', '6m': '6 months', '1y': '12 months'}.get(length_of(plan) or '', PLANS.get(plan, plan))
     return months + (' with AI' if plan in AI_PLANS else '')
 
 REMIND_DAYS = 15        # paid plans: reminder banner this many days before the end
@@ -177,7 +181,7 @@ def save_plan(plan, started_on, ends_on):
 
 def renew(length, plan_name=None):
     """Add 6m / 1y / 7d… to this deployment's plan. On time (within grace) it extends from the end date,
-    so no days are lost; late or with no plan it starts from today. 6m / 1y renewals become that plan (with AI if
+    so no days are lost; late or with no plan it starts from today. 1m / 3m / 6m / 1y renewals become that plan (with AI if
     it was a plan with AI; plan_name says which: this is also how a trial becomes paid); other lengths keep the
     current plan. Returns the new status.
     Caller commits."""
@@ -186,7 +190,7 @@ def renew(length, plan_name=None):
     start = today()
     base = status.ends_on if status.has_limit and start <= status.grace_until else start
     key = length.strip().lower()
-    new_plan = {'1m': '1m', '6m': '6m', '1y': '1y', '12m': '1y'}.get(key)
+    new_plan = {'1m': '1m', '3m': '3m', '6m': '6m', '1y': '1y', '12m': '1y'}.get(key)
     if new_plan and status.plan in AI_PLANS:
         new_plan += '_ai'                    # renewing keeps the AI plan
     new_plan = plan_name or new_plan or status.plan or 'custom'

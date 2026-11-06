@@ -22,7 +22,10 @@ def plan_page():
     _guard()
     from . import ai_tools, plan as plan_mod
     status = load_status()
-    return render_template('plan/plan.html', title='Your plan', status=status, prices=subscription.prices(),
+    from . import pricing
+    data = pricing.load()
+    return render_template('plan/plan.html', title='Your plan', status=status, prices=pricing.prices(data),
+                           offered=pricing.offered(data), pricing=pricing, pricing_data=data,
                            ai_pool=ai_tools.pool(), ai_allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
                            addon=plan_mod.ADDON, addon_uses=plan_mod.ADDON_USES, ai_on=any(ai_tools.available(f) for f in ai_tools.FEATURES),
                            payments=subscription.history(tenancy.current_slug()),
@@ -38,6 +41,9 @@ def order():
     from . import ai_tools, plan as plan_mod
     from .branding import get_brand
     plan = (request.get_json(silent=True) or {}).get('plan') or request.form.get('plan')
+    from . import pricing
+    if plan != plan_mod.ADDON and plan not in pricing.offered():   # only the plans shown (the console's Pricing)
+        return jsonify({'ok': False, 'error': 'Choose one of the plans shown.'}), 400
     if plan == plan_mod.ADDON and not ai_tools.pool()['can_buy']:
         return jsonify({'ok': False, 'error': 'More AI uses can be bought on a paid plan: choose a plan first.'}), 400
     brand = get_brand()
@@ -63,6 +69,9 @@ def subscribe():
     from .branding import get_brand
     plan = (request.get_json(silent=True) or {}).get('plan') or request.form.get('plan')
     slug = tenancy.current_slug()
+    from . import pricing
+    if plan not in pricing.offered():
+        return jsonify({'ok': False, 'error': 'Choose one of the plans shown.'}), 400
     if subscription.current_subscription(slug):
         return jsonify({'ok': False, 'error': 'Your autopay is already on.'}), 400
     brand = get_brand()

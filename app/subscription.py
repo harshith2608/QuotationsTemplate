@@ -64,12 +64,10 @@ def _env(name, default=''):
 
 
 def prices():
-    """{'1m': 599, '1y': 5999, '1m_ai': 749, '1y_ai': 7499, 'ai40': 99, …} in rupees (and the 6-month plans, for
-    payments recorded by hand)."""
-    return {'1m': int(_env('PLAN_PRICE_1M', '599')), '1y': int(_env('PLAN_PRICE_1Y', '5999')),
-            '1m_ai': int(_env('PLAN_PRICE_1M_AI', '749')), '1y_ai': int(_env('PLAN_PRICE_1Y_AI', '7499')),
-            '6m': int(_env('PLAN_PRICE_6M', '4999')), '6m_ai': int(_env('PLAN_PRICE_6M_AI', '5999')),
-            plan_mod.ADDON: int(_env('AI_ADDON_PRICE', '99'))}
+    """{'1m': 599, '1y': 5999, '1m_ai': 749, '1y_ai': 7499, 'ai40': 99, …} in rupees: the console's Pricing
+    (app/pricing.py), every plan whether offered now or not (payments by hand, old records)."""
+    from . import pricing
+    return pricing.prices()
 
 
 def enabled():
@@ -132,8 +130,9 @@ def ensure_table():
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS payer_name VARCHAR(120)'))
             conn.execute(text(REMINDERS_DDL))
             conn.execute(text(SUBS_DDL))
-            conn.execute(text(RZP_PLANS_DDL))
-        _table_ready = True
+            conn.execute(text('ALTER TABLE public.platform_subscriptions ADD COLUMN IF NOT EXISTS amount_paise INTEGER'))
+            conn.execute(text(RZP_PLANS_DDL))                    # (the amount it started at: a later price change
+        _table_ready = True                                      # doesn't touch a running autopay)
 
 
 def _api(method, path, payload=None):
@@ -394,13 +393,16 @@ def create_subscription(slug, plan, business_name='', paid_by='', email='', phon
     if not links_enabled():
         raise PaymentError('Payments aren\'t set up yet.')
     ensure_table()
+    amount = prices()[plan] * 100
     sub = _api('POST', '/subscriptions', {'plan_id': razorpay_plan(plan), 'total_count': 120, 'quantity': 1,
                                            'customer_notify': 1, 'notes': {'slug': slug, 'plan': plan}})
     digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
     with db.engine.begin() as conn:
         conn.execute(text('INSERT INTO public.platform_subscriptions (slug, plan, sub_id, status, short_url, business_name, '
-                          'email, phone, payer_name, paid_by) VALUES (:s, :p, :i, :st, :u, :n, :e, :ph, :pn, :by)'),
+                          'email, phone, payer_name, paid_by, amount_paise) VALUES (:s, :p, :i, :st, :u, :n, :e, :ph, :pn, '
+                          ':by, :a)'),
                      {'s': slug, 'p': plan, 'i': sub['id'], 'st': sub.get('status') or 'created', 'u': sub.get('short_url'),
+                      'a': amount,
                       'n': (business_name or '')[:120], 'e': (email or '')[:120] or None, 'ph': digits[:20] or None,
                       'pn': (payer_name or '').strip()[:120] or None, 'by': (paid_by or '')[:80]})
     return get_subscription(sub['id'])
@@ -474,7 +476,7 @@ def record_charge(sub, payment_id, amount_paise, source, email=None):
             "INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, payment_id, status, business_name, "
             "paid_by, email, kind, phone, payer_name, source, paid_at) VALUES (:s, :p, :a, :o, :o, 'paid', :n, :u, :e, "
             "'autopay', :ph, :pn, :src, (now() AT TIME ZONE 'utc')) ON CONFLICT (order_id) DO NOTHING RETURNING id, paid_at"),
-            {'s': sub['slug'], 'p': sub['plan'], 'a': int(amount_paise or prices()[sub['plan']] * 100), 'o': payment_id,
+            {'s': sub['slug'], 'p': sub['plan'], 'a': int(amount_paise or sub.get('amount_paise') or prices()[sub['plan']] * 100), 'o': payment_id,
              'n': sub.get('business_name') or '', 'u': sub.get('paid_by') or 'autopay',
              'e': (sub.get('email') or (email if '@' in (email or '') else None)), 'ph': sub.get('phone'),
              'pn': sub.get('payer_name'), 'src': source}).first()
@@ -847,11 +849,9 @@ def send_reminders():
             when = 'today' if st.days_left == 0 else 'tomorrow' if st.days_left == 1 else f'in {st.days_left} days'
             words = dict(when=when, end=fmt(st.ends_on), plan=st.label, grace=fmt(st.grace_until),
                          delete=fmt(st.delete_on))
-            p = prices()
-            from . import texts
-            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), price_1m=f"{inr(p['1m'], 0)}",
-                                         price_6m=f"{inr(p['6m'], 0)}",
-                                         price_1y=f"{inr(p['1y'], 0)}", **words)
+            from . import pricing, texts
+            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), **pricing.fields(),
+                                         **words)
             mailer.send(email, subject, body)
             out[slug] = kind
         except Exception as exc:                           # one business's problem mustn't stop the others

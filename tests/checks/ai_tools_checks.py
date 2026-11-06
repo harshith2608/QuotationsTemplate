@@ -332,12 +332,14 @@ with app.test_request_context('/plan'):
     PM.g.pop('plan_status', None)
     with mock.patch.object(SUB, 'enabled', lambda: True):
         pool = T.pool()
+    from app import pricing as _pricing
+    _plan_vars = dict(pricing=_pricing, pricing_data=_pricing.load(), offered=_pricing.offered())
     page = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
                            ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
-                           addon_uses=40, ai_on=True)
+                           addon_uses=40, ai_on=True, **_plan_vars)
     page_off = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
                                ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
-                               addon_uses=40, ai_on=False)
+                               addon_uses=40, ai_on=False, **_plan_vars)
 ok('Your plan: four plans (20 or 100 AI uses a month) and Buy 40 AI uses · ₹99',
    all(p in page for p in ('₹599', '₹5,999', '₹749', '₹7,499', "startAutopay('1m'", "startAutopay('1m_ai'",
                            "buyPlan('1y_ai'", "buyPlan('ai40'"))

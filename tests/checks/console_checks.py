@@ -959,6 +959,32 @@ ok('…but one that ended 13 days ago still does', 'already had a free trial' in
 with app.app_context():
     _ops.delete_trial('old-firm')
 
+# ── Pricing: plans and prices from the console (no code change), copied to the website ──
+_pp = signed.get('/pricing').text
+ok('Pricing page: every plan with its switch and price (monthly ₹599 and 12 months ₹5,999 on at first)',
+   'name="price_1m" value="599"' in _pp and 'name="price_1y" value="5999"' in _pp and 'name="on_3m"' in _pp
+   and re.search(r'name="on_1y" value="1"\s+checked', _pp) and 'href="/pricing"' in signed.get('/').text)
+_form = {f'price_{k}': str(v) for k, v in (('1m', 649), ('3m', 1799), ('6m', 3499), ('1y', 6499), ('1m_ai', 799),
+                                           ('3m_ai', 2199), ('6m_ai', 4299), ('1y_ai', 7999))}
+_form.update(on_1m='1', on_6m='1', on_1y='1', on_1m_ai='1', on_1y_ai='1', addon='129')
+signed.post('/pricing', data=_form)
+with app.app_context():
+    from app import pricing as _pr, platform_switch as _ps, subscription as _sb
+    _ps.forget(_pr.KEY)
+    with tenancy.tenant_context('shah-studio'):
+        _live = (_pr.prices(), _pr.offered(), _sb.prices()['1y'])
+with le.connect() as conn:
+    _web = conn.execute(text("SELECT value FROM app_settings WHERE key = 'pricing'")).scalar()
+ok('saved: the apps get the new prices and plans (6 months on, 3 months off), the website its copy, audited',
+   _live[0]['1y'] == 6499 and _live[0]['ai40'] == 129 and _live[1] == ['1m', '6m', '1y', '1m_ai', '1y_ai']
+   and _live[2] == 6499 and _web and '"6m": {"price": 3499, "on": true}' in _web
+   and 'pricing' in signed.get('/activity').text)
+_bad = signed.post('/pricing', data=dict(_form, price_1y=''), follow_redirects=True).text
+ok('…a plan switched on with no price is refused, nothing changed', 'Type a price for 12 months' in _bad
+   and 'name="price_1y" value=""' not in _bad)
+with app.app_context(), db.engine.begin() as conn:
+    conn.execute(text("DELETE FROM public.console_state WHERE key = 'pricing'"))
+
 # Clean up the public console tables so other suites start from a clean trials database
 with app.app_context(), db.engine.begin() as conn:
     for tname in ('console_audit', 'console_state', 'console_lead_links', 'signups', 'console_followups',

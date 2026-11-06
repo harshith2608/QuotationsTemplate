@@ -1,0 +1,45 @@
+{% extends "console/_layout.html" %}
+{% block title %}Pricing{% endblock %}
+{% block content %}
+<h1>Pricing</h1>
+<p class="muted small">The plans businesses can buy and their prices. A change shows straight away on the website's
+  pricing cards, and within a minute in every app's <em>Choose a plan</em> page, on the set-up and payment pages, in the
+  reminder emails and in your sales texts. It counts for new payments only: a monthly autopay already running keeps
+  the amount it started at, and a plan already paid for keeps its end date.
+  {% if not website %}<br><span class="muted">The website isn't connected (<span class="mono">LEADS_DATABASE_URL</span>):
+  only the apps follow these.</span>{% endif %}</p>
+
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for group, ai in [('Plans', false), ('Plans with AI', true)] %}
+  <h2>{{ group }}{% if ai %} <span class="muted small">(100 AI uses a month; shown on the website once <span class="mono">AI_PLANS=1</span>)</span>{% endif %}</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Offered</th><th>Plan</th><th>Price (₹)</th><th class="small">Works out to</th></tr></thead>
+      <tbody>
+      {% for key in pricing.ALL if key.endswith('_ai') == ai %}{% set p = data.plans[key] %}
+        <tr>
+          <td><input type="checkbox" name="on_{{ key }}" value="1" {{ 'checked' if p.on }} aria-label="Offer {{ key }}"></td>
+          <td><strong>{{ pricing.HEADS[pricing.length(key)] }}</strong>{{ ' with AI' if ai }}
+            <div class="muted small">{{ 'Autopay every month until cancelled' if pricing.is_monthly(key) else 'Paid once, no auto-renewal' }}</div></td>
+          <td><input type="text" inputmode="numeric" name="price_{{ key }}" value="{{ p.price }}" style="width:110px"></td>
+          <td class="small muted">{% if not pricing.is_monthly(key) %}₹{{ pricing.per_month(key, data)|inr(0) }} a month
+            {%- set b = pricing.badge(key, data) %}{% if b %} · {{ b }}{% endif %}{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  <h2>More AI uses</h2>
+  <div class="card">
+    <label class="small">40 more AI uses, bought on a paid plan: ₹
+      <input type="text" inputmode="numeric" name="addon" value="{{ data.addon }}" style="width:90px"></label>
+  </div>
+  <p class="small">On now: {{ summary }}.</p>
+  <button class="btn btn-primary" type="submit" onclick="return confirm('Save these prices? They show on the website and in every app.');">Save prices</button>
+</form>
+<p class="muted small" style="margin-top:14px">"N months free" and "Save ₹…" are worked out against the monthly price.
+  A plan switched off isn't offered any more, but businesses already on it keep it, and you can still send a payment
+  link or record a payment for it.</p>
+{% endblock %}

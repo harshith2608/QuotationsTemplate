@@ -7,7 +7,7 @@
 <title>Set up your QuoteRoom app</title>
 {% include "console/_public_style.html" %}
 {% set monthly = plan in ('1m', '1m_ai') %}
-{% set plan_title = ('monthly plan' if monthly else '12-month plan' if plan in ('1y', '1y_ai') else '6-month plan')
+{% set plan_title = ({'1m': 'monthly plan', '3m': '3-month plan', '6m': '6-month plan', '1y': '12-month plan'}.get((plan or '').removesuffix('_ai'), 'plan'))
                     ~ (' with AI' if plan and plan.endswith('_ai') else '') %}
 {% set per = ' a month, by autopay' if monthly else '' %}
 </head>

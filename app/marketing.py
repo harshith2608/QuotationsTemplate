@@ -38,6 +38,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import undefer
 from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, url_for
 
+from .numbers import inr
+
 marketing_bp = Blueprint('marketing', __name__)
 
 
@@ -65,6 +67,8 @@ def _context():
     from .signup import website_sells
     from . import business
     offered = {k for k in BUSINESS_TYPES if business.offered(k)}   # the console's Features → Kinds of business
+    from . import pricing
+    price_data = pricing.load()                                     # the console's Pricing
     return dict(
         product=product,
         legal_name=_env('MARKETING_LEGAL_NAME', product),
@@ -86,13 +90,24 @@ def _context():
         has_tutorials=bool(tutorials()),
         business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items() if k in offered],
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
-        ai_plans=ai_plans(), plan_names=PLAN_NAMES, plan_values=PLAN_VALUES,
+        ai_plans=ai_plans(), plan_names=plan_names(price_data), plan_values=pricing.prices(price_data),
+        pricing=pricing, price_data=price_data, **_shown_plans(price_data),
     )
 
 
-PLAN_NAMES = {'1m': ('Monthly plan', '₹599'), '1y': ('12-month plan', '₹5,999'),      # as on the pricing cards
-              '1m_ai': ('Monthly plan with AI', '₹749'), '1y_ai': ('12-month plan with AI', '₹7,499')}
-PLAN_VALUES = {'1m': 599, '1y': 5999, '1m_ai': 749, '1y_ai': 7499}                      # for the ads' InitiateCheckout
+def _shown_plans(data):
+    """The pricing cards: the plans shown (those with AI only with AI_PLANS=1) and their lengths, in order."""
+    from . import pricing
+    shown = [k for k in pricing.offered(data) if ai_plans() or not k.endswith('_ai')]
+    return {'plans_shown': shown, 'plan_lengths': list(dict.fromkeys(pricing.length(k) for k in shown))}
+
+
+def plan_names(data=None):
+    """{'1y': ('12-month plan', '₹5,999'), …}: each plan offered now, as on the pricing cards."""
+    from . import pricing
+    from .plan import PLANS
+    p = pricing.prices(data)
+    return {k: (PLANS[k], f'₹{inr(p[k], 0)}') for k in pricing.offered(data)}
 
 
 def call_url():
@@ -107,7 +122,7 @@ def ai_plans():
 
 
 def _plan_ok(plan, ctx):
-    return ctx['sells'] and plan in PLAN_NAMES and (ctx['ai_plans'] or not plan.endswith('_ai'))
+    return ctx['sells'] and plan in ctx['plan_names'] and (ctx['ai_plans'] or not plan.endswith('_ai'))
 
 
 # ── Tutorials (videos hosted on YouTube, so the site stays light) ────────────

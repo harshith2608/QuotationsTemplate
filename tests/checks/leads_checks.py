@@ -196,6 +196,32 @@ with app.app_context():
     ok('…the request notes the plan they\'re buying', any('buying 1m' in (l.source or '') for l in Lead.query.all()))
 ok('pricing: monthly ₹599 by autopay, 12 months ₹5,999 with 2 months free; no 6-month plan', '₹599' in lp
    and '₹5,999' in lp and '2 months free' in lp and 'renews' in lp and 'autopay' in lp.lower() and '₹4,999' not in lp)
+# Prices from the console's Pricing (a copy in the website's own database): no code change
+import json as _json
+from app.models import AppSetting as _AS
+from app import pricing as _pr
+with app.app_context():
+    _AS.set(_pr.KEY, _json.dumps({'plans': {'1m': {'price': 699, 'on': False}, '6m': {'price': 2999, 'on': True},
+                                            '1y': {'price': 4999, 'on': True}}, 'addon': 149}))
+    db.session.commit()
+lp2 = c5.get('/').text
+t2 = c5.get('/free-trial?plan=1m').text
+r = c5.post('/trial-request', data=dict(good, phone='9811100060', plan='1m'), headers=J, environ_base={'REMOTE_ADDR': '10.9.0.9'})
+ok('the console\'s prices: 6 months ₹2,999 and 12 months ₹4,999 shown, monthly switched off (not shown, not buyable)',
+   '₹2,999' in lp2 and '₹4,999' in lp2 and 'data-plan="6m"' in lp2 and 'data-plan="1m"' not in lp2
+   and '₹5,999' not in lp2 and 'Monthly plan · ' not in t2 and not (r.get_json() or {}).get('pay_url'))
+with app.app_context():
+    ok('…and what they work out to (without a monthly plan, no "Save" or "months free")',
+       _pr.per_month('6m') == 500 and _pr.prices()['ai40'] == 149 and 'Save ₹' not in lp2 and 'months free' not in lp2)
+    _AS.set(_pr.KEY, ''); db.session.commit()
+ok('…and back to the defaults when nothing is saved', '₹5,999' in c5.get('/').text)
+data, errs = _pr.validate({'price_1m': '599', 'on_1m': '1', 'price_1y': '5,999', 'on_1y': '1', 'addon': '99'})
+ok('Pricing form: "5,999" is read as 5999; 12 months is 2 months free against ₹599', not errs and data['plans']['1y']['price'] == 5999
+   and _pr.badge('1y', data) == '2 months free' and _pr.saving('1y', data) == 1189)
+_, errs = _pr.validate({'price_1y': '', 'on_1y': '1', 'addon': '99'})
+_, errs2 = _pr.validate({'price_1m_ai': '749', 'on_1m_ai': '1', 'addon': '99'})
+ok('…a plan switched on needs a price, and one plan without AI must stay on', any('12 months' in e for e in errs)
+   and any('at least one plan without AI' in e for e in errs2))
 os.environ.pop('MAIL_OUTBOX_DIR', None)
 lp = c5.get('/').text
 ok('"Book a call with us": a band before the pricing and a line under it, to the console\'s booking page',

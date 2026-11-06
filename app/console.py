@@ -455,8 +455,12 @@ def _wa_link(phone, message):
 # Drafts for the trial page's "Message on WhatsApp" card. {name} is filled in on the page (it can be edited there);
 # the rest when the page is built. The message opens in the operator's own WhatsApp (wa.me): nothing is sent from here.
 
-PLAN_PRICES = ('₹599 a month by autopay or ₹5,999 for 12 months (with more AI: ₹749 / ₹7,499), one price for your '
-               'whole team')
+
+def _plan_prices():
+    """The plans on, in one line, for the WhatsApp drafts' {prices} (the console's Pricing)."""
+    from . import pricing
+    return pricing.summary() + ', one price for your whole team'
+
 
 def _follow_up_texts():
     """[(key, label, text)] for the WhatsApp drafts (console → Messages can change them)."""
@@ -658,7 +662,7 @@ def follow_ups(t):
     """([(key, label, draft)], suggested key) for a trial, from its plan dates and usage."""
     st, u = t.get('status_obj'), t.get('usage') or {}
     fmt = lambda d: d.strftime('%d %b') if d else ''
-    values = dict(product=_product(), sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), url=t['url'], prices=PLAN_PRICES,
+    values = dict(product=_product(), sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), url=t['url'], prices=_plan_prices(),
                   ends_on=fmt(st.ends_on) if st and st.has_limit else '',
                   delete_on=fmt(st.delete_on) if st and st.has_limit else '')
     from . import texts
@@ -724,6 +728,43 @@ def dashboard():
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+
+
+@console_bp.route('/pricing', methods=['GET', 'POST'])
+@login_required
+def pricing_page():
+    """Plans and prices (app/pricing.py): which plans are offered and at what price, in the app's Plan page, the
+    website's pricing cards, the set-up and payment pages and the messages. No code change to change a price."""
+    import json
+    from . import platform_switch, pricing
+    try:
+        data = pricing.parse(json.loads(platform_switch.console_value(pricing.KEY, raw=True) or '{}'))
+    except Exception:
+        data = pricing.parse({})
+    errors = []
+    if request.method == 'POST':
+        data, errors = pricing.validate(request.form)
+        if not errors:
+            value = json.dumps(data)
+            platform_switch.set_value(pricing.KEY, value)
+            website, note = _leads_engine_or_none(), ''
+            if website is not None:                   # the website reads its own database (kept on the nightly reset)
+                try:
+                    with website.begin() as conn:
+                        conn.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': pricing.KEY})
+                        conn.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'),
+                                     {'k': pricing.KEY, 'v': value})
+                except Exception:
+                    note = ' The website could not be updated: save again.'
+            audit('pricing', None, '; '.join(f'{k} ₹{v["price"]}{"" if v["on"] else " (off)"}'
+                                             for k, v in data['plans'].items()) + f'; AI uses ₹{data["addon"]}')
+            flash('Saved. The apps show the new prices within a minute, the website now. Monthly autopays already '
+                  'running keep their amount.' + note, 'ok' if not note else 'error')
+            return redirect(url_for('console.pricing_page'))
+        for e in errors:
+            flash(e, 'error')
+    return render_template('console/pricing.html', data=data, pricing=pricing, website=_leads_engine_or_none() is not None,
+                           summary=pricing.summary(data))
 
 
 @console_bp.route('/features')
@@ -1081,9 +1122,11 @@ def _call_qr(phone):
 
 def _call_answers(name=''):
     """The quick answers for calls (console → Messages → Sales calls), with their first name and yours filled in."""
-    from . import texts
+    from . import pricing, texts
+    prices = pricing.fields()
     return [(texts.TEXTS[k][1], texts.render(k, name=_first_name(name) or 'there',
-                                             sender=_env('CONSOLE_SENDER_NAME', 'Harshith'))[1]) for k in texts.CALL_KEYS]
+                                             sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), **prices)[1])
+            for k in texts.CALL_KEYS]
 
 
 def _calendar_link(a, row):
@@ -2450,7 +2493,7 @@ def start_trial():
     ?plan=6m|1y: they chose a plan on the website, so after the app is made they go on to pay for it."""
     from . import signup, subscription
     token = request.values.get('t', '')
-    plan = request.values.get('plan') if request.values.get('plan') in signup.PLANS else None
+    plan = request.values.get('plan') if signup.plan_ok(request.values.get('plan')) else None
     lead_id = signup.read_token(token)
     lead = load_lead(lead_id) if lead_id else None
     if not lead or (lead.get('business_type') not in signup.ELIGIBLE and not plan):
@@ -2643,7 +2686,7 @@ def start_pay():
     plan = request.form.get('plan')
     lead = load_lead(lead_id) if lead_id else None
     slug = _signup(lead_id, lead) if lead else None
-    if not slug or plan not in signup.PLANS:
+    if not slug or not signup.plan_ok(plan):
         abort(404)
     return _go_pay(slug, plan, lead, request.form.get('t', ''))
 

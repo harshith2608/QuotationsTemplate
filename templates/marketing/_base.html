@@ -218,7 +218,8 @@ section { padding-block: 80px; }
 
 /* Pricing */
 .plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
-.plans[data-tier="std"] .tier-ai, .plans[data-tier="ai"] .tier-std { display: none !important; }
+.plans[data-tier="std"] .tier-ai, .plans[data-tier="ai"] .tier-std,
+.plans[data-tier="std"] .plan.only-ai, .plans[data-tier="ai"] .plan.only-std { display: none !important; }
 .tier-switch { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); margin: 0 0 14px; }
 .tier-switch button { border: 0; background: none; padding: .45rem 1.1rem; border-radius: 999px; font: 600 .92rem var(--body); color: var(--muted); cursor: pointer; }
 .tier-switch button[aria-pressed="true"] { background: var(--pine); color: #fff; }
