@@ -25,6 +25,11 @@ ok('…at step 1, your business', loc(r).endswith('/welcome/business'))
 t = c.get('/welcome/business').text
 ok('step 1: one question, no menu, step 1 of 6, Skip for now and I\'ll explore on my own', 'Your business' in t
    and 'Step 1 of 6' in t and 'Skip for now' in t and 'explore on my own' in t and 'id="ki-navbar"' not in t)
+r = c.post('/welcome/business', data={'name': 'Nest & Grain Interiors', 'phone': '90000 00021'}, follow_redirects=True)
+with app.app_context():
+    ok('"These details are correct" must be ticked (required on the page, and nothing saved without it)',
+       'name="confirm" id="wConfirm" value="1" required' in t and 'Tick &#34;These details are correct&#34; to continue' in r.text
+       and not AppSetting.get('company_mobile') and W.step() == 'business')
 r = c.post('/welcome/business', data={'name': 'Nest & Grain Interiors', 'phone': '90000 00021', 'confirm': '1'})
 with app.app_context():
     ok('…saves the name and phone, then step 2', loc(r).endswith('/welcome/') and AppSetting.get('company_name') == 'Nest & Grain Interiors'
