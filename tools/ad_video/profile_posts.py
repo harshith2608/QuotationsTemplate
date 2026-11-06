@@ -41,7 +41,7 @@ def one_price():
     rows = [
         ('Custom quotation website', '₹30,000–40,000', 'up front, plus hosting and fixes', 0.92, (120, 140, 132)),
         ('Per-user software', '₹6,000–11,000', 'per person, per year, plus GST', 0.62, (120, 140, 132)),
-        ('QuoteRoom', '₹599 a month', 'whole team · your own brand · cancel any time', 0.30, TAPE),
+        ('QuoteRoom', '₹5,999 a year', 'or ₹599 a month · whole team · your own brand', 0.30, TAPE),
     ]
     y += 34
     for name, price, note, frac, colour in rows:
@@ -56,7 +56,7 @@ def one_price():
         else:                                   # short bar: the price sits just after it
             rich_text(d, (60 + bar_w + 20, y + 33), price, 36, 'heavy', TAPE if is_us else PAPER, 'lm')
         y += 80
-        d.text((60, y), note, font=font(29, 'demi'), fill=TAPE if is_us else MUTED)
+        rich_text(d, (60, y), note, 29, 'demi', TAPE if is_us else MUTED, 'lt')      # (₹ needs the rich text)
         y += 64
     check(d, 84, y + 20, 21)
     d.text((122, y), 'Unlimited staff logins and quotations', font=font(31, 'demi'), fill=PAPER)
