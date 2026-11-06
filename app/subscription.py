@@ -439,6 +439,19 @@ def verify_subscription_checkout(payment_id, sub_id, signature):
     return bool(secret) and hmac.compare_digest(expected, signature or '')
 
 
+def checkout_charge(sub, payment_id):
+    """The amount (paise) Checkout's payment for this autopay really took, if it's the month's charge; None when it
+    was only Razorpay's small mandate check (e.g. ₹5, refunded) or Razorpay can't be asked now: then the month is
+    added when Razorpay charges it (the subscription.charged webhook), never on the checkout's word alone."""
+    try:
+        pay = _api('GET', f'/payments/{payment_id}')
+    except PaymentError:
+        return None
+    expected = sub.get('amount_paise') or prices()[sub['plan']] * 100
+    amount = int(pay.get('amount') or 0)
+    return amount if amount >= expected and pay.get('status') in ('captured', 'authorized') else None
+
+
 def _set_status(sub_id, status, charged=False):
     stamp = ', charged_at = (now() AT TIME ZONE \'utc\')' if charged else \
         ', ended_at = (now() AT TIME ZONE \'utc\')' if status in ('halted', 'cancelled', 'completed') else ''

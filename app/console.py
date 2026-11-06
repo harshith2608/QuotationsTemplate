@@ -2712,13 +2712,18 @@ def start_subscribed():
             payment_id, sub_id, request.form.get('razorpay_signature', '')):
         return render_template('console/start.html', problem='We couldn\'t match this payment to your app. If you were '
                                'charged, message us on WhatsApp and we\'ll sort it out straight away.', site=_site_url()), 404
+    amount = subscription.checkout_charge(sub, payment_id)
     try:
-        subscription.record_charge(sub, payment_id, None, 'website')
+        if amount is not None:
+            subscription.record_charge(sub, payment_id, amount, 'website')
+        else:                                     # only the mandate check so far: the month comes with the charge
+            subscription.set_autopay(slug, True)
     except Exception:
         current_app.logger.exception('Recording the website autopay failed (the webhook will retry)')
-    audit('website_paid', slug, sub['plan'])
+    audit('website_paid' if amount is not None else 'website_autopay_set', slug, sub['plan'])
     return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), token=token,
-                           plan=sub['plan'], price=subscription.prices()[sub['plan']], paid=sub['plan'], just_paid=True)
+                           plan=sub['plan'], price=subscription.prices()[sub['plan']], paid=sub['plan'], just_paid=True,
+                           autopay_pending=amount is None)
 
 
 @console_bp.route('/start/paid')

@@ -101,7 +101,13 @@ def subscribed():
     sub = subscription.get_subscription(sub_id)
     if not sub or sub['slug'] != tenancy.current_slug():
         abort(404)
-    row, _ = subscription.record_charge(sub, payment_id, None, 'app')
+    amount = subscription.checkout_charge(sub, payment_id)
+    if amount is None:                        # only the mandate check so far: the month comes with the charge
+        subscription.set_autopay(sub['slug'], True)
+        flash('Autopay is set up. Your first month is charged in a few minutes, and your plan is updated as soon as '
+              'it goes through (you get a receipt by email).', 'success')
+        return jsonify({'ok': True, 'redirect': url_for('plan.plan_page')})
+    row, _ = subscription.record_charge(sub, payment_id, amount, 'app')
     return jsonify({'ok': True, 'redirect': url_for('plan.thanks', payment_id=row['id'])})
 
 

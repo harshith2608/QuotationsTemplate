@@ -28,9 +28,16 @@
       Message us on WhatsApp.</p>
   {% elif ready and just_paid %}
     <div class="tick">✓</div>
+    {% if autopay_pending %}
+    <h1>Autopay is set up. Thank you!</h1>
+    <p class="lead">Your app is at <strong>{{ ready }}.{{ base }}</strong>. The first month of your {{ plan_title }} is
+      charged in a few minutes, and your plan is updated as soon as it goes through: you get a receipt by email.
+      Sign in with the username and password you chose.</p>
+    {% else %}
     <h1>Payment received. Thank you!</h1>
     <p class="lead">Your {{ plan_title }} is active on <strong>{{ ready }}.{{ base }}</strong>.
       Sign in with the username and password you chose. Your receipt is on its way to your email.</p>
+    {% endif %}
     <a class="btn" href="https://{{ ready }}.{{ base }}/login">Open my app</a>
     <p class="hint" style="text-align:center;margin-top:14px">Bookmark it, or add it to your phone's home screen.
       Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a> or message us on WhatsApp.</p>

@@ -571,3 +571,19 @@ r = c3.post(f'/projects/{qid}/access', data={f'access_{st_id_}': 'edit'}, follow
 ok('before the update: sharing saves (as view), list and pages work', r.status_code == 200 and 'Access updated' in r.text
    and s3.get(f'/projects/{qid}').status_code == 200 and s3.get(f'/projects/{qid}/edit').status_code == 403
    and c3.get('/projects').status_code == 200)
+
+# ── Autopay checkout: a month is added only for the month's real charge, never for Razorpay's ₹5 mandate check ──
+from app import subscription as _sb
+_pays = {'pay_auth': {'amount': 500, 'status': 'captured'}, 'pay_month': {'amount': 74900, 'status': 'captured'},
+         'pay_failed': {'amount': 74900, 'status': 'failed'}}
+def _fake_api(method, path, payload=None):
+    if path.split('/')[-1] == 'pay_down':
+        raise _sb.PaymentError('Could not reach Razorpay.')
+    return _pays[path.split('/')[-1]]
+_real_api, _sb._api = _sb._api, _fake_api
+with app.app_context():
+    _s = {'plan': '1m_ai', 'amount_paise': 74900}
+    ok('autopay checkout: ₹5 mandate check → no month yet; ₹749 charged → recorded; failed or Razorpay down → wait for it',
+       _sb.checkout_charge(_s, 'pay_auth') is None and _sb.checkout_charge(_s, 'pay_month') == 74900
+       and _sb.checkout_charge(_s, 'pay_failed') is None and _sb.checkout_charge(_s, 'pay_down') is None)
+_sb._api = _real_api
