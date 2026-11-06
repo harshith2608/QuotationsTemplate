@@ -2375,9 +2375,9 @@ def _app_exists(slug):
 
 
 def earlier_trial(lead_id, lead):
-    """The app an earlier request with this phone number or email got, if it still exists, or None: one free trial
-    per business, so a new request (another firm name, another link) doesn't start a second one. A trial you deleted
-    doesn't count: they can start again."""
+    """The app an earlier request with this phone number or email got, while it still counts, or None: one free
+    trial per business, so a new request (another firm name, another link) doesn't start a second one. It stops
+    counting once it's deleted or its deletion date (30 days after it ended) has passed: then they can start again."""
     from sqlalchemy import inspect, select
     from . import crypto
     from .marketing import normalise_phone
@@ -2402,7 +2402,19 @@ def earlier_trial(lead_id, lead):
              if (not made[r['id']] or made[r['id']] >= r['created_at'] - timedelta(minutes=10))   # not a stale link
              and ((phone and normalise_phone(r['phone'] or '') == phone)
                   or (email and (r.get('email') or '').strip().lower() == email))]
-    return next((s for s in found if _app_exists(s)), None)
+    return next((s for s in found if _app_exists(s) and not _past_deletion(s)), None)
+
+
+def _past_deletion(slug):
+    """True if this trial ended more than 30 days ago (its deletion date has passed). Paying customers: never."""
+    with db.engine.connect() as conn:
+        schema = conn.execute(text("SELECT schema_name FROM public.tenants WHERE slug = :s AND status = 'active'"),
+                              {'s': slug}).scalar()
+    if not schema:
+        return False
+    with tenancy.tenant_context(slug, schema):
+        st = plan_mod.load_status(on=plan_mod.today())
+    return bool(st and st.delete_on and st.delete_on <= plan_mod.today())
 
 
 @console_bp.route('/e/o/<token>.gif')

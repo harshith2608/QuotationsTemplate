@@ -629,7 +629,7 @@ with crypto.using_key(LEADS_KEY), le.begin() as conn:
                              company_name='Rao Studio', email='ravi@rao.example',
                              created_at=datetime.utcnow())).inserted_primary_key[0]
 r = anon.get('/start?t=' + _su.make_token(rao_again))
-ok('a trial you deleted frees the number: a new request gets the set-up form with its new details',
+ok('a trial deleted before deletions were recorded frees the number: the set-up form with the new details',
    'already had a free trial' not in _h.unescape(r.text) and 'name="password"' in r.text and 'Rao Studio' in r.text)
 _r = signed.post('/trials', data={'slug': 'meera-again', 'lead_id': str(self_id), 'name': 'Meera Shah', 'days': '7'})
 ok('Create trial on a request they already set up themselves: no error, it opens their trial',
@@ -932,6 +932,32 @@ os.environ.pop('MAIL_OUTBOX_DIR', None)
 with app.app_context():
     for sl in ('fu-new', 'fu-set', 'fu-end'):
         _ops.delete_trial(sl)
+
+# ── 30 days after a trial ended (its deletion date), or once deleted, they can start a new one ──
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    old_id = conn.execute(Lead.__table__.insert().values(name='Old Firm', phone='919811100091', business_type='interiors',
+                          company_name='Old Firm', created_at=datetime.utcnow() - _td(days=45))).inserted_primary_key[0]
+with app.app_context():
+    _ops.create_trial('old-firm', 'admin', 'old-pass-1234', 7)
+    _link_lead(old_id, 'trial', 'old-firm')
+    with tenancy.tenant_context('old-firm'):
+        _pl.save_plan('trial', _pl.today() - _td(days=38), _pl.today() - _td(days=31))
+        db.session.commit()
+with crypto.using_key(LEADS_KEY), le.begin() as conn:
+    back_id = conn.execute(Lead.__table__.insert().values(name='Old Firm Again', phone='919811100091', business_type='interiors',
+                           company_name='Old Firm Again', created_at=datetime.utcnow())).inserted_primary_key[0]
+r = anon.get('/start?t=' + _su.make_token(back_id))
+ok('a trial that ended over 30 days ago (past its deletion date) no longer counts: they can start a new one',
+   'name="password"' in r.text and 'Old Firm Again' in r.text and 'already had a free trial' not in _h.unescape(r.text))
+with app.app_context():
+    with tenancy.tenant_context('old-firm'):
+        _pl.save_plan('trial', _pl.today() - _td(days=20), _pl.today() - _td(days=13))
+        db.session.commit()
+r = anon.get('/start?t=' + _su.make_token(back_id))
+ok('…but one that ended 13 days ago still does', 'already had a free trial' in _h.unescape(r.text)
+   and 'old-firm.quote-room.test' in r.text)
+with app.app_context():
+    _ops.delete_trial('old-firm')
 
 # Clean up the public console tables so other suites start from a clean trials database
 with app.app_context(), db.engine.begin() as conn:
