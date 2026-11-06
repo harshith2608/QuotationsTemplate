@@ -287,3 +287,16 @@ with app.test_request_context():
     nav_off = render_template_string(menu + '{{ admin_links|map(attribute=2)|join("|") }}', renew_in_app=False, ai_import_on=False)
 ok('…and Admin → Plan & billing in the menu (where paying in the app is on)', 'Plan &amp; billing' in nav
    and 'Plan &amp; billing' not in nav_off and 'Settings' in nav)
+
+from pypdf import PdfReader as _PR
+with app.app_context():
+    month_pdf = ' '.join(pg.extract_text() for pg in _PR(SUB.receipt_pdf({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900,
+        'payer_name': 'Ravi', 'business_name': 'Acme', 'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001',
+        'paid_at': __import__('datetime').datetime(2026, 11, 6), 'payment_id': 'pay_1', 'paid_by': 'admin', 'source': 'app',
+        'email': None})).pages)
+    year_pdf = ' '.join(pg.extract_text() for pg in _PR(SUB.receipt_pdf({'plan': '1y', 'slug': 'acme', 'amount_paise': 599900,
+        'payer_name': 'Ravi', 'business_name': 'Acme', 'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0002',
+        'paid_at': __import__('datetime').datetime(2026, 11, 6), 'payment_id': 'pay_2', 'paid_by': 'admin', 'source': 'app',
+        'email': None})).pages)
+ok('…and the receipt PDF of a monthly payment says how to cancel; a 12-month one doesn\'t', 'Cancel autopay' in month_pdf
+   and '/plan' in month_pdf and 'Cancel autopay' not in year_pdf)

@@ -887,6 +887,12 @@ def receipt_pdf(row):
                       else 'Paid online through Razorpay. ') + 'This is a payment receipt, not a tax invoice: '
                      f'{escape(who["name"])} is not registered under GST, so no GST is charged.', small),
            Spacer(1, 6), Paragraph('Thank you for choosing QuoteRoom.', small)]
+    if row['plan'] in plan_mod.AUTOPAY:              # how to stop it, on every monthly receipt
+        link = _app_link(row['slug'], '/plan')
+        el[-1:-1] = [Spacer(1, 6), Paragraph(
+            '<b>Autopay:</b> this plan renews every month by autopay until you cancel it. Cancel any time at '
+            f'<a href="{escape(link)}" color="#1f4d3f"><u>{escape(link)}</u></a> (Plan &amp; billing → Cancel autopay), '
+            'or cancel the mandate in your UPI app. Nothing more is charged after you cancel.', small)]
     doc.build(el)
     buf.seek(0)
     return buf
