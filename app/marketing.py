@@ -327,9 +327,14 @@ def trial_request():
             if wants_json:
                 return jsonify({'ok': False, 'errors': {'form': msg}}), 429
             return render_template('marketing/free_trial.html', standalone_trial=True, errors={'form': msg}, form=request.form, **ctx), 429
-        # Same number again within a day: don't store a duplicate (phones are encrypted, so compare in Python)
+        # Same number again within a day: don't store a duplicate (phones are encrypted, so compare in Python), but
+        # keep what they typed this time (name, company, business…): the set-up page greets them with it
         dup = next((l for l in Lead.query.filter(Lead.created_at > now - timedelta(days=1)) if l.phone == data['phone']), None)
         lead_id = dup.id if dup else None
+        if dup:
+            for col in ('name', 'business_type', 'business_other') + tuple(c for c in LATER_LEAD_COLUMNS if lead_has(c)):
+                if data.get(col) or col == 'business_other':
+                    setattr(dup, col, data[col])
         if not dup:
             source = ' · '.join(filter(None, [
                 (request.form.get('utm_source') or '')[:60], (request.form.get('utm_campaign') or '')[:60],

@@ -52,9 +52,14 @@ for num, valid in [('98765 43210', True), ('919876543210', True), ('5876543210',
     from app.marketing import normalise_phone
     ok(f'phone {num!r} → {"valid" if valid else "invalid"}', bool(normalise_phone(num)) == valid)
 
-c.post('/trial-request', data=good, headers=J)
+c.post('/trial-request', data=dict(good, name='Second Try', company_name='New Name Interiors', city='Mysuru',
+                                   email='second@newname.example'), headers=J)
 with app.app_context():
-    ok('same number within a day not stored twice', Lead.query.count() == 2)
+    _same = [l for l in Lead.query.all() if l.phone == normalise_phone(good['phone'])]
+    ok('same number within a day not stored twice, but the new details replace the old (the set-up page greets them)',
+       Lead.query.count() == 2 and len(_same) == 1 and _same[0].name == 'Second Try'
+       and _same[0].company_name == 'New Name Interiors' and _same[0].city == 'Mysuru'
+       and _same[0].email == 'second@newname.example')
 r = c.post('/trial-request', data=dict(good, phone='9000000001', website='http://spam'), headers=J)
 with app.app_context():
     ok('honeypot: bot gets "ok" but nothing is stored', r.get_json()['ok'] and Lead.query.count() == 2)
