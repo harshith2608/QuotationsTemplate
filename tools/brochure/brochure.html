@@ -22,10 +22,10 @@
   header h1 em { font-style: normal; color: var(--tape); }
   header p { margin-top: 2mm; font-size: 9pt; opacity: .95; max-width: 178mm; }
   header p b { color: var(--tape); }
-  .for { display: flex; flex-wrap: wrap; align-items: center; gap: 1.6mm; margin-top: 2.8mm; font-size: 8.2pt; }
+  .for { display: flex; flex-wrap: wrap; align-items: center; gap: 1.2mm; margin-top: 2.4mm; font-size: 7.6pt; }
   .for span { font-weight: 700; color: var(--tape); margin-right: 1mm; }
   .for i { font-style: normal; font-weight: 600; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.28);
-           border-radius: 12px; padding: .6mm 2.6mm; }
+           border-radius: 12px; padding: .5mm 2.2mm; }
   .badge { position: absolute; right: 12mm; top: 7mm; background: var(--tape); color: var(--ink); font-weight: 700;
            border-radius: 20px; padding: 2mm 4mm; font-size: 8.6pt; }
 
@@ -45,7 +45,14 @@
   .ai { font-size: 6.6pt; font-weight: 800; background: var(--tape); color: var(--ink); border-radius: 3px; padding: 0 1mm;
         vertical-align: 1px; }
 
-  .plans { display: grid; grid-template-columns: 1fr 1.15fr 1.15fr; gap: 4mm; margin-top: 1mm; }
+  .plans { display: grid; grid-template-columns: 1fr 2.3fr; gap: 5mm; margin-top: 1mm; align-items: start; }
+  .prices { width: 100%; border-collapse: collapse; font-size: 8.4pt; border: 1.5px solid var(--pine); border-radius: 3mm; }
+  .prices th { background: var(--pine); color: #fff; text-align: left; padding: 1.4mm 3mm; font-size: 8.4pt; }
+  .prices td { border-bottom: 1px solid var(--line); padding: 1.1mm 3mm; vertical-align: top; }
+  .prices td b { color: var(--pine); font-size: 10.5pt; }
+  .prices td:first-child b { color: var(--ink); font-size: 9pt; }
+  .prices td span { display: block; color: var(--muted); font-size: 7.4pt; }
+  .prices td i { display: block; font-style: normal; color: var(--muted); font-size: 7.4pt; }
   .plan { border: 1.5px solid var(--line); border-radius: 3mm; padding: 2.8mm 4mm; position: relative; }
   .plan.best { border-color: var(--pine); box-shadow: 0 0 0 1px var(--pine) inset; }
   .plan .tag { position: absolute; top: -2.6mm; right: 4mm; background: var(--tape); font-weight: 800; font-size: 7.4pt;
@@ -60,7 +67,7 @@
   .plan li::before { content: "•"; position: absolute; left: .6mm; color: var(--tape); font-weight: 800; }
 
   .compare { width: 100%; border-collapse: collapse; margin-top: 3mm; font-size: 8pt; }
-  .compare th, .compare td { border-bottom: 1px solid var(--line); padding: 1mm 2mm; text-align: center; }
+  .compare th, .compare td { border-bottom: 1px solid var(--line); padding: .8mm 2mm; text-align: center; }
   .compare th:first-child, .compare td:first-child { text-align: left; }
   .compare thead th { background: var(--paper); color: var(--pine); font-weight: 700; }
   .compare td.y { color: var(--pine-2); font-weight: 800; }
@@ -144,34 +151,31 @@
         <p class="sub">Your own app with every feature. No payment to start.</p>
         <ul><li>Use it on real jobs</li><li>10 AI uses to try</li><li>Keep everything when you subscribe</li></ul>
       </div>
-      <div class="plan">
-        <h3>Monthly</h3>
-        <div class="price">₹599 <small>a month</small></div>
-        <div class="alt">With AI: <b>₹749</b> a month</div>
-        <p class="sub">By UPI Autopay or card. Cancel any time from the app.</p>
-        <ul><li>About ₹20 a day for the whole team</li><li>Nothing to pay up front</li></ul>
-      </div>
-      <div class="plan best">
-        <span class="tag">2 months free</span>
-        <h3>12 months</h3>
-        <div class="price">₹5,999 <small>a year</small></div>
-        <div class="alt">With AI: <b>₹7,499</b> a year</div>
-        <p class="sub">Paid once. About ₹500 a month: save ₹1,189 on monthly.</p>
-        <ul><li>No auto-renewal: we remind you before it ends</li><li>Priority support</li></ul>
-      </div>
+      <table class="prices">
+        <thead><tr><th>Plan</th><th>Standard</th><th>With AI</th></tr></thead>
+        <tbody>
+          <tr><td><b>Monthly</b><span>UPI Autopay or card · cancel any time</span></td>
+            <td><b>₹499</b> a month</td><td><b>₹599</b> a month</td></tr>
+          <tr><td><b>3 months</b><span>paid once</span></td>
+            <td><b>₹1,499</b></td><td><b>₹1,649</b> <i>₹550 a month</i></td></tr>
+          <tr><td><b>6 months</b><span>paid once</span></td>
+            <td><b>₹2,499</b> <i>₹416 a month</i></td><td><b>₹3,299</b> <i>₹550 a month</i></td></tr>
+          <tr><td><b>12 months</b><span>paid once · priority support</span></td>
+            <td><b>₹5,499</b> <i>₹458 a month</i></td><td><b>₹6,499</b> <i>₹542 a month</i></td></tr>
+        </tbody>
+      </table>
     </div>
-
     <table class="compare">
-      <thead><tr><th>What you get</th><th>Free trial</th><th>Monthly / 12 months</th><th>With AI</th></tr></thead>
+      <thead><tr><th>What you get</th><th>Free trial</th><th>Standard plans</th><th>Plans with AI</th></tr></thead>
       <tbody>
-        <tr><td>Every feature above, unlimited quotations</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
-        <tr><td>Unlimited staff logins, no per-user fees</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Every feature above; unlimited quotations and staff logins, no per-user fees</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
         <tr><td>Your own web address, branding, hosting, updates &amp; support</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
         <tr><td>AI uses (drafts from messages or site-note photos, checks)</td><td>10 in total</td><td>20 a month</td><td><b>100 a month</b></td></tr>
         <tr><td>More AI uses whenever you need them</td><td>–</td><td>40 for ₹99</td><td>40 for ₹99</td></tr>
       </tbody>
     </table>
-    <p class="note">Prices are final: no GST added, no setup fee. After a paid plan ends you get 7 more days, then the app
+    <p class="note">Prices are final: no GST added, no setup fee. Plans paid once don't renew by themselves: we remind you
+      before they end. After a paid plan ends you get 7 more days, then the app
       becomes read-only; your data is kept for 30 days. Payments aren't refundable, which is why the trial is free.</p>
   </main>
 
