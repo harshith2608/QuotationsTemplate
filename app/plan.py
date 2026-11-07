@@ -228,7 +228,8 @@ def renew_message_url(status, user=None, host_url=''):
 
 # Still allowed when read-only: signing in/out, and Razorpay recording payments
 # from the business's own customers.
-ALWAYS_ALLOWED = {'auth.login', 'auth.logout', 'projects.razorpay_webhook', 'static',
+ALWAYS_ALLOWED = {'auth.login', 'auth.logout', 'auth.forgot_password', 'auth.reset_password',   # (to sign in and renew)
+                  'projects.razorpay_webhook', 'static',
                   'main.favicon', 'main.brand_logo', 'main.web_manifest', 'main.app_icon',
                   'share.view', 'share.pdf', 'share.respond', 'share.invoice_view', 'share.invoice_pdf',
                   'plan.plan_page', 'plan.order', 'plan.paid', 'plan.thanks', 'plan.receipt',   # paying for a plan

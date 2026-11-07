@@ -49,3 +49,50 @@ def logout():
     flash('You have been logged out.', 'info')
     from .marketing import marketing_enabled
     return redirect(url_for('main.index') if marketing_enabled() else url_for('auth.login'))
+
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Admins: a reset link to the business's email. Staff: ask your admin."""
+    from . import password_reset as pr
+    from .branding import support_contact
+    from .demo import demo_enabled
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.list_projects'))
+    if demo_enabled():                            # the public demo has no passwords to reset
+        return redirect(url_for('demo.start'))
+    result, username = None, ''
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()[:80]
+        user = User.query.filter_by(username=username).first() if username else None
+        result = pr.send_link(user) if user and user.is_admin else 'not_admin'
+    return render_template('auth/forgot.html', title='Forgot password', result=result, username=username,
+                           email=pr.mask(pr.business_email()), support=support_contact())
+
+
+@auth_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """The link from the email: choose a new password (the link then stops working)."""
+    from werkzeug.security import generate_password_hash
+    from . import db, password_reset as pr
+    from .demo import demo_enabled
+    if demo_enabled():
+        return redirect(url_for('demo.start'))
+    user = pr.read_token(token)
+    if user is None:
+        return render_template('auth/reset.html', title='Reset password', invalid=True), 400
+    errors = {}
+    if request.method == 'POST':
+        password = request.form.get('password') or ''
+        if len(password) < 8:
+            errors['password'] = 'Use at least 8 characters.'
+        elif password != request.form.get('password2'):
+            errors['password2'] = "The passwords don't match."
+        if not errors:
+            user.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+            db.session.commit()
+            if current_user.is_authenticated:
+                logout_user()
+            flash('Password changed. Sign in with your new password.', 'success')
+            return redirect(url_for('auth.login', u=user.username))
+    return render_template('auth/reset.html', title='Reset password', user=user, errors=errors)
