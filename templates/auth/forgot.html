@@ -17,8 +17,8 @@
         {% if result == 'not_admin' %}
         <div class="alert alert-warning small">Only admins can reset their password here. If you're a staff member,
           ask your admin to set a new password for you (Admin → Users). Check the username is right too.</div>
-        {% elif result in ('no_email', 'no_mail') %}
-        <div class="alert alert-warning small">We can't email a reset link for this app{{ ': there\'s no email address in its details' if result == 'no_email' }}.
+        {% elif result in ('no_email', 'no_mail', 'send_failed') %}
+        <div class="alert alert-warning small">We can't email a reset link for this app{{ ': there\'s no email address in its details' if result == 'no_email' else ' right now' if result == 'send_failed' }}.
           {% if support[1] %}<a href="{{ support[1] }}" target="_blank" rel="noopener">Message us on WhatsApp</a>{% else %}Contact us{% endif %} and we'll reset it for you.</div>
         {% endif %}
         <p class="small text-muted">Admins: type your username and we'll email a reset link to your business's email

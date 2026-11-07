@@ -68,7 +68,7 @@ def _recently_sent(user):
 
 def send_link(user):
     """Email the reset link to the business's email. Returns 'sent', 'recent' (one went out a moment ago: check the
-    inbox), 'no_email' or 'no_mail' (email isn't set up on this app)."""
+    inbox), 'no_email', 'no_mail' (email isn't set up on this app) or 'send_failed' (the mail server refused it)."""
     from . import mailer
     from .branding import get_brand
     from .models import AppSetting
@@ -76,6 +76,7 @@ def send_link(user):
     if not email:
         return 'no_email'
     if not mailer.enabled():
+        current_app.logger.warning('Password reset: email is not set up on this app (PLATFORM_SMTP_*)')
         return 'no_mail'
     recent, sent = _recently_sent(user)
     if recent:
@@ -86,7 +87,7 @@ def send_link(user):
             f'{name} on QuoteRoom.\n\nChoose a new password here (the link works for 1 hour, once):\n{link}\n\n'
             f'If you didn\'t ask for this, ignore this email: your password stays as it is.\n\nQuoteRoom\n')
     if not mailer.send(email, f'Reset your {name} password', body):
-        return 'no_mail'
+        return 'send_failed'                       # (the reason is in the log: app/mailer.py)
     sent[str(user.id)] = time.time()
     AppSetting.set(SENT_KEY, json.dumps(sent))
     db.session.commit()
