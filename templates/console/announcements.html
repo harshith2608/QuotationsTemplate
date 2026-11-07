@@ -1,0 +1,58 @@
+{% extends "console/_layout.html" %}
+{% block title %}Announcements{% endblock %}
+{% block content %}
+<h1>Announcements</h1>
+<p class="muted small">A message shown as a banner at the top of the apps (trials and customers in the shared app),
+  within a minute. Each person can hide it with ✕ on their device; a new announcement shows again. Turn one off or
+  delete it to take it down everywhere.</p>
+
+<div class="card">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="annMessage"><strong>Message</strong></label>
+    <textarea id="annMessage" name="message" rows="3" maxlength="{{ max_len }}" required style="width:100%"
+      placeholder="e.g. New: send your quotation as a link your customer can accept online.">{{ form.get('message', '') }}</textarea>
+    <div style="display:flex;flex-wrap:wrap;gap:10px 20px;margin:10px 0">
+      <label class="small">Show to
+        <select name="audience">{% for k, label in audiences.items() %}
+          <option value="{{ k }}" {{ 'selected' if form.get('audience', 'both') == k }}>{{ label }}</option>{% endfor %}
+        </select></label>
+      <label class="small">Style
+        <select name="level">{% for k, label in levels.items() %}
+          <option value="{{ k }}" {{ 'selected' if form.get('level', 'info') == k }}>{{ label }}</option>{% endfor %}
+        </select></label>
+      <label class="small"><input type="checkbox" name="admins_only" value="1"
+        {{ 'checked' if not form or form.get('admins_only') }}> Admins only (not their staff)</label>
+      <label class="small">Until (optional) <input type="date" name="ends_on" value="{{ form.get('ends_on', '') }}"
+        min="{{ today.isoformat() }}"></label>
+    </div>
+    <button class="btn btn-primary" type="submit">Publish</button>
+  </form>
+</div>
+
+<h2>All announcements</h2>
+<div class="card">
+  {% if rows %}<table>
+    <thead><tr><th>Message</th><th>Shown to</th><th>Until</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}{% set live = r.active and (not r.ends_on or r.ends_on >= today) %}
+      <tr>
+        <td>{{ r.message }}<div class="muted small">{{ levels[r.level].split(' (')[0] }} · {{ r.created_at|ist }}</div></td>
+        <td class="small">{{ audiences[r.audience] }}{{ ', admins only' if r.admins_only }}</td>
+        <td class="small">{{ r.ends_on.strftime('%d %b %Y') if r.ends_on else '—' }}</td>
+        <td class="small">{{ 'Showing' if live else 'Ended' if r.active else 'Off' }}</td>
+        <td style="white-space:nowrap">
+          <form method="post" action="{{ url_for('console.announcement_action', ann_id=r.id, action='off' if r.active else 'on') }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm" type="submit">{{ 'Turn off' if r.active else 'Turn on' }}</button></form>
+          <form method="post" action="{{ url_for('console.announcement_action', ann_id=r.id, action='delete') }}" style="display:inline"
+                onsubmit="return confirm('Delete this announcement?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>{% else %}<p class="muted small">No announcements yet.</p>{% endif %}
+</div>
+{% endblock %}

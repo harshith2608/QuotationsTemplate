@@ -38,6 +38,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import undefer
 from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, url_for
 
+from .numbers import inr
+
 marketing_bp = Blueprint('marketing', __name__)
 
 
@@ -65,6 +67,8 @@ def _context():
     from .signup import website_sells
     from . import business
     offered = {k for k in BUSINESS_TYPES if business.offered(k)}   # the console's Features → Kinds of business
+    from . import pricing
+    price_data = pricing.load()                                     # the console's Pricing
     return dict(
         product=product,
         legal_name=_env('MARKETING_LEGAL_NAME', product),
@@ -86,13 +90,24 @@ def _context():
         has_tutorials=bool(tutorials()),
         business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items() if k in offered],
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
-        ai_plans=ai_plans(), plan_names=PLAN_NAMES, plan_values=PLAN_VALUES,
+        ai_plans=ai_plans(), plan_names=plan_names(price_data), plan_values=pricing.prices(price_data),
+        pricing=pricing, price_data=price_data, **_shown_plans(price_data),
     )
 
 
-PLAN_NAMES = {'6m': ('6-month plan', '₹4,999'), '1y': ('12-month plan', '₹8,999'),    # as on the pricing cards
-              '6m_ai': ('6-month plan with AI', '₹5,999'), '1y_ai': ('12-month plan with AI', '₹9,999')}
-PLAN_VALUES = {'6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999}                    # for the ads' InitiateCheckout
+def _shown_plans(data):
+    """The pricing cards: the plans shown (those with AI only with AI_PLANS=1) and their lengths, in order."""
+    from . import pricing
+    shown = [k for k in pricing.offered(data) if ai_plans() or not k.endswith('_ai')]
+    return {'plans_shown': shown, 'plan_lengths': list(dict.fromkeys(pricing.length(k) for k in shown))}
+
+
+def plan_names(data=None):
+    """{'1y': ('12-month plan', '₹5,999'), …}: each plan offered now, as on the pricing cards."""
+    from . import pricing
+    from .plan import PLANS
+    p = pricing.prices(data)
+    return {k: (PLANS[k], f'₹{inr(p[k], 0)}') for k in pricing.offered(data)}
 
 
 def call_url():
@@ -107,7 +122,7 @@ def ai_plans():
 
 
 def _plan_ok(plan, ctx):
-    return ctx['sells'] and plan in PLAN_NAMES and (ctx['ai_plans'] or not plan.endswith('_ai'))
+    return ctx['sells'] and plan in ctx['plan_names'] and (ctx['ai_plans'] or not plan.endswith('_ai'))
 
 
 # ── Tutorials (videos hosted on YouTube, so the site stays light) ────────────
@@ -190,10 +205,10 @@ def terms():
 
 # ── Free-trial requests ──────────────────────────────────────────────────────
 
-# The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Every one but 'other' is a
-# trade QuoteRoom is for: they can set up their own app (signup.ELIGIBLE) and count as a Lead for the ads.
+# The trial form's "Your business" choices (key: up to 20 letters, stored on the request). Everyone sets up their own app
+# (signup.ELIGIBLE); every one but 'other' is a trade QuoteRoom is for and counts as a Lead for the ads.
 # The trial form's choices (the app's own kinds: welcome.KINDS; 'kitchens' is set up as interiors)
-BUSINESS_TYPES = {'interiors': 'Interiors (plywood, PVC or WPC)', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
+BUSINESS_TYPES = {'interiors': 'Interiors (plywood, PVC, uPVC or WPC)', 'kitchens': 'Modular kitchens', 'turnkey': 'Turnkey interiors & civil',
                   'furniture': 'Furniture works', 'upvc': 'uPVC windows & doors (fabrication)', 'glass': 'Glass & aluminium works',
                   'tiles': 'Tiles, flooring & granite', 'construction': 'Construction', 'painting': 'Painting & waterproofing',
                   'ceiling': 'False ceiling & POP', 'fabrication': 'Steel fabrication & grills',
@@ -234,7 +249,8 @@ def _validate_lead(form):
         errors['email'] = 'Please enter your email address.'
     elif not EMAIL_RE.match(email):
         errors['email'] = 'Please check your email address.'
-    if btype not in BUSINESS_TYPES:
+    from . import business
+    if btype not in BUSINESS_TYPES or not business.offered(btype):    # (a type switched off in the console)
         errors['business_type'] = 'Please choose your type of business.'
     elif btype == 'other' and len(other) < 2:
         errors['business_other'] = 'Please tell us what your business does.'
@@ -327,9 +343,14 @@ def trial_request():
             if wants_json:
                 return jsonify({'ok': False, 'errors': {'form': msg}}), 429
             return render_template('marketing/free_trial.html', standalone_trial=True, errors={'form': msg}, form=request.form, **ctx), 429
-        # Same number again within a day: don't store a duplicate (phones are encrypted, so compare in Python)
+        # Same number again within a day: don't store a duplicate (phones are encrypted, so compare in Python), but
+        # keep what they typed this time (name, company, business…): the set-up page greets them with it
         dup = next((l for l in Lead.query.filter(Lead.created_at > now - timedelta(days=1)) if l.phone == data['phone']), None)
         lead_id = dup.id if dup else None
+        if dup:
+            for col in ('name', 'business_type', 'business_other') + tuple(c for c in LATER_LEAD_COLUMNS if lead_has(c)):
+                if data.get(col) or col == 'business_other':
+                    setattr(dup, col, data[col])
         if not dup:
             source = ' · '.join(filter(None, [
                 (request.form.get('utm_source') or '')[:60], (request.form.get('utm_campaign') or '')[:60],

@@ -6,6 +6,10 @@
 <meta name="robots" content="noindex">
 <title>Set up your QuoteRoom app</title>
 {% include "console/_public_style.html" %}
+{% set monthly = plan in ('1m', '1m_ai') %}
+{% set plan_title = ({'1m': 'monthly plan', '3m': '3-month plan', '6m': '6-month plan', '1y': '12-month plan'}.get((plan or '').removesuffix('_ai'), 'plan'))
+                    ~ (' with AI' if plan and plan.endswith('_ai') else '') %}
+{% set per = ' a month, by autopay' if monthly else '' %}
 </head>
 <body>
 <div class="wrap">
@@ -15,14 +19,71 @@
     <h1>Link not valid</h1>
     <p class="lead">{{ problem }}</p>
     <a class="btn" href="{{ site }}">Go to the website</a>
+  {% elif had_trial %}
+    <h1>You've already had a free trial</h1>
+    <p class="lead">Your app is at <strong>{{ had_trial }}.{{ base }}</strong>, with everything you made in it.
+      Sign in there, and to keep using it, choose a plan in <strong>Admin → Plan &amp; billing</strong>.</p>
+    <a class="btn" href="https://{{ had_trial }}.{{ base }}/login">Open my app</a>
+    <p class="hint" style="text-align:center;margin-top:14px">Forgot your password, or need more time to try it?
+      Message us on WhatsApp.</p>
   {% elif ready and just_paid %}
     <div class="tick">✓</div>
+    {% if autopay_pending %}
+    <h1>Autopay is set up. Thank you!</h1>
+    <p class="lead">Your app is at <strong>{{ ready }}.{{ base }}</strong>. The first month of your {{ plan_title }} is
+      charged in a few minutes, and your plan is updated as soon as it goes through: you get a receipt by email.
+      Sign in with the username and password you chose.</p>
+    {% else %}
     <h1>Payment received. Thank you!</h1>
-    <p class="lead">Your {{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }} is active on <strong>{{ ready }}.{{ base }}</strong>.
+    <p class="lead">Your {{ plan_title }} is active on <strong>{{ ready }}.{{ base }}</strong>.
       Sign in with the username and password you chose. Your receipt is on its way to your email.</p>
+    {% endif %}
     <a class="btn" href="https://{{ ready }}.{{ base }}/login">Open my app</a>
     <p class="hint" style="text-align:center;margin-top:14px">Bookmark it, or add it to your phone's home screen.
       Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a> or message us on WhatsApp.</p>
+  {% elif ready and autopay_checkout %}
+    <div class="tick">✓</div>
+    <h1>Your app is ready!</h1>
+    <p class="lead">It's at <strong>{{ ready }}.{{ base }}</strong>. Now approve the autopay for the {{ plan_title }}:
+      ₹{{ price|inr(0) }} a month, the first month paid now. Cancel any time from your app.</p>
+    <button type="button" id="startAutopay">Start autopay · ₹{{ price|inr(0) }} a month</button>
+    <p class="hint" style="text-align:center">UPI Autopay or card, through Razorpay.</p>
+    <p class="hint" id="autopayMsg" style="text-align:center"></p>
+    <form method="post" action="{{ url_for('console.start_subscribed') }}" id="autopayDone">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="t" value="{{ token }}">
+      <input type="hidden" name="razorpay_payment_id"><input type="hidden" name="razorpay_subscription_id">
+      <input type="hidden" name="razorpay_signature">
+    </form>
+    <p class="hint" style="text-align:center;margin-top:14px">Not now? <a href="https://{{ ready }}.{{ base }}/login">Open my app</a>
+      and use the free trial first.</p>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      (function () {
+        const c = {{ autopay_checkout|tojson }};
+        const btn = document.getElementById('startAutopay'), msg = document.getElementById('autopayMsg');
+        function open() {
+          btn.disabled = true;
+          const rzp = new Razorpay({
+            key: c.key_id, subscription_id: c.subscription_id, name: 'QuoteRoom', description: c.description,
+            prefill: c.prefill, theme: { color: '#1f4d3f' },
+            modal: { ondismiss: () => { btn.disabled = false; } },
+            handler: (r) => {
+              msg.textContent = 'Autopay approved. Activating your plan…';
+              const f = document.getElementById('autopayDone');
+              f.razorpay_payment_id.value = r.razorpay_payment_id;
+              f.razorpay_subscription_id.value = r.razorpay_subscription_id;
+              f.razorpay_signature.value = r.razorpay_signature;
+              f.submit();
+            }
+          });
+          rzp.on('payment.failed', (e) => { msg.textContent = (e.error && e.error.description) || 'The payment failed. Please try again.'; btn.disabled = false; });
+          rzp.open();
+        }
+        btn.addEventListener('click', open);
+        open();                                   // straight on, as they chose to pay
+      })();
+    </script>
   {% elif ready and plan and pay_failed %}
     <div class="tick">✓</div>
     <h1>Your app is ready!</h1>
@@ -32,14 +93,15 @@
   {% elif ready and plan and not paid %}
     <h1>{{ 'Payment not completed' if request.endpoint == 'console.start_paid' else 'Your app is ready' }}</h1>
     <p class="lead">Your app is at <strong>{{ ready }}.{{ base }}</strong>. Pay for the
-      {{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }} to keep it running after the 7 free days.</p>
+      {{ plan_title }} to keep it running after the 7 free days.</p>
     <form method="post" action="{{ url_for('console.start_pay') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="t" value="{{ token }}">
       <input type="hidden" name="plan" value="{{ plan }}">
-      <button type="submit">Pay ₹{{ (price)|inr(0) }} securely</button>
+      <button type="submit">{{ 'Start autopay · ₹' ~ (price)|inr(0) ~ ' a month' if monthly else 'Pay ₹' ~ (price)|inr(0) ~ ' securely' }}</button>
     </form>
-    <p class="hint" style="text-align:center">UPI, cards or net banking, through Razorpay.</p>
+    <p class="hint" style="text-align:center">{{ 'UPI Autopay or card, through Razorpay. Cancel any time from your app.' if monthly
+                                                   else 'UPI, cards or net banking, through Razorpay.' }}</p>
     <p class="hint" style="text-align:center;margin-top:14px">Not now? <a href="https://{{ ready }}.{{ base }}/login">Open my app</a>
       and use the free trial first.</p>
   {% elif ready %}
@@ -53,8 +115,8 @@
   {% else %}
     <h1>Set up your app</h1>
     {% if plan %}
-    <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ '12-month' if plan in ('1y', '1y_ai') else '6-month' }} plan{{ ' with AI' if plan in ('6m_ai', '1y_ai') }},
-      ₹{{ (price)|inr(0) }}</strong>. Check your company name and choose a password, then pay.</p>
+    <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ plan_title }},
+      ₹{{ (price)|inr(0) }}{{ per }}</strong>. Check your company name and choose a password, then pay{{ ' (approve the autopay once)' if monthly }}.</p>
     {% else %}
     <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>
     {% endif %}

@@ -35,8 +35,9 @@ SHARED_STEPS = ['database', 'data', 'switch']                         # "shared"
 STEP_LABELS = {'database': 'Create database', 'data': 'Set up data and plan', 'project': 'Create Vercel project',
                'deploy': 'Start first build', 'domain': 'Connect address', 'switch': 'Switch the address to it'}
 HOSTING = ('shared', 'own')
-PLANS = plan_mod.PAID                     # 6 or 12 months, with or without AI
-RENEW_LENGTHS = ('6m', '1y')
+PLANS = tuple(p for p in plan_mod.PAID if p not in plan_mod.AUTOPAY)   # what a customer set up from the console pays
+                                          # for (the monthly plan is started by the business itself, with autopay)
+RENEW_LENGTHS = ('1m', '3m', '6m', '1y')
 
 REGISTRY_DDL = """
 CREATE TABLE IF NOT EXISTS public.customers (

@@ -1,12 +1,13 @@
-"""Paid plans bought inside the app: the business pays QuoteRoom (the platform's own Razorpay account) for 6 or 12
-months, and the plan is active straight away. A trial that pays is then moved to its own database by the console
+"""Paid plans bought inside the app: the business pays QuoteRoom (the platform's own Razorpay account) monthly by
+autopay (a Razorpay subscription: UPI Autopay or a card mandate, charged every month until cancelled) or for 12 months
+at once, and the plan is active straight away. A trial that pays is then moved to its own database by the console
 (customers.py, shared hosting), with the plan it bought.
 
 Shared trials app (TENANT_MODE) settings:
     PLATFORM_RAZORPAY_KEY_ID, PLATFORM_RAZORPAY_KEY_SECRET     the platform's Razorpay API keys (live or test)
     PLATFORM_LEGAL_NAME, PLATFORM_ADDRESS, PLATFORM_EMAIL, PLATFORM_PHONE   who issues the receipt
-    PLAN_PRICE_6M=4999, PLAN_PRICE_1Y=8999                   optional: prices in rupees (no GST: not registered)
-    PLAN_PRICE_6M_AI=5999, PLAN_PRICE_1Y_AI=9999             the plans with AI (a bigger AI allowance, app/ai_tools.py)
+    PLAN_PRICE_1M=599, PLAN_PRICE_1Y=5999                    optional: prices in rupees (no GST: not registered)
+    PLAN_PRICE_1M_AI=749, PLAN_PRICE_1Y_AI=7499              the plans with AI (a bigger AI allowance, app/ai_tools.py)
     AI_ADDON_PRICE=99                                        40 more AI uses (plan.ADDON), bought on a paid plan
 Console settings:
     PLATFORM_RAZORPAY_WEBHOOK_SECRET    the webhook (order.paid → /billing/razorpay-webhook on the console) records a
@@ -63,10 +64,10 @@ def _env(name, default=''):
 
 
 def prices():
-    """{'6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999, 'ai40': 99} in rupees."""
-    return {'6m': int(_env('PLAN_PRICE_6M', '4999')), '1y': int(_env('PLAN_PRICE_1Y', '8999')),
-            '6m_ai': int(_env('PLAN_PRICE_6M_AI', '5999')), '1y_ai': int(_env('PLAN_PRICE_1Y_AI', '9999')),
-            plan_mod.ADDON: int(_env('AI_ADDON_PRICE', '99'))}
+    """{'1m': 599, '1y': 5999, '1m_ai': 749, '1y_ai': 7499, 'ai40': 99, …} in rupees: the console's Pricing
+    (app/pricing.py), every plan whether offered now or not (payments by hand, old records)."""
+    from . import pricing
+    return pricing.prices()
 
 
 def enabled():
@@ -88,6 +89,34 @@ CREATE TABLE IF NOT EXISTS public.plan_reminders (
 """
 
 
+# Monthly autopay: one row per Razorpay subscription; every charge is a platform_payments row (kind 'autopay')
+SUBS_DDL = """
+CREATE TABLE IF NOT EXISTS public.platform_subscriptions (
+    id            SERIAL       PRIMARY KEY,
+    slug          VARCHAR(40)  NOT NULL,
+    plan          VARCHAR(10)  NOT NULL,
+    sub_id        VARCHAR(40)  NOT NULL UNIQUE,
+    status        VARCHAR(20)  NOT NULL DEFAULT 'created',   -- created / active / pending / halted / cancelled / completed
+    short_url     TEXT,
+    business_name VARCHAR(120),
+    email         VARCHAR(120),
+    phone         VARCHAR(20),
+    payer_name    VARCHAR(120),
+    paid_by       VARCHAR(80),
+    created_at    TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+    charged_at    TIMESTAMP,
+    ended_at      TIMESTAMP
+)
+"""
+RZP_PLANS_DDL = """
+CREATE TABLE IF NOT EXISTS public.platform_rzp_plans (
+    key      VARCHAR(80) PRIMARY KEY,                       -- plan:amount:test|live
+    plan_id  VARCHAR(40) NOT NULL
+)
+"""
+LIVE_STATUSES = ('created', 'authenticated', 'active', 'pending')    # a subscription that may still charge
+
+
 def ensure_table():
     global _table_ready
     if not _table_ready:
@@ -100,7 +129,10 @@ def ensure_table():
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS phone VARCHAR(20)'))
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS payer_name VARCHAR(120)'))
             conn.execute(text(REMINDERS_DDL))
-        _table_ready = True
+            conn.execute(text(SUBS_DDL))
+            conn.execute(text('ALTER TABLE public.platform_subscriptions ADD COLUMN IF NOT EXISTS amount_paise INTEGER'))
+            conn.execute(text(RZP_PLANS_DDL))                    # (the amount it started at: a later price change
+        _table_ready = True                                      # doesn't touch a running autopay)
 
 
 def _api(method, path, payload=None):
@@ -127,8 +159,10 @@ def _api(method, path, payload=None):
 def create_order(slug, plan, business_name='', paid_by='', email='', payer_name=''):
     """A Razorpay order for `plan` (one of plan.PAID, or plan.ADDON: more AI uses), remembered as "created".
     Returns the order row (dict)."""
-    if plan not in plan_mod.PAID and plan != plan_mod.ADDON:
+    if plan not in plan_mod.PAID + plan_mod.LEGACY and plan != plan_mod.ADDON:
         raise PaymentError('Choose a plan.')
+    if plan in plan_mod.AUTOPAY:
+        raise PaymentError('The monthly plan is paid by autopay.')
     ensure_table()
     amount = prices()[plan] * 100
     order = _api('POST', '/orders', {'amount': amount, 'currency': 'INR',
@@ -152,8 +186,8 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
     """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email, or opened straight away by a
     business buying on the website). kind 'new': a customer whose app is made once they pay. callback_url: where
     Razorpay sends the payer back after paying. Returns the payment row (dict, with link_url)."""
-    if plan not in plan_mod.PAID:
-        raise PaymentError('Choose a plan.')
+    if plan not in plan_mod.PAID + plan_mod.LEGACY or plan in plan_mod.AUTOPAY:
+        raise PaymentError('Choose a plan (the monthly plan is started by the business itself, with autopay).')
     if not links_enabled():
         raise PaymentError('Set PLATFORM_RAZORPAY_KEY_ID and PLATFORM_RAZORPAY_KEY_SECRET on the console first.')
     ensure_table()
@@ -287,7 +321,21 @@ def apply_plan(row):
     with db.engine.begin() as conn:
         conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
                      {'a': status.started_on, 'b': status.ends_on, 'i': row['id']})
+    _stop_autopay_for(row)
     return status
+
+
+def _stop_autopay_for(row):
+    """A 12-month plan paid (any way) by a business on monthly autopay: stop the autopay, so it isn't charged
+    monthly on top of the year it bought. The year was added after the month already paid, so no days are lost."""
+    if row['plan'] in plan_mod.AUTOPAY or row['plan'] == plan_mod.ADDON:
+        return
+    sub = current_subscription(row['slug'])
+    if sub:
+        try:
+            cancel_subscription(sub)
+        except PaymentError:
+            pass                       # (Razorpay unreachable: the next charge's webhook finds the 12-month plan below)
 
 
 def apply_plan_for(slug, row):
@@ -307,8 +355,197 @@ def apply_plan_for(slug, row):
             conn.execute(text('UPDATE public.platform_payments SET plan_start = :a, plan_end = :b WHERE id = :i'),
                          {'a': status.started_on, 'b': status.ends_on, 'i': row['id']})
         customers._update(slug, ends_on=status.ends_on, plan=status.plan)
+        _stop_autopay_for(row)
         return status
     raise PaymentError(f'No trial or customer "{slug}" to add the plan to.')
+
+
+# ── Monthly autopay (Razorpay subscriptions) ─────────────────────────────────
+
+def _mode():
+    return 'live' if _env('PLATFORM_RAZORPAY_KEY_ID').startswith('rzp_live') else 'test'
+
+
+def razorpay_plan(plan):
+    """The Razorpay plan for `plan` at today's price (made the first time, then reused; test and live apart)."""
+    ensure_table()
+    amount = prices()[plan] * 100
+    key = f'{plan}:{amount}:{_mode()}'
+    with db.engine.connect() as conn:
+        found = conn.execute(text('SELECT plan_id FROM public.platform_rzp_plans WHERE key = :k'), {'k': key}).scalar()
+    if found:
+        return found
+    made = _api('POST', '/plans', {'period': 'monthly', 'interval': 1,
+                                   'item': {'name': f'QuoteRoom {plan_mod.PLANS[plan]}', 'amount': amount,
+                                            'currency': 'INR', 'description': 'Charged every month until cancelled'},
+                                   'notes': {'plan': plan}})
+    with db.engine.begin() as conn:
+        conn.execute(text('INSERT INTO public.platform_rzp_plans (key, plan_id) VALUES (:k, :p) ON CONFLICT (key) DO NOTHING'),
+                     {'k': key, 'p': made['id']})
+    return made['id']
+
+
+def create_subscription(slug, plan, business_name='', paid_by='', email='', phone='', payer_name=''):
+    """A monthly autopay subscription for `plan` (plan.AUTOPAY): the business approves the mandate once (Checkout,
+    or its short_url) and pays the first month then. Returns the subscription row."""
+    if plan not in plan_mod.AUTOPAY:
+        raise PaymentError('Choose the monthly plan.')
+    if not links_enabled():
+        raise PaymentError('Payments aren\'t set up yet.')
+    ensure_table()
+    amount = prices()[plan] * 100
+    sub = _api('POST', '/subscriptions', {'plan_id': razorpay_plan(plan), 'total_count': 120, 'quantity': 1,
+                                           'customer_notify': 1, 'notes': {'slug': slug, 'plan': plan}})
+    digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    with db.engine.begin() as conn:
+        conn.execute(text('INSERT INTO public.platform_subscriptions (slug, plan, sub_id, status, short_url, business_name, '
+                          'email, phone, payer_name, paid_by, amount_paise) VALUES (:s, :p, :i, :st, :u, :n, :e, :ph, :pn, '
+                          ':by, :a)'),
+                     {'s': slug, 'p': plan, 'i': sub['id'], 'st': sub.get('status') or 'created', 'u': sub.get('short_url'),
+                      'a': amount,
+                      'n': (business_name or '')[:120], 'e': (email or '')[:120] or None, 'ph': digits[:20] or None,
+                      'pn': (payer_name or '').strip()[:120] or None, 'by': (paid_by or '')[:80]})
+    return get_subscription(sub['id'])
+
+
+def get_subscription(sub_id):
+    ensure_table()
+    with db.engine.connect() as conn:
+        row = conn.execute(text('SELECT * FROM public.platform_subscriptions WHERE sub_id = :i'), {'i': sub_id}).mappings().first()
+    return dict(row) if row else None
+
+
+def current_subscription(slug):
+    """This business's monthly autopay that is on (active, or a charge being retried), or None."""
+    ensure_table()
+    with db.engine.connect() as conn:
+        row = conn.execute(text("SELECT * FROM public.platform_subscriptions WHERE slug = :s AND status IN "
+                                "('authenticated', 'active', 'pending') ORDER BY id DESC LIMIT 1"), {'s': slug}).mappings().first()
+    return dict(row) if row else None
+
+
+def subscriptions(limit=100):
+    """Autopay subscriptions, newest first (the console's Payments)."""
+    ensure_table()
+    with db.engine.connect() as conn:
+        return [dict(r) for r in conn.execute(text("SELECT * FROM public.platform_subscriptions WHERE status <> 'created' "
+                                                   'ORDER BY id DESC LIMIT :l'), {'l': limit}).mappings()]
+
+
+def verify_subscription_checkout(payment_id, sub_id, signature):
+    """Razorpay Checkout's signature for a subscription: HMAC-SHA256(payment_id|subscription_id)."""
+    secret = _env('PLATFORM_RAZORPAY_KEY_SECRET')
+    expected = hmac.new(secret.encode(), f'{payment_id}|{sub_id}'.encode(), hashlib.sha256).hexdigest()
+    return bool(secret) and hmac.compare_digest(expected, signature or '')
+
+
+def checkout_charge(sub, payment_id):
+    """The amount (paise) Checkout's payment for this autopay really took, if it's the month's charge; None when it
+    was only Razorpay's small mandate check (e.g. ₹5, refunded) or Razorpay can't be asked now: then the month is
+    added when Razorpay charges it (the subscription.charged webhook), never on the checkout's word alone."""
+    try:
+        pay = _api('GET', f'/payments/{payment_id}')
+    except PaymentError:
+        return None
+    expected = sub.get('amount_paise') or prices()[sub['plan']] * 100
+    amount = int(pay.get('amount') or 0)
+    return amount if amount >= expected and pay.get('status') in ('captured', 'authorized') else None
+
+
+def _set_status(sub_id, status, charged=False):
+    stamp = ', charged_at = (now() AT TIME ZONE \'utc\')' if charged else \
+        ', ended_at = (now() AT TIME ZONE \'utc\')' if status in ('halted', 'cancelled', 'completed') else ''
+    with db.engine.begin() as conn:
+        conn.execute(text(f'UPDATE public.platform_subscriptions SET status = :st{stamp} WHERE sub_id = :i'),
+                     {'st': status, 'i': sub_id})
+
+
+def set_autopay(slug, on):
+    """The business's own flag (plan.AUTOPAY_KEY): no "renew" reminders while its autopay is on."""
+    from . import customers
+    from .models import AppSetting
+
+    def flag():
+        AppSetting.set(plan_mod.AUTOPAY_KEY, '1' if on else '')
+        db.session.commit()
+    if tenancy.current_slug() == slug:
+        return flag()
+    target = tenancy.lookup(slug)
+    if target and target[0] == 'schema':
+        with tenancy.tenant_context(slug, target[1]):
+            return flag()
+    c = customers.get(slug)
+    if c and c['status'] == 'active':
+        with customers.open_customer(slug):
+            return flag()
+
+
+def record_charge(sub, payment_id, amount_paise, source, email=None):
+    """A month paid by autopay (the first one from Checkout or the webhook, then each month's from the webhook):
+    recorded once, the month added, autopay marked on, the receipt sent. Returns (payment row, newly_paid)."""
+    ensure_table()
+    with db.engine.begin() as conn:
+        made = conn.execute(text(
+            "INSERT INTO public.platform_payments (slug, plan, amount_paise, order_id, payment_id, status, business_name, "
+            "paid_by, email, kind, phone, payer_name, source, paid_at) VALUES (:s, :p, :a, :o, :o, 'paid', :n, :u, :e, "
+            "'autopay', :ph, :pn, :src, (now() AT TIME ZONE 'utc')) ON CONFLICT (order_id) DO NOTHING RETURNING id, paid_at"),
+            {'s': sub['slug'], 'p': sub['plan'], 'a': int(amount_paise or sub.get('amount_paise') or prices()[sub['plan']] * 100), 'o': payment_id,
+             'n': sub.get('business_name') or '', 'u': sub.get('paid_by') or 'autopay',
+             'e': (sub.get('email') or (email if '@' in (email or '') else None)), 'ph': sub.get('phone'),
+             'pn': sub.get('payer_name'), 'src': source}).first()
+        if made:
+            conn.execute(text('UPDATE public.platform_payments SET receipt_no = :r WHERE id = :i'),
+                         {'r': f'QR{made[1]:%y%m}-{made[0]:04d}', 'i': made[0]})
+    row = get_by_order(payment_id)
+    stopped = sub['status'] == 'cancelled'
+    if not stopped:
+        _set_status(sub['sub_id'], 'active', charged=True)
+    if not made:
+        return row, False
+    if stopped:                                # charged as it was being stopped (a 12-month plan bought meanwhile):
+        from . import mailer                   # recorded, the plan left as it is; the operator refunds it
+        if mailer.enabled():
+            mailer.send(mailer.operator(), f'Refund needed: {sub.get("business_name") or sub["slug"]}, ₹{inr((amount_paise or 0) / 100, 0)}',
+                        f'{sub.get("business_name") or sub["slug"]} ({sub["slug"]}) was charged {inr((amount_paise or 0) / 100, 0)} by '
+                        f'its monthly autopay just after it stopped (they switched to 12 months). Their plan was not changed.\n'
+                        f'Payment {payment_id}: refund it in Razorpay → Payments.\n')
+        return get(row['id']), True
+    if tenancy.current_slug() == sub['slug']:
+        apply_plan(row)
+    else:
+        apply_plan_for(sub['slug'], row)
+    set_autopay(sub['slug'], True)
+    notify_paid(get(row['id']))
+    return get(row['id']), True
+
+
+def cancel_subscription(sub):
+    """Stop the autopay now: no more charges. The month already paid stays (the plan runs to its end date)."""
+    if sub['status'] in LIVE_STATUSES:
+        _api('POST', f'/subscriptions/{sub["sub_id"]}/cancel', {'cancel_at_cycle_end': 0})
+    _set_status(sub['sub_id'], 'cancelled')
+    set_autopay(sub['slug'], False)
+
+
+def _subscription_event(event, payload):
+    """subscription.* webhooks: a month charged (recorded once), or the autopay paused or stopped."""
+    entity = (payload.get('payload', {}).get('subscription') or {}).get('entity') or {}
+    pay = (payload.get('payload', {}).get('payment') or {}).get('entity') or {}
+    sub = get_subscription(entity.get('id', ''))
+    if sub is None:
+        return 'not ours'
+    if event == 'subscription.charged' and pay.get('id'):
+        row, newly = record_charge(sub, pay['id'], pay.get('amount'), 'webhook', email=pay.get('email'))
+        return f'autopay charged: {sub["slug"]}' if newly else 'already recorded'
+    status = event.split('.', 1)[1]
+    if status in ('activated', 'authenticated', 'resumed'):
+        _set_status(sub['sub_id'], 'active' if status != 'authenticated' else 'authenticated')
+        return f'autopay {status}: {sub["slug"]}'
+    if status in ('pending', 'halted', 'cancelled', 'completed', 'paused'):
+        _set_status(sub['sub_id'], status)
+        set_autopay(sub['slug'], False)                 # the usual reminders and grace from here
+        return f'autopay {status}: {sub["slug"]}'
+    return 'ignored'
 
 
 # ── Payments recorded by hand (paid outside Razorpay: UPI to you, bank transfer, cash) ──
@@ -340,7 +577,7 @@ def record_manual(slug, plan, amount, method, reference='', paid_on=None, add_pl
     number like any other, and (add_plan) the plan added to their app the same way. Returns the payment row."""
     from datetime import time
     from . import customers
-    if plan not in plan_mod.PAID and plan != plan_mod.ADDON:
+    if plan not in plan_mod.PAID + plan_mod.LEGACY and plan != plan_mod.ADDON:
         raise PaymentError('Choose a plan.')
     try:
         paise = int(round(float(amount) * 100))
@@ -396,6 +633,8 @@ def handle_webhook(payload):
     """order.paid / payment.captured from Razorpay. Records the payment (once) and adds the plan. Returns a
     short result for the log. Moving the trial is separate (move_paid_trials)."""
     event = payload.get('event', '')
+    if event.startswith('subscription.'):
+        return _subscription_event(event, payload)
     pay = (payload.get('payload', {}).get('payment') or {}).get('entity') or {}
     order = (payload.get('payload', {}).get('order') or {}).get('entity') or {}
     plink = (payload.get('payload', {}).get('payment_link') or {}).get('entity') or {}
@@ -537,6 +776,10 @@ def send_receipt(row, to=None):
                                      business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
                                      plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
                                      receipt_no=row.get('receipt_no'))
+        if row['plan'] in plan_mod.AUTOPAY:          # every monthly receipt says how to stop it
+            body = body.rstrip() + (f'\n\nThis plan renews every month by autopay. To cancel any time: open '
+                                    f'{_app_link(row["slug"], "/plan")} and tap Cancel autopay (or cancel the mandate '
+                                    'in your UPI app). Nothing more is charged after you cancel.\n')
     return mailer.send(to, subject, body, bcc=mailer.sender(),
                        attachments=[(f'QuoteRoom-receipt-{row["receipt_no"]}.pdf', receipt_pdf(row).read(), 'application/pdf')])
 
@@ -581,6 +824,8 @@ def due_reminder(status):
     if not status.has_limit or status.days_left is None:
         return None
     d = status.days_left
+    if status.autopay and d >= 0:
+        return None                     # renewed by autopay: no "plan ends" reminders while it's on
     if status.is_trial:
         return 'trial_2' if 0 <= d <= 2 else 'trial_end' if -3 <= d < 0 else None
     return 'paid_3' if 0 <= d <= 3 else 'paid_15' if 3 < d <= 15 else 'paid_end' if -7 <= d < 0 else None
@@ -617,10 +862,9 @@ def send_reminders():
             when = 'today' if st.days_left == 0 else 'tomorrow' if st.days_left == 1 else f'in {st.days_left} days'
             words = dict(when=when, end=fmt(st.ends_on), plan=st.label, grace=fmt(st.grace_until),
                          delete=fmt(st.delete_on))
-            p = prices()
-            from . import texts
-            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), price_6m=f"{inr(p['6m'], 0)}",
-                                         price_1y=f"{inr(p['1y'], 0)}", **words)
+            from . import pricing, texts
+            subject, body = texts.render(f'remind_{kind}', plan_link=_app_link(slug, '/plan'), **pricing.fields(),
+                                         **words)
             mailer.send(email, subject, body)
             out[slug] = kind
         except Exception as exc:                           # one business's problem mustn't stop the others
@@ -681,6 +925,12 @@ def receipt_pdf(row):
                       else 'Paid online through Razorpay. ') + 'This is a payment receipt, not a tax invoice: '
                      f'{escape(who["name"])} is not registered under GST, so no GST is charged.', small),
            Spacer(1, 6), Paragraph('Thank you for choosing QuoteRoom.', small)]
+    if row['plan'] in plan_mod.AUTOPAY:              # how to stop it, on every monthly receipt
+        link = _app_link(row['slug'], '/plan')
+        el[-1:-1] = [Spacer(1, 6), Paragraph(
+            '<b>Autopay:</b> this plan renews every month by autopay until you cancel it. Cancel any time at '
+            f'<a href="{escape(link)}" color="#1f4d3f"><u>{escape(link)}</u></a> (Plan &amp; billing → Cancel autopay), '
+            'or cancel the mandate in your UPI app. Nothing more is charged after you cancel.', small), Spacer(1, 6)]
     doc.build(el)
     buf.seek(0)
     return buf
@@ -736,7 +986,7 @@ def proforma_pdf(row, bill_to='', address=''):
                            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
     el += [t, Spacer(1, 16)]
-    months = '6 months' if plan_mod.length_of(row['plan']) == '6m' else '12 months'
+    months = {'1m': '1 month', '6m': '6 months'}.get(plan_mod.length_of(row['plan']), '12 months')
     lines = [['Description', 'Amount'],
              [Paragraph(f'<b>QuoteRoom {escape(plan_label)}</b><br/><font size="8" color="#455a64">'
                         f'Quotation app for your whole team, all features, for {months}. '

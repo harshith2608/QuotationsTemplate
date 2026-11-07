@@ -97,6 +97,7 @@
                        ('admin.costs', 'graph-up-arrow', 'Costs & Profit'), ('admin.payment_settings', 'credit-card', 'Payment Settings'),
                        ('admin.settings', 'sliders', 'Settings'), ('admin.notifications', 'bell', 'Notifications')] %}
 {% if ai_import_on %}{% set admin_links = admin_links[:1] + [('admin.ai_import', 'magic', 'Import a quotation')] + admin_links[1:] %}{% endif %}
+{% if renew_in_app %}{% set admin_links = admin_links + [('plan.plan_page', 'credit-card-2-front', 'Plan & billing')] %}{% endif %}
 <nav class="navbar navbar-expand-lg {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar sticky-top" id="ki-navbar">
   <div class="container-fluid px-3">
     <a class="navbar-brand fw-bold text-truncate" href="{{ url_for('projects.list_projects') }}">
@@ -213,6 +214,33 @@
 <!-- ===== FLASH MESSAGES ===== -->
 <div class="container-fluid px-3 pt-2">
   {% include 'partials/_plan_banner.html' %}
+  {% for a in announcements %}
+  <div class="alert alert-{{ a.level }} alert-dismissible py-2 mb-2 ki-announcement" role="status" data-ann="{{ a.id }}">
+    <i class="bi bi-megaphone me-1"></i>{{ a.message }}
+    <button type="button" class="btn-close py-2" aria-label="Hide" data-ann-hide="{{ a.id }}"></button>
+  </div>
+  {% endfor %}
+  {% if announcements %}
+  <script>
+    // ✕ hides that announcement on this device (a new one shows again)
+    document.querySelectorAll('[data-ann]').forEach((el) => {
+      const key = 'ann-hidden-' + el.dataset.ann;
+      try { if (localStorage.getItem(key)) el.remove(); } catch (e) {}
+      el.querySelector('[data-ann-hide]').addEventListener('click', () => {
+        try { localStorage.setItem(key, '1'); } catch (e) {}
+        el.remove();
+      });
+    });
+  </script>
+  {% endif %}
+  {% if lower_price and request.endpoint != 'plan.plan_page' %}
+  <div class="alert alert-success d-md-flex align-items-center justify-content-between py-2 mb-2" role="status" id="lowerPrice">
+    <div><i class="bi bi-tag me-1"></i><strong>Good news: the monthly plan is now ₹{{ lower_price.now|inr(0) }}.</strong>
+      Your autopay is ₹{{ lower_price.paying|inr(0) }} a month. To pay the new price, cancel your autopay and start it
+      again on Plan &amp; billing: no days are lost.</div>
+    <a href="{{ url_for('plan.plan_page') }}" class="btn btn-sm btn-outline-dark fw-semibold ms-md-2 mt-2 mt-md-0 flex-shrink-0">Switch to ₹{{ lower_price.now|inr(0) }}</a>
+  </div>
+  {% endif %}
   {% include 'partials/_setup_banner.html' %}
   {% include 'partials/_welcome_bar.html' %}
   {% with messages = get_flashed_messages(with_categories=true) %}

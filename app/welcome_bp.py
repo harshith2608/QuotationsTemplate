@@ -86,6 +86,9 @@ def business():
         confirmed = not branding.lock_enabled() or bool(request.form.get('confirm'))
         name = ' '.join(request.form.get('name', '').split())[:80]
         phone = ' '.join(request.form.get('phone', '').split())[:30]
+        if not confirmed and ('name' not in locked or 'logo' not in locked):     # the box is on the page: always tick it
+            flash('Tick "These details are correct" to continue.', 'danger')
+            return redirect(url_for('welcome.business'))
         if 'name' not in locked:
             if not name:
                 errors.append('Type your business name.')

@@ -52,9 +52,14 @@ for num, valid in [('98765 43210', True), ('919876543210', True), ('5876543210',
     from app.marketing import normalise_phone
     ok(f'phone {num!r} → {"valid" if valid else "invalid"}', bool(normalise_phone(num)) == valid)
 
-c.post('/trial-request', data=good, headers=J)
+c.post('/trial-request', data=dict(good, name='Second Try', company_name='New Name Interiors', city='Mysuru',
+                                   email='second@newname.example'), headers=J)
 with app.app_context():
-    ok('same number within a day not stored twice', Lead.query.count() == 2)
+    _same = [l for l in Lead.query.all() if l.phone == normalise_phone(good['phone'])]
+    ok('same number within a day not stored twice, but the new details replace the old (the set-up page greets them)',
+       Lead.query.count() == 2 and len(_same) == 1 and _same[0].name == 'Second Try'
+       and _same[0].company_name == 'New Name Interiors' and _same[0].city == 'Mysuru'
+       and _same[0].email == 'second@newname.example')
 r = c.post('/trial-request', data=dict(good, phone='9000000001', website='http://spam'), headers=J)
 with app.app_context():
     ok('honeypot: bot gets "ok" but nothing is stored', r.get_json()['ok'] and Lead.query.count() == 2)
@@ -142,14 +147,15 @@ ok('self-serve on: an interior designer gets "set up my app now" (a signed link 
    and _su.read_token(d['setup_url'].split('t=', 1)[1].replace('%2E', '.')) is not None)
 r = c5.post('/trial-request', data=dict(good, phone='9811100045', business_type='other', business_other='Tiles'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.2'})
-ok('…"Others" still wait for us', r.get_json()['ok'] and r.get_json()['setup_url'] is None)
+ok('…"Others" set up their own app too (no waiting for us)', r.get_json()['ok'] and r.get_json()['setup_url'])
 r = c5.post('/trial-request', data=dict(good, phone='9811100051', business_type='upvc'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.8'})
 ok('…uPVC, glass and kitchen firms set up their own app too', r.get_json()['ok'] and r.get_json()['setup_url']
    and all(f'value="{v}"' in c5.get('/free-trial').text for v in ('kitchens', 'upvc', 'glass'))
    and 'uPVC windows &amp; doors' in c5.get('/free-trial').text)
 t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
-ok('…and the page without JavaScript shows the button too', 'Set up my app now' in t and '/start?t=' in t)
+ok('…and the page without JavaScript shows the button too, with no demo button beside it (one clear next step)',
+   'Set up my app now' in t and '/start?t=' in t and '<div data-demo-wait hidden>' in t)
 
 # With email set up, the link goes to their email instead (proves the address is theirs)
 import glob, tempfile, email as _email
@@ -174,19 +180,48 @@ ok('…and the page without JavaScript: Set up my app now, and the email copy', 
 # Buying a plan on the website: the plan buttons open the same form, then straight on to set up and pay (any business,
 # and the link is shown, not emailed: Razorpay checks the payer)
 lp = c5.get('/').text
-ok('plan buttons: the same form for that plan (no WhatsApp)', 'data-plan="6m"' in lp and 'data-plan="1y"' in lp
+ok('plan buttons: the same form for that plan (no WhatsApp)', 'data-plan="1m"' in lp and 'data-plan="1y"' in lp
    and '/free-trial?plan=1y' in lp and 'interested%20in%20the' not in lp and 'Continue to payment' in lp)
 t = c5.get('/free-trial?plan=1y').text
-ok('/free-trial?plan=1y (no JavaScript): the 12-month plan and "Continue to payment"', '12-month plan · ₹8,999' in t
+ok('/free-trial?plan=1y (no JavaScript): the 12-month plan and "Continue to payment"', '12-month plan · ₹5,999' in t
    and 'name="plan" value="1y"' in t and 'Continue to payment' in t)
 r = c5.post('/trial-request', data=dict(good, phone='9811100049', business_type='other', business_other='Kitchens', plan='1y'),
             headers=J, environ_base={'REMOTE_ADDR': '10.9.0.6'}); d = r.get_json()
 ok('…submitted: on to /start for that plan (even "Others"; shown, not emailed)', d['ok'] and d['pay_url']
    and d['pay_url'].startswith('https://ops.quote-room.test/start?t=') and d['pay_url'].endswith('&plan=1y'))
-r = c5.post('/trial-request', data=dict(good, phone='9811100050', plan='6m'), environ_base={'REMOTE_ADDR': '10.9.0.7'})
-ok('…without JavaScript: redirected there', r.status_code == 302 and r.headers['Location'].endswith('&plan=6m'))
+r = c5.post('/trial-request', data=dict(good, phone='9811100050', plan='1m'), environ_base={'REMOTE_ADDR': '10.9.0.7'})
+ok('…without JavaScript: redirected there (the monthly plan too)', r.status_code == 302
+   and r.headers['Location'].endswith('&plan=1m'))
 with app.app_context():
-    ok('…the request notes the plan they\'re buying', any('buying 6m' in (l.source or '') for l in Lead.query.all()))
+    ok('…the request notes the plan they\'re buying', any('buying 1m' in (l.source or '') for l in Lead.query.all()))
+ok('pricing: monthly ₹599 by autopay, 12 months ₹5,999 with 2 months free; no 6-month plan', '₹599' in lp
+   and '₹5,999' in lp and '2 months free' in lp and 'renews' in lp and 'autopay' in lp.lower() and '₹4,999' not in lp)
+# Prices from the console's Pricing (a copy in the website's own database): no code change
+import json as _json
+from app.models import AppSetting as _AS
+from app import pricing as _pr
+with app.app_context():
+    _AS.set(_pr.KEY, _json.dumps({'plans': {'1m': {'price': 699, 'on': False}, '6m': {'price': 2999, 'on': True},
+                                            '1y': {'price': 4999, 'on': True}}, 'addon': 149}))
+    db.session.commit()
+lp2 = c5.get('/').text
+t2 = c5.get('/free-trial?plan=1m').text
+r = c5.post('/trial-request', data=dict(good, phone='9811100060', plan='1m'), headers=J, environ_base={'REMOTE_ADDR': '10.9.0.9'})
+ok('the console\'s prices: 6 months ₹2,999 and 12 months ₹4,999 shown, monthly switched off (not shown, not buyable)',
+   '₹2,999' in lp2 and '₹4,999' in lp2 and 'data-plan="6m"' in lp2 and 'data-plan="1m"' not in lp2
+   and '₹5,999' not in lp2 and 'Monthly plan · ' not in t2 and not (r.get_json() or {}).get('pay_url'))
+with app.app_context():
+    ok('…and what they work out to (without a monthly plan, no "Save" or "months free")',
+       _pr.per_month('6m') == 500 and _pr.prices()['ai40'] == 149 and 'Save ₹' not in lp2 and 'months free' not in lp2)
+    _AS.set(_pr.KEY, ''); db.session.commit()
+ok('…and back to the defaults when nothing is saved', '₹5,999' in c5.get('/').text)
+data, errs = _pr.validate({'price_1m': '599', 'on_1m': '1', 'price_1y': '5,999', 'on_1y': '1', 'addon': '99'})
+ok('Pricing form: "5,999" is read as 5999; 12 months is 2 months free against ₹599', not errs and data['plans']['1y']['price'] == 5999
+   and _pr.badge('1y', data) == '2 months free' and _pr.saving('1y', data) == 1189)
+_, errs = _pr.validate({'price_1y': '', 'on_1y': '1', 'addon': '99'})
+_, errs2 = _pr.validate({'price_1m_ai': '749', 'on_1m_ai': '1', 'addon': '99'})
+ok('…a plan switched on needs a price, and one plan without AI must stay on', any('12 months' in e for e in errs)
+   and any('at least one plan without AI' in e for e in errs2))
 os.environ.pop('MAIL_OUTBOX_DIR', None)
 lp = c5.get('/').text
 ok('"Book a call with us": a band before the pricing and a line under it, to the console\'s booking page',

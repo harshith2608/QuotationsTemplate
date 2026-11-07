@@ -85,7 +85,7 @@ with app.app_context():
 from app import marketing, signup
 ok('the trial form offers every kind, and each can set up its own app',
    {'tiles', 'construction', 'painting', 'ceiling', 'fabrication', 'curtains', 'turnkey'} <= set(marketing.BUSINESS_TYPES)
-   and set(marketing.BUSINESS_TYPES) - {'other'} == signup.ELIGIBLE)
+   and set(marketing.BUSINESS_TYPES) == signup.ELIGIBLE)
 
 # ── Kinds of business offered (the console's Features → Kinds of business) ──
 with app.app_context():
@@ -93,13 +93,13 @@ with app.app_context():
        business.kinds_offered() == ['interiors', 'furniture', 'upvc', 'glass', 'other'])
     AppSetting.set(business.KINDS_KEY, json.dumps(['tiles', 'painting'])); db.session.commit()
 with app.app_context():
-    ok('saved: those kinds, with interiors and something else always',
-       business.kinds_offered() == ['interiors', 'tiles', 'painting', 'other'])
+    ok('saved: those kinds, with interiors always (something else only when switched on)',
+       business.kinds_offered() == ['interiors', 'tiles', 'painting'])
     ok('…the trial form\'s types follow (modular kitchens is interiors)', business.offered('tiles')
        and business.offered('kitchens') and not business.offered('upvc') and not business.offered('construction'))
 with app.test_request_context():
     types = [k for k, _ in marketing._context()['business_types']]
-ok('…the website\'s trial form shows only those', types == ['interiors', 'kitchens', 'tiles', 'painting', 'other'])
+ok('…the website\'s trial form shows only those', types == ['interiors', 'kitchens', 'tiles', 'painting'])
 c.post('/welcome/restart')
 kp = c.get('/welcome/work').text
 ok('…the guided setup offers only those', 'value="tiles"' in kp and 'value="painting"' in kp and 'value="upvc"' not in kp
@@ -141,6 +141,12 @@ ok('…then the app, with the QA label and noindex', r.status_code == 200 and '>
    and r.headers.get('X-Robots-Tag') == 'noindex, nofollow')
 r = qc.post('/qa-access?next=//evil.example', data={'key': 'qa-test-key-123'}, base_url='https://test1.qa.example.test')
 ok('…never sends you to another site', r.headers['Location'].endswith('/') and 'evil' not in r.headers['Location'])
+hook = qapp.test_client().post('/webhook/razorpay', data='{}', base_url='https://test1.qa.example.test')
+ok('…Razorpay\'s webhook gets through without the key (it checks its own signature)', hook.status_code != 401
+   and 'Enter the QA key' not in hook.text)
+mf = qapp.test_client().get('/manifest.webmanifest', base_url='https://test1.qa.example.test')
+ok('…the "Add to Home screen" manifest too (browsers fetch it without the key cookie)', mf.status_code == 200
+   and 'Enter the QA key' not in mf.text)
 for k in ('QA_MODE', 'QA_ACCESS_KEY', 'QA_COOKIE_DOMAIN'):
     os.environ.pop(k)
 ok('the live app: no key page, no QA label, indexed as usual', live.status_code == 200 and '>QA</div>' not in live.text
@@ -227,3 +233,82 @@ ok('…the card: a WhatsApp video call to book, or chat; once booked, when', 'A 
 from app.numbers import inr
 ok('numbers the Indian way: 15,50,000.00 · 1,23,45,678.90 · 99,999.50 · -41,950 · 0', [inr(1550000), inr(12345678.9),
    inr(99999.5), inr(-41950, 0), inr(0, 0)] == ['15,50,000.00', '1,23,45,678.90', '99,999.50', '-41,950', '0'])
+
+# ── Monthly autopay (app/subscription.py): no "renew" reminders while it's on; Razorpay's signature; webhook events ──
+import hmac as _hmac, hashlib as _hl
+from datetime import date as _date
+from unittest import mock
+from app import plan as PM, subscription as SUB
+ends = _date(2026, 12, 6)
+on = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 1), autopay=True)
+off = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 1), autopay=False)
+late = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 9), autopay=True)
+ok('autopay on: no "plan ends" banner or reminder; off: the usual ones; a failed month still gets the grace reminder',
+   on.state == 'active' and SUB.due_reminder(on) is None and off.state == 'reminder' and SUB.due_reminder(off) == 'paid_15'
+   and late.state == 'grace' and SUB.due_reminder(late) == 'paid_end')
+ok('the monthly plans: autopay, a month at a time, AI on the AI one', PM.AUTOPAY == ('1m', '1m_ai')
+   and PM.length_of('1m') == '1m' and '1m_ai' in PM.AI_PLANS and str(PM.add_length(_date(2026, 1, 31), '1m')) == '2026-02-28')
+os.environ['PLATFORM_RAZORPAY_KEY_SECRET'] = 'test-secret'
+sig = _hmac.new(b'test-secret', b'pay_1|sub_1', _hl.sha256).hexdigest()
+ok("Razorpay's autopay signature (payment|subscription) is checked", SUB.verify_subscription_checkout('pay_1', 'sub_1', sig)
+   and not SUB.verify_subscription_checkout('pay_1', 'sub_2', sig))
+os.environ.pop('PLATFORM_RAZORPAY_KEY_SECRET')
+try:
+    SUB.create_order('x', '1m'); refused = False
+except SUB.PaymentError:
+    refused = True
+ok('the monthly plan is never sold as a one-off payment', refused)
+sub = {'slug': 'acme', 'plan': '1m', 'sub_id': 'sub_9', 'status': 'active'}
+charged = {'event': 'subscription.charged', 'payload': {'subscription': {'entity': {'id': 'sub_9'}},
+                                                         'payment': {'entity': {'id': 'pay_9', 'amount': 59900}}}}
+with mock.patch.object(SUB, 'get_subscription', return_value=sub), \
+        mock.patch.object(SUB, 'record_charge', return_value=({'id': 1}, True)) as rec, \
+        mock.patch.object(SUB, '_set_status') as st, mock.patch.object(SUB, 'set_autopay') as ap:
+    r1 = SUB.handle_webhook(charged)
+    r2 = SUB.handle_webhook({'event': 'subscription.halted', 'payload': {'subscription': {'entity': {'id': 'sub_9'}}}})
+ok('webhook: a month charged is recorded (₹599); halted turns autopay off (reminders and grace come back)',
+   r1 == 'autopay charged: acme' and rec.call_args[0][1:3] == ('pay_9', 59900) and r2 == 'autopay halted: acme'
+   and st.call_args[0] == ('sub_9', 'halted') and ap.call_args[0] == ('acme', False))
+
+# ── Cancelling autopay is easy to find: Admin → Plan & billing, Settings, and every monthly receipt ──
+import tempfile, glob as _glob, io as _io
+box = tempfile.mkdtemp(); os.environ['MAIL_OUTBOX_DIR'] = box
+with app.app_context(), mock.patch.object(SUB, 'receipt_pdf', return_value=_io.BytesIO(b'%PDF')):
+    SUB.send_receipt({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900, 'payer_name': 'Ravi', 'business_name': 'Acme',
+                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001'}, to='ravi@acme.example')
+    SUB.send_receipt({'plan': '1y', 'slug': 'acme', 'amount_paise': 599900, 'payer_name': 'Ravi', 'business_name': 'Acme',
+                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0002'}, to='ravi@acme.example')
+mails = [open(f, 'rb').read().decode('utf-8', 'ignore') for f in sorted(_glob.glob(box + '/*.eml'))]
+os.environ.pop('MAIL_OUTBOX_DIR')
+ok('a monthly receipt says how to cancel (with the Plan page link); a 12-month one doesn\'t', len(mails) == 2
+   and 'Cancel autopay' in mails[0] and '/plan' in mails[0] and 'Cancel autopay' not in mails[1])
+base_src = open('templates/base.html').read()
+menu = '\n'.join(l for l in base_src.splitlines() if 'set admin_links' in l or l.startswith('                       ('))
+with app.test_request_context():
+    from flask import render_template_string
+    nav = render_template_string(menu + '{{ admin_links|map(attribute=2)|join("|") }}', renew_in_app=True, ai_import_on=False)
+    nav_off = render_template_string(menu + '{{ admin_links|map(attribute=2)|join("|") }}', renew_in_app=False, ai_import_on=False)
+ok('…and Admin → Plan & billing in the menu (where paying in the app is on)', 'Plan &amp; billing' in nav
+   and 'Plan &amp; billing' not in nav_off and 'Settings' in nav)
+
+from pypdf import PdfReader as _PR
+with app.app_context():
+    month_pdf = ' '.join(pg.extract_text() for pg in _PR(SUB.receipt_pdf({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900,
+        'payer_name': 'Ravi', 'business_name': 'Acme', 'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001',
+        'paid_at': __import__('datetime').datetime(2026, 11, 6), 'payment_id': 'pay_1', 'paid_by': 'admin', 'source': 'app',
+        'email': None})).pages)
+    year_pdf = ' '.join(pg.extract_text() for pg in _PR(SUB.receipt_pdf({'plan': '1y', 'slug': 'acme', 'amount_paise': 599900,
+        'payer_name': 'Ravi', 'business_name': 'Acme', 'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0002',
+        'paid_at': __import__('datetime').datetime(2026, 11, 6), 'payment_id': 'pay_2', 'paid_by': 'admin', 'source': 'app',
+        'email': None})).pages)
+ok('…and the receipt PDF of a monthly payment says how to cancel; a 12-month one doesn\'t', 'Cancel autopay' in month_pdf
+   and '/plan' in month_pdf and 'Cancel autopay' not in year_pdf)
+
+# ── Paying for 12 months while on monthly autopay stops the autopay (no monthly charges on top of the year) ──
+with mock.patch.object(SUB, 'current_subscription', return_value=dict(sub, status='active')), \
+        mock.patch.object(SUB, 'cancel_subscription') as cancel:
+    SUB._stop_autopay_for({'plan': '1y', 'slug': 'acme'})
+    stopped_for_year = cancel.called
+    cancel.reset_mock()
+    SUB._stop_autopay_for({'plan': '1m', 'slug': 'acme'}); SUB._stop_autopay_for({'plan': 'ai40', 'slug': 'acme'})
+ok('a 12-month plan paid on autopay stops the autopay; a month or AI uses don\'t', stopped_for_year and not cancel.called)

@@ -82,7 +82,10 @@
   <p class="small" data-emailed {% if not emailed_to %}hidden{% endif %}>We've also emailed this link to
     <strong data-emailed-to>{{ emailed_to or '' }}</strong>, so you can come back to it later.</p>
   <p data-wait {% if setup_url or emailed_to %}hidden{% endif %}>We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.</p>
-  <p class="done-skip"><strong>While you wait, have a look around:</strong></p>
-  <a class="btn btn-primary done-demo" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo</a>
+  {# the demo only for those who wait for us: the rest set up their own app now (one clear button) #}
+  <div data-demo-wait {% if setup_url %}hidden{% endif %}>
+    <p class="done-skip"><strong>While you wait, have a look around:</strong></p>
+    <a class="btn btn-primary done-demo" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo</a>
+  </div>
 </div>
 {%- endmacro %}

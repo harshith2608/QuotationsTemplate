@@ -8,7 +8,7 @@
   <div class="wrap">
     <div class="trial-card" data-trial-root>
       <div data-trial-start {% if name %}hidden{% endif %}>
-        {% set buying = (form or {}).get('plan') %}
+        {% set buying = (form or {}).get('plan') if (form or {}).get('plan') in plan_names else None %}
         {% if buying %}
         <p class="eyebrow">{{ plan_names[buying][0] }} · {{ plan_names[buying][1] }}</p>
         <h1>Get your own {{ product }} app</h1>

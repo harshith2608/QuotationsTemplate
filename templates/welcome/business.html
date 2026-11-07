@@ -21,7 +21,7 @@
   {% endif %}
   {% if lock_enabled and ('name' not in locked or 'logo' not in locked) %}
   <div class="form-check mb-3">
-    <input class="form-check-input" type="checkbox" name="confirm" id="wConfirm" value="1">
+    <input class="form-check-input" type="checkbox" name="confirm" id="wConfirm" value="1" required>
     <label class="form-check-label small" for="wConfirm">These details are correct. <span class="text-muted">The name and logo
       can't be changed later without contacting us.</span></label>
   </div>

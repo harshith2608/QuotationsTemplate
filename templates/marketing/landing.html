@@ -186,11 +186,14 @@
   {% endif %}
 
   <section id="pricing">
+    {% set shown, lengths = plans_shown, plan_lengths %}
+    {% set longer = lengths|reject('equalto', '1m')|list %}
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">Pricing</p>
         <h2>One price for your whole team. No per-user fees.</h2>
-        <p>Try it free, then pay once for 6 or 12 months. Every plan includes unlimited quotations, unlimited staff logins, both PDFs,
+        <p>Try it free, then {% if '1m' in lengths %}pay monthly with autopay (cancel any time){% if longer %} or {% endif %}{% endif %}{% if longer %}pay once for {% for l in longer %}{{ pricing.HEADS[l]|lower }}{{ ' or ' if not loop.last }}{% endfor %}{% set top = pricing.badge(longer[-1], price_data) %}{% if top and '1m' in lengths %} and get {{ top }}{% endif %}{% endif %}.
+           Every plan includes unlimited quotations, unlimited staff logins, both PDFs,
            GST invoices, online approval, payment tracking, your own branding, hosting, updates and support.
            A one-time quotation website typically costs ₹30,000–40,000 and still needs hosting and fixes.</p>
       </div>
@@ -200,7 +203,7 @@
         <button type="button" data-tier="ai" aria-pressed="false">With AI</button>
       </div>
       <p class="tier-note tier-ai-note" hidden>With AI: draft a quotation from a customer's WhatsApp message or a photo of
-        your site notes, and check it before sending, 100 times a month. Every plan gets 20 a month; more any time: 40 for ₹99.</p>
+        your site notes, and check it before sending, 100 times a month. Every plan gets 20 a month; more any time: 40 for ₹{{ price_data.addon|inr(0) }}.</p>
       {% endif %}
       <div class="plans" data-plans data-tier="std">
         <div class="plan">
@@ -210,32 +213,39 @@
           <ul><li>Full app, all features</li><li>Use it on real jobs</li><li>Keep everything if you subscribe</li></ul>
           <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Start free trial</a>
         </div>
-        {% for key, head, price, per, sub, badge in [('6m', '6 months', '₹4,999', '/6 months', 'About ₹833 a month for your whole team, paid once.', ''),
-                                                    ('1y', '12 months', '₹8,999', '/year', 'About ₹750 a month for your whole team, paid once.', 'Best value · save ₹999')] %}
-        <div class="plan{{ ' featured' if key == '1y' }}">
-          {% if badge %}<span class="badge tier-std">{{ badge }}</span>{% if ai_plans %}<span class="badge tier-ai">Best value · save ₹1,999</span>{% endif %}{% endif %}
+        {% for length in lengths %}
+        {% set keys = [length, length ~ '_ai']|select('in', shown)|list %}
+        {% set head = pricing.HEADS[length] %}{% set featured = length == '1y' %}
+        {% set per = {'1m': '/month', '3m': '/3 months', '6m': '/6 months', '1y': '/year'}[length] %}
+        {% set badge = pricing.badge(keys[0], price_data) %}
+        <div class="plan{{ ' featured' if featured }}{{ ' only-ai' if keys == [length ~ '_ai'] }}{{ ' only-std' if ai_plans and keys == [length] }}">
+          {% if badge %}<span class="badge">{{ badge }}</span>{% endif %}
           <h3>{{ head }}</h3>
-          {% for k in ([key, key ~ '_ai'] if ai_plans else [key]) %}{% set ai = k.endswith('_ai') %}
+          {% for k in keys %}{% set ai = k.endswith('_ai') %}
           <div class="tier-{{ 'ai' if ai else 'std' }}">
             <div class="price"><span class="amount">{{ plan_names[k][1] }}</span><span class="per">{{ per }}</span></div>
-            <p class="sub">{{ sub if not ai else ('About ₹1,000 a month' if key == '6m' else 'About ₹833 a month') ~ ' for your whole team, paid once.' }}</p>
+            {% set saved = pricing.saving(k, price_data) if pricing.monthly_of(k) in shown else 0 %}
+            <p class="sub">{{ 'For your whole team. Paid every month by UPI Autopay or card; cancel any time.' if length == '1m'
+                               else 'About ₹' ~ pricing.per_month(k, price_data)|inr(0) ~ ' a month for your whole team, paid once.' ~ (' Save ₹' ~ saved|inr(0) ~ '.' if saved else '') }}</p>
           </div>
           {% endfor %}
           <ul><li>Everything in the app</li><li>Unlimited staff logins</li><li>Hosting, updates &amp; support</li>
             {% if ai_plans %}<li class="tier-std">AI drafts &amp; checks: 20 a month</li><li class="tier-ai">AI drafts &amp; checks: 100 a month</li>{% endif %}
-            <li>{{ 'Priority support' if key == '1y' else 'Renewal reminders, no auto-charge' }}</li></ul>
-          {% for k in ([key, key ~ '_ai'] if ai_plans else [key]) %}{% set ai = k.endswith('_ai') %}
+            <li>{{ 'Priority support · no auto-renewal' if featured else 'No auto-renewal' if length != '1m' else 'Launch price · cancel any time' }}</li></ul>
+          {% for k in keys %}{% set ai = k.endswith('_ai') %}
           {% if sells %}
-          <a class="btn {{ 'btn-primary' if key == '1y' else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="{{ url_for('marketing.free_trial', plan=k) }}" data-trial data-plan="{{ k }}"
+          <a class="btn {{ 'btn-primary' if featured else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="{{ url_for('marketing.free_trial', plan=k) }}" data-trial data-plan="{{ k }}"
              data-plan-title="{{ plan_names[k][0] }} · {{ plan_names[k][1] }}">Choose {{ head }}{{ ' with AI' if ai }}</a>
           {% else %}
-          <a class="btn {{ 'btn-primary' if key == '1y' else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="https://wa.me/{{ wa_number }}?text={{ ('Hi, I\'m interested in the ' ~ product ~ ' ' ~ plan_names[k][0])|urlencode }}" target="_blank" rel="noopener" data-cta>Choose {{ head }}{{ ' with AI' if ai }}</a>
+          <a class="btn {{ 'btn-primary' if featured else 'btn-ghost' }} tier-{{ 'ai' if ai else 'std' }}" href="https://wa.me/{{ wa_number }}?text={{ ('Hi, I\'m interested in the ' ~ product ~ ' ' ~ plan_names[k][0])|urlencode }}" target="_blank" rel="noopener" data-cta>Choose {{ head }}{{ ' with AI' if ai }}</a>
           {% endif %}
           {% endfor %}
         </div>
         {% endfor %}
       </div>
-      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees. Plans don't renew automatically; we remind you before yours ends.{% if call_url %}
+      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees.{% if '1m' in lengths %} The monthly plan renews
+        by autopay until you cancel it (your bank or UPI app tells you a day before each payment).{% endif %}{% if longer %} Plans paid once don't
+        renew automatically, and we remind you before they end.{% endif %}{% if call_url %}
         Not sure which plan? <a href="{{ call_url }}" data-call>Book a call with us</a>.{% endif %}</p>
     </div>
   </section>

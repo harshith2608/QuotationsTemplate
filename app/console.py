@@ -455,7 +455,12 @@ def _wa_link(phone, message):
 # Drafts for the trial page's "Message on WhatsApp" card. {name} is filled in on the page (it can be edited there);
 # the rest when the page is built. The message opens in the operator's own WhatsApp (wa.me): nothing is sent from here.
 
-PLAN_PRICES = '6 months ₹4,999 or 12 months ₹8,999 (with more AI: ₹5,999 / ₹9,999), one price for your whole team'
+
+def _plan_prices():
+    """The plans on, in one line, for the WhatsApp drafts' {prices} (the console's Pricing)."""
+    from . import pricing
+    return pricing.summary() + ', one price for your whole team'
+
 
 def _follow_up_texts():
     """[(key, label, text)] for the WhatsApp drafts (console → Messages can change them)."""
@@ -657,7 +662,7 @@ def follow_ups(t):
     """([(key, label, draft)], suggested key) for a trial, from its plan dates and usage."""
     st, u = t.get('status_obj'), t.get('usage') or {}
     fmt = lambda d: d.strftime('%d %b') if d else ''
-    values = dict(product=_product(), sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), url=t['url'], prices=PLAN_PRICES,
+    values = dict(product=_product(), sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), url=t['url'], prices=_plan_prices(),
                   ends_on=fmt(st.ends_on) if st and st.has_limit else '',
                   delete_on=fmt(st.delete_on) if st and st.has_limit else '')
     from . import texts
@@ -723,6 +728,78 @@ def dashboard():
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
+
+
+@console_bp.route('/pricing', methods=['GET', 'POST'])
+@login_required
+def pricing_page():
+    """Plans and prices (app/pricing.py): which plans are offered and at what price, in the app's Plan page, the
+    website's pricing cards, the set-up and payment pages and the messages. No code change to change a price."""
+    import json
+    from . import platform_switch, pricing
+    try:
+        data = pricing.parse(json.loads(platform_switch.console_value(pricing.KEY, raw=True) or '{}'))
+    except Exception:
+        data = pricing.parse({})
+    errors = []
+    if request.method == 'POST':
+        data, errors = pricing.validate(request.form)
+        if not errors:
+            value = json.dumps(data)
+            platform_switch.set_value(pricing.KEY, value)
+            website, note = _leads_engine_or_none(), ''
+            if website is not None:                   # the website reads its own database (kept on the nightly reset)
+                try:
+                    with website.begin() as conn:
+                        conn.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': pricing.KEY})
+                        conn.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'),
+                                     {'k': pricing.KEY, 'v': value})
+                except Exception:
+                    note = ' The website could not be updated: save again.'
+            audit('pricing', None, '; '.join(f'{k} ₹{v["price"]}{"" if v["on"] else " (off)"}'
+                                             for k, v in data['plans'].items()) + f'; AI uses ₹{data["addon"]}')
+            flash('Saved. The apps show the new prices within a minute, the website now. Monthly autopays already '
+                  'running keep their amount.' + note, 'ok' if not note else 'error')
+            return redirect(url_for('console.pricing_page'))
+        for e in errors:
+            flash(e, 'error')
+    return render_template('console/pricing.html', data=data, pricing=pricing, website=_leads_engine_or_none() is not None,
+                           summary=pricing.summary(data))
+
+
+@console_bp.route('/announcements', methods=['GET', 'POST'])
+@login_required
+def announcements_page():
+    """Announcements (app/announcements.py): a banner at the top of the apps, for trials, customers or both."""
+    from . import announcements as ann
+    form = {}
+    if request.method == 'POST':
+        values, errors = ann.validate(request.form)
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            form = request.form
+        else:
+            new_id = ann.add(**values)
+            audit('announcement', f'#{new_id}', f'{values["audience"]}: {values["message"][:150]}')
+            flash('Announcement on. The apps show it within a minute.', 'ok')
+            return redirect(url_for('console.announcements_page'))
+    return render_template('console/announcements.html', rows=ann.all_rows(), audiences=ann.AUDIENCES, levels=ann.LEVELS,
+                           form=form, max_len=ann.MAX_LEN, today=plan_mod.today())
+
+
+@console_bp.route('/announcements/<int:ann_id>/<action>', methods=['POST'])
+@login_required
+def announcement_action(ann_id, action):
+    from . import announcements as ann
+    if action == 'delete':
+        ann.delete(ann_id)
+    elif action in ('on', 'off'):
+        ann.set_active(ann_id, action == 'on')
+    else:
+        abort(404)
+    audit(f'announcement_{action}', f'#{ann_id}')
+    return redirect(url_for('console.announcements_page'))
 
 
 @console_bp.route('/features')
@@ -1080,9 +1157,11 @@ def _call_qr(phone):
 
 def _call_answers(name=''):
     """The quick answers for calls (console → Messages → Sales calls), with their first name and yours filled in."""
-    from . import texts
+    from . import pricing, texts
+    prices = pricing.fields()
     return [(texts.TEXTS[k][1], texts.render(k, name=_first_name(name) or 'there',
-                                             sender=_env('CONSOLE_SENDER_NAME', 'Harshith'))[1]) for k in texts.CALL_KEYS]
+                                             sender=_env('CONSOLE_SENDER_NAME', 'Harshith'), **prices)[1])
+            for k in texts.CALL_KEYS]
 
 
 def _calendar_link(a, row):
@@ -2189,7 +2268,11 @@ def payments():
     this_month = sum(r['amount_paise'] for r in rows if r['paid_at'] and r['paid_at'].strftime('%Y-%m') == month) / 100
     businesses = [(t['slug'], 'trial') for t in ops.list_trials() if t['status'] == 'active']
     businesses += [(c['slug'], 'customer') for c in _customers().all_customers() if c['status'] == 'active']
-    return render_template('console/payments.html', rows=rows, total=total, this_month=this_month,
+    try:
+        autopays = subscription.subscriptions()
+    except Exception:
+        autopays = []
+    return render_template('console/payments.html', rows=rows, total=total, this_month=this_month, autopays=autopays,
                            pending=subscription.paid_trials(), keys_set=bool(os.environ.get('PLATFORM_RAZORPAY_WEBHOOK_SECRET')),
                            auto=subscription.auto_move(), base_domain=tenancy.base_domain(),
                            businesses=sorted(businesses), methods=subscription.MANUAL_METHODS, prices=subscription.prices(),
@@ -2347,13 +2430,69 @@ def _free_address(text_):
     return ''
 
 
-def _signup(lead_id):
+def _signup(lead_id, lead=None):
     """The app already made for this request: set up by them (/start) or by you from the console (Create trial on the
-    request), so the emailed link opens it instead of making a second one."""
+    request), so the emailed link opens it instead of making a second one. Only an app that still exists and was made
+    after the request (a row left from a deleted trial, or from an older request with the same number, doesn't count)."""
+    since = (lead or {}).get('created_at')
+    since = since - timedelta(minutes=10) if since else None
     with db.engine.connect() as conn:
-        return (conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': lead_id}).scalar()
-                or conn.execute(text("SELECT slug FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial' "
-                                     "AND slug IS NOT NULL"), {'i': lead_id}).scalar())
+        rows = conn.execute(text(
+            "SELECT slug, created_at FROM public.signups WHERE lead_id = :i UNION ALL SELECT slug, updated_at "
+            "FROM public.console_lead_links WHERE lead_id = :i AND status = 'trial' AND slug IS NOT NULL"),
+            {'i': lead_id}).all()
+    return next((slug for slug, at in rows if (since is None or at is None or at >= since) and _app_exists(slug)), None)
+
+
+def _app_exists(slug):
+    with db.engine.connect() as conn:
+        if conn.execute(text("SELECT 1 FROM public.tenants WHERE slug = :s AND status <> 'spare'"), {'s': slug}).first():
+            return True
+        return bool(conn.execute(text("SELECT to_regclass('public.customers')")).scalar() and conn.execute(
+            text("SELECT 1 FROM public.customers WHERE slug = :s AND status <> 'deleted'"), {'s': slug}).first())
+
+
+def earlier_trial(lead_id, lead):
+    """The app an earlier request with this phone number or email got, while it still counts, or None: one free
+    trial per business, so a new request (another firm name, another link) doesn't start a second one. It stops
+    counting once it's deleted or its deletion date (30 days after it ended) has passed: then they can start again."""
+    from sqlalchemy import inspect, select
+    from . import crypto
+    from .marketing import normalise_phone
+    from .models import Lead
+    phone = normalise_phone(lead.get('phone') or '')
+    email = (lead.get('email') or '').strip().lower()
+    with db.engine.connect() as conn:
+        links = [r for r in conn.execute(text(
+            "SELECT lead_id, slug, created_at FROM public.signups UNION ALL SELECT lead_id, slug, updated_at "
+            "FROM public.console_lead_links WHERE status = 'trial' AND slug IS NOT NULL")) if r[0] != lead_id]
+    apps = {r[0]: r[1] for r in links}
+    made = {r[0]: r[2] for r in links}
+    engine = _leads_engine_or_none() if apps and (phone or email) else None
+    if engine is None:
+        return None
+    t = Lead.__table__
+    with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
+        cols = [t.c.id, t.c.phone, t.c.created_at] + ([t.c.email] if 'email' in {c['name'] for c in inspect(conn).get_columns('leads')}
+                                      else [])
+        rows = conn.execute(select(*cols).where(t.c.id.in_(list(apps)))).mappings().all()
+    found = [apps[r['id']] for r in sorted(rows, key=lambda r: -r['id'])
+             if (not made[r['id']] or made[r['id']] >= r['created_at'] - timedelta(minutes=10))   # not a stale link
+             and ((phone and normalise_phone(r['phone'] or '') == phone)
+                  or (email and (r.get('email') or '').strip().lower() == email))]
+    return next((s for s in found if _app_exists(s) and not _past_deletion(s)), None)
+
+
+def _past_deletion(slug):
+    """True if this trial ended more than 30 days ago (its deletion date has passed). Paying customers: never."""
+    with db.engine.connect() as conn:
+        schema = conn.execute(text("SELECT schema_name FROM public.tenants WHERE slug = :s AND status = 'active'"),
+                              {'s': slug}).scalar()
+    if not schema:
+        return False
+    with tenancy.tenant_context(slug, schema):
+        st = plan_mod.load_status(on=plan_mod.today())
+    return bool(st and st.delete_on and st.delete_on <= plan_mod.today())
 
 
 @console_bp.route('/e/o/<token>.gif')
@@ -2389,7 +2528,7 @@ def start_trial():
     ?plan=6m|1y: they chose a plan on the website, so after the app is made they go on to pay for it."""
     from . import signup, subscription
     token = request.values.get('t', '')
-    plan = request.values.get('plan') if request.values.get('plan') in signup.PLANS else None
+    plan = request.values.get('plan') if signup.plan_ok(request.values.get('plan')) else None
     lead_id = signup.read_token(token)
     lead = load_lead(lead_id) if lead_id else None
     if not lead or (lead.get('business_type') not in signup.ELIGIBLE and not plan):
@@ -2402,10 +2541,20 @@ def start_trial():
         except Exception:
             pass
     price = subscription.prices()[plan] if plan else None
-    done = _signup(lead_id)
+    done = _signup(lead_id, lead)
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
                                plan=plan, price=price, token=token, paid=_paid_plan(done))
+    earlier = earlier_trial(lead_id, lead)
+    if earlier and plan:                          # buying: pay for the app they already have (their data is in it)
+        with db.engine.begin() as conn:           # so /start/paid matches the payment to it
+            conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s) ON CONFLICT (lead_id) DO UPDATE '
+                              "SET slug = :s, created_at = (now() AT TIME ZONE 'utc')"), {'i': lead_id, 's': earlier})
+        audit('website_buy_existing', earlier, f'lead #{lead_id}, {plan}')
+        return _go_pay(earlier, plan, lead, token)
+    if earlier:                                   # one free trial per business: open the one they have
+        audit('trial_again_blocked', earlier, f'lead #{lead_id}')
+        return render_template('console/start.html', had_trial=earlier, base=tenancy.base_domain(), site=_site_url())
     form = {'company': lead.get('company_name') or '', 'username': 'admin'}
     errors = {}
     if request.method == 'POST':
@@ -2446,8 +2595,9 @@ def start_trial():
                     break
         if t is not None:
             with db.engine.begin() as conn:
-                conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h)'),
-                             {'i': lead_id, 's': t['slug'], 'h': ip_hash})
+                conn.execute(text('INSERT INTO public.signups (lead_id, slug, ip_hash) VALUES (:i, :s, :h) ON CONFLICT '
+                                  "(lead_id) DO UPDATE SET slug = :s, ip_hash = :h, created_at = (now() AT TIME ZONE 'utc')"),
+                             {'i': lead_id, 's': t['slug'], 'h': ip_hash})   # (replaces a link to an app since deleted)
             _link_lead(lead_id, 'trial', t['slug'])
             audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}' + (f', buying {plan}' if plan else ''))
             if plan:
@@ -2473,7 +2623,8 @@ def website_call():
     form = {k: ' '.join((request.form.get(k) or '').split()) for k in ('name', 'phone', 'company', 'business', 'slot',
                                                                          'note')}
     errors, booked = {}, None
-    kinds = [(k, v) for k, v in BUSINESS_TYPES.items() if k != 'kitchens']
+    from . import business
+    kinds = [(k, v) for k, v in BUSINESS_TYPES.items() if k != 'kitchens' and business.offered(k)]
     if request.method == 'POST' and not request.form.get('website'):            # (the honeypot: bots fill it)
         if len(form['name']) < 2:
             errors['name'] = 'Type your name.'
@@ -2536,7 +2687,25 @@ def _paid_plan(slug):
 
 def _go_pay(slug, plan, lead, token, company=''):
     """Send a business buying on the website to Razorpay for its plan (a payment link, reused if they come back)."""
-    from . import emails, subscription
+    from . import emails, plan as plan_mod, subscription
+    if plan in plan_mod.AUTOPAY:                 # monthly: approve the autopay on Razorpay's page (first month paid then)
+        try:
+            sub = subscription.current_subscription(slug) or subscription.create_subscription(
+                slug, plan, company or lead.get('company_name') or '', 'website', lead.get('email') or '',
+                lead.get('phone') or '', payer_name=lead.get('name') or '')
+        except subscription.PaymentError as exc:
+            current_app.logger.warning('Website autopay failed for %s: %s', slug, exc)
+            audit('website_pay_failed', slug, str(exc)[:200])
+            return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(),
+                                   new=True, plan=plan, pay_failed=True)
+        # Razorpay's Checkout on this page (its own subscription page can't send them back here): /start/subscribed
+        price = subscription.prices()[plan]
+        digits = ''.join(ch for ch in (lead.get('phone') or '') if ch.isdigit())[-12:]
+        checkout = {'key_id': _env('PLATFORM_RAZORPAY_KEY_ID'), 'subscription_id': sub['sub_id'],
+                    'description': f'QuoteRoom: {plan_mod.PLANS[plan]}, ₹{price} a month',
+                    'prefill': {'name': lead.get('name') or '', 'email': lead.get('email') or '', 'contact': digits}}
+        return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), new=True,
+                               plan=plan, price=price, token=token, autopay_checkout=checkout)
     try:
         row = subscription.open_link(slug, plan) or subscription.create_payment_link(
             slug, plan, company or lead.get('company_name') or '', lead.get('phone') or '', lead.get('email') or '',
@@ -2557,10 +2726,39 @@ def start_pay():
     lead_id = signup.read_token(request.form.get('t', ''))
     plan = request.form.get('plan')
     lead = load_lead(lead_id) if lead_id else None
-    slug = _signup(lead_id) if lead else None
-    if not slug or plan not in signup.PLANS:
+    slug = _signup(lead_id, lead) if lead else None
+    if not slug or not signup.plan_ok(plan):
         abort(404)
     return _go_pay(slug, plan, lead, request.form.get('t', ''))
+
+
+@console_bp.route('/start/subscribed', methods=['POST'])
+def start_subscribed():
+    """Public: Razorpay Checkout approved the monthly autopay on /start (first month paid). Recorded once: the
+    webhook does the same if this never arrives."""
+    from . import signup, subscription
+    token = request.form.get('t', '')
+    lead_id = signup.read_token(token)
+    lead = load_lead(lead_id) if lead_id else None
+    slug = _signup(lead_id, lead) if lead else None
+    payment_id, sub_id = request.form.get('razorpay_payment_id', ''), request.form.get('razorpay_subscription_id', '')
+    sub = subscription.get_subscription(sub_id)
+    if not slug or not sub or sub['slug'] != slug or not subscription.verify_subscription_checkout(
+            payment_id, sub_id, request.form.get('razorpay_signature', '')):
+        return render_template('console/start.html', problem='We couldn\'t match this payment to your app. If you were '
+                               'charged, message us on WhatsApp and we\'ll sort it out straight away.', site=_site_url()), 404
+    amount = subscription.checkout_charge(sub, payment_id)
+    try:
+        if amount is not None:
+            subscription.record_charge(sub, payment_id, amount, 'website')
+        else:                                     # only the mandate check so far: the month comes with the charge
+            subscription.set_autopay(slug, True)
+    except Exception:
+        current_app.logger.exception('Recording the website autopay failed (the webhook will retry)')
+    audit('website_paid' if amount is not None else 'website_autopay_set', slug, sub['plan'])
+    return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), token=token,
+                           plan=sub['plan'], price=subscription.prices()[sub['plan']], paid=sub['plan'], just_paid=True,
+                           autopay_pending=amount is None)
 
 
 @console_bp.route('/start/paid')
@@ -2570,7 +2768,7 @@ def start_paid():
     from . import signup, subscription
     token = request.args.get('t', '')
     lead_id = signup.read_token(token)
-    slug = _signup(lead_id) if lead_id else None
+    slug = _signup(lead_id, load_lead(lead_id)) if lead_id else None
     row = subscription.get_by_order(request.args.get('razorpay_payment_link_id', ''))
     if not slug or not row or row['slug'] != slug:
         return render_template('console/start.html', problem='We couldn\'t match this payment to your app. If you were '

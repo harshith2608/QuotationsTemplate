@@ -320,7 +320,8 @@ def talking_point(row):
     u, st, stage = row.get('usage') or {}, row.get('status_obj'), row.get('stage')
     q = u.get('quotations') or 0
     if stage == 'ended':
-        return 'Trial ended. Ask what stopped them, and offer a plan (₹4,999 for 6 months, ₹8,999 for 12).'
+        from . import pricing
+        return f'Trial ended. Ask what stopped them, and offer a plan ({pricing.summary()}).'
     if stage == 'signin':
         return 'Never signed in. Check they got the login link, and offer to set it up together on the call.'
     if stage == 'details':

@@ -80,7 +80,10 @@
 <div class="d-flex flex-wrap align-items-center gap-2 small mb-3 text-muted">
   <span class="badge {{ 'bg-info text-dark' if plan.is_trial else 'bg-success' }}">{{ plan.label }}</span>
   <span>{{ plan.started_on.strftime('%d %b %Y') if plan.started_on else '' }} – {{ plan.ends_on.strftime('%d %b %Y') }}</span>
-  {% if renew_url %}<a href="{{ renew_url }}" {% if not renew_in_app %}target="_blank" rel="noopener"{% endif %} class="ms-1">{{ 'Choose a plan' if plan.is_trial else 'Renew' }}</a>{% endif %}
+  {% if plan.autopay and renew_in_app %}
+  <span class="badge text-bg-light border"><i class="bi bi-arrow-repeat me-1"></i>Autopay on</span>
+  <a href="{{ url_for('plan.plan_page') }}" class="ms-1">Manage or cancel autopay</a>
+  {% elif renew_url %}<a href="{{ renew_url }}" {% if not renew_in_app %}target="_blank" rel="noopener"{% endif %} class="ms-1">{{ 'Choose a plan' if plan.is_trial else 'Renew' }}</a>{% endif %}
 </div>
 {% endif %}
 

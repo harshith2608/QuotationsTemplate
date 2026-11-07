@@ -283,9 +283,11 @@ from app import subscription as SUB
 outbox_dir = tempfile.mkdtemp()
 os.environ.update(MAIL_OUTBOX_DIR=outbox_dir, OPERATOR_EMAIL='op@quote-room.test')
 with app.app_context():
-    ok('prices: ₹4,999 / ₹8,999, with AI ₹5,999 / ₹9,999, 40 AI uses ₹99', SUB.prices() == {
-        '6m': 4999, '1y': 8999, '6m_ai': 5999, '1y_ai': 9999, 'ai40': 99})
-    ok('plan names', [PM.short(k) for k in ('6m', '1y_ai', 'ai40')] == ['6 months', '12 months with AI', '40 AI uses'])
+    ok('prices: ₹599 a month / ₹5,999 a year, with AI ₹749 / ₹7,499, 40 AI uses ₹99 (6-month kept for old records)',
+       {k: SUB.prices()[k] for k in ('1m', '1y', '1m_ai', '1y_ai', 'ai40', '6m')} == {
+           '1m': 599, '1y': 5999, '1m_ai': 749, '1y_ai': 7499, 'ai40': 99, '6m': 4999})
+    ok('plan names', [PM.short(k) for k in ('1m', '6m', '1y_ai', 'ai40')] == ['1 month', '6 months', '12 months with AI',
+                                                                             '40 AI uses'])
     PM.save_plan('1y', PM.today(), PM.add_length(PM.today(), '1y')); db.session.commit(); PM.g.pop('plan_status', None)
     set_used(20, 0)
     before = PM.load_status(on=PM.today())
@@ -330,16 +332,26 @@ with app.test_request_context('/plan'):
     PM.g.pop('plan_status', None)
     with mock.patch.object(SUB, 'enabled', lambda: True):
         pool = T.pool()
+    from app import pricing as _pricing
+    _plan_vars = dict(pricing=_pricing, pricing_data=_pricing.load(), offered=_pricing.offered())
     page = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
                            ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
-                           addon_uses=40, ai_on=True)
+                           addon_uses=40, ai_on=True, **_plan_vars)
     page_off = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
                                ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
-                               addon_uses=40, ai_on=False)
+                               addon_uses=40, ai_on=False, **_plan_vars)
+    page_lower = render_template('plan/plan.html', status=PM.load_status(), prices=SUB.prices(), payments=[], key_id='rzp',
+                                 ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
+                                 addon_uses=40, ai_on=False, autopay={'plan': '1m', 'amount_paise': 69900, 'status': 'active'},
+                                 lower_price={'paying': 699, 'now': 599}, **_plan_vars)
+ok('price lowered since their autopay started: the bar shows what they pay and how to switch (no days lost)',
+   '₹699 a month' in page_lower and 'now ₹599' in page_lower
+   and 'Cancel autopay, then Start autopay again' in page_lower and 'no days are lost' in page_lower)
 ok('Your plan: four plans (20 or 100 AI uses a month) and Buy 40 AI uses · ₹99',
-   all(p in page for p in ('₹4,999', '₹8,999', '₹5,999', '₹9,999', "buyPlan('1y_ai'", "buyPlan('ai40'"))
+   all(p in page for p in ('₹599', '₹5,999', '₹749', '₹7,499', "startAutopay('1m'", "startAutopay('1m_ai'",
+                           "buyPlan('1y_ai'", "buyPlan('ai40'"))
    and 'Buy 40 AI uses · ₹99' in page and '20 AI uses a month' in page and '100 AI uses a month' in page)
-ok('…with every AI helper switched off: only the two plans, nothing about AI', '₹5,999' not in page_off
-   and 'AI uses' not in page_off and '₹8,999' in page_off)
+ok('…with every AI helper switched off: only the two plans, nothing about AI', '₹7,499' not in page_off
+   and 'AI uses' not in page_off and '₹5,999' in page_off and "startAutopay('1m'" in page_off)
 with app.app_context():
     PM.save_plan('', None, None); db.session.commit()

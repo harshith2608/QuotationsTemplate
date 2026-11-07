@@ -9,7 +9,7 @@
   <p class="updated">Last updated: {{ legal_updated }}</p>
 
   <div class="summary">
-    <p><strong>In short:</strong> try {{ product }} free for 7 days, then pay once for 6 or 12 months. Plans don't renew automatically and aren't refundable. If you don't renew, your app becomes read-only and your data is deleted 30 days after your plan ends. Your quotation data belongs to you, and you're responsible for the prices, taxes and promises in the quotations you send.</p>
+    <p><strong>In short:</strong> try {{ product }} free for 7 days, then pay monthly by autopay (cancel any time) or once for 12 months. Payments aren't refundable; the 12-month plan doesn't renew automatically. If you don't renew, your app becomes read-only and your data is deleted 30 days after your plan ends. Your quotation data belongs to you, and you're responsible for the prices, taxes and promises in the quotations you send.</p>
   </div>
 
   <h2>1. About these terms</h2>
@@ -28,9 +28,15 @@
   <h2>4. Free trial, plans, payment and taxes</h2>
   <ul>
     <li><strong>Free trial:</strong> 7 days, free of charge, with no payment details required. During the trial your data is kept in its own separate space in a database shared with other trials. If you subscribe, it moves to your own database and your app keeps the same web address.</li>
-    <li><strong>Plans:</strong> 6 months or 12 months, paid in advance at the prices on our pricing page or as agreed with you in writing. We are not currently registered for GST, so no GST is charged. If that changes, we will tell you before your next renewal.</li>
+    <li><strong>Plans:</strong> monthly or 12 months, paid in advance at the prices on our pricing page or as agreed with you in writing. We are not currently registered for GST, so no GST is charged. If that changes, we will tell you before your next renewal.</li>
     <li><strong>AI uses:</strong> the AI features (drafting a quotation from a message or a photo of your notes, checking a quotation) come with an allowance of uses that depends on your plan: a set number in the free trial and each month on a plan. Extra uses you buy are kept until you use them while you have a plan, and aren't refundable. AI suggestions can be wrong: check every quotation before you send it.</li>
-    <li><strong>No automatic renewal:</strong> we never charge you automatically. We remind you in the app before your plan ends, and you renew by paying for a new period.</li>
+    <li><strong>Monthly plan (autopay):</strong> you approve an autopay mandate once (UPI Autopay or a card), and we charge
+      the monthly price every month until you cancel. Your bank or UPI app tells you before each payment. Cancel any time
+      from the Plan page in your app or from your UPI app: nothing more is charged, and your app keeps working until the
+      end of the month already paid. A month already charged isn't refundable. If a monthly payment fails, we try again
+      for a few days; then your plan ends as described below.</li>
+    <li><strong>12-month plan:</strong> paid once, never renewed automatically. We remind you in the app before it ends,
+      and you renew by paying for a new period.</li>
     <li><strong>Renewing on time:</strong> if you renew before your plan ends, or within 7 days after, the new period starts when the current one ends, so you don't lose any days.</li>
     <li><strong>Price changes</strong> apply only to future periods, never to a period you've already paid for.</li>
     <li><strong>Messages from us:</strong> by requesting a trial or using {{ product }}, you agree that we may message you on

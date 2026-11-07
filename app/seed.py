@@ -245,7 +245,7 @@ def _seed_demo_quote_to_cash(users):
 
 # Real data that lives in the marketing/demo database and must survive the nightly demo reset
 KEEP_ON_RESET = {'leads', 'demo_stats', 'tutorials'}
-KEEP_SETTINGS = {'business_kinds'}          # app_settings the console writes to the website (business.KINDS_KEY)
+KEEP_SETTINGS = {'business_kinds', 'pricing'}   # app_settings the console writes to the website (business.KINDS_KEY, pricing.KEY)
 
 
 def _clear_all_tables():
