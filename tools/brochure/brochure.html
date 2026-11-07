@@ -53,6 +53,11 @@
   .prices td:first-child b { color: var(--ink); font-size: 9pt; }
   .prices td span { display: block; color: var(--muted); font-size: 7.4pt; }
   .prices td i { display: block; font-style: normal; color: var(--muted); font-size: 7.4pt; }
+  .prices tr.best td { background: #fff8dc; }
+  .prices th:first-child, .prices td:first-child { width: 33%; }
+  .prices tr.best i { color: var(--pine); font-weight: 700; }
+  .prices td em { font-style: normal; font-weight: 800; font-size: 7pt; background: var(--tape); border-radius: 8px;
+                  padding: .2mm 1.8mm; margin-left: 1mm; vertical-align: 1px; white-space: nowrap; }
   .plan { border: 1.5px solid var(--line); border-radius: 3mm; padding: 2.8mm 4mm; position: relative; }
   .plan.best { border-color: var(--pine); box-shadow: 0 0 0 1px var(--pine) inset; }
   .plan .tag { position: absolute; top: -2.6mm; right: 4mm; background: var(--tape); font-weight: 800; font-size: 7.4pt;
@@ -154,14 +159,14 @@
       <table class="prices">
         <thead><tr><th>Plan</th><th>Standard</th><th>With AI</th></tr></thead>
         <tbody>
-          <tr><td><b>Monthly</b><span>UPI Autopay or card · cancel any time</span></td>
+          <tr><td><b>Monthly</b><span>autopay · cancel any time</span></td>
             <td><b>₹499</b> a month</td><td><b>₹599</b> a month</td></tr>
           <tr><td><b>3 months</b><span>paid once</span></td>
             <td><b>₹1,499</b></td><td><b>₹1,649</b> <i>₹550 a month</i></td></tr>
           <tr><td><b>6 months</b><span>paid once</span></td>
             <td><b>₹2,499</b> <i>₹416 a month</i></td><td><b>₹3,299</b> <i>₹550 a month</i></td></tr>
-          <tr><td><b>12 months</b><span>paid once · priority support</span></td>
-            <td><b>₹5,499</b> <i>₹458 a month</i></td><td><b>₹6,499</b> <i>₹542 a month</i></td></tr>
+          <tr class="best"><td><b>12 months</b> <em>Best value</em><span>paid once · priority support</span></td>
+            <td><b>₹4,699</b> <i>₹392 a month<br>3 months free</i></td><td><b>₹5,999</b> <i>₹500 a month<br>2 months free</i></td></tr>
         </tbody>
       </table>
     </div>
