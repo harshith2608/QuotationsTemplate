@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuoteRoom brochure</title>
+<!-- One-page A4 brochure. Make the PDF: python tools/brochure/make.py → ad-videos/QuoteRoom-Brochure.pdf
+     Prices here are written in by hand: keep them the same as the console's Pricing. -->
+<style>
+  @page { size: A4; margin: 0; }
+  :root { --pine: #1f4d3f; --pine-2: #2b6352; --tape: #f2b705; --ink: #16231f; --muted: #5b6b65; --paper: #f5f6f2;
+          --line: #dfe5e1; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 210mm; height: 297mm; }
+  body { font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: #fff;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 8.3pt; line-height: 1.33; }
+  .page { width: 210mm; height: 297mm; display: flex; flex-direction: column; overflow: hidden; }
+
+  header { background: var(--pine); color: #fff; padding: 7mm 12mm 5.5mm; position: relative; }
+  .logo { font-weight: 800; font-size: 22pt; letter-spacing: -0.5px; }
+  .logo .tick { color: #fff; margin-right: 3px; } .logo b { color: var(--tape); font-weight: 800; }
+  header h1 { font-size: 15.5pt; line-height: 1.2; margin-top: 2.5mm; font-weight: 700; max-width: 150mm; }
+  header h1 em { font-style: normal; color: var(--tape); }
+  header p { margin-top: 1.5mm; font-size: 9pt; opacity: .92; max-width: 160mm; }
+  .badge { position: absolute; right: 12mm; top: 7mm; background: var(--tape); color: var(--ink); font-weight: 700;
+           border-radius: 20px; padding: 2mm 4mm; font-size: 8.6pt; }
+
+  .flow { display: flex; gap: 2mm; padding: 3mm 12mm; background: var(--paper); border-bottom: 1px solid var(--line); }
+  .flow div { flex: 1; text-align: center; font-weight: 700; font-size: 8.4pt; color: var(--pine); position: relative; }
+  .flow div span { display: block; font-weight: 500; color: var(--muted); font-size: 7.4pt; margin-top: .5mm; }
+  .flow div + div::before { content: "→"; position: absolute; left: -2.6mm; top: 0; color: var(--tape); font-weight: 800; }
+
+  main { padding: 4mm 12mm 0; flex: 1; }
+  h2 { font-size: 11pt; color: var(--pine); margin: 0 0 2.5mm; display: flex; align-items: center; gap: 2mm; }
+  h2::after { content: ""; flex: 1; height: 2px; background: var(--tape); opacity: .7; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5mm 5mm; }
+  .box h3 { font-size: 9.3pt; margin-bottom: 1mm; color: var(--ink); }
+  .box ul { list-style: none; }
+  .box li { padding-left: 3.4mm; position: relative; margin-bottom: .3mm; }
+  .box li::before { content: "✓"; position: absolute; left: 0; color: var(--pine-2); font-weight: 800; }
+  .ai { font-size: 6.6pt; font-weight: 800; background: var(--tape); color: var(--ink); border-radius: 3px; padding: 0 1mm;
+        vertical-align: 1px; }
+
+  .plans { display: grid; grid-template-columns: 1fr 1.15fr 1.15fr; gap: 4mm; margin-top: 1mm; }
+  .plan { border: 1.5px solid var(--line); border-radius: 3mm; padding: 2.8mm 4mm; position: relative; }
+  .plan.best { border-color: var(--pine); box-shadow: 0 0 0 1px var(--pine) inset; }
+  .plan .tag { position: absolute; top: -2.6mm; right: 4mm; background: var(--tape); font-weight: 800; font-size: 7.4pt;
+               padding: .4mm 2.4mm; border-radius: 10px; }
+  .plan h3 { font-size: 10.5pt; }
+  .price { font-size: 15.5pt; font-weight: 800; color: var(--pine); line-height: 1.15; margin-top: 1mm; }
+  .price small { font-size: 8.4pt; font-weight: 600; color: var(--muted); }
+  .alt { margin-top: .6mm; font-size: 8.4pt; } .alt b { color: var(--pine); }
+  .plan p.sub { color: var(--muted); font-size: 7.8pt; margin-top: 1mm; }
+  .plan ul { list-style: none; margin-top: 1.5mm; }
+  .plan li { padding-left: 3.4mm; position: relative; margin-bottom: .4mm; font-size: 8.1pt; }
+  .plan li::before { content: "•"; position: absolute; left: .6mm; color: var(--tape); font-weight: 800; }
+
+  .compare { width: 100%; border-collapse: collapse; margin-top: 3mm; font-size: 8pt; }
+  .compare th, .compare td { border-bottom: 1px solid var(--line); padding: 1mm 2mm; text-align: center; }
+  .compare th:first-child, .compare td:first-child { text-align: left; }
+  .compare thead th { background: var(--paper); color: var(--pine); font-weight: 700; }
+  .compare td.y { color: var(--pine-2); font-weight: 800; }
+  .note { color: var(--muted); font-size: 7.6pt; margin-top: 2mm; }
+
+  footer { background: var(--pine); color: #fff; padding: 4mm 12mm; display: flex; align-items: center; gap: 6mm; margin-top: 3mm; }
+  footer .cta { font-size: 11pt; font-weight: 800; } footer .cta b { color: var(--tape); }
+  footer .links { margin-left: auto; text-align: right; font-size: 8.6pt; line-height: 1.5; }
+  footer .links b { color: var(--tape); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="logo"><span class="tick">✓</span>Quote<b>Room</b></div>
+    <div class="badge">Free 7-day trial · no payment needed</div>
+    <h1>Send a professional quotation <em>before you leave the site</em>, then get confirmed, invoiced and paid.</h1>
+    <p>Your own branded quotation app for interior designers, modular kitchen &amp; wardrobe makers and turnkey firms.
+      Measure each room in your own unit, QuoteRoom works out the area and applies your rates. On phone or laptop,
+      for your whole team, at one price.</p>
+  </header>
+
+  <div class="flow">
+    <div>Measure<span>your own unit</span></div>
+    <div>Quote<span>your rates</span></div>
+    <div>Send<span>WhatsApp · link · email</span></div>
+    <div>Accept<span>customer taps Accept</span></div>
+    <div>Invoice<span>GST in one step</span></div>
+    <div>Get paid<span>links &amp; reminders</span></div>
+  </div>
+
+  <main>
+    <h2>Everything in QuoteRoom</h2>
+    <div class="grid">
+      <div class="box"><h3>Quote in minutes</h3><ul>
+        <li>Room by room: sizes in ft &amp; in, mm, cm or inches; area and totals as you type</li>
+        <li>Your materials and rates: laminate, acrylic, veneer, box or frame work, your own</li>
+        <li>Price by item or by material; fittings, plywood choice and discounts</li>
+        <li>Every change saved as a revision; go back to any one</li>
+      </ul></div>
+      <div class="box"><h3>Send &amp; get it accepted</h3><ul>
+        <li>Two PDFs: an Initial Quotation (amount per room) and the Full Quotation</li>
+        <li>Your terms, payment terms and specifications on every PDF</li>
+        <li>WhatsApp in one tap, or email from your own address</li>
+        <li>A link in your colours: the customer views, downloads and taps <b>Accept</b></li>
+      </ul></div>
+      <div class="box"><h3>Invoice &amp; get paid</h3><ul>
+        <li>Quotation to invoice in one step: CGST + SGST or IGST, or without GST</li>
+        <li>Invoices numbered by financial year, shared as a link</li>
+        <li>Record advances and instalments; see what each customer owes</li>
+        <li>Razorpay payment links and polite WhatsApp reminders</li>
+      </ul></div>
+      <div class="box"><h3>Run the business</h3><ul>
+        <li>Every job by stage: awaiting, confirmed, ongoing, completed</li>
+        <li>Material list for each job: sheets, hardware, paint, to send to suppliers</li>
+        <li>Costs &amp; profit on every quotation, and yearly reports (owner only)</li>
+        <li>Staff logins with view or edit access to the jobs you give them</li>
+      </ul></div>
+      <div class="box"><h3>AI helpers <span class="ai">AI</span></h3><ul>
+        <li>Draft a quotation from a customer's WhatsApp message</li>
+        <li>Draft from photos of your handwritten site notes</li>
+        <li>Check before sending: missing sizes, odd rates, things usually needed</li>
+        <li>Bring your old quotation: your items, rates and terms set up from it</li>
+      </ul></div>
+      <div class="box"><h3>Your brand, safe &amp; simple</h3><ul>
+        <li>Your own web address, logo and colours on the app, PDFs and links</li>
+        <li>Works in the browser; add it to the home screen. Nothing to install</li>
+        <li>Your data encrypted, in your own database once you subscribe</li>
+        <li>Guided setup and help: we can set up your rates for you</li>
+      </ul></div>
+    </div>
+
+    <h2 style="margin-top:4mm">Plans: one price for your whole team</h2>
+    <div class="plans">
+      <div class="plan">
+        <h3>Free trial</h3>
+        <div class="price">₹0 <small>for 7 days</small></div>
+        <p class="sub">Your own app with every feature. No payment to start.</p>
+        <ul><li>Use it on real jobs</li><li>10 AI uses to try</li><li>Keep everything when you subscribe</li></ul>
+      </div>
+      <div class="plan">
+        <h3>Monthly</h3>
+        <div class="price">₹599 <small>a month</small></div>
+        <div class="alt">With AI: <b>₹749</b> a month</div>
+        <p class="sub">By UPI Autopay or card. Cancel any time from the app.</p>
+        <ul><li>About ₹20 a day for the whole team</li><li>Nothing to pay up front</li></ul>
+      </div>
+      <div class="plan best">
+        <span class="tag">2 months free</span>
+        <h3>12 months</h3>
+        <div class="price">₹5,999 <small>a year</small></div>
+        <div class="alt">With AI: <b>₹7,499</b> a year</div>
+        <p class="sub">Paid once. About ₹500 a month: save ₹1,189 on monthly.</p>
+        <ul><li>No auto-renewal: we remind you before it ends</li><li>Priority support</li></ul>
+      </div>
+    </div>
+
+    <table class="compare">
+      <thead><tr><th>What you get</th><th>Free trial</th><th>Monthly / 12 months</th><th>With AI</th></tr></thead>
+      <tbody>
+        <tr><td>Every feature above, unlimited quotations</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Unlimited staff logins, no per-user fees</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Your own web address, branding, hosting, updates &amp; support</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>AI uses (drafts from messages or site-note photos, checks)</td><td>10 in total</td><td>20 a month</td><td><b>100 a month</b></td></tr>
+        <tr><td>More AI uses whenever you need them</td><td>–</td><td>40 for ₹99</td><td>40 for ₹99</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Prices are final: no GST added, no setup fee. After a paid plan ends you get 7 more days, then the app
+      becomes read-only; your data is kept for 30 days. Payments aren't refundable, which is why the trial is free.</p>
+  </main>
+
+  <footer>
+    <div class="cta">Start your <b>free 7-day trial</b> today</div>
+    <div class="links"><b>www.quote-room.co.in</b><br>Book a call with us or chat on WhatsApp from the website</div>
+  </footer>
+</div>
+</body>
+</html>
