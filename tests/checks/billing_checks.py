@@ -605,3 +605,9 @@ _v2, _e2 = _an.validate({'message': '', 'audience': 'everyone', 'ends_on': '31/1
 ok('…the form: spaces tidied, audience and style kept, a bad audience → both, empty or a bad date refused',
    not _e and _v['message'] == 'New feature' and _v['audience'] == 'trials' and _v['ends_on'] == _date(2026, 12, 31)
    and not _v['admins_only'] and _v2['audience'] == 'both' and len(_e2) == 2)
+from unittest import mock as _mock
+with _mock.patch.object(_an, 'for_user', lambda st, u: [_rows[0]]):
+    _pg = c.get('/projects').text
+_pg_none = c.get('/projects').text
+ok('…the banner is on the app\'s pages (with its ✕), and none when there is nothing to show',
+   'For all' in _pg and 'data-ann-hide="1"' in _pg and 'data-ann=' not in _pg_none)

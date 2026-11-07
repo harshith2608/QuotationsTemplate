@@ -227,11 +227,13 @@ def create_app(config_name='default'):
 
     @app.context_processor
     def _announcements():
+        from flask_login import current_user
         from .announcements import for_user
         from .plan import load_status
         try:
             return {'announcements': for_user(load_status(), current_user)}
         except Exception:                            # a banner mustn't break a page
+            app.logger.exception('Announcements could not be shown')
             return {'announcements': []}
 
     def _lower_price(status, user):

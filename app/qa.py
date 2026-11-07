@@ -15,6 +15,7 @@ from flask import redirect, request
 PATH = '/qa-access'
 # Razorpay's calls (webhooks) can't enter a key: they're let through, and each checks Razorpay's own signature
 SIGNED_ENDPOINTS = ('console.platform_webhook', 'projects.razorpay_webhook')
+OPEN_ENDPOINTS = ('main.web_manifest',)   # browsers fetch it without cookies; only a name, colours and an icon
 COOKIE = 'qa_access'
 DAYS = 90
 
@@ -57,7 +58,7 @@ button{{width:100%;padding:10px;font-size:16px;border:0;border-radius:6px;backgr
 
 def gate():
     """before_request, first of all: the QA key page until this browser has entered QA_ACCESS_KEY."""
-    if request.endpoint in SIGNED_ENDPOINTS and request.method == 'POST':
+    if request.endpoint in SIGNED_ENDPOINTS and request.method == 'POST' or request.endpoint in OPEN_ENDPOINTS:
         return None
     key = _key()
     if not key:

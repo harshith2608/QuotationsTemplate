@@ -144,6 +144,9 @@ ok('…never sends you to another site', r.headers['Location'].endswith('/') and
 hook = qapp.test_client().post('/webhook/razorpay', data='{}', base_url='https://test1.qa.example.test')
 ok('…Razorpay\'s webhook gets through without the key (it checks its own signature)', hook.status_code != 401
    and 'Enter the QA key' not in hook.text)
+mf = qapp.test_client().get('/manifest.webmanifest', base_url='https://test1.qa.example.test')
+ok('…the "Add to Home screen" manifest too (browsers fetch it without the key cookie)', mf.status_code == 200
+   and 'Enter the QA key' not in mf.text)
 for k in ('QA_MODE', 'QA_ACCESS_KEY', 'QA_COOKIE_DOMAIN'):
     os.environ.pop(k)
 ok('the live app: no key page, no QA label, indexed as usual', live.status_code == 200 and '>QA</div>' not in live.text
