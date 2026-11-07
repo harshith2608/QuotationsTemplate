@@ -214,6 +214,25 @@
 <!-- ===== FLASH MESSAGES ===== -->
 <div class="container-fluid px-3 pt-2">
   {% include 'partials/_plan_banner.html' %}
+  {% for a in announcements %}
+  <div class="alert alert-{{ a.level }} alert-dismissible py-2 mb-2 ki-announcement" role="status" data-ann="{{ a.id }}">
+    <i class="bi bi-megaphone me-1"></i>{{ a.message }}
+    <button type="button" class="btn-close py-2" aria-label="Hide" data-ann-hide="{{ a.id }}"></button>
+  </div>
+  {% endfor %}
+  {% if announcements %}
+  <script>
+    // ✕ hides that announcement on this device (a new one shows again)
+    document.querySelectorAll('[data-ann]').forEach((el) => {
+      const key = 'ann-hidden-' + el.dataset.ann;
+      try { if (localStorage.getItem(key)) el.remove(); } catch (e) {}
+      el.querySelector('[data-ann-hide]').addEventListener('click', () => {
+        try { localStorage.setItem(key, '1'); } catch (e) {}
+        el.remove();
+      });
+    });
+  </script>
+  {% endif %}
   {% if lower_price and request.endpoint != 'plan.plan_page' %}
   <div class="alert alert-success d-md-flex align-items-center justify-content-between py-2 mb-2" role="status" id="lowerPrice">
     <div><i class="bi bi-tag me-1"></i><strong>Good news: the monthly plan is now ₹{{ lower_price.now|inr(0) }}.</strong>

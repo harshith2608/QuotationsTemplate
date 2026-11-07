@@ -587,3 +587,21 @@ with app.app_context():
        _sb.checkout_charge(_s, 'pay_auth') is None and _sb.checkout_charge(_s, 'pay_month') == 74900
        and _sb.checkout_charge(_s, 'pay_failed') is None and _sb.checkout_charge(_s, 'pay_down') is None)
 _sb._api = _real_api
+
+# ── Announcements (console → Announcements): who sees which banner ──
+from datetime import date as _date
+from app import announcements as _an
+_rows = [dict(id=1, message='For all', audience='both', level='info', admins_only=False, ends_on=None, active=True),
+         dict(id=2, message='Trial admins', audience='trials', level='info', admins_only=True, ends_on=None, active=True),
+         dict(id=3, message='Customers', audience='customers', level='success', admins_only=False, ends_on=None, active=True),
+         dict(id=4, message='Ended', audience='both', level='info', admins_only=False, ends_on=_date(2026, 1, 1), active=True),
+         dict(id=5, message='Off', audience='both', level='info', admins_only=False, ends_on=None, active=False)]
+_ids = lambda **k: [r['id'] for r in _an.showing(_rows, today=_date(2026, 11, 7), **k)]
+ok('announcements: trial admin 1+2, trial staff 1, customer staff 1+3; ended and off ones never',
+   _ids(is_trial=True, is_admin=True) == [1, 2] and _ids(is_trial=True, is_admin=False) == [1]
+   and _ids(is_trial=False, is_admin=False) == [1, 3] and _ids(is_trial=False, is_admin=True) == [1, 3])
+_v, _e = _an.validate({'message': '  New   feature  ', 'audience': 'trials', 'level': 'warning', 'ends_on': '2026-12-31'})
+_v2, _e2 = _an.validate({'message': '', 'audience': 'everyone', 'ends_on': '31/12'})
+ok('…the form: spaces tidied, audience and style kept, a bad audience → both, empty or a bad date refused',
+   not _e and _v['message'] == 'New feature' and _v['audience'] == 'trials' and _v['ends_on'] == _date(2026, 12, 31)
+   and not _v['admins_only'] and _v2['audience'] == 'both' and len(_e2) == 2)

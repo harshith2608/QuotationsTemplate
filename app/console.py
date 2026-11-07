@@ -767,6 +767,41 @@ def pricing_page():
                            summary=pricing.summary(data))
 
 
+@console_bp.route('/announcements', methods=['GET', 'POST'])
+@login_required
+def announcements_page():
+    """Announcements (app/announcements.py): a banner at the top of the apps, for trials, customers or both."""
+    from . import announcements as ann
+    form = {}
+    if request.method == 'POST':
+        values, errors = ann.validate(request.form)
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            form = request.form
+        else:
+            new_id = ann.add(**values)
+            audit('announcement', f'#{new_id}', f'{values["audience"]}: {values["message"][:150]}')
+            flash('Announcement on. The apps show it within a minute.', 'ok')
+            return redirect(url_for('console.announcements_page'))
+    return render_template('console/announcements.html', rows=ann.all_rows(), audiences=ann.AUDIENCES, levels=ann.LEVELS,
+                           form=form, max_len=ann.MAX_LEN, today=plan_mod.today())
+
+
+@console_bp.route('/announcements/<int:ann_id>/<action>', methods=['POST'])
+@login_required
+def announcement_action(ann_id, action):
+    from . import announcements as ann
+    if action == 'delete':
+        ann.delete(ann_id)
+    elif action in ('on', 'off'):
+        ann.set_active(ann_id, action == 'on')
+    else:
+        abort(404)
+    audit(f'announcement_{action}', f'#{ann_id}')
+    return redirect(url_for('console.announcements_page'))
+
+
 @console_bp.route('/features')
 @login_required
 def features_page():

@@ -225,6 +225,15 @@ def create_app(config_name='default'):
                 'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
 
+    @app.context_processor
+    def _announcements():
+        from .announcements import for_user
+        from .plan import load_status
+        try:
+            return {'announcements': for_user(load_status(), current_user)}
+        except Exception:                            # a banner mustn't break a page
+            return {'announcements': []}
+
     def _lower_price(status, user):
         """{'paying', 'now'} when this business's monthly autopay costs more than the plan's price today (it was
         lowered in the console's Pricing): admins see a banner until they restart the autopay at the new price."""
