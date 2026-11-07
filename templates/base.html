@@ -98,6 +98,7 @@
                        ('admin.settings', 'sliders', 'Settings'), ('admin.notifications', 'bell', 'Notifications')] %}
 {% if ai_import_on %}{% set admin_links = admin_links[:1] + [('admin.ai_import', 'magic', 'Import a quotation')] + admin_links[1:] %}{% endif %}
 {% if renew_in_app %}{% set admin_links = admin_links + [('plan.plan_page', 'credit-card-2-front', 'Plan & billing')] %}{% endif %}
+{% set admin_links = admin_links + [('admin.support', 'life-preserver', 'Support')] %}
 <nav class="navbar navbar-expand-lg {{ 'navbar-dark' if brand.header_dark else 'navbar-light' }} ki-navbar sticky-top" id="ki-navbar">
   <div class="container-fluid px-3">
     <a class="navbar-brand fw-bold text-truncate" href="{{ url_for('projects.list_projects') }}">
@@ -214,6 +215,7 @@
 <!-- ===== FLASH MESSAGES ===== -->
 <div class="container-fluid px-3 pt-2">
   {% include 'partials/_plan_banner.html' %}
+  {% include 'partials/_help_card.html' %}
   {% for a in announcements %}
   <div class="alert alert-{{ a.level }} alert-dismissible py-2 mb-2 ki-announcement" role="status" data-ann="{{ a.id }}">
     <i class="bi bi-megaphone me-1"></i>{{ a.message }}

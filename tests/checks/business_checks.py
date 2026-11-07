@@ -225,9 +225,9 @@ with app.test_request_context():
                                   help_card={'booked': None, 'whatsapp': 'https://wa.me/919999999999?text=Hi'})
     done = render_template_string('{% include "partials/_help_card.html" %}',
                                   help_card={'booked': {'when': 'Mon 9 Nov, 5:00 PM'}, 'whatsapp': ''})
-ok('…the card: a WhatsApp video call to book, or chat; once booked, when', 'A free 10-minute call' in card and 'Get your rates set up for you' in card
+ok('…the card: a WhatsApp video call to book, or chat; once booked, when; closed for good with ✕', 'A free 10-minute call' in card and 'Get your rates set up for you' in card
    and '/welcome/call' in card and 'wa.me/919999999999' in card and 'WhatsApp us' in card and 'Your free set-up call: Mon 9 Nov, 5:00 PM' in done
-   and '/welcome/call' not in done and 'Hide for a week' in card)
+   and '/welcome/call' not in done and 'ki-help-card-closed' in card)
 
 # ── Numbers the Indian way, everywhere (app/numbers.py) ──
 from app.numbers import inr
@@ -312,3 +312,19 @@ with mock.patch.object(SUB, 'current_subscription', return_value=dict(sub, statu
     cancel.reset_mock()
     SUB._stop_autopay_for({'plan': '1m', 'slug': 'acme'}); SUB._stop_autopay_for({'plan': 'ai40', 'slug': 'acme'})
 ok('a 12-month plan paid on autopay stops the autopay; a month or AI uses don\'t', stopped_for_year and not cancel.called)
+
+# ── Admin → Support: common questions and the ways to reach us ──
+os.environ['SUPPORT_WHATSAPP'] = '919876543210'
+sapp = create_app('development'); sapp.config['WTF_CSRF_ENABLED'] = False
+with sapp.app_context():
+    from werkzeug.security import generate_password_hash as _gph
+    from app.models import User as _U
+    db.session.add(_U(username='support-admin', password_hash=_gph('support-pass-123'), role='admin')); db.session.commit()
+sc = sapp.test_client()
+sc.post('/login', data={'username': 'support-admin', 'password': 'support-pass-123'})
+sc.post('/welcome/exit')
+sp = sc.get('/admin/support').text
+ok('Admin → Support: in the menu, common questions, WhatsApp us (with who they are) and email',
+   'href="/admin/support"' in sc.get('/projects').text and 'Common questions' in sp and 'How do I make an invoice?' in sp
+   and 'wa.me/919876543210?text=' in sp and 'WhatsApp us' in sp and 'mailto:' in sp)
+os.environ.pop('SUPPORT_WHATSAPP', None)

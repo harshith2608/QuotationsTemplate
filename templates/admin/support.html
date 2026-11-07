@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mt-3 mb-3">
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-life-preserver me-2 text-primary"></i>Support</h4>
+  <p class="text-muted small mb-0">Answers to common questions, and how to reach us. We're happy to help.</p>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body d-flex flex-wrap align-items-center gap-3">
+    <div class="flex-grow-1">
+      <div class="fw-bold">Talk to us</div>
+      <div class="small text-muted">Message us on WhatsApp{{ ' (' ~ whatsapp_display ~ ')' if whatsapp_display }} and we
+        reply as soon as we can.{% if can_book %} Or book a free 10-minute call: we set up your rates and first quotation with you.{% endif %}
+        You can also email <a href="mailto:{{ email }}">{{ email }}</a>.</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% if whatsapp %}<a class="btn btn-success fw-semibold" href="{{ whatsapp }}" target="_blank" rel="noopener" id="supportWhatsapp"><i class="bi bi-whatsapp me-1"></i>WhatsApp us</a>{% endif %}
+      {% if can_book %}<a class="btn btn-primary fw-semibold" href="{{ url_for('welcome.call') }}"><i class="bi bi-calendar-check me-1"></i>Book a free call</a>{% endif %}
+    </div>
+  </div>
+</div>
+
+<h6 class="fw-bold mb-2">Common questions</h6>
+{% set faqs = [
+  ('How do I make my first quotation?', 'Tap <b>New Quote</b> at the top. Add a room, then its items with their sizes in your own unit: the area and amounts are worked out from your rates as you type. Save, and the quotation is ready to send.'),
+  ('How do I set or change my rates?', 'Admin → <b>Rates</b>. Change a rate and every new quotation uses it; quotations already made keep their prices until you edit them. Have an old quotation or rate Excel? Send it to us on WhatsApp and we can set your rates up for you.'),
+  ('How do I add my logo and company details?', 'Admin → <b>Settings</b>: company name, phone, address, email, GSTIN and logo. They appear on every PDF. Once confirmed, the name and logo are locked so nobody can change them by mistake: message us if one needs correcting.'),
+  ('How do I send a quotation to my customer?', 'Open the quotation and send it on <b>WhatsApp</b> or by <b>Email</b>. Under <b>Online approval</b> you get a link: your customer sees the quotation in your colours, downloads the PDF and taps <b>Accept</b>, and you are told when they accept.'),
+  ('My customer wants changes. Do I make a new quotation?', 'No: open it and tap <b>Edit</b>. Each saved change becomes a new revision (Rev 2, Rev 3…) with what changed, and you can go back to any earlier one.'),
+  ('How do I make an invoice?', 'Open a confirmed quotation and tap <b>Create invoice</b>: with GST (CGST + SGST or IGST, worked out for you) or without GST. Set your GSTIN and invoice numbering in Settings → Invoices.'),
+  ('How do I record payments and remind customers?', 'On the quotation, record each payment (advance, instalments) and see the balance. <b>Balances</b> at the top lists everyone who owes you, with a WhatsApp reminder in one tap and a payment link if you have Razorpay set up in Admin → Payment Settings.'),
+  ('How do I add my staff?', 'Admin → <b>Users</b> → add a login. Staff see only the quotations you give them (view or edit); admins see everything, including costs and profit. To reset a staff member\'s password, change it there.'),
+  ('I forgot my password.', 'Admins: on the sign-in page tap <b>Forgot password?</b> and we email a reset link to your business email. Staff: ask your admin to set a new one in Admin → Users.'),
+  ('How do I pay, renew or cancel autopay?', 'Admin → <b>Plan &amp; billing</b>: choose a plan and pay by UPI, card or net banking. The monthly plan renews by autopay until you cancel it there; nothing more is charged after that.'),
+  ('Can I use it on my phone?', 'Yes: it works in the browser on any phone, tablet or laptop. Open it in Chrome and choose <b>Add to Home screen</b> to open it with one tap, like an app.'),
+  ('Is my data safe?', 'Yes. Only your team can see your quotations. Customer details, amounts and payment details are encrypted, and your data is never shared with anyone.'),
+] %}
+<div class="accordion mb-4" id="faq">
+  {% for q, a in faqs %}
+  <div class="accordion-item">
+    <h2 class="accordion-header"><button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse"
+      data-bs-target="#faq{{ loop.index }}" aria-expanded="false">{{ q }}</button></h2>
+    <div id="faq{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#faq">
+      <div class="accordion-body small">{{ a|safe }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<p class="small text-muted">Didn't find your answer? {% if whatsapp %}<a href="{{ whatsapp }}" target="_blank" rel="noopener">Message us on WhatsApp</a>{% else %}Email us at <a href="mailto:{{ email }}">{{ email }}</a>{% endif %}.</p>
+{% endblock %}

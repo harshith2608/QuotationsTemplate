@@ -1,7 +1,8 @@
 {# A trial's way to us: a free set-up call (welcome.call) or a WhatsApp chat. app/callbook.py. Compact on a phone:
-   one line and two buttons side by side; × hides it on this browser for a week. #}
+   one line and two buttons side by side. On every page (the guided setup's first screen too) until × closes it on
+   this browser; Admin → Support has the same ways to reach us. #}
 {% if help_card %}
-<div class="card border-0 shadow-sm mb-3 ki-help-card" data-help-card>
+<div class="card border-0 shadow-sm mb-2 ki-help-card" data-help-card>
   <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center gap-2">
     <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0">
       <i class="bi bi-headset fs-5 text-primary" aria-hidden="true"></i>
@@ -14,21 +15,21 @@
         <div class="small text-muted d-none d-sm-block">A free 10-minute call: we set up your rates and first quotation with you.</div>
         {% endif %}
       </div>
-      <button type="button" class="btn-close ms-auto d-sm-none" aria-label="Hide for a week" data-help-hide></button>
+      <button type="button" class="btn-close ms-auto d-sm-none" aria-label="Close" data-help-hide></button>
     </div>
     <div class="d-flex gap-2 ki-help-actions">
       {% if not help_card.booked %}<a class="btn btn-sm btn-primary fw-semibold" href="{{ url_for('welcome.call') }}"><i class="bi bi-calendar-check me-1"></i>Book a free call</a>{% endif %}
       {% if help_card.whatsapp %}<a class="btn btn-sm btn-success fw-semibold" href="{{ help_card.whatsapp }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp me-1"></i>WhatsApp us</a>{% endif %}
     </div>
-    <button type="button" class="btn-close d-none d-sm-block" aria-label="Hide for a week" data-help-hide></button>
+    <button type="button" class="btn-close d-none d-sm-block" aria-label="Close" data-help-hide></button>
   </div>
 </div>
 <script>
 (function () {
-  const card = document.currentScript.previousElementSibling, KEY = 'ki-help-card-hidden';
-  try { if (Date.now() < +(localStorage.getItem(KEY) || 0)) card.remove(); } catch (e) {}
+  const card = document.currentScript.previousElementSibling, KEY = 'ki-help-card-closed';
+  try { if (localStorage.getItem(KEY)) card.remove(); } catch (e) {}
   card.querySelectorAll('[data-help-hide]').forEach(b => b.addEventListener('click', () => {
-    try { localStorage.setItem(KEY, String(Date.now() + 7 * 864e5)); } catch (e) {}
+    try { localStorage.setItem(KEY, '1'); } catch (e) {}
     card.remove();
   }));
 })();
