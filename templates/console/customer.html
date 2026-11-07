@@ -42,6 +42,20 @@
 </div>
 {% endif %}
 
+<h2 id="payments">Payments</h2>
+<div class="card">
+  {% if payments %}<table>
+    <tr><th>Paid</th><th>Plan</th><th>Amount</th><th>Receipt</th><th></th></tr>
+    {% for r in payments %}
+    <tr><td class="small">{{ r.paid_at|ist }}</td><td>{{ r.plan|plan_short }}</td>
+      <td>₹{{ (r.amount_paise / 100)|inr(0) }}{% if r.refunded_paise %}<div class="small" style="color:var(--bad)">Refunded
+        ₹{{ (r.refunded_paise / 100)|inr(0) }} · {{ r.refunded_at|ist }}</div>{% endif %}</td>
+      <td><a href="{{ url_for('console.payment_receipt', payment_id=r.id) }}" target="_blank" rel="noopener">{{ r.receipt_no }}</a></td>
+      <td>{% include 'console/_refund.html' %}</td></tr>
+    {% endfor %}
+  </table>{% else %}<p class="muted small" style="margin:0">No payments recorded for this business.</p>{% endif %}
+</div>
+
 <h2 id="payment-link">Payment link</h2>
 <div class="card stack">
   {% if pending_link %}<p style="margin:0"><strong>Waiting for payment.</strong> Their app is made when they pay.</p>

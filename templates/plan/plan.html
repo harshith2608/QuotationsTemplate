@@ -98,7 +98,7 @@
   <tbody>
   {% for p in payments %}
     <tr><td>{{ p.paid_at.strftime('%d %b %Y') }}</td><td>{{ p.plan|plan_short }}</td>
-        <td class="text-end">₹{{ (p.amount_paise / 100)|inr(0) }}</td>
+        <td class="text-end">₹{{ (p.amount_paise / 100)|inr(0) }}{% if p.refunded_paise %}<div class="small text-danger">Refunded ₹{{ (p.refunded_paise / 100)|inr(0) }}</div>{% endif %}</td>
         <td><a href="{{ url_for('plan.receipt', payment_id=p.id) }}" target="_blank" rel="noopener">{{ p.receipt_no }}</a></td></tr>
   {% endfor %}
   </tbody>

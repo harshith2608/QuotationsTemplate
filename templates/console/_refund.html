@@ -1,0 +1,12 @@
+{#- The Refund button for one payment (r): through Razorpay, in full. -#}
+{% if r.status == 'paid' and (r.payment_id or '').startswith('pay_') and not r.refunded_paise %}
+<form method="post" action="{{ url_for('console.payments_refund', payment_id=r.id) }}" style="margin:6px 0 0"
+      data-confirm="Refund ₹{{ (r.amount_paise / 100)|inr(0) }} ({{ r.receipt_no }}, {{ r.slug }}) in full through Razorpay? This can't be undone.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="back" value="{{ request.full_path }}">
+  {% if r.plan != 'ai40' %}<label class="small" style="display:block"><input type="checkbox" name="end_plan" value="1" checked>
+    End their plan today (and stop autopay)</label>{% endif %}
+  <button class="btn btn-sm btn-danger" type="submit">Refund</button>
+</form>
+{% elif r.refunded_paise %}<span class="small muted">Refunded</span>
+{% endif %}
