@@ -28,8 +28,9 @@ with app.app_context():
     _sp = _sq.project()
     _sample_ok = _sp is not None and _sp.customer_name == 'Sample customer' and _sp.grand_total > 0
     _counts = _act.usage()['quotations']
-ok('…a 2 BHK priced at their rates, with "Send this PDF to yourself on WhatsApp" and "Make it yours"',
-   _sample_ok and 'Send this PDF to yourself on WhatsApp' in sp and 'Make it yours' in sp and '/welcome/sample.pdf' in sp
+ok('…a 2 BHK priced at their rates, with Download PDF and "Make it yours" (no WhatsApp button)',
+   _sample_ok and 'Download PDF' in sp and 'sendSample' not in sp and 'yourself on WhatsApp' not in sp
+   and 'Make it yours' in sp and '/welcome/sample.pdf' in sp
    and pdf.status_code == 200 and pdf.data[:4] == b'%PDF')
 import io as _io
 from pypdf import PdfReader as _PR

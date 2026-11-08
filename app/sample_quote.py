@@ -1,6 +1,6 @@
 """A ready sample quotation on a new business's first sign-in: a 2 BHK in their company's name, priced at the rates
 their app starts with, shown as the customer PDF with its title page (no About us or Next steps page). They see the
-end result before doing any work, send the PDF to themselves on WhatsApp, then edit it into their own.
+end result before doing any work (and can download it), then edit it into their own.
 
 It's a normal quotation in their list ("Sample customer"). Until they edit it, it doesn't count as their own: not in
 the console's trial stages (app/activity.py) nor the setup guide's "first quotation" (app/setup_guide.py).
