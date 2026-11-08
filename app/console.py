@@ -802,6 +802,32 @@ def announcement_action(ann_id, action):
     return redirect(url_for('console.announcements_page'))
 
 
+@console_bp.route('/features/telegram', methods=['POST'])
+@login_required
+def telegram_alerts():
+    """Telegram alerts (app/notify.py): find the chat to send to, or send a test."""
+    from . import notify
+    if not os.environ.get('TELEGRAM_BOT_TOKEN'):
+        flash('Set TELEGRAM_BOT_TOKEN on the console first (from @BotFather).', 'error')
+    elif request.form.get('action') == 'find':
+        try:
+            chats = notify.find_chats()
+        except Exception as exc:
+            chats, err = [], str(exc)
+            flash(f'Telegram didn\'t answer: {err}', 'error')
+        else:
+            flash(('Your chat: ' + '; '.join(f'{name}: {cid}' for cid, name in chats) + '. Set TELEGRAM_CHAT_ID to that number.')
+                  if chats else 'No messages yet: open your bot in Telegram, tap Start (or send "hi"), then try again.',
+                  'ok' if chats else 'error')
+    else:
+        sent = notify.send('✅ QuoteRoom alerts are on', ['New trials, booked calls and payments will come here.'],
+                           console_path='/')
+        flash('Test sent: check Telegram.' if sent else 'Not sent: check TELEGRAM_CHAT_ID (and that you tapped Start '
+              'in your bot).', 'ok' if sent else 'error')
+    audit('telegram_' + (request.form.get('action') or 'test'))
+    return redirect(url_for('console.features_page') + '#telegram')
+
+
 @console_bp.route('/features')
 @login_required
 def features_page():
@@ -830,7 +856,10 @@ def features_page():
         call_hours, call_next, call_blocks = callbook.hours(), callbook.slots()[:2], callbook.blocks()
     except Exception:
         call_hours, call_next, call_blocks = dict(callbook.DEFAULT_HOURS), [], []
-    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers, kinds=kinds,
+    from . import notify
+    telegram = {'token': bool(os.environ.get('TELEGRAM_BOT_TOKEN')), 'on': notify.enabled(),
+                'console': bool(os.environ.get('CONSOLE_URL'))}
+    return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers, kinds=kinds, telegram=telegram,
                            call_hours=call_hours, call_days=callbook.DAYS, call_next=call_next, call_blocks=call_blocks,
                            today_ist=(datetime.utcnow() + callbook.IST).date().isoformat(),
                            allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
@@ -2625,6 +2654,13 @@ def start_trial():
                              {'i': lead_id, 's': t['slug'], 'h': ip_hash})   # (replaces a link to an app since deleted)
             _link_lead(lead_id, 'trial', t['slug'])
             audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}' + (f', buying {plan}' if plan else ''))
+            from . import notify
+            from .marketing import BUSINESS_TYPES
+            notify.send(f'🆕 New trial: {form["company"]}',
+                        [' · '.join(filter(None, (lead.get('name'), lead.get('city')))),
+                         BUSINESS_TYPES.get(lead.get('business_type') or '', ''),
+                         f'{t["slug"]}.{tenancy.base_domain()}', f'Buying the {plan} plan' if plan else ''],
+                        phone=lead.get('phone') or '', console_path=f'/trials/{t["slug"]}')
             if plan:
                 return _go_pay(t['slug'], plan, lead, token, company=form['company'])
             return render_template('console/start.html', ready=t['slug'], base=tenancy.base_domain(),
@@ -2693,6 +2729,9 @@ def _book_website_call(form, phone):
     followups.book(f'lead:{lead_id}', at_ist, mode='call', note=note)
     audit('website_call', f'lead #{lead_id}', when)
     shown = f'+91 {phone[2:7]} {phone[7:]}'
+    from . import notify
+    notify.send(f'📞 Call booked: {form["company"] or form["name"]}', [f'{when} (India time) · from the website',
+                form['name'], form['business'], form['note'][:200]], phone=phone, console_path='/calls')
     if mailer.enabled():
         mailer.send(mailer.operator(), f'Call booked: {form["company"] or form["name"]}, {when}',
                     f'{form["name"]}{" (" + form["company"] + ")" if form["company"] else ""} booked a call on the website.'

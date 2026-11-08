@@ -1057,3 +1057,13 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 
 ## 12. Environment variable reference
 `.env.example` in the repo root lists every variable with comments.
+
+## Telegram alerts (new trials, booked calls, payments)
+
+An instant Telegram message for each new trial, booked call and payment, with the phone (tap to call), WhatsApp and
+"Open in console" buttons (app/notify.py). Set up in console → Features → Telegram alerts:
+1. Telegram → @BotFather → /newbot → copy the token.
+2. Vercel, on the **console** and the **trials app**: `TELEGRAM_BOT_TOKEN` (and `CONSOLE_URL` on both, e.g.
+   https://ops.quote-room.co.in, for the console button). Redeploy.
+3. Open the bot, tap Start; console → Features → **Find my chat ID** → add `TELEGRAM_CHAT_ID` on both. Redeploy.
+4. **Send a test.** QA: a separate bot (or the same chat) on the QA projects, so test alerts are easy to tell apart.

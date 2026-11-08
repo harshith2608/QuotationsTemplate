@@ -886,13 +886,17 @@ def send_receipt(row, to=None):
 
 def notify_paid(row):
     """"You're on your paid plan" with the receipt (to the business's email), and a note to the operator."""
-    from . import mailer
-    if not row or not mailer.enabled():
+    from . import mailer, notify
+    if not row:
         return
     fmt = lambda d: d.strftime('%d %b %Y') if d else '—'
     plan_label = plan_mod.PLANS.get(row['plan'], row['plan'])
     amount = f'₹{inr(row["amount_paise"] / 100, 0)}'
     name = row.get('business_name') or row['slug']
+    notify.send(f'💰 Payment {amount}: {name}', [plan_label + (f', until {fmt(row.get("plan_end"))}' if row.get('plan_end') else ''),
+                row.get('payer_name') or '', f'via {row.get("source")}'], console_path='/payments')
+    if not mailer.enabled():
+        return
     sent = send_receipt(row)
     mailer.send(mailer.operator(), f'Payment: {amount} from {name}',
                 f'{name} ({row["slug"]}){" · " + row["payer_name"] if row.get("payer_name") else ""} paid {amount} for {"" if row["plan"] == plan_mod.ADDON else "the "}{plan_label}.\n'

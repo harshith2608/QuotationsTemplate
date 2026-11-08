@@ -186,6 +186,9 @@ def book(value, phone, note, user_name):
     at = at_ist - IST
     AppSetting.set(BOOKED_KEY, json.dumps({'at': at.isoformat(), 'id': aid}))
     db.session.commit()
+    from . import notify
+    notify.send(f'📞 Call booked: {brand["name"]}', [f'{followups.when_text(at)} (India time) · set-up call, in the app',
+                f'Booked by {user_name or "their admin"}', note[:200]], phone=phone, console_path=f'/trials/{slug}')
     if mailer.enabled():                            # so we see it straight away
         when = followups.when_text(at)
         mailer.send(mailer.operator(), f'Call booked: {brand["name"]}, {when}',
