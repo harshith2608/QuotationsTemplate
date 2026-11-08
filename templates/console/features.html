@@ -6,7 +6,8 @@
   minute. Turn one off if something goes wrong with it; what they've already made is kept.</p>
 <nav class="small" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0">
   <a href="#ai-import">Bring your old quotation</a><a href="#ai-helpers">AI helpers on quotations</a>
-  <a href="#material-list">Material list</a><a href="#kinds">Kinds of business</a><a href="#calls">Call bookings</a></nav>
+  <a href="#material-list">Material list</a><a href="#kinds">Kinds of business</a><a href="#calls">Call bookings</a>
+  <a href="#telegram">Telegram alerts</a></nav>
 
 <h2 id="ai-import">Bring your old quotation (AI)</h2>
 <div class="card">
@@ -143,5 +144,22 @@
     {% endfor %}
   </table>
   {% else %}<p class="small muted">Nothing blocked.</p>{% endif %}
+</div>
+<h2 id="telegram">Telegram alerts</h2>
+<div class="card">
+  <p class="small" style="margin-top:0">An instant message on your phone for each <strong>new trial</strong>, <strong>booked
+    call</strong> and <strong>payment</strong>: name, company, phone (tap to call) and a WhatsApp button.
+    {% if telegram.on %}<strong style="color:var(--good, #1f7a4d)">On.</strong>{% else %}<strong>Off.</strong>{% endif %}</p>
+  <ol class="small">
+    <li>In Telegram, open <span class="mono">@BotFather</span> → <span class="mono">/newbot</span>, name it (e.g. QuoteRoom Alerts), and copy the token it gives you.</li>
+    <li>In Vercel, on the <strong>console</strong> and the <strong>trials app</strong>: add <span class="mono">TELEGRAM_BOT_TOKEN</span> (that token){% if not telegram.console %} and <span class="mono">CONSOLE_URL</span> (this console's address, for the "Open in console" button){% endif %}, then redeploy. {% if telegram.token %}✓ the token is set here.{% endif %}</li>
+    <li>Open your new bot in Telegram and tap <strong>Start</strong>. Then here: <strong>Find my chat ID</strong>, and add it as <span class="mono">TELEGRAM_CHAT_ID</span> on both, and redeploy.</li>
+    <li><strong>Send a test</strong>.</li>
+  </ol>
+  <form method="post" action="{{ url_for('console.telegram_alerts') }}" class="row" style="gap:8px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm" type="submit" name="action" value="find" {{ 'disabled' if not telegram.token }}>Find my chat ID</button>
+    <button class="btn btn-sm btn-primary" type="submit" name="action" value="test" {{ 'disabled' if not telegram.on }}>Send a test</button>
+  </form>
 </div>
 {% endblock %}

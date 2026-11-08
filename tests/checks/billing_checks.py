@@ -627,3 +627,29 @@ with app.app_context():
     AppSetting.set(_MM.SHOW_WORK_KEY, ''); db.session.commit()
 ok('customers see "Laminate Finish · 18mm BWP", "Acrylic Finish", "Glass", "PU Finish"; work types only if switched on',
    _a == ('Laminate Finish · 18mm BWP', 'Acrylic Finish', 'Glass', 'PU Finish') and _b == 'Laminates – Box Work')
+
+# ── Telegram alerts (app/notify.py): nothing without the settings; name, phone, WhatsApp and console buttons ──
+from app import notify as _nt
+_sent = []
+_real_call, _nt._call = _nt._call, lambda method, payload=None, token=None: (_sent.append((method, payload)), {'ok': True})[1]
+for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'CONSOLE_URL'):
+    os.environ.pop(k, None)
+_off = _nt.send('🆕 New trial: X', ['a'])
+os.environ.update(TELEGRAM_BOT_TOKEN='123:abc', TELEGRAM_CHAT_ID='555', CONSOLE_URL='https://ops.example.test/')
+with app.test_request_context():
+    _on = _nt.send('🆕 New trial: Shah <Studio>', ['Meera · Pune', '', 'Interiors'], phone='98111 00022',
+                   console_path='/trials/shah-studio')
+_m, _p = _sent[-1] if _sent else (None, {})
+_btns = [b['url'] for b in (_p.get('reply_markup') or {}).get('inline_keyboard', [[]])[0]]
+ok('Telegram: nothing without the token and chat; then the title (escaped), details, phone, WhatsApp and console buttons',
+   _off is False and _on is True and _m == 'sendMessage' and _p['chat_id'] == '555'
+   and '<b>🆕 New trial: Shah &lt;Studio&gt;</b>' in _p['text'] and 'Meera · Pune' in _p['text']
+   and '+91 98111 00022' in _p['text'] and _btns == ['https://wa.me/919811100022', 'https://ops.example.test/trials/shah-studio'])
+def _boom(*a, **k):
+    raise OSError('network down')
+_nt._call = _boom
+with app.test_request_context():
+    ok('…a Telegram failure never breaks anything (logged, returns False)', _nt.send('x') is False)
+_nt._call = _real_call
+for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'CONSOLE_URL'):
+    os.environ.pop(k, None)
