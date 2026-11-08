@@ -1187,6 +1187,15 @@ def settings():
                            business_state=billing.STATES.get(billing.business_state_code(), ''))
 
 
+@admin_bp.route('/support')
+def support():
+    """Help: common questions, and the ways to reach us (WhatsApp, a free call for trials, email)."""
+    from . import branding, callbook, mailer
+    display, _ = branding.support_contact()
+    return render_template('admin/support.html', title='Support', whatsapp=callbook.whatsapp_url(),
+                           whatsapp_display=display, can_book=callbook.available(), email=mailer.sender())
+
+
 @admin_bp.route('/reports')
 def reports():
     """Sales, collections, invoices and estimated profit by financial year, with a projection (admins only)."""

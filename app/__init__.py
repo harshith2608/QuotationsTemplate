@@ -35,7 +35,8 @@ login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'warning'
 
 
-HELP_CARD_PAGES = ('projects.list_projects', 'welcome.done')     # where a trial sees "Get your rates set up for you"
+HELP_CARD_SKIP = ('welcome.call', 'auth.login', 'auth.logout')   # a trial's admin sees "Get your rates set up for you"
+                                                                 # on every other page, until they close it
 
 
 def create_app(config_name='default'):
@@ -214,7 +215,8 @@ def create_app(config_name='default'):
             from . import demo
             demo_guide = demo.guide()
         help_card = None
-        if current_user.is_authenticated and current_user.is_admin and request.endpoint in HELP_CARD_PAGES:
+        if current_user.is_authenticated and current_user.is_admin and request.endpoint \
+                and request.endpoint not in HELP_CARD_SKIP and not request.endpoint.startswith('static'):
             from . import callbook                # Get your rates set up for you: a call, or WhatsApp
             if callbook.available():
                 help_card = {'booked': callbook.booked(), 'whatsapp': callbook.whatsapp_url()}

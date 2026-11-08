@@ -27,6 +27,7 @@ import urllib.request
 from datetime import datetime
 from io import BytesIO
 
+from flask import g, has_app_context
 from sqlalchemy import text
 
 from . import db, tenancy
@@ -128,6 +129,9 @@ def ensure_table():
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS link_url TEXT'))
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS phone VARCHAR(20)'))
             conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS payer_name VARCHAR(120)'))
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS refunded_paise INTEGER'))
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMP'))
+            conn.execute(text('ALTER TABLE public.platform_payments ADD COLUMN IF NOT EXISTS refund_id VARCHAR(40)'))
             conn.execute(text(REMINDERS_DDL))
             conn.execute(text(SUBS_DDL))
             conn.execute(text('ALTER TABLE public.platform_subscriptions ADD COLUMN IF NOT EXISTS amount_paise INTEGER'))
@@ -358,6 +362,99 @@ def apply_plan_for(slug, row):
         _stop_autopay_for(row)
         return status
     raise PaymentError(f'No trial or customer "{slug}" to add the plan to.')
+
+
+# ── Refunds ──────────────────────────────────────────────────────────────────
+# A refund (from the console, or in Razorpay's dashboard: the refund.processed webhook) is noted on the payment; a
+# full refund also ends the business's plan today, as if it had run out (the usual grace, read-only, deletion), and
+# stops its monthly autopay. The payment stays in the list with its receipt, marked refunded.
+
+def get_by_payment(payment_id):
+    ensure_table()
+    with db.engine.connect() as conn:
+        row = conn.execute(text('SELECT * FROM public.platform_payments WHERE payment_id = :p'),
+                           {'p': payment_id}).mappings().first()
+    return dict(row) if row else None
+
+
+def can_refund(row):
+    """Paid through Razorpay (a payment id like pay_…) and not refunded yet."""
+    return row.get('status') == 'paid' and (row.get('payment_id') or '').startswith('pay_') and not row.get('refunded_paise')
+
+
+def _end_here():
+    status = plan_mod.load_status(on=plan_mod.today())
+    if status.has_limit and status.ends_on and status.ends_on > plan_mod.today():
+        plan_mod.save_plan(status.plan, status.started_on or plan_mod.today(), plan_mod.today())
+    from .models import AppSetting
+    AppSetting.set(plan_mod.AUTOPAY_KEY, '')
+    db.session.commit()
+    if has_app_context():
+        g.pop('plan_status', None)
+    return plan_mod.load_status(on=plan_mod.today())
+
+
+def end_plan_for(slug):
+    """End this business's plan today (its trial schema, or a paying customer's database). Returns the status."""
+    from . import customers
+    target = tenancy.lookup(slug)
+    if target and target[0] == 'schema':
+        with tenancy.tenant_context(slug, target[1]):
+            return _end_here()
+    c = customers.get(slug)
+    if c and c['status'] == 'active':
+        with customers.open_customer(slug):
+            status = _end_here()
+        customers._update(slug, ends_on=status.ends_on)
+        return status
+    raise PaymentError(f'No trial or customer "{slug}".')
+
+
+def record_refund(row, amount_paise, refund_id=None, end_plan=None):
+    """Note the refund on the payment (once). A full refund (or end_plan=True) stops the autopay and ends the plan
+    today. Returns the payment row."""
+    ensure_table()
+    with db.engine.begin() as conn:
+        done = conn.execute(text(
+            "UPDATE public.platform_payments SET refunded_paise = :a, refund_id = :r, refunded_at = (now() AT TIME ZONE "
+            "'utc') WHERE id = :i AND refunded_paise IS NULL RETURNING id"),
+            {'a': int(amount_paise), 'r': refund_id, 'i': row['id']}).first()
+    if done and (end_plan if end_plan is not None else int(amount_paise) >= row['amount_paise']) \
+            and row['plan'] != plan_mod.ADDON:
+        sub = current_subscription(row['slug'])
+        if sub:
+            try:
+                cancel_subscription(sub)
+            except PaymentError:
+                pass                                    # already stopped on Razorpay's side
+        end_plan_for(row['slug'])
+    return get(row['id'])
+
+
+def refund(row, end_plan=True):
+    """Refund this payment in full through Razorpay (console → Customers / Payments), then record_refund."""
+    if not can_refund(row):
+        raise PaymentError('Only a payment made through Razorpay, not refunded yet, can be refunded here.')
+    made = _api('POST', f'/payments/{row["payment_id"]}/refund', {'amount': row['amount_paise'], 'speed': 'normal',
+                                                                    'notes': {'slug': row['slug']}})
+    return record_refund(row, made.get('amount') or row['amount_paise'], made.get('id'), end_plan=end_plan)
+
+
+def _refund_event(ref):
+    row = get_by_payment(ref.get('payment_id') or '')
+    if row is None:
+        return 'not ours'
+    if row.get('refunded_paise'):
+        return 'refund already recorded'
+    row = record_refund(row, ref.get('amount') or row['amount_paise'], ref.get('id'))
+    from . import mailer
+    if mailer.enabled():
+        mailer.send(mailer.operator(), f'Refunded: {row.get("business_name") or row["slug"]}, ₹{inr(row["refunded_paise"] / 100, 0)}',
+                    f'A refund of ₹{inr(row["refunded_paise"] / 100, 0)} on {row["receipt_no"] or row["payment_id"]} '
+                    f'({row["slug"]}) was recorded.'
+                    + (' Their plan now ends today and their autopay is stopped.' if row['refunded_paise'] >= row['amount_paise']
+                       else ' It was a part refund: their plan was left as it is.') + '\n')
+    return f'refunded: {row["slug"]}'
 
 
 # ── Monthly autopay (Razorpay subscriptions) ─────────────────────────────────
@@ -635,6 +732,9 @@ def handle_webhook(payload):
     event = payload.get('event', '')
     if event.startswith('subscription.'):
         return _subscription_event(event, payload)
+    if event == 'refund.processed':                        # refunded in Razorpay's dashboard (or from the console)
+        ref = (payload.get('payload', {}).get('refund') or {}).get('entity') or {}
+        return _refund_event(ref)
     pay = (payload.get('payload', {}).get('payment') or {}).get('entity') or {}
     order = (payload.get('payload', {}).get('order') or {}).get('entity') or {}
     plink = (payload.get('payload', {}).get('payment_link') or {}).get('entity') or {}

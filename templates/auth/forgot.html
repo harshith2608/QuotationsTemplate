@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Forgot password{% endblock %}
+{% block content %}
+<div class="row justify-content-center align-items-center min-vh-85 py-5">
+  <div class="col-12 col-sm-9 col-md-6 col-lg-4">
+    <div class="text-center mb-4"><h2 class="fw-bold ki-brand-text">{{ brand.name }}</h2></div>
+    <div class="card shadow-lg border-0 ki-login-card">
+      <div class="card-body p-4">
+        <h5 class="card-title text-center mb-3 fw-semibold">Forgot your password?</h5>
+        {% if result in ('sent', 'recent') %}
+        <div class="alert alert-success mb-3" id="resetSent"><i class="bi bi-envelope-check me-1"></i>
+          We've sent a password reset link to your email address <strong>{{ email }}</strong>. Please reset your
+          password using the link in your email.</div>
+        <p class="small text-muted">The link works for 1 hour. Not there? Check your spam folder, or try again in a
+          couple of minutes.</p>
+        {% else %}
+        {% if result == 'not_admin' %}
+        <div class="alert alert-warning small">Only admins can reset their password here. If you're a staff member,
+          ask your admin to set a new password for you (Admin → Users). Check the username is right too.</div>
+        {% elif result in ('no_email', 'no_mail', 'send_failed') %}
+        <div class="alert alert-warning small">We can't email a reset link for this app{{ ': there\'s no email address in its details' if result == 'no_email' else ' right now' if result == 'send_failed' }}.
+          {% if support[1] %}<a href="{{ support[1] }}" target="_blank" rel="noopener">Message us on WhatsApp</a>{% else %}Contact us{% endif %} and we'll reset it for you.</div>
+        {% endif %}
+        <p class="small text-muted">Admins: type your username and we'll email a reset link to your business's email
+          address{{ ' (' ~ email ~ ')' if email }}.</p>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="form-label fw-medium" for="fpUser">Username</label>
+          <input class="form-control form-control-lg mb-3" id="fpUser" name="username" value="{{ username or request.args.get('u', '')[:80] }}"
+                 autocomplete="username" required autofocus>
+          <div class="d-grid"><button class="btn btn-primary btn-lg ki-btn-primary fw-semibold" type="submit">Send reset link</button></div>
+        </form>
+        {% endif %}
+        <div class="text-center mt-3"><a class="small" href="{{ url_for('auth.login') }}">Back to sign in</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

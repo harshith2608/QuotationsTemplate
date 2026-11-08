@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Reset password{% endblock %}
+{% block content %}
+<div class="row justify-content-center align-items-center min-vh-85 py-5">
+  <div class="col-12 col-sm-9 col-md-6 col-lg-4">
+    <div class="text-center mb-4"><h2 class="fw-bold ki-brand-text">{{ brand.name }}</h2></div>
+    <div class="card shadow-lg border-0 ki-login-card">
+      <div class="card-body p-4">
+        {% if invalid %}
+        <h5 class="card-title text-center mb-3 fw-semibold">This link has expired</h5>
+        <p class="small text-muted">Reset links work for 1 hour, and only once. Ask for a new one.</p>
+        <div class="d-grid"><a class="btn btn-primary ki-btn-primary" href="{{ url_for('auth.forgot_password') }}">Send a new link</a></div>
+        {% else %}
+        <h5 class="card-title text-center mb-3 fw-semibold">Choose a new password</h5>
+        <p class="small text-muted">For <strong>{{ user.username }}</strong>.</p>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="form-label fw-medium" for="rpPass">New password</label>
+          <input class="form-control form-control-lg {{ 'is-invalid' if errors.password }}" type="password" id="rpPass" name="password"
+                 autocomplete="new-password" minlength="8" required autofocus>
+          <div class="form-text mb-3">{{ errors.password or 'At least 8 characters.' }}</div>
+          <label class="form-label fw-medium" for="rpPass2">New password again</label>
+          <input class="form-control form-control-lg mb-1 {{ 'is-invalid' if errors.password2 }}" type="password" id="rpPass2" name="password2"
+                 autocomplete="new-password" required>
+          {% if errors.password2 %}<div class="invalid-feedback d-block">{{ errors.password2 }}</div>{% endif %}
+          <div class="d-grid mt-3"><button class="btn btn-primary btn-lg ki-btn-primary fw-semibold" type="submit">Save new password</button></div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

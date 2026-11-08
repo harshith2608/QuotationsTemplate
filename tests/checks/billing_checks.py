@@ -611,3 +611,8 @@ with _mock.patch.object(_an, 'for_user', lambda st, u: [_rows[0]]):
 _pg_none = c.get('/projects').text
 ok('…the banner is on the app\'s pages (with its ✕), and none when there is nothing to show',
    'For all' in _pg and 'data-ann-hide="1"' in _pg and 'data-ann=' not in _pg_none)
+
+# ── Refunds: only a Razorpay payment not refunded yet; the button on the console's lists ──
+ok('refund: only a paid Razorpay payment (pay_…), once', _sb.can_refund({'status': 'paid', 'payment_id': 'pay_X1'})
+   and not _sb.can_refund({'status': 'paid', 'payment_id': 'cash-12'}) and not _sb.can_refund({'status': 'created', 'payment_id': 'pay_X2'})
+   and not _sb.can_refund({'status': 'paid', 'payment_id': 'pay_X3', 'refunded_paise': 59900}))

@@ -1936,7 +1936,8 @@ def customer_detail(slug):
                         else None, extra_phone=row.get('phone') or '')
     return render_template('console/customer.html', row=row, c=c, steps=c.steps_for(row), step_labels=c.STEP_LABELS, info=info,
                            links=subscription.links_enabled(), pending_link=pending_link, pay_email=pay_email,
-                           prices=subscription.prices(),
+                           prices=subscription.prices(), payments=subscription.history(slug),
+                           can_refund=subscription.can_refund,
                            next_step=c.next_step(row) if row['status'] in ('provisioning', 'failed') else None,
                            username=username, password=password, message=message,
                            wa_url=_wa_link(row['phone'], message) if message else '', live=live, rev=rev,
@@ -2211,10 +2212,34 @@ def platform_webhook():
         current_app.logger.exception('Platform webhook failed')
         return jsonify({'error': 'not recorded'}), 500              # Razorpay retries later
     moved = {}
-    if result in ('already recorded',) or result.startswith('paid'):     # a retry carries on an unfinished move
+    if result in ('already recorded',) or result.startswith(('paid', 'autopay charged')):   # (a retry carries on an
+                                                                                              # unfinished move)
         moved = subscription.move_all_paid() if subscription.auto_move() else {}
     audit('platform_payment', None, f'{result}' + (f'; moved {moved}' if moved else ''))
     return jsonify({'ok': True, 'result': result})
+
+
+@console_bp.route('/payments/<int:payment_id>/refund', methods=['POST'])
+@login_required
+def payments_refund(payment_id):
+    """Refund a payment in full through Razorpay; their autopay stops and their plan ends today (as if it ran out)."""
+    from . import subscription
+    row = subscription.get(payment_id)
+    if not row:
+        abort(404)
+    back = request.form.get('back') or url_for('console.payments')
+    if not back.startswith('/'):
+        back = url_for('console.payments')
+    try:
+        row = subscription.refund(row, end_plan=bool(request.form.get('end_plan')))
+    except subscription.PaymentError as exc:
+        flash(f'Not refunded: {exc}', 'error')
+        return redirect(back)
+    audit('payment_refund', row['slug'], f'{row["receipt_no"]}: ₹{row["refunded_paise"] // 100}'
+          + ('; plan ended' if request.form.get('end_plan') else ''))
+    flash(f'Refunded ₹{inr(row["refunded_paise"] / 100, 0)} ({row["receipt_no"]}). It reaches them in 5–7 working days.'
+          + (' Their plan now ends today and any autopay is stopped.' if request.form.get('end_plan') else ''), 'ok')
+    return redirect(back)
 
 
 @console_bp.route('/cron/tick')
@@ -2263,7 +2288,7 @@ def cron_tick():
 def payments():
     from . import subscription
     rows = subscription.history(limit=300)
-    total = sum(r['amount_paise'] for r in rows) / 100
+    total = sum(r['amount_paise'] - (r.get('refunded_paise') or 0) for r in rows) / 100   # (less refunds)
     month = plan_mod.today().strftime('%Y-%m')
     this_month = sum(r['amount_paise'] for r in rows if r['paid_at'] and r['paid_at'].strftime('%Y-%m') == month) / 100
     businesses = [(t['slug'], 'trial') for t in ops.list_trials() if t['status'] == 'active']
