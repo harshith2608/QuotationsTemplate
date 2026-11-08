@@ -13,7 +13,8 @@
     <button type="button" class="btn btn-success btn-lg fw-semibold" id="sendSample"><i class="bi bi-whatsapp me-1"></i>Send this PDF to yourself on WhatsApp</button>
     <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('welcome.sample_pdf', download=1) }}"><i class="bi bi-download me-1"></i>Download</a>
   </div>
-  <p class="small text-muted text-center d-none" id="sendNote">Downloaded. Open WhatsApp, choose your own chat (or "Message yourself") and attach the PDF.</p>
+  <p class="small text-muted text-center d-none" id="sendNote">The PDF is downloaded, and WhatsApp is open{{ ' in your own chat' if own_whatsapp }}:
+    attach the PDF there (📎) and send it.{% if not own_whatsapp %} Choose "Message yourself" or your own number.{% endif %}</p>
 
   <div class="card shadow-sm border-0 mb-3 overflow-hidden">
     <iframe src="{{ url_for('welcome.sample_pdf') }}#view=FitH" title="Sample quotation PDF" class="w-100 d-none d-md-block" style="height:70vh;border:0"></iframe>
@@ -37,23 +38,36 @@
 
 {% block scripts %}
 <script>
-// On a phone, the share sheet sends the PDF itself (pick WhatsApp, then your own chat); elsewhere it's downloaded
-document.getElementById('sendSample').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  btn.disabled = true;
-  try {
-    const blob = await (await fetch('{{ url_for("welcome.sample_pdf") }}')).blob();
-    const file = new File([blob], 'Sample quotation - {{ company|replace("'", "")|e }}.pdf', { type: 'application/pdf' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Sample quotation', text: 'My sample quotation from QuoteRoom' });
+// The PDF is loaded as the page opens, so the share happens straight from the tap (a phone's share sheet only
+// opens from a tap). On a phone: the share sheet, with the PDF (pick WhatsApp, then your own chat). On a laptop, or
+// if sharing isn't possible: the PDF is downloaded and WhatsApp opens in your own chat to attach it.
+(function () {
+  const btn = document.getElementById('sendSample');
+  const name = 'Sample quotation - {{ company|replace("'", "")|replace('"', "")|e }}.pdf';
+  const chat = {{ (('https://wa.me/' ~ own_whatsapp) if own_whatsapp else 'https://web.whatsapp.com/')|tojson }};
+  const message = 'My sample quotation from QuoteRoom (PDF attached)';
+  let file = null;
+  fetch('{{ url_for("welcome.sample_pdf") }}').then(r => r.blob())
+    .then(b => { file = new File([b], name, { type: 'application/pdf' }); }).catch(() => {});
+  const phone = window.matchMedia('(pointer: coarse)').matches;
+
+  function downloadAndOpen() {
+    const a = document.createElement('a');
+    a.href = file ? URL.createObjectURL(file) : '{{ url_for("welcome.sample_pdf", download=1) }}';
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    window.open(chat + (chat.includes('wa.me') ? '?text=' + encodeURIComponent(message) : ''), '_blank', 'noopener');
+    document.getElementById('sendNote').classList.remove('d-none');
+  }
+
+  btn.addEventListener('click', () => {
+    if (phone && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'Sample quotation' }).catch((err) => {
+        if (!err || err.name !== 'AbortError') downloadAndOpen();       // (closing the share sheet: nothing to do)
+      });
     } else {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-      document.getElementById('sendNote').classList.remove('d-none');
-      window.open('https://web.whatsapp.com/', '_blank', 'noopener');
+      downloadAndOpen();
     }
-  } catch (err) { /* share cancelled */ }
-  btn.disabled = false;
-});
+  });
+})();
 </script>
 {% endblock %}

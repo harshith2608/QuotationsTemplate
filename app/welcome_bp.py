@@ -473,8 +473,11 @@ def sample():
         return redirect(url_for('welcome.resume'))
     p = sample_quote.make(current_user)
     from .branding import get_brand
+    from .marketing import normalise_phone
+    from .models import AppSetting
+    own = normalise_phone(AppSetting.get('company_mobile') or '') or ''      # their own chat, to send it to themselves
     return render_template('welcome/sample.html', hide_nav=True, title='Your first quotation', project=p,
-                           company=get_brand().get('name') or 'your company')
+                           company=get_brand().get('name') or 'your company', own_whatsapp=own)
 
 
 @welcome_bp.route('/sample.pdf')
