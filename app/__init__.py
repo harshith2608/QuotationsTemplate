@@ -70,6 +70,8 @@ def create_app(config_name='default'):
     app.add_template_filter(plan_short, 'plan_short')   # '12 months with AI', '40 AI uses' (the app and the console)
     from .numbers import inr
     app.add_template_filter(inr, 'inr')                  # 15,50,000.00: numbers the Indian way, on every page
+    from .materials import customer_label
+    app.add_template_filter(customer_label, 'customer_material')   # "Laminate Finish", not "Laminates – Box Work"
 
     from .console import console_mode
     if console_mode():

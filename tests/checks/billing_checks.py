@@ -366,7 +366,7 @@ with app.app_context():
 anon = app.test_client()
 r = anon.get(f'/q/{token}')
 ok('link shows the Initial (room by room) view by default: sizes and room amounts, no rates or per-item amounts',
-   'Room by room' in r.text and '10 ft × 5 ft' in r.text and 'Laminates – Box Work' in r.text and '= 50.00 sqft' not in r.text)
+   'Room by room' in r.text and '10 ft × 5 ft' in r.text and 'Laminate Finish' in r.text and 'Box Work' not in r.text and '= 50.00 sqft' not in r.text)
 ok('…and its PDF is the Initial (customer) quotation', 'Room-by-Room' not in pdftext(anon, f'/q/{token}/pdf'))
 _pr = anon.get(f'/q/{token}/pdf')
 ok('…the customer\'s page, its PDF and file name show no quotation number', f'Quotation #{mid}' not in r.text
@@ -616,3 +616,14 @@ ok('…the banner is on the app\'s pages (with its ✕), and none when there is 
 ok('refund: only a paid Razorpay payment (pay_…), once', _sb.can_refund({'status': 'paid', 'payment_id': 'pay_X1'})
    and not _sb.can_refund({'status': 'paid', 'payment_id': 'cash-12'}) and not _sb.can_refund({'status': 'created', 'payment_id': 'pay_X2'})
    and not _sb.can_refund({'status': 'paid', 'payment_id': 'pay_X3', 'refunded_paise': 59900}))
+
+# ── What customers see for a material: "Laminate Finish", unless the business shows work types ──
+from app import materials as _MM
+with app.app_context():
+    _a = (_MM.customer_label('Laminates – Box Work · 18mm BWP'), _MM.customer_label('Acrylic – Frame Work'),
+          _MM.customer_label('Glass'), _MM.customer_label('PU Finish – Box Work'))
+    AppSetting.set(_MM.SHOW_WORK_KEY, '1'); db.session.commit()
+    _b = _MM.customer_label('Laminates – Box Work')
+    AppSetting.set(_MM.SHOW_WORK_KEY, ''); db.session.commit()
+ok('customers see "Laminate Finish · 18mm BWP", "Acrylic Finish", "Glass", "PU Finish"; work types only if switched on',
+   _a == ('Laminate Finish · 18mm BWP', 'Acrylic Finish', 'Glass', 'PU Finish') and _b == 'Laminates – Box Work')

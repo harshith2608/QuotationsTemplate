@@ -536,9 +536,11 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
                                   'hsn': hsn, 'qty': it['quantity'], 'unit': it.get('unit') or 'nos',
                                   'rate': it['unit_price'], 'amount': it['amount']})
                 else:
+                    from . import materials as M
                     lines.append({'room': room['name'], 'description': it['name'],
                                   'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])}"
-                                            f"{' × ' + str(it['count']) if it.get('count', 1) > 1 else ''} · {it['material']}",
+                                            f"{' × ' + str(it['count']) if it.get('count', 1) > 1 else ''} · "
+                                            f"{M.customer_label(it['material'])}",
                                   'hsn': hsn, 'qty': round(units.area_value(it['area']), 2), 'unit': units.area_label(),
                                   'rate': round(units.rate_value(it['rate']), 2), 'amount': it['amount']})
         return lines

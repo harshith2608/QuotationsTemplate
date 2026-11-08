@@ -819,13 +819,15 @@ def _summary_from_snapshot(snap, page_width, palette):
     return [t] + _totals_elements(snap, page_width, palette)
 
 
-def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revision=None):
+def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revision=None, cover=None, closing=True):
     """
     The Initial Quotation (customer copy). Room by room (default, Settings → Quotation PDFs): each room with what it's
     made of, its items with sizes and No's, and one amount; fittings as a Hardware row per room. Or by material:
     amount per material. Then the sections (specifications, terms, notes) and payment details.
     revision: a saved revision (QuoteRevision): the quotation exactly as it was then (its own items, rates, totals,
     customer details and date), in the business's layout.
+    cover: the title page whatever the business's setting (the first-sign-in sample: app/sample_quote.py), and closing
+    False leaves out the About us and Next steps pages then.
     """
     import json as _json
     rsnap = _json.loads(revision.snapshot) if revision is not None else None
@@ -872,11 +874,13 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
                                             'email': project.email or '', 'address': project.address or ''}
     from . import presentation
-    cover = presentation.enabled()             # title page, About us, …, Next steps (console: per business)
+    cover = presentation.enabled() if cover is None else cover   # title page, About us, …, Next steps (per business)
+    closing = cover and closing
     palette = (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND)
     if cover:
         elements += _title_page(project, cust, ref, page_width, palette, styles)
-        elements += _about_page(page_width, palette, styles)
+        if closing:
+            elements += _about_page(page_width, palette, styles)
     else:
         # ------- HEADER -------
         elements += _header_elements(title_style, subtitle_style, BRAND_ACCENT)
@@ -1064,7 +1068,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
 
     # ------- SECTIONS: material specifications, payment & delivery terms, notes, T&C -------
     elements += _section_elements(styles, BRAND_DARK, project, _rooms2)
-    if not cover:                              # (with presentation pages, the thank-you is on the last page)
+    if not closing:                            # (with presentation pages, the thank-you is on the last page)
         _with_thanks(elements, Paragraph(
             _thank_you_text(),
             ParagraphStyle('Footer2', parent=styles['Normal'],
@@ -1107,7 +1111,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
             ] + span_cmds_pay))
             elements.append(pay_table)
 
-    if cover:
+    if closing:
         elements += _closing_page(page_width, palette, styles)
     _build(doc, elements)
     buffer.seek(0)

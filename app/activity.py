@@ -63,9 +63,12 @@ def usage():
     from . import welcome
     s = AppSetting.get_many([LAST_ACTIVE_KEY, LAST_LOGIN_KEY, FIELDS['name'][0], 'company_name_prefilled', 'company_mobile',
                              welcome.KEY])
-    last_quote = db.session.scalar(select(func.max(Project.updated_at)))
+    from . import sample_quote
+    sample = sample_quote.untouched_id()                         # the first-sign-in sample, until they edit it
+    own = (lambda q: q.where(Project.id != sample)) if sample else (lambda q: q)
+    last_quote = db.session.scalar(own(select(func.max(Project.updated_at))))
     out = dict(
-        quotations=db.session.scalar(select(func.count(Project.id))) or 0,
+        quotations=db.session.scalar(own(select(func.count(Project.id)))) or 0,
         last_quotation_at=last_quote,
         users=db.session.scalar(select(func.count(User.id))) or 0,
         payments=db.session.scalar(select(func.count(Payment.id))) or 0,

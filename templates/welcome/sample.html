@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Your first quotation{% endblock %}
+{% block content %}
+<div class="mx-auto my-4" style="max-width:860px">
+  <div class="text-center mb-3">
+    <div class="small text-muted fw-semibold mb-1">Welcome to QuoteRoom</div>
+    <h3 class="fw-bold mb-1">Here's a quotation from <span class="text-primary">{{ company }}</span></h3>
+    <p class="text-muted mb-0">A sample 2 BHK, at typical rates. This is the PDF your customers will get: send it to
+      yourself and see how it looks on WhatsApp.</p>
+  </div>
+
+  <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
+    <button type="button" class="btn btn-success btn-lg fw-semibold" id="sendSample"><i class="bi bi-whatsapp me-1"></i>Send this PDF to yourself on WhatsApp</button>
+    <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('welcome.sample_pdf', download=1) }}"><i class="bi bi-download me-1"></i>Download</a>
+  </div>
+  <p class="small text-muted text-center d-none" id="sendNote">Downloaded. Open WhatsApp, choose your own chat (or "Message yourself") and attach the PDF.</p>
+
+  <div class="card shadow-sm border-0 mb-3 overflow-hidden">
+    <iframe src="{{ url_for('welcome.sample_pdf') }}#view=FitH" title="Sample quotation PDF" class="w-100 d-none d-md-block" style="height:70vh;border:0"></iframe>
+    <div class="card-body d-md-none text-center">
+      <a class="btn btn-outline-primary" href="{{ url_for('welcome.sample_pdf') }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>Open the PDF</a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body d-md-flex align-items-center gap-3">
+      <div class="flex-grow-1 mb-2 mb-md-0">
+        <div class="fw-bold">Now make it yours</div>
+        <div class="small text-muted">A few quick questions: your logo, how you measure and your own rates. Your next
+          quotation looks like this, with your details. The sample stays in your quotations list to edit or delete.</div>
+      </div>
+      <a class="btn btn-primary btn-lg fw-semibold flex-shrink-0" href="{{ url_for('welcome.resume') }}">Make it yours <i class="bi bi-arrow-right ms-1"></i></a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// On a phone, the share sheet sends the PDF itself (pick WhatsApp, then your own chat); elsewhere it's downloaded
+document.getElementById('sendSample').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const blob = await (await fetch('{{ url_for("welcome.sample_pdf") }}')).blob();
+    const file = new File([blob], 'Sample quotation - {{ company|replace("'", "")|e }}.pdf', { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Sample quotation', text: 'My sample quotation from QuoteRoom' });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+      document.getElementById('sendNote').classList.remove('d-none');
+      window.open('https://web.whatsapp.com/', '_blank', 'noopener');
+    }
+  } catch (err) { /* share cancelled */ }
+  btn.disabled = false;
+});
+</script>
+{% endblock %}

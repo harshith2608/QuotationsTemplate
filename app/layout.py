@@ -84,7 +84,8 @@ def boq_rows(snapshot):
                 size = f"{units.length(it['length'])} × {units.length(it['width'])}"
                 if it.get('count', 1) > 1:
                     size += f" × {it['count']} No's"
-                detail = f"{it['material']} · {size}"
+                from .materials import customer_label
+                detail = f"{customer_label(it['material'])} · {size}"
                 lines.append({'no': n, 'title': it['name'], 'description': '\n'.join(x for x in (desc, detail) if x),
                               'image_id': it.get('image_id'),
                               'qty': units.area_value(it['area']), 'unit': units.area_label(),
@@ -134,12 +135,14 @@ def room_description(room):
 
 
 def auto_description(items):
-    """What a room is made of, from its measured items' materials (snapshot items), e.g.
-    'Laminates – Box Work · 18mm BWP, Glass'."""
+    """What a room is made of, from its measured items' materials (snapshot items), as the customer sees them, e.g.
+    'Laminate Finish · 18mm BWP, Glass'."""
+    from .materials import customer_label
     seen = []
-    for it in items:
-        if it.get('type') == 'measured' and it.get('material') and it['material'] not in seen:
-            seen.append(it['material'])
+    for it in items:                           # (as the customer sees them: "Laminate Finish", once)
+        text = customer_label(it.get('material')) if it.get('type') == 'measured' else ''
+        if text and text not in seen:
+            seen.append(text)
     return ', '.join(seen)
 
 

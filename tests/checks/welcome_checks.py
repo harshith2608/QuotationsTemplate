@@ -19,7 +19,28 @@ loc = lambda r: r.headers.get('Location', '')
 
 c = app.test_client()
 r = c.post('/login', data={'username': 'owner', 'password': 'owner-pass-123'})
-ok('first sign-in of a new business\'s admin opens the guided setup', r.status_code == 302 and loc(r).endswith('/welcome/'))
+ok('first sign-in of a new business\'s admin: a sample quotation in their name first', r.status_code == 302
+   and loc(r).endswith('/welcome/sample'))
+sp = c.get('/welcome/sample').text
+pdf = c.get('/welcome/sample.pdf')
+from app import activity as _act, sample_quote as _sq, setup_guide as _sg
+with app.app_context():
+    _sp = _sq.project()
+    _sample_ok = _sp is not None and _sp.customer_name == 'Sample customer' and _sp.grand_total > 0
+    _counts = _act.usage()['quotations']
+ok('…a 2 BHK priced at their rates, with "Send this PDF to yourself on WhatsApp" and "Make it yours"',
+   _sample_ok and 'Send this PDF to yourself on WhatsApp' in sp and 'Make it yours' in sp and '/welcome/sample.pdf' in sp
+   and pdf.status_code == 200 and pdf.data[:4] == b'%PDF')
+import io as _io
+from pypdf import PdfReader as _PR
+_t = ' '.join(p.extract_text() for p in _PR(_io.BytesIO(pdf.data)).pages)
+ok('…the PDF: a title page, then the quotation; no About us or Next steps page', 'Prepared for' in _t
+   and 'Sample customer' in _t and 'Next steps' not in _t and 'About us' not in _t)
+ok('…until they edit it, it isn\'t their quotation (console stages, setup guide)', _counts == 0)
+c.get('/welcome/sample')
+with app.app_context():
+    from app.models import Project as _P
+    ok('…made once, however often the page is opened', _P.query.count() == 1)
 r = c.get('/welcome/')
 ok('…at step 1, your business', loc(r).endswith('/welcome/business'))
 t = c.get('/welcome/business').text

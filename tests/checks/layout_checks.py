@@ -49,7 +49,7 @@ ok('room rows: one amount each, adding up to the subtotal exactly',
    [round(r['amount'], 2) for r in rows] == [round(kitchen_measured, 2), 13500, round(bedroom_measured, 2), 2800]
    and round(sum(r['amount'] for r in rows), 2) == round(snap['subtotal'], 2) == round(subtotal, 2))
 ok('descriptions: the room\'s own, else its materials', rows[0]['description'] == 'Carcass: BWP 710 ply · Shutters: 1.5mm Acrylic'
-   and 'Laminates – Box Work' in rows[2]['description'] and rows[1]['description'] == '')
+   and 'Laminate Finish' in rows[2]['description'] and 'Box Work' not in rows[2]['description'] and rows[1]['description'] == '')
 ok("hardware rows list each fitting with its count", [(i['name'], i['count']) for i in rows[1]['items']] == [('Tandem Drawer', 3)])
 
 cust = pdftext(f'/projects/{pid}/pdf/customer')
@@ -60,8 +60,8 @@ ok('…with sizes, one amount per room, discount and total; no rates or areas', 
    and 'sqft' not in cust)
 full = pdftext(f'/projects/{pid}/pdf')
 ok('Full Quotation keeps every rate and shows the count', 'Glass Shutters × 2' in full and money(subtotal - 1000) in full)
-ok('Full Quotation: each item\'s material as a finish (Laminates Finish), work types only in the Cost Summary',
-   'Laminates Finish' in full and 'Acrylic Finish' in full and 'Laminates – Box Work' in full.split('Cost Summary')[1]
+ok('Full Quotation: each item\'s material as a finish (Laminate Finish), work types only in the Cost Summary',
+   'Laminate Finish' in full and 'Acrylic Finish' in full and 'Laminates – Box Work' in full.split('Cost Summary')[1]
    and 'Laminates – Box Work' not in full.split('Cost Summary')[0])
 ok('Full Quotation Cost Summary: area and amount per material, no rate per area', 'Total Area' in full
    and 'Rate (Rs.' not in full and f'{inr(LAM, 0)}' not in full.split('Cost Summary')[1].split('Subtotal')[0].replace(money(LAM * 20), ''))
@@ -202,5 +202,5 @@ with app.app_context():
        and round(pre_p.grand_total, 2) == round(subtotal, 2))
 cust = re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in PdfReader(io.BytesIO(c2.get(f'/projects/{pre}/pdf/customer').data)).pages))
 ok('before the update: Initial Quotation prints, rooms described from materials', 'Kitchen – Hardware' in cust
-   and 'Laminates – Box Work' in cust and c2.get(f'/projects/{pre}').status_code == 200 and c2.get(f'/projects/{pre}/edit').status_code == 200)
+   and 'Laminate Finish' in cust and c2.get(f'/projects/{pre}').status_code == 200 and c2.get(f'/projects/{pre}/edit').status_code == 200)
 ok('before the update: {plywood_details} prints the plywood name', f'{d_name} for all the carcass and shutters' in cust)

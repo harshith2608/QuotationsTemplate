@@ -144,7 +144,12 @@ def _seen_done():
     done = set()
     if get_brand().get('logo_url'):
         done.add('logo')
-    counts = [select(func.count(Project.id)).where(Project.status != 'draft').scalar_subquery(),
+    from . import quote_templates, sample_quote
+    s = AppSetting.get_many(['upi_id', 'account_number', 'smtp_host', quote_templates.KEY, sample_quote.KEY])  # one query
+    sample = int(s[sample_quote.KEY]) if str(s[sample_quote.KEY] or '').isdigit() else -1
+    counts = [select(func.count(Project.id)).where(      # the first-sign-in sample isn't theirs until they edit it
+                  Project.status != 'draft', ~((Project.id == sample) & (Project.updated_at == Project.created_at))
+              ).scalar_subquery(),
               select(func.count(User.id)).scalar_subquery()]
     if billing.ready():                                    # cost_rates arrives with a database update
         counts.append(select(func.count(CostRate.id)).scalar_subquery())
@@ -156,8 +161,6 @@ def _seen_done():
         done.add('team')
     if len(row) > 2 and row[2]:
         done.add('costs')
-    from . import quote_templates
-    s = AppSetting.get_many(['upi_id', 'account_number', 'smtp_host', quote_templates.KEY])   # one query
     if s['upi_id'] or s['account_number']:
         done.add('payments')
     if s['smtp_host']:
