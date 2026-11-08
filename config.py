@@ -36,6 +36,8 @@ class Config:
     }
 
     WTF_CSRF_ENABLED = True
+    WTF_CSRF_TIME_LIMIT = None   # valid as long as the signed-in session (a tab left open for hours still works);
+                                 # still tied to the person's own session, so another site can't use it
 
 
 class DevelopmentConfig(Config):

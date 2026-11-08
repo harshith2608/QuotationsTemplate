@@ -653,3 +653,13 @@ with app.test_request_context():
 _nt._call = _real_call
 for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'CONSOLE_URL'):
     os.environ.pop(k, None)
+
+# ── A form refused for its security token: back to the page with a note, never a bare "Bad Request" ──
+_capp = create_app('development')
+_capp.config['WTF_CSRF_ENABLED'] = True
+_cc = _capp.test_client()
+_cc.post('/login', data={'username': 'demo-admin', 'password': 'demo1234'})
+_r = _cc.post('/admin/setup/hide', headers={'Referer': 'http://localhost/projects'})
+ok('an out-of-date form: back to the page it came from, not "Bad Request"', _r.status_code == 302
+   and _r.headers['Location'].endswith('/projects'))
+ok('…and the security token no longer expires after an hour', _capp.config.get('WTF_CSRF_TIME_LIMIT') is None)
