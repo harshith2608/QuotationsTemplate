@@ -73,7 +73,7 @@ ok('full PDF: item and summary lines labelled "Glass" / "PU Finish – Frame Wor
    re.search(r'Glass\s+12\.00', full) and 'PU Finish – Frame Work' in full and 'Glass –' not in full and '10,800' in full)
 cust = pdftext(f'/projects/{pid}/pdf/customer')
 cust = re.sub(r'\s+', ' ', cust)
-ok('customer PDF (room by room) names the new materials', 'Wallpaper' in cust and 'PU Finish – Frame Work' in cust)
+ok('customer PDF (room by room) names the new materials', 'Wallpaper' in cust and 'PU Finish' in cust and 'Frame Work' not in cust)
 e = c.get(f'/projects/{pid}/edit').text
 ok('edit form re-selects the saved one-rate material', 'existing-rooms-data' in e and '"wood_type": "Glass"' in e.replace('":"', '": "'))
 

@@ -136,15 +136,43 @@ def ordered_keys(totals):
 
 
 def finish_label_of(combo_key):
-    """For the Full Quotation's items: 'Acrylic|Box Work' → 'Acrylic Finish', with a plywood
+    """For the Full Quotation's items: 'Laminates|Box Work' → 'Laminate Finish', with a plywood
     'Acrylic Finish · 18mm BWP plywood' ("plywood" added unless the name already says ply); a material without work
     types keeps its name ('Glass')."""
     wood, work, *ply = combo_key.split('|')
-    text = f'{wood} Finish' if work else wood
+    text = finish_name(wood) if work else wood
     if not (ply and ply[0]):
         return text
     board = ply[0] if 'ply' in ply[0].lower() else f'{ply[0]} plywood'
     return f'{text} · {board}'
+
+
+SHOW_WORK_KEY = 'customer_work_types'   # '1': customers see "Laminates – Box Work" (Settings → Quotation PDFs)
+
+
+def finish_name(wood):
+    """'Laminates' → 'Laminate Finish', 'Acrylic' → 'Acrylic Finish' (a plural 's' dropped; 'Glass' keeps its 'ss')."""
+    w = (wood or '').strip()
+    if w.lower().endswith('finish'):
+        return w                                # already says it ('PU Finish')
+    if w.endswith('s') and not w.endswith('ss') and len(w) > 3:
+        w = w[:-1]
+    return f'{w} Finish'
+
+
+def customer_label(text):
+    """What the customer sees for a material label: 'Laminates – Box Work · 18mm BWP' → 'Laminate Finish · 18mm BWP'
+    (no Box Work / Frame Work: a technical word for the firm), unless the business shows work types. A material
+    without work types keeps its name ('Glass')."""
+    from .catalog import WORK_TYPES
+    from .models import AppSetting
+    if not text or AppSetting.get(SHOW_WORK_KEY) == '1':
+        return text or ''
+    main, sep, rest = text.partition(' · ')
+    wood, dash, work = main.partition(' – ')
+    if dash and work in WORK_TYPES:
+        main = finish_name(wood)
+    return main + (sep + rest if sep else '')
 
 
 def label_of(combo_key):

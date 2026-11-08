@@ -410,6 +410,13 @@
           customer's link and WhatsApp). Your quotation page always shows the rates.</div>
       </div>
       {% endif %}
+      <div class="form-check mt-3">
+        <input type="hidden" name="customer_work_types" value="0">
+        <input class="form-check-input" type="checkbox" name="customer_work_types" id="customer_work_types" value="1" {{ 'checked' if show_work_types }}>
+        <label class="form-check-label" for="customer_work_types">Show <strong>Box Work / Frame Work</strong> to customers</label>
+        <div class="form-text">Off: your customer sees "Laminate Finish", "Acrylic Finish" (on the PDFs, invoices and their
+          link). Your own quotation page always shows the work type.</div>
+      </div>
       <div class="text-end mt-2"><button type="submit" name="back_to" value="pdfLayout" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>

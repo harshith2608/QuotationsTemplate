@@ -1118,6 +1118,9 @@ def settings():
                 AppSetting.set(key, request.form.get(key, '').strip())
             if request.form.get('initial_layout') in layout.layouts():
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
+            if 'customer_work_types' in request.form:   # Box Work / Frame Work on what the customer sees
+                from .materials import SHOW_WORK_KEY
+                AppSetting.set(SHOW_WORK_KEY, '1' if request.form.get('customer_work_types') == '1' else '')
             if 'about_us' in request.form:          # presentation pages (shown when turned on from the console)
                 from . import presentation
                 presentation.save_texts(request.form.get('about_us'), request.form.get('next_steps'))
@@ -1175,6 +1178,7 @@ def settings():
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
+                           show_work_types=AppSetting.get('customer_work_types') == '1',
                            pdf_look=pdf_look.choices() if tab == 'documents' else None,
                            preview_pid=db.session.query(db.func.max(Project.id)).scalar() if tab == 'documents' else None,
                            presentation=_presentation_texts() if tab == 'documents' else None,
