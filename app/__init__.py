@@ -61,6 +61,20 @@ def create_app(config_name='default'):
     login_manager.init_app(app)
     csrf.init_app(app)
 
+    from flask_wtf.csrf import CSRFError
+
+    @app.errorhandler(CSRFError)
+    def _form_expired(exc):
+        """A form refused (e.g. signed out meanwhile in another tab): back to the page with a note, not a bare error."""
+        from flask import flash, jsonify, redirect, request
+        message = 'That didn\'t go through because the page was out of date. Please try again.'
+        if request.is_json or request.accept_mimetypes.best == 'application/json':
+            return jsonify({'ok': False, 'error': message}), 400
+        flash(message, 'warning')
+        back = request.referrer or ''
+        same_site = back.startswith(request.host_url)
+        return redirect(back if same_site else '/')
+
     # A QA copy (QA_MODE=1: built from the dev branch, on its own database): behind the QA key, marked QA, not indexed
     from . import qa
     qa.init(app)
