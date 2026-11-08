@@ -38,32 +38,27 @@ def project():
 
 
 def untouched_id():
-    """The sample's id while they haven't edited it (updated_at still its created_at), else None. One query, once
-    per request (the quotations list and the setup guide both ask)."""
+    """The sample's id while they haven't edited it (updated_at still its created_at), else None. Asked once per
+    request (the quotations list and the setup guide both ask); the setting comes with the page's settings read.
+    Through the models, so a trial's own schema is used (a plain SQL string would look in public)."""
     from flask import g, has_app_context
-    from sqlalchemy import text
-    if has_app_context() and '_sample_untouched' in g:
-        return g._sample_untouched
-    try:
-        row = db.session.execute(text(
-            'SELECT id, created_at, updated_at FROM projects WHERE id = (SELECT CAST(value AS INTEGER) FROM app_settings '
-            'WHERE key = :k)'), {'k': KEY}).first()
-    except Exception:
-        row = None
-    found = row[0] if row and row[1] and _dt(row[1]) == _dt(row[2]) else None     # (an edit changes updated_at)
-    if has_app_context():
-        g._sample_untouched = found
+    from sqlalchemy import select
+    from .models import AppSetting, Project
+    seen = g.setdefault('_sample_untouched', {}) if has_app_context() else {}
+    where = g.get('tenant_slug') if has_app_context() else None          # (the console asks for many trials at once)
+    if where in seen:
+        return seen[where]
+    found = None
+    pid = AppSetting.get(KEY)
+    if pid and str(pid).isdigit():
+        try:
+            row = db.session.execute(select(Project.created_at, Project.updated_at).where(Project.id == int(pid))).first()
+        except Exception:
+            db.session.rollback()                # never leave the request's transaction broken
+            row = None
+        found = int(pid) if row and row[0] and row[0] == row[1] else None     # (an edit changes updated_at)
+    seen[where] = found
     return found
-
-
-def _dt(value):
-    from datetime import datetime
-    if isinstance(value, datetime):
-        return value
-    try:
-        return datetime.fromisoformat(str(value))
-    except ValueError:
-        return None
 
 
 def available():
