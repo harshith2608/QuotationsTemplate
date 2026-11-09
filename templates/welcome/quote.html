@@ -1,0 +1,10 @@
+{% extends "welcome/_frame.html" %}
+{% block step %}
+<h4 class="fw-bold mb-1">Make your first quotation from your notes</h4>
+<p class="text-muted mb-3">{{ 'Take a picture of your site notes, or upload one from your gallery' if photos_on else 'Type what the customer wants' }}{{ ', or type what the customer wants' if photos_on and text_on }}.
+  QuoteRoom drafts the quotation with <strong>the rates you just set</strong>: you check it and save.</p>
+{% include 'projects/_draft_form.html' %}
+<div class="small text-muted mt-3"><i class="bi bi-shield-check me-1"></i>Your notes aren't stored or used to train AI.</div>
+<hr class="my-3">
+<a class="small" href="{{ url_for('welcome.quote', blank=1) }}">Or start a blank quotation <i class="bi bi-arrow-right"></i></a>
+{% endblock %}

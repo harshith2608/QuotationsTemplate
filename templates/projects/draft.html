@@ -14,75 +14,10 @@
 
   <div class="card shadow-sm border-0">
     <div class="card-body">
-      <form method="post" id="draftForm" enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {% if photos_on %}
-        <label class="form-label fw-semibold" for="draftPhotos"><i class="bi bi-camera me-1"></i>Photos of your site notes</label>
-        <input class="form-control" type="file" id="draftPhotos" name="photos" accept="image/*" multiple>
-        <div class="form-text">Up to {{ photo_max }} pages, one per photo · 1 AI use each</div>
-        <div id="photoPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
-        <div id="photoData"></div>
-        {% endif %}
-        {% if text_on %}
-        <label class="form-label fw-semibold {{ 'mt-3' if photos_on }}" for="draftMessage">{{ 'Or type' if photos_on else 'Type' }} the requirements</label>
-        <textarea class="form-control" id="draftMessage" name="message" rows="{{ 4 if photos_on else 8 }}" maxlength="6000"
-                  placeholder="e.g. {{ biz.draft_example }}">{{ message }}</textarea>
-        {% endif %}
-        <button type="submit" class="btn btn-primary ki-btn-primary mt-3" id="draftGo">
-          <i class="bi bi-stars me-1"></i>Draft the quotation</button>
-        {% include 'projects/_ai_uses.html' %}
-      </form>
+      {% include 'projects/_draft_form.html' %}
     </div>
   </div>
 
   <div class="small text-muted mt-3"><i class="bi bi-shield-check me-1"></i>Not stored or used to train AI.</div>
 </div>
-<script>
-(function () {
-  const form = document.getElementById('draftForm');
-  const input = document.getElementById('draftPhotos');
-  const MAX = {{ photo_max }}, SIDE = 1600;
-  // Photos are shrunk here before upload (a phone photo is 3–6 MB; this sends ~300 KB each)
-  function shrink(file) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const k = Math.min(1, SIDE / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(img.src);
-        resolve(c.toDataURL('image/jpeg', 0.85));
-      };
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
-    });
-  }
-  if (input) input.addEventListener('change', async () => {
-    const box = document.getElementById('photoData'), preview = document.getElementById('photoPreview');
-    box.innerHTML = ''; preview.innerHTML = '';
-    const files = [...input.files].slice(0, MAX);
-    if (input.files.length > MAX) alert(`Up to ${MAX} photos at a time: the first ${MAX} are used.`);
-    for (const f of files) {
-      try {
-        const url = await shrink(f);
-        const h = document.createElement('input'); h.type = 'hidden'; h.name = 'photo_data'; h.value = url; box.appendChild(h);
-        const im = document.createElement('img'); im.src = url; im.alt = ''; im.className = 'rounded border';
-        im.style.height = '90px'; preview.appendChild(im);
-      } catch (e) { /* the file itself is sent instead */ }
-    }
-  });
-  form.addEventListener('submit', (ev) => {
-    const msg = document.getElementById('draftMessage');
-    const shrunk = document.querySelectorAll('input[name=photo_data]').length;
-    if (!shrunk && !(input && input.files.length) && !(msg && msg.value.trim())) {
-      ev.preventDefault(); alert('{{ "Add photos of your notes or paste the message." if photos_on and text_on else ("Add photos of your notes." if photos_on else "Paste the customer\'s message or your notes.") }}'); return;
-    }
-    if (shrunk && input) input.disabled = true;      // send the shrunk copies, not the originals
-    const b = document.getElementById('draftGo');
-    setTimeout(() => { b.disabled = true; }, 0);
-    b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Drafting your quotation…';
-  });
-})();
-</script>
 {% endblock %}
