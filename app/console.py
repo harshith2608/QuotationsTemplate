@@ -712,6 +712,21 @@ def dashboard():
         contacts = {}
     leads = load_leads()
     new_leads = [l for l in (leads or []) if not l['link_status']]
+    # A request from someone who already has an app (they asked again, another day): matched by phone or email to a
+    # trial, it isn't "not set up": it goes under "Asked again" with their app
+    from .marketing import normalise_phone
+    known = {}
+    for slug, ct in contacts.items():
+        for key in (normalise_phone(ct.get('phone') or ''), (ct.get('email') or '').strip().lower()):
+            if key:
+                known.setdefault(key, slug)
+    asked_again = []
+    for l in new_leads:
+        slug = known.get(normalise_phone(l.get('phone') or '') or '') or known.get((l.get('email') or '').strip().lower())
+        if slug:
+            l['has_app'] = slug
+            asked_again.append(l)
+    new_leads = [l for l in new_leads if not l.get('has_app')]
     try:
         demo_stats = load_demo_stats()
     except Exception as exc:                 # the demo database being unreachable shouldn't break the dashboard
@@ -724,6 +739,7 @@ def dashboard():
         email_seen, email_since = {}, None
     from . import texts
     return render_template('console/dashboard.html', trials=trials, leads=leads, new_leads=new_leads, demo_stats=demo_stats,
+                           asked_again=asked_again,
                            lead_wa=texts.get('lead_whatsapp')[1],
                            email_seen=email_seen, email_since=email_since, contacts=contacts,
                            extend_choices=EXTEND_CHOICES, base_domain=tenancy.base_domain(),

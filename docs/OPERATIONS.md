@@ -1061,7 +1061,9 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 ## Telegram alerts (new trials, booked calls, payments)
 
 An instant Telegram message for each new trial, booked call and payment, with the phone (tap to call), WhatsApp and
-"Open in console" buttons (app/notify.py). Set up in console → Features → Telegram alerts:
+"Open in console" buttons (app/notify.py). Also a "📝 Trial request" when someone fills in the website's form: set the same three on the **website** project
+too. A request with no "🆕 New trial" after it means they stopped before creating their app (console dashboard →
+"Requested, app not set up yet"). Set up in console → Features → Telegram alerts:
 1. Telegram → @BotFather → /newbot → copy the token.
 2. Vercel, on the **console** and the **trials app**: `TELEGRAM_BOT_TOKEN` (and `CONSOLE_URL` on both, e.g.
    https://ops.quote-room.co.in, for the console button). Redeploy.
