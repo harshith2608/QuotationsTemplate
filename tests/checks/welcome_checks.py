@@ -310,7 +310,7 @@ with _mk.patch.object(_ait, 'available', lambda f: True):
 _q_off = c.get('/welcome/quote')
 ok('first quotation step (AI on): take a picture, upload from gallery or type it, drafted with your rates; or start blank',
    'Make your first quotation from your notes' in _q and 'capture="environment"' in _q and 'Take a picture' in _q
-   and 'Upload from gallery' in _q and 'name="message"' in _q and 'action="/projects/draft"' in _q
+   and 'ki-phone-only' in _q and 'Upload from gallery' in _q and 'Upload photos' in _q and 'name="message"' in _q and 'action="/projects/draft"' in _q
    and '/welcome/quote?blank=1' in _q and _qb.status_code == 302 and _qb.headers['Location'].endswith('/projects/new'))
 ok('…with the AI helpers off: straight to the new quotation form, as before', _q_off.status_code == 302
    and _q_off.headers['Location'].endswith('/projects/new'))

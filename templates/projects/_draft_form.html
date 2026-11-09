@@ -5,10 +5,16 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if photos_on %}
   <div class="form-label fw-semibold"><i class="bi bi-camera me-1"></i>Photos of your site notes</div>
+  <style>
+    /* "Take a picture" only where there's a camera to point at notes: phones and tablets (a touch screen) */
+    .ki-phone-only { display: none !important; }
+    @media (pointer: coarse) { .ki-phone-only { display: inline-block !important; } .ki-laptop-only { display: none; } }
+    @media (pointer: fine) { .ki-phone-label { display: none; } }
+  </style>
   <div class="d-flex flex-wrap gap-2">
-    <label class="btn btn-outline-primary fw-semibold mb-0" for="draftCamera"><i class="bi bi-camera-fill me-1"></i>Take a picture</label>
+    <label class="btn btn-outline-primary fw-semibold mb-0 ki-phone-only" for="draftCamera"><i class="bi bi-camera-fill me-1"></i>Take a picture</label>
     <input class="d-none" type="file" id="draftCamera" name="photos" accept="image/*" capture="environment" data-photo-input>
-    <label class="btn btn-outline-primary fw-semibold mb-0" for="draftGallery"><i class="bi bi-images me-1"></i>Upload from gallery</label>
+    <label class="btn btn-outline-primary fw-semibold mb-0" for="draftGallery"><i class="bi bi-images me-1"></i><span class="ki-phone-label">Upload from gallery</span><span class="ki-laptop-only">Upload photos</span></label>
     <input class="d-none" type="file" id="draftGallery" name="photos" accept="image/*" multiple data-photo-input>
   </div>
   <div class="form-text">Up to {{ photo_max }} pages, one per photo · 1 AI use each</div>
