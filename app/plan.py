@@ -37,7 +37,8 @@ DEFAULT_LENGTH = {'trial': '7d', '1m': '1m', '3m': '3m', '6m': '6m', '1y': '1y',
                   '6m_ai': '6m', '1y_ai': '1y'}
 PAID = ('1m', '3m', '6m', '1y', '1m_ai', '3m_ai', '6m_ai', '1y_ai')   # every paid plan (pricing.ALL); which are
                                          # offered now, and at what price: the console's Pricing (app/pricing.py)
-AUTOPAY = ('1m', '1m_ai')                # paid monthly by autopay (a Razorpay subscription), until cancelled
+AUTOPAY = ('1m', '1m_ai')                # monthly: paid once for a month, or by autopay (a Razorpay subscription)
+                                         # until cancelled, which the business turns on in Plan & billing
 LEGACY = ()                              # (plans switched off in Pricing stay valid for records and payments by hand)
 AI_PLANS = ('1m_ai', '3m_ai', '6m_ai', '1y_ai')   # plans with the bigger AI allowance (app/ai_tools.py)
 ADDON, ADDON_USES = 'ai40', 40           # bought on its own, on a paid plan: more AI uses
@@ -56,6 +57,7 @@ def short(plan):
     return months + (' with AI' if plan in AI_PLANS else '')
 
 REMIND_DAYS = 15        # paid plans: reminder banner this many days before the end
+MONTH_REMIND_DAYS = 5   # …a month paid once (not by autopay): the last 5 days
 GRACE_DAYS = 7          # paid plans: full access this many days after the end
 DELETE_AFTER_DAYS = 30  # data deleted this many days after the end date
 
@@ -133,7 +135,8 @@ class PlanStatus:
         if not self.has_limit:
             return 'none'
         if self.today <= self.ends_on:
-            if self.is_trial or (self.days_left < REMIND_DAYS and not self.autopay):
+            remind = MONTH_REMIND_DAYS if length_of(self.plan) == '1m' else REMIND_DAYS
+            if self.is_trial or (self.days_left < remind and not self.autopay):
                 return 'reminder'
             return 'active'
         if self.today <= self.grace_until:

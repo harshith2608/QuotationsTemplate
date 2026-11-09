@@ -1194,10 +1194,9 @@ def settings():
 @admin_bp.route('/support')
 def support():
     """Help: common questions, and the ways to reach us (WhatsApp, a free call for trials, email)."""
-    from . import branding, callbook, mailer
-    display, _ = branding.support_contact()
+    from . import callbook, mailer
     return render_template('admin/support.html', title='Support', whatsapp=callbook.whatsapp_url(),
-                           whatsapp_display=display, can_book=callbook.available(), email=mailer.sender())
+                           can_book=callbook.available(), email=mailer.sender())
 
 
 @admin_bp.route('/reports')

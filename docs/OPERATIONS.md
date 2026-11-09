@@ -144,7 +144,7 @@ without following "Rotating an encryption key" (section 3e).
 | `DATA_ENCRYPTION_KEY` | new key (section 2) |
 | `DATABASE_URL` | demo DB **pooled** URL |
 | `MARKETING_SITE` | `1` |
-| `MARKETING_WHATSAPP` | your number, digits only, e.g. `917675801918` |
+| `MARKETING_WHATSAPP` | your business WhatsApp number, digits only, e.g. `919876543210` |
 | `MARKETING_PRODUCT_NAME` | `QuoteRoom` |
 | `MARKETING_LEGAL_NAME`, `MARKETING_CONTACT_EMAIL`, `MARKETING_ADDRESS`, `MARKETING_JURISDICTION` | shown on /privacy and /terms |
 | `DEMO_MODE` | `1` |

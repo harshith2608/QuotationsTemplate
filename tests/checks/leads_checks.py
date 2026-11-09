@@ -194,8 +194,9 @@ ok('…without JavaScript: redirected there (the monthly plan too)', r.status_co
    and r.headers['Location'].endswith('&plan=1m'))
 with app.app_context():
     ok('…the request notes the plan they\'re buying', any('buying 1m' in (l.source or '') for l in Lead.query.all()))
-ok('pricing: monthly ₹599 by autopay, 12 months ₹5,999 with 2 months free; no 6-month plan', '₹599' in lp
-   and '₹5,999' in lp and '2 months free' in lp and 'renews' in lp and 'autopay' in lp.lower() and '₹4,999' not in lp)
+ok('pricing: monthly ₹599 (a month at a time, or autopay), 12 months ₹5,999 with 2 months free; no 6-month plan',
+   '₹599' in lp and '₹5,999' in lp and '2 months free' in lp and 'one month' in lp and 'autopay' in lp.lower()
+   and '₹4,999' not in lp)
 # Prices from the console's Pricing (a copy in the website's own database): no code change
 import json as _json
 from app.models import AppSetting as _AS

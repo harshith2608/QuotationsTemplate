@@ -199,8 +199,8 @@ _CALLS = [
      "• It also saves the hours spent typing and re-checking totals in Excel, every quotation.\n"
      "• Ask: \"How much is one 2 BHK job worth to you?\" Then compare."),
     ('monthly', '"Can I pay monthly?" / "Lifetime?"',
-     "• Yes: ₹{price_1m} a month (₹{price_1m_ai} with AI), paid by UPI Autopay or card. Approve it once; cancel any "
-     "time from the app.\n"
+     "• Yes: ₹{price_1m} a month (₹{price_1m_ai} with AI), paid one month at a time by UPI, card or net banking. "
+     "Or turn on autopay in the app (Plan & billing) and it renews by itself; cancel any time.\n"
      "• Paying for 12 months (₹{price_1y}) is {free_1y}.\n"
      "• No lifetime plan: the app runs on servers we pay for every month (hosting, backups, updates), and you get every "
      "new feature as it comes."),
