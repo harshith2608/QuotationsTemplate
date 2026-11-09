@@ -82,6 +82,15 @@
   </div>
 {% endif %}
 
+  {% if asked_again %}
+  <details class="card" style="margin-bottom:14px"><summary class="small"><strong>Asked again: already have an app ({{ asked_again|length }})</strong>
+    <span class="muted">· a new request from someone with a trial (same phone or email)</span></summary>
+    <ul class="small" style="margin:8px 0 0">
+      {% for l in asked_again %}<li>{{ l.company_name or l.name }} · {{ l.created_at|ist }} →
+        <a href="{{ url_for('console.trial_detail', slug=l.has_app) }}">{{ l.has_app }}</a></li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
 <h2 id="allTrials">All trials <span class="muted small">({{ trials|length }}, newest first)</span></h2>
 <p id="tsNone" class="muted" hidden>No trial matches.</p>
 {% if not trials %}<p class="muted">No trials yet.</p>{% endif %}
