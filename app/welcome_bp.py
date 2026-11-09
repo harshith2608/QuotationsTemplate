@@ -121,6 +121,8 @@ def business():
                 flash(e, 'danger')
             return redirect(url_for('welcome.business'))
         from . import setup_guide
+        from .ops import PREFILLED_NAME_KEY
+        AppSetting.set(PREFILLED_NAME_KEY, '')      # confirmed: their own now (even if unchanged from their request)
         setup_guide.mark('company')
         if branding.get_brand().get('logo_url'):
             setup_guide.mark('logo')

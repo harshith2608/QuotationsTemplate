@@ -1088,6 +1088,9 @@ def settings():
         errors = []
         if tab == 'company':
             errors = _save_company_fields()
+            if not errors:                      # their own details now (even if the name is the one from their request)
+                from .ops import PREFILLED_NAME_KEY
+                AppSetting.set(PREFILLED_NAME_KEY, '')
         elif tab == 'appearance':
             if request.form.get('reset_theme'):
                 for key in branding.THEME_KEYS:

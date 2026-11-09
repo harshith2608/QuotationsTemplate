@@ -308,3 +308,15 @@ with app.app_context():
        and W.state()['kind'] == 'furniture')
 t = c.get('/projects/new').text
 ok('…the strip on the quotation form goes back to the materials', 'href="/welcome/rates/materials"' in t)
+
+# ── The company name from the trial request: "not confirmed yet" until they confirm it (even unchanged) ──
+from app import activity as _act2
+with app.app_context():
+    _nm = AppSetting.get('company_name')
+    AppSetting.set('company_name_prefilled', _nm); db.session.commit()
+    _before = _act2.usage()
+c.post('/welcome/business', data={'name': _nm, 'phone': '90000 00021', 'confirm': '1'})
+with app.app_context():
+    _after = _act2.usage()
+ok('company name from the request: "not confirmed yet"; confirming it unchanged counts as their own',
+   not _before['company_set'] and _before['company_prefilled'] and _after['company_set'] and not _after['company_prefilled'])
