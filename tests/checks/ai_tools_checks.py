@@ -112,6 +112,14 @@ with app.app_context():
     fc_row.unit, fc_row.rate, fc_row.category, fc_row.description = 'sqft', 120, 'Ceiling', 'Gypsum board'
     db.session.add(fc_row)
     db.session.commit()
+answers.append(D(job_title='Wardrobe', questions=[], rooms=[R(name='Bedroom', items=[
+    I(kind='measured', name='Wardrobe', length_ft=7, width_ft=7, material='Laminates', work_type='Box Work')])],
+    customer_name='Mr.  Sharma', customer_mobile='+91 98765-43210', customer_email='sharma@example.com',
+    customer_address='Flat 402, Green Park'))
+r = c.post('/projects/draft', data={'message': 'Mr. Sharma 98765 43210, Flat 402 Green Park. Wardrobe 7x7 laminate'})
+ok('the customer\'s name, mobile, email and address in the message fill the form (to check)', 'value="Mr. Sharma"' in r.text
+   and 'value="9876543210"' in r.text and 'sharma@example.com' in r.text and 'Flat 402, Green Park' in r.text
+   and 'check the customer details' in r.text and 'customer_name, customer_mobile' in calls[-1]['messages'][0]['content'])
 answers.append(D(job_title='Hall work', questions=[], rooms=[R(name='Hall', items=[
     I(kind='line', name='false ceiling', length_ft=15, width_ft=12),
     I(kind='line', name='Electrical points', quantity=20, unit='points'),
@@ -189,7 +197,8 @@ def data_url(raw, kind='jpeg'):
 ok('photos: off until switched on (their own switch)', 'id="draftPhotos"' not in c.get('/projects/draft').text)
 os.environ['AI_PHOTOS'] = '1'
 page = c.get('/projects/draft').text
-ok('on: take photos of the notes, with the AI uses left', 'id="draftPhotos"' in page and re.search(r'\d+ AI uses left', page)
+ok('on: take a picture of the notes or upload from the gallery, with the AI uses left', 'Take a picture' in page
+   and 'Upload from gallery' in page and 'capture="environment"' in page and re.search(r'\d+ AI uses left', page)
    and '1 AI use each' in page)
 answers.append(D(job_title='Kitchen and wardrobe', questions=['Loft size?'], rooms=[
     R(name='Kitchen', items=[I(kind='measured', name='Base Cabinet', length_ft=10.5, width_ft=2.75, material='Laminates', work_type='Box Work')])]))

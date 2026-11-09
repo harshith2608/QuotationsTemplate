@@ -82,7 +82,7 @@
 {% if ai_draft %}
 <div class="alert alert-info py-2 small" id="aiDraftNotes">
   <div class="fw-semibold mb-1"><i class="bi bi-stars me-1"></i>Drafted from {{ 'your notes' if ai_draft.photos else 'the message' }}{% if ai_draft.title %}: {{ ai_draft.title }}{% endif %}.
-    Check every line{{ ' against the photos' if ai_draft.photos }}, enter the customer, and save.</div>
+    Check every line{{ ' against the photos' if ai_draft.photos }}, {{ 'check the customer details (filled in from ' ~ ('your notes' if ai_draft.photos else 'the message') ~ ')' if ai_draft.customer else 'enter the customer' }}, and save.</div>
   {% if ai_draft.photos %}
   <div class="d-flex flex-wrap gap-2 my-2">
     {% for src in ai_draft.photos %}<a href="{{ src }}" target="_blank" rel="noopener" title="Open the photo"><img src="{{ src }}" alt="Site notes, page {{ loop.index }}" class="rounded border" style="height:110px"></a>{% endfor %}

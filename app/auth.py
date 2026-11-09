@@ -32,10 +32,9 @@ def login():
             record_login()
             if user.is_admin and not request.args.get('next'):
                 from . import db, welcome
-                if welcome.start_on_first_login():          # a new business: a sample quotation, then the setup
+                if welcome.start_on_first_login():          # a new business: the guided first setup
                     db.session.commit()
-                    from . import sample_quote
-                    return redirect(url_for('welcome.sample' if sample_quote.available() else 'welcome.resume'))
+                    return redirect(url_for('welcome.resume'))
                 welcome.note_sign_in()
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(safe_next())

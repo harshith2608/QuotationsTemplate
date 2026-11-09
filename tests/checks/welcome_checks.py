@@ -19,29 +19,7 @@ loc = lambda r: r.headers.get('Location', '')
 
 c = app.test_client()
 r = c.post('/login', data={'username': 'owner', 'password': 'owner-pass-123'})
-ok('first sign-in of a new business\'s admin: a sample quotation in their name first', r.status_code == 302
-   and loc(r).endswith('/welcome/sample'))
-sp = c.get('/welcome/sample').text
-pdf = c.get('/welcome/sample.pdf')
-from app import activity as _act, sample_quote as _sq, setup_guide as _sg
-with app.app_context():
-    _sp = _sq.project()
-    _sample_ok = _sp is not None and _sp.customer_name == 'Sample customer' and _sp.grand_total > 0
-    _counts = _act.usage()['quotations']
-ok('…a 2 BHK priced at their rates, with Download PDF and "Make it yours" (no WhatsApp button)',
-   _sample_ok and 'Download PDF' in sp and 'sendSample' not in sp and 'yourself on WhatsApp' not in sp
-   and 'Make it yours' in sp and '/welcome/sample.pdf' in sp
-   and pdf.status_code == 200 and pdf.data[:4] == b'%PDF')
-import io as _io
-from pypdf import PdfReader as _PR
-_t = ' '.join(p.extract_text() for p in _PR(_io.BytesIO(pdf.data)).pages)
-ok('…the PDF: a title page, then the quotation; no About us or Next steps page', 'Prepared for' in _t
-   and 'Sample customer' in _t and 'Next steps' not in _t and 'About us' not in _t)
-ok('…until they edit it, it isn\'t their quotation (console stages, setup guide)', _counts == 0)
-c.get('/welcome/sample')
-with app.app_context():
-    from app.models import Project as _P
-    ok('…made once, however often the page is opened', _P.query.count() == 1)
+ok('first sign-in of a new business\'s admin opens the guided setup', r.status_code == 302 and loc(r).endswith('/welcome/'))
 r = c.get('/welcome/')
 ok('…at step 1, your business', loc(r).endswith('/welcome/business'))
 t = c.get('/welcome/business').text
@@ -320,3 +298,19 @@ with app.app_context():
     _after = _act2.usage()
 ok('company name from the request: "not confirmed yet"; confirming it unchanged counts as their own',
    not _before['company_set'] and _before['company_prefilled'] and _after['company_set'] and not _after['company_prefilled'])
+
+# ── The first quotation step, with the AI helpers on: make it from your notes (camera, gallery or typed) ──
+from unittest import mock as _mk
+from app import ai_tools as _ait
+with app.app_context():                       # (no quotation rebuilt from an old one: that one would open instead)
+    _st = W._state(); _st.pop('project', None); W._store(_st); db.session.commit()
+with _mk.patch.object(_ait, 'available', lambda f: True):
+    _q = c.get('/welcome/quote').text
+    _qb = c.get('/welcome/quote?blank=1')
+_q_off = c.get('/welcome/quote')
+ok('first quotation step (AI on): take a picture, upload from gallery or type it, drafted with your rates; or start blank',
+   'Make your first quotation from your notes' in _q and 'capture="environment"' in _q and 'Take a picture' in _q
+   and 'ki-phone-only' in _q and 'Upload from gallery' in _q and 'Upload photos' in _q and 'name="message"' in _q and 'action="/projects/draft"' in _q
+   and '/welcome/quote?blank=1' in _q and _qb.status_code == 302 and _qb.headers['Location'].endswith('/projects/new'))
+ok('…with the AI helpers off: straight to the new quotation form, as before', _q_off.status_code == 302
+   and _q_off.headers['Location'].endswith('/projects/new'))

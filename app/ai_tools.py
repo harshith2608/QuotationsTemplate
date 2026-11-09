@@ -207,6 +207,10 @@ class Draft(BaseModel):
     job_title: str
     rooms: List[DraftRoom]
     questions: List[str]
+    customer_name: str = ''         # the customer's details, when the notes or the message give them
+    customer_mobile: str = ''
+    customer_email: str = ''
+    customer_address: str = ''
 
 
 DRAFT_PROMPT = """Below is what a customer wants done (often a WhatsApp message), or an interior designer's notes from a
@@ -227,6 +231,9 @@ site visit. Draft a quotation for this business, using only the business's own i
 - questions: up to 6 short questions the business can send the customer for what's missing (sizes, finishes, how
   many), in plain words. Never ask about the business's own terms or methods (work types, plywood, how it prices).
 - job_title: 2–4 words ("3 BHK interiors", "Kitchen and wardrobes").
+- customer_name, customer_mobile, customer_email, customer_address: the CUSTOMER's details when the text gives them
+  (often at the top of the notes: "Mr. Sharma 98765 43210, Flat 402, Green Park"), exactly as written; otherwise
+  empty. Never the business's own name or number, and never guess.
 There are no prices in your answer: the business's own rates are used."""
 
 # only for a business that prices by material (one pricing by item has no measured items)
@@ -386,7 +393,8 @@ def to_form(draft, cat):
 
 def draft(message, photos=()):
     """A customer's message and/or photos of site notes (prepare_photo'd JPEG bytes) → {'rooms_json', 'title',
-    'questions', 'no_rate', 'waiting'}. Photos count against their own limit, one use each. Raises AIProblem."""
+    'customer' (name, mobile, email, address found in them: filled into the form to check), 'questions', 'no_rate',
+    'waiting'}. Photos count against their own limit, one use each. Raises AIProblem."""
     import base64
     message = (message or '').strip()
     photos = list(photos)[:PHOTO_MAX]
@@ -413,7 +421,15 @@ def draft(message, photos=()):
             'Mention the rooms and what goes in each.'))
     lines = sum(len(r['items']) for r in rooms)
     ai_import._log(feature, True, lines=lines, tokens_in=used['in'], tokens_out=used['out'])
+    from .marketing import normalise_phone
+    mobile = normalise_phone(answer.customer_mobile or '') or ''
+    email = (answer.customer_email or '').strip()
+    customer = {'customer_name': ' '.join((answer.customer_name or '').split())[:80],
+                'mobile': mobile[2:] if mobile else '',                    # (the form's 10 digits)
+                'email': email[:120] if '@' in email else '',
+                'address': ' '.join((answer.customer_address or '').split())[:300]}
     return {'rooms_json': json.dumps(rooms), 'title': ' '.join(answer.job_title.split())[:60],
+            'customer': {k: v for k, v in customer.items() if v},
             'questions': [q.strip() for q in answer.questions if q.strip()][:6], 'no_rate': no_rate[:10],
             'waiting': sum(1 for r in rooms for i in r['items'] if i.get('pending'))}
 

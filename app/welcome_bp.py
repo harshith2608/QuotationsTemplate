@@ -466,45 +466,23 @@ def _money(value, default):
 
 # ── 4. Your first quotation, then done ───────────────────────────────────────
 
-@welcome_bp.route('/sample')
-def sample():
-    """First sign-in: a sample 2 BHK quotation in their company's name, as their customer would get it, before any
-    setup (app/sample_quote.py). Then "Make it yours" starts the guided setup."""
-    from . import sample_quote
-    if not sample_quote.available():
-        return redirect(url_for('welcome.resume'))
-    p = sample_quote.make(current_user)
-    from .branding import get_brand
-    return render_template('welcome/sample.html', hide_nav=True, title='Your first quotation', project=p,
-                           company=get_brand().get('name') or 'your company')
-
-
-@welcome_bp.route('/sample.pdf')
-def sample_pdf():
-    """The sample as the customer PDF: its title page, then the quotation (no About us or Next steps page)."""
-    from flask import send_file
-    from . import sample_quote
-    from .models import AppSetting
-    from .pdf_utils import generate_customer_pdf
-    p = sample_quote.project()
-    if p is None:
-        abort(404)
-    pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
-    from .branding import get_brand
-    name = ''.join(ch if ch.isalnum() else '_' for ch in (get_brand().get('name') or 'QuoteRoom')).strip('_')
-    return send_file(generate_customer_pdf(p, payment_settings=pay, cover=True, closing=False), mimetype='application/pdf',
-                     as_attachment=request.args.get('download') == '1', download_name=f'Sample_quotation_{name}.pdf')
-
-
 @welcome_bp.route('/quote')
 def quote():
-    """The quotation rebuilt from their old one, else the new quotation form (the strip on top says what to do)."""
+    """The quotation rebuilt from their old one; else, with the AI helpers on, "make it from your notes" (a photo of
+    their site notes, taken now or from the gallery, or the requirements typed): drafted with the rates they just set;
+    else (or ?blank=1) the new quotation form. The strip on top says what to do."""
+    from . import ai_tools
     from .models import Project
     W.go_to('quote')
     db.session.commit()
     pid = W.state().get('project')
     if pid and Project.query.get(pid):
         return redirect(url_for('projects.view_project', project_id=pid))
+    photos_on, text_on = ai_tools.available('photos'), ai_tools.available('draft')
+    if (photos_on or text_on) and not request.args.get('blank'):
+        from .ai_tools_bp import _plan_page_on
+        return _page('welcome/quote.html', 'quote', back='welcome.rates', photos_on=photos_on, text_on=text_on,
+                     photo_max=ai_tools.PHOTO_MAX, message='', ai_pool=ai_tools.pool(), plan_page_on=_plan_page_on())
     return redirect(url_for('projects.create_project'))
 
 
