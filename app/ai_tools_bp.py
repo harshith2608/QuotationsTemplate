@@ -58,7 +58,7 @@ def draft():
                      'plywood_thickness': ''}
             # shown small next to the draft for checking, from this page only: never stored
             result['photos'] = ['data:image/jpeg;base64,' + base64.b64encode(p).decode() for p in photos]
-            return render_new_form(start, ai_draft=result)
+            return render_new_form(start, form_data=result.get('customer') or {}, ai_draft=result)
     return render_template('projects/draft.html', title='Draft from a message', message=message,
                            text_on=ai_tools.available('draft'), photos_on=photos_on,
                            ai_pool=ai_tools.pool(), plan_page_on=_plan_page_on(), photo_max=ai_tools.PHOTO_MAX)
