@@ -367,7 +367,7 @@ footer nav { display: flex; gap: 1.2rem; }
       <a class="btn btn-primary" href="{{ url_for('projects.list_projects') }}">Open app</a>
       {% else %}
       {% if sells and '1m' in (plan_names or {}) %}
-      <a class="btn btn-ghost hide-sm" href="{{ url_for('marketing.free_trial') }}" data-trial>Free trial</a>
+      <a class="btn btn-ghost hide-sm" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Live demo</a>
       <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
          data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }}</a>
       {% else %}
