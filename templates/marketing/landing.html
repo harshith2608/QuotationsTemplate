@@ -13,7 +13,7 @@
           {% if buy_month %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
              data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }} a month</a>
-          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Or try free for 7 days</a>
+          <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo{{ ' (no signup)' if demo_mode }}</a>
           {% else %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>
             Start your 7-day free trial
@@ -24,7 +24,9 @@
         <div class="proof">
           {% if buy_month %}<span>{{ plan_names['1m'][1] }} a month · cancel any time</span>{% endif %}<span>7-day free trial</span><span>One price for your whole team</span><span>Works on any phone</span><span>Your logo &amp; colours</span>
         </div>
-        {% if buy_month %}<p class="small" style="margin-top:.6rem"><a href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Or see the live demo first{{ ' (no signup)' if demo_mode }} →</a></p>{% endif %}
+        {% if buy_month %}<p class="small" style="margin-top:.6rem"><a href="{{ url_for('marketing.free_trial') }}" data-trial>Or start a free 7-day trial →</a>
+          <br><span style="color:var(--muted)">The AI features (a quotation drafted from a photo of your notes or a customer's message)
+          aren't in the live demo: try them in the free trial.</span></p>{% endif %}
       </div>
 
       <!-- The 1-minute demo: only a thumbnail loads until someone taps play (no YouTube scripts or cookies before that) -->
@@ -286,7 +288,8 @@
           {% if sells and '1m' in plan_names %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
              data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }} a month</a>
-          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Or try free for 7 days</a>
+          <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo</a>
+          <a class="small" href="{{ url_for('marketing.free_trial') }}" data-trial style="color:inherit">Or start a free 7-day trial (with the AI features) →</a>
           {% else %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start your free trial</a>
           {% endif %}
