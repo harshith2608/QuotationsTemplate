@@ -225,7 +225,7 @@
           <div class="tier-{{ 'ai' if ai else 'std' }}">
             <div class="price"><span class="amount">{{ plan_names[k][1] }}</span><span class="per">{{ per }}</span></div>
             {% set saved = pricing.saving(k, price_data) if pricing.monthly_of(k) in shown else 0 %}
-            <p class="sub">{{ 'For your whole team. Paid every month by UPI Autopay or card; cancel any time.' if length == '1m'
+            <p class="sub">{{ 'For your whole team. Pay month by month, or turn on autopay; cancel any time.' if length == '1m'
                                else 'About ₹' ~ pricing.per_month(k, price_data)|inr(0) ~ ' a month for your whole team, paid once.' ~ (' Save ₹' ~ saved|inr(0) ~ '.' if saved else '') }}</p>
           </div>
           {% endfor %}
@@ -243,8 +243,8 @@
         </div>
         {% endfor %}
       </div>
-      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees.{% if '1m' in lengths %} The monthly plan renews
-        by autopay until you cancel it (your bank or UPI app tells you a day before each payment).{% endif %}{% if longer %} Plans paid once don't
+      <p class="price-note">The price you see is the price you pay: no per-user charges, no setup fees.{% if '1m' in lengths %} The monthly plan is paid one month
+        at a time; turn on autopay in your app if you like (cancel any time).{% endif %}{% if longer %} Plans paid once don't
         renew automatically, and we remind you before they end.{% endif %}{% if call_url %}
         Not sure which plan? <a href="{{ call_url }}" data-call>Book a call with us</a>.{% endif %}</p>
     </div>

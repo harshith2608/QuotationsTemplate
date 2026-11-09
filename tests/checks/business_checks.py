@@ -241,10 +241,13 @@ from unittest import mock
 from app import plan as PM, subscription as SUB
 ends = _date(2026, 12, 6)
 on = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 1), autopay=True)
-off = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 1), autopay=False)
+off = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 3), autopay=False)
+early = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 11, 25), autopay=False)
 late = PM.PlanStatus(plan='1m', started_on=_date(2026, 11, 6), ends_on=ends, today=_date(2026, 12, 9), autopay=True)
-ok('autopay on: no "plan ends" banner or reminder; off: the usual ones; a failed month still gets the grace reminder',
-   on.state == 'active' and SUB.due_reminder(on) is None and off.state == 'reminder' and SUB.due_reminder(off) == 'paid_15'
+ok('autopay on: no "plan ends" banner or reminder; a month paid once: reminded in its last days only (not 15 days ahead); '
+   'a failed month still gets the grace reminder',
+   on.state == 'active' and SUB.due_reminder(on) is None and off.state == 'reminder' and SUB.due_reminder(off) == 'paid_3'
+   and early.state == 'active' and SUB.due_reminder(early) is None
    and late.state == 'grace' and SUB.due_reminder(late) == 'paid_end')
 ok('the monthly plans: autopay, a month at a time, AI on the AI one', PM.AUTOPAY == ('1m', '1m_ai')
    and PM.length_of('1m') == '1m' and '1m_ai' in PM.AI_PLANS and str(PM.add_length(_date(2026, 1, 31), '1m')) == '2026-02-28')
@@ -253,11 +256,6 @@ sig = _hmac.new(b'test-secret', b'pay_1|sub_1', _hl.sha256).hexdigest()
 ok("Razorpay's autopay signature (payment|subscription) is checked", SUB.verify_subscription_checkout('pay_1', 'sub_1', sig)
    and not SUB.verify_subscription_checkout('pay_1', 'sub_2', sig))
 os.environ.pop('PLATFORM_RAZORPAY_KEY_SECRET')
-try:
-    SUB.create_order('x', '1m'); refused = False
-except SUB.PaymentError:
-    refused = True
-ok('the monthly plan is never sold as a one-off payment', refused)
 sub = {'slug': 'acme', 'plan': '1m', 'sub_id': 'sub_9', 'status': 'active'}
 charged = {'event': 'subscription.charged', 'payload': {'subscription': {'entity': {'id': 'sub_9'}},
                                                          'payment': {'entity': {'id': 'pay_9', 'amount': 59900}}}}
@@ -275,13 +273,16 @@ import tempfile, glob as _glob, io as _io
 box = tempfile.mkdtemp(); os.environ['MAIL_OUTBOX_DIR'] = box
 with app.app_context(), mock.patch.object(SUB, 'receipt_pdf', return_value=_io.BytesIO(b'%PDF')):
     SUB.send_receipt({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900, 'payer_name': 'Ravi', 'business_name': 'Acme',
-                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001'}, to='ravi@acme.example')
+                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001', 'kind': 'autopay'}, to='ravi@acme.example')
     SUB.send_receipt({'plan': '1y', 'slug': 'acme', 'amount_paise': 599900, 'payer_name': 'Ravi', 'business_name': 'Acme',
                       'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0002'}, to='ravi@acme.example')
+    SUB.send_receipt({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900, 'payer_name': 'Ravi', 'business_name': 'Acme',
+                      'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0003', 'kind': 'checkout'}, to='ravi@acme.example')
 mails = [open(f, 'rb').read().decode('utf-8', 'ignore') for f in sorted(_glob.glob(box + '/*.eml'))]
 os.environ.pop('MAIL_OUTBOX_DIR')
-ok('a monthly receipt says how to cancel (with the Plan page link); a 12-month one doesn\'t', len(mails) == 2
-   and 'Cancel autopay' in mails[0] and '/plan' in mails[0] and 'Cancel autopay' not in mails[1])
+ok('an autopay receipt says how to cancel (with the Plan page link); a 12-month one or a month paid once doesn\'t',
+   len(mails) == 3 and 'Cancel autopay' in mails[0] and '/plan' in mails[0] and 'Cancel autopay' not in mails[1]
+   and 'Cancel autopay' not in mails[2])
 base_src = open('templates/base.html').read()
 menu = '\n'.join(l for l in base_src.splitlines() if 'set admin_links' in l or l.startswith('                       ('))
 with app.test_request_context():
@@ -296,7 +297,7 @@ with app.app_context():
     month_pdf = ' '.join(pg.extract_text() for pg in _PR(SUB.receipt_pdf({'plan': '1m', 'slug': 'acme', 'amount_paise': 59900,
         'payer_name': 'Ravi', 'business_name': 'Acme', 'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0001',
         'paid_at': __import__('datetime').datetime(2026, 11, 6), 'payment_id': 'pay_1', 'paid_by': 'admin', 'source': 'app',
-        'email': None})).pages)
+        'email': None, 'kind': 'autopay'})).pages)
     year_pdf = ' '.join(pg.extract_text() for pg in _PR(SUB.receipt_pdf({'plan': '1y', 'slug': 'acme', 'amount_paise': 599900,
         'payer_name': 'Ravi', 'business_name': 'Acme', 'plan_start': None, 'plan_end': None, 'receipt_no': 'QR2611-0002',
         'paid_at': __import__('datetime').datetime(2026, 11, 6), 'payment_id': 'pay_2', 'paid_by': 'admin', 'source': 'app',

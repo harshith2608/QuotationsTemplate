@@ -2767,25 +2767,8 @@ def _paid_plan(slug):
 
 def _go_pay(slug, plan, lead, token, company=''):
     """Send a business buying on the website to Razorpay for its plan (a payment link, reused if they come back)."""
-    from . import emails, plan as plan_mod, subscription
-    if plan in plan_mod.AUTOPAY:                 # monthly: approve the autopay on Razorpay's page (first month paid then)
-        try:
-            sub = subscription.current_subscription(slug) or subscription.create_subscription(
-                slug, plan, company or lead.get('company_name') or '', 'website', lead.get('email') or '',
-                lead.get('phone') or '', payer_name=lead.get('name') or '')
-        except subscription.PaymentError as exc:
-            current_app.logger.warning('Website autopay failed for %s: %s', slug, exc)
-            audit('website_pay_failed', slug, str(exc)[:200])
-            return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(),
-                                   new=True, plan=plan, pay_failed=True)
-        # Razorpay's Checkout on this page (its own subscription page can't send them back here): /start/subscribed
-        price = subscription.prices()[plan]
-        digits = ''.join(ch for ch in (lead.get('phone') or '') if ch.isdigit())[-12:]
-        checkout = {'key_id': _env('PLATFORM_RAZORPAY_KEY_ID'), 'subscription_id': sub['sub_id'],
-                    'description': f'QuoteRoom: {plan_mod.PLANS[plan]}, ₹{price} a month',
-                    'prefill': {'name': lead.get('name') or '', 'email': lead.get('email') or '', 'contact': digits}}
-        return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), new=True,
-                               plan=plan, price=price, token=token, autopay_checkout=checkout)
+    from . import emails, subscription
+    # Every plan, monthly too, is one payment here (a month paid once); autopay is turned on later in the app
     try:
         row = subscription.open_link(slug, plan) or subscription.create_payment_link(
             slug, plan, company or lead.get('company_name') or '', lead.get('phone') or '', lead.get('email') or '',

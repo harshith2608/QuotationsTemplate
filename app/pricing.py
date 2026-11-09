@@ -1,6 +1,6 @@
 """Plans and prices, set in the console (Pricing): no code change to change a price or offer a plan.
 
-Each plan is a length (monthly by autopay, 3, 6 or 12 months paid once) without or with AI, switched on or off with
+Each plan is a length (monthly, paid a month at a time or by autopay; 3, 6 or 12 months paid once) without or with AI, switched on or off with
 its price. The console keeps them in public.console_state (the shared app and the console read it, within a minute)
 and writes a copy to the website's own database (app_settings, kept on the nightly reset), as with the kinds of
 business. Nothing saved yet: the prices below, or the old PLAN_PRICE_* variables when set.
@@ -122,7 +122,7 @@ def badge(key, data=None):
 
 
 def summary(data=None):
-    """"₹599 a month by autopay or ₹5,999 for 12 months (with AI: ₹749 / ₹7,499)": the plans on, for messages."""
+    """"₹599 a month or ₹5,999 for 12 months (with AI: ₹749 / ₹7,499)": the plans on, for messages."""
     data = data or load()
     p = prices(data)
 
@@ -130,7 +130,7 @@ def summary(data=None):
         bits = []
         for k in keys:
             if is_monthly(k):
-                bits.append(f'₹{inr(p[k], 0)} a month by autopay')
+                bits.append(f'₹{inr(p[k], 0)} a month')
             else:
                 bits.append(f'₹{inr(p[k], 0)} for {HEADS[length(k)].lower()}')
         return ' or '.join(bits)

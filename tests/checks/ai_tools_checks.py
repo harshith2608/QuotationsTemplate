@@ -344,6 +344,9 @@ with app.test_request_context('/plan'):
                                  ai_pool=pool, ai_allowance={k: T.allowance(k) for k in T.ALLOWANCE}, addon='ai40',
                                  addon_uses=40, ai_on=False, autopay={'plan': '1m', 'amount_paise': 69900, 'status': 'active'},
                                  lower_price={'paying': 699, 'now': 599}, **_plan_vars)
+ok('monthly: "Pay ₹599 for 1 month" (one payment) and "Start autopay" side by side; with autopay on, only "Autopay is on"',
+   "buyPlan('1m'" in page and 'for 1 month' in page and "startAutopay('1m'" in page
+   and "buyPlan('1m'" not in page_lower and 'Autopay is on' in page_lower)
 ok('price lowered since their autopay started: the bar shows what they pay and how to switch (no days lost)',
    '₹699 a month' in page_lower and 'now ₹599' in page_lower
    and 'Cancel autopay, then Start autopay again' in page_lower and 'no days are lost' in page_lower)

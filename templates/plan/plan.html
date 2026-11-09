@@ -42,18 +42,22 @@
           {% if status.plan == key and not status.is_trial %}<span class="badge text-bg-success">Your plan</span>{% endif %}
         </div>
         <div class="display-6 fw-bold my-2">₹{{ (prices[key])|inr(0) }}<span class="fs-6 text-muted fw-normal"> {{ pricing.per_word(key) }}</span></div>
-        <div class="small text-muted mb-3">{% if monthly %}Paid every month by UPI Autopay or card · cancel any time
+        <div class="small text-muted mb-3">{% if monthly %}Pay for one month at a time, or turn on autopay · cancel any time
           {% else %}{% set saved = pricing.saving(key, pricing_data) %}{% if saved and pricing.monthly_of(key) in offered %}Save ₹{{ saved|inr(0) }} on paying monthly · {% endif %}paid once{% endif %}
           · your whole team · all features · no GST</div>
         <ul class="small mb-3 ps-3">
           <li>Unlimited quotations, staff logins and customers</li>
           {% if ai_on %}<li>{{ ai_allowance['ai' if ai else 'standard'] }} AI uses a month{{ ', more whenever you need them' if not ai else '' }}</li>{% endif %}
           <li>{{ when }}</li>
-          {% if monthly %}<li>Approve autopay once: the first month is paid now, then it renews by itself</li>{% endif %}
+          {% if monthly %}<li>Autopay (optional): approve it once and it renews every month until you cancel</li>{% endif %}
         </ul>
         {% if monthly %}
-        <button type="button" class="btn {{ 'btn-primary' if not autopay else 'btn-outline-secondary' }} mt-auto fw-semibold"
-                onclick="startAutopay('{{ key }}', this)" {{ 'disabled' if autopay }}><i class="bi bi-arrow-repeat me-1"></i>{{ 'Autopay is on' if autopay else 'Start autopay · ₹' ~ (prices[key])|inr(0) ~ ' a month' }}</button>
+        {% if autopay %}
+        <button type="button" class="btn btn-outline-secondary mt-auto fw-semibold" disabled><i class="bi bi-arrow-repeat me-1"></i>Autopay is on</button>
+        {% else %}
+        <button type="button" class="btn btn-primary mt-auto fw-semibold" onclick="buyPlan('{{ key }}', this)"><i class="bi bi-lock me-1"></i>Pay ₹{{ (prices[key])|inr(0) }} for 1 month</button>
+        <button type="button" class="btn btn-outline-primary mt-2 fw-semibold" onclick="startAutopay('{{ key }}', this)"><i class="bi bi-arrow-repeat me-1"></i>Start autopay · ₹{{ (prices[key])|inr(0) }} a month</button>
+        {% endif %}
         {% else %}
         {% set switch_note = 'Your monthly autopay will stop, and your ' ~ head ~ ' start on ' ~ status.ends_on.strftime('%d %b %Y')
                              ~ ', when your paid month ends.' if autopay and status.ends_on else '' %}

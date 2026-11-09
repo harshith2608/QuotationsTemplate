@@ -165,9 +165,7 @@ def create_order(slug, plan, business_name='', paid_by='', email='', payer_name=
     Returns the order row (dict)."""
     if plan not in plan_mod.PAID + plan_mod.LEGACY and plan != plan_mod.ADDON:
         raise PaymentError('Choose a plan.')
-    if plan in plan_mod.AUTOPAY:
-        raise PaymentError('The monthly plan is paid by autopay.')
-    ensure_table()
+    ensure_table()                          # (monthly too: paid once for a month; autopay is its own button)
     amount = prices()[plan] * 100
     order = _api('POST', '/orders', {'amount': amount, 'currency': 'INR',
                                      'receipt': f'{slug}-{plan}-{int(datetime.utcnow().timestamp())}'[:40],
@@ -190,8 +188,8 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
     """A Razorpay payment link for `plan` (sent by the operator on WhatsApp / email, or opened straight away by a
     business buying on the website). kind 'new': a customer whose app is made once they pay. callback_url: where
     Razorpay sends the payer back after paying. Returns the payment row (dict, with link_url)."""
-    if plan not in plan_mod.PAID + plan_mod.LEGACY or plan in plan_mod.AUTOPAY:
-        raise PaymentError('Choose a plan (the monthly plan is started by the business itself, with autopay).')
+    if plan not in plan_mod.PAID + plan_mod.LEGACY:
+        raise PaymentError('Choose a plan.')
     if not links_enabled():
         raise PaymentError('Set PLATFORM_RAZORPAY_KEY_ID and PLATFORM_RAZORPAY_KEY_SECRET on the console first.')
     ensure_table()
@@ -333,7 +331,7 @@ def _stop_autopay_for(row):
     """A 12-month plan paid (any way) by a business on monthly autopay: stop the autopay, so it isn't charged
     monthly on top of the year it bought. The year was added after the month already paid, so no days are lost."""
     if row['plan'] in plan_mod.AUTOPAY or row['plan'] == plan_mod.ADDON:
-        return
+        return                         # (a month paid once alongside autopay isn't offered: the app hides it)
     sub = current_subscription(row['slug'])
     if sub:
         try:
@@ -876,7 +874,7 @@ def send_receipt(row, to=None):
                                      business=row.get('business_name') or row['slug'], app=_app_link(row['slug']),
                                      plan_start=fmt(row.get('plan_start')), plan_end=fmt(row.get('plan_end')),
                                      receipt_no=row.get('receipt_no'))
-        if row['plan'] in plan_mod.AUTOPAY:          # every monthly receipt says how to stop it
+        if row.get('kind') == 'autopay':               # every autopay receipt says how to stop it
             body = body.rstrip() + (f'\n\nThis plan renews every month by autopay. To cancel any time: open '
                                     f'{_app_link(row["slug"], "/plan")} and tap Cancel autopay (or cancel the mandate '
                                     'in your UPI app). Nothing more is charged after you cancel.\n')
@@ -932,7 +930,8 @@ def due_reminder(status):
         return None                     # renewed by autopay: no "plan ends" reminders while it's on
     if status.is_trial:
         return 'trial_2' if 0 <= d <= 2 else 'trial_end' if -3 <= d < 0 else None
-    return 'paid_3' if 0 <= d <= 3 else 'paid_15' if 3 < d <= 15 else 'paid_end' if -7 <= d < 0 else None
+    early = 3 < d <= 15 and plan_mod.length_of(status.plan) != '1m'     # (a month paid once: 3 days before only)
+    return 'paid_3' if 0 <= d <= 3 else 'paid_15' if early else 'paid_end' if -7 <= d < 0 else None
 
 
 def send_reminders():
@@ -1029,7 +1028,7 @@ def receipt_pdf(row):
                       else 'Paid online through Razorpay. ') + 'This is a payment receipt, not a tax invoice: '
                      f'{escape(who["name"])} is not registered under GST, so no GST is charged.', small),
            Spacer(1, 6), Paragraph('Thank you for choosing QuoteRoom.', small)]
-    if row['plan'] in plan_mod.AUTOPAY:              # how to stop it, on every monthly receipt
+    if row.get('kind') == 'autopay':                 # how to stop it, on every autopay receipt
         link = _app_link(row['slug'], '/plan')
         el[-1:-1] = [Spacer(1, 6), Paragraph(
             '<b>Autopay:</b> this plan renews every month by autopay until you cancel it. Cancel any time at '
