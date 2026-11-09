@@ -14,7 +14,7 @@
     </select></div>
   <span id="tsCount" class="muted small" style="padding-bottom:10px"></span>
   <nav class="small jump" style="flex-basis:100%">Go to:
-    <a href="#newRequests">New requests</a> · <a href="#allTrials">All trials</a> · <a href="#handled">Handled requests</a> ·
+    <a href="#newRequests">Requested, app not set up</a> · <a href="#allTrials">All trials</a> · <a href="#handled">Handled requests</a> ·
     <a href="#website">Website &amp; live demo</a> · <a href="#selfServe">Self-serve</a> ·
     <a href="#newTrial">New trial</a></nav>
 </div>
@@ -27,8 +27,10 @@
 {% if leads is none %}
   <p class="muted small">Trial requests aren't connected (set <span class="mono">LEADS_DATABASE_URL</span> and <span class="mono">LEADS_DATA_ENCRYPTION_KEY</span>).</p>
 {% else %}
-  <h2 id="newRequests">New trial requests {% if new_leads %}<span class="badge b-reminder">{{ new_leads|length }}</span>{% endif %}</h2>
-  {% if not new_leads %}<p class="muted">No new requests.</p>{% endif %}
+  <h2 id="newRequests">Requested, app not set up yet {% if new_leads %}<span class="badge b-reminder">{{ new_leads|length }}</span>{% endif %}</h2>
+  <p class="muted small" style="margin-top:-6px">Asked for a trial on the website but didn't create their app (those who
+    did are under All trials). Call or WhatsApp them: they were interested a moment ago.</p>
+  {% if not new_leads %}<p class="muted">None: everyone who asked has set up their app.</p>{% endif %}
   <div class="list" data-pager="10">
   {% for l in new_leads %}
     <div class="item" data-row data-search="{{ [l.name, l.company_name, l.phone, l.email, l.city, l.business]|select|join(' ')|lower }}" data-kind="lead">

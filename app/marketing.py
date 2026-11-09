@@ -363,6 +363,13 @@ def trial_request():
             lead_id = db.session.execute(Lead.__table__.insert().values(**values)).inserted_primary_key[0]
         Lead.query.filter(Lead.created_at < now - timedelta(days=KEEP_LEADS_DAYS)).delete()
         db.session.commit()
+        if not dup:                              # Telegram (app/notify.py): a "🆕 New trial" follows once they set
+            from . import notify                 # up their app; none following means they stopped: call them
+            notify.send(f'📝 Trial request: {data["company_name"] or data["name"]}',
+                        ['App not set up yet' + (f' · buying the {plan} plan' if plan else ''),
+                         ' · '.join(filter(None, (data['name'], data['city']))),
+                         data['business_other'] or BUSINESS_TYPES.get(data['business_type'], '')],
+                        phone=data['phone'], console_path='/#newRequests')
 
     # Buying a plan: straight on to set up the app and pay (Razorpay checks who's paying)
     from . import mailer, signup

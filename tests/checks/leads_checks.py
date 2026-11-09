@@ -233,3 +233,16 @@ lp = create_app('development').test_client().get('/').text
 ok('self-serve off: the plan buttons still open WhatsApp', 'interested%20in%20the' in lp and 'data-plan=' not in lp)
 
 ok('…and none without the console link (SIGNUP_URL)', 'Rather see it with someone?' not in create_app('development').test_client().get('/').text)
+
+# ── Telegram: a "📝 Trial request" alert for each new request (a repeat from the same number: none) ──
+from app import notify as _nt
+_tg = []
+_nt.send = lambda title, lines=(), phone='', console_path='', chat_id=None: _tg.append((title, list(lines), phone, console_path)) or True
+_ct = create_app('development').test_client()
+_ct.post('/trial-request', data=dict(good, phone='9811100088', company_name='Alert Studio'), headers=J,
+         environ_base={'REMOTE_ADDR': '10.9.1.1'})
+_ct.post('/trial-request', data=dict(good, phone='9811100088', company_name='Alert Studio'), headers=J,
+         environ_base={'REMOTE_ADDR': '10.9.1.2'})
+ok('a new trial request alerts you on Telegram (app not set up yet, phone, console link); a repeat doesn\'t',
+   len(_tg) == 1 and _tg[0][0] == '📝 Trial request: Alert Studio' and 'App not set up yet' in _tg[0][1][0]
+   and _tg[0][2] == '919811100088' and _tg[0][3] == '/#newRequests')
