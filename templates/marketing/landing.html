@@ -8,15 +8,23 @@
         <p class="lede">Measure each room in feet & inches, mm or cm on your phone. {{ product }} works out the area, applies your rates and sends your customer a branded PDF on WhatsApp in minutes.</p>
       </div>
       <div class="hero-actions">
+        {% set buy_month = sells and '1m' in plan_names %}
         <div class="ctas">
+          {% if buy_month %}
+          <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
+             data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }} a month</a>
+          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Or try free for 7 days</a>
+          {% else %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>
             Start your 7-day free trial
           </a>
           <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo{{ ' — no signup' if demo_mode }}</a>
+          {% endif %}
         </div>
         <div class="proof">
-          <span>7-day free trial</span><span>One price for your whole team</span><span>Works on any phone</span><span>Your logo &amp; colours</span>
+          {% if buy_month %}<span>{{ plan_names['1m'][1] }} a month · cancel any time</span>{% endif %}<span>7-day free trial</span><span>One price for your whole team</span><span>Works on any phone</span><span>Your logo &amp; colours</span>
         </div>
+        {% if buy_month %}<p class="small" style="margin-top:.6rem"><a href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Or see the live demo first{{ ' (no signup)' if demo_mode }} →</a></p>{% endif %}
       </div>
 
       <!-- The 1-minute demo: only a thumbnail loads until someone taps play (no YouTube scripts or cookies before that) -->
@@ -272,10 +280,16 @@
       <div class="final">
         <div>
           <h2>Make your next quote in {{ product }}</h2>
-          <p>Start a free 7-day trial on your own app, or ask us for a 15-minute walkthrough on a real job.</p>
+          <p>Start today{% if sells and '1m' in plan_names %} for {{ plan_names['1m'][1] }} a month, cancel any time,{% endif %} or try it free for 7 days on your own app. Or ask us for a 15-minute walkthrough on a real job.</p>
         </div>
         <div class="actions">
+          {% if sells and '1m' in plan_names %}
+          <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
+             data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }} a month</a>
+          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Or try free for 7 days</a>
+          {% else %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start your free trial</a>
+          {% endif %}
           <div class="contact-line">
             <span>Or message us:</span><code id="waNumber">{{ wa_display }}</code>
             <button class="copy" type="button" id="copyBtn">Copy</button>

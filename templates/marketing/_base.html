@@ -93,6 +93,8 @@ header.nav { position: sticky; top: 0; padding-top: env(safe-area-inset-top, 0px
 .nav-links a { text-decoration: none; color: var(--muted); }
 .nav-links a:hover { color: var(--ink); }
 .nav-links .btn { color: var(--on-pine); padding: .55rem 1rem; }
+.nav-links .btn-ghost { color: var(--ink); }
+@media (max-width: 760px) { .nav-links .btn-ghost { display: none; } }   /* phones: one button in the header */
 .nav-links .btn, .nav-links .nav-keep { white-space: nowrap; }
 .nav-links .show-sm { display: none; }
 @media (max-width: 420px) { .nav-links .show-sm { display: inline; } }
@@ -110,6 +112,7 @@ header.nav { position: sticky; top: 0; padding-top: env(safe-area-inset-top, 0px
 .hero h1 em { font-style: normal; background: linear-gradient(transparent 62%, var(--tape) 62% 92%, transparent 92%); padding-inline: .08em; }
 .hero .lede { margin-top: 1.2rem; font-size: 1.15rem; color: var(--muted); max-width: 34em; }
 .hero .ctas { margin-top: 1.8rem; display: flex; flex-wrap: wrap; gap: .75rem; }
+@media (max-width: 520px) { .hero .ctas .btn { flex: 1 1 100%; justify-content: center; } }   /* stacked on a phone */
 .hero .proof { margin-top: 1.6rem; display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; font-size: .9rem; color: var(--muted); }
 .hero .proof span::before { content: "✓"; color: var(--pine); font-weight: 700; margin-right: .4rem; }
 @media (max-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 36px; } }
@@ -363,7 +366,13 @@ footer nav { display: flex; gap: 1.2rem; }
       {% if current_user.is_authenticated %}
       <a class="btn btn-primary" href="{{ url_for('projects.list_projects') }}">Open app</a>
       {% else %}
+      {% if sells and '1m' in (plan_names or {}) %}
+      <a class="btn btn-ghost hide-sm" href="{{ url_for('marketing.free_trial') }}" data-trial>Free trial</a>
+      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
+         data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }}</a>
+      {% else %}
       <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial><span class="hide-sm">Start free trial</span><span class="show-sm">Free trial</span></a>
+      {% endif %}
       {% endif %}
     </nav>
   </div>
