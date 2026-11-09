@@ -74,6 +74,7 @@ def usage():
         payments=db.session.scalar(select(func.count(Payment.id))) or 0,
         # the customer's own name: one filled in from their trial request (ops.create_trial) doesn't count
         company_set=bool((s[FIELDS['name'][0]] or '').strip()) and s[FIELDS['name'][0]] != s['company_name_prefilled'],
+        company_prefilled=bool((s['company_name_prefilled'] or '').strip()) and s[FIELDS['name'][0]] == s['company_name_prefilled'],
         logo_set=db.session.scalar(select(func.count()).select_from(AppSetting).where(
             AppSetting.key == LOGO_DATA_KEY, AppSetting.value != '')) > 0,
         last_login_at=when(s[LAST_LOGIN_KEY]),
