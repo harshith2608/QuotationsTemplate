@@ -386,6 +386,8 @@ def trial_request():
             emailed = mailer.mask(data['email'])
     if wants_json:
         return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup, 'emailed_to': emailed})
+    if setup:                                    # without JS too: straight on to choose a password
+        return redirect(setup)
     return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, name=data['name'],
                            setup_url=setup, emailed_to=emailed, **ctx)
 

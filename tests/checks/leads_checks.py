@@ -153,9 +153,9 @@ r = c5.post('/trial-request', data=dict(good, phone='9811100051', business_type=
 ok('…uPVC, glass and kitchen firms set up their own app too', r.get_json()['ok'] and r.get_json()['setup_url']
    and all(f'value="{v}"' in c5.get('/free-trial').text for v in ('kitchens', 'upvc', 'glass'))
    and 'uPVC windows &amp; doors' in c5.get('/free-trial').text)
-t = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'}).text
-ok('…and the page without JavaScript shows the button too, with no demo button beside it (one clear next step)',
-   'Set up my app now' in t and '/start?t=' in t and '<div data-demo-wait hidden>' in t)
+r = c5.post('/trial-request', data=dict(good, phone='9811100046'), environ_base={'REMOTE_ADDR': '10.9.0.3'})
+ok('…and without JavaScript: straight on to the set-up page (no "request received" stop)',
+   r.status_code == 302 and '/start?t=' in r.headers['Location'])
 
 # With email set up, the link goes to their email instead (proves the address is theirs)
 import glob, tempfile, email as _email
@@ -173,10 +173,10 @@ ok('email set up: the set-up link is shown straight away, and a copy emailed (th
    and '/e/o/L' in mails[0].get_body(('html',)).get_content())        # the open image (app/emails.py)
 ok('…with a hidden copy to hello@ (app emails don\'t show in the mailbox\'s Sent folder)',
    mails[0]['Bcc'] == 'hello@quote-room.co.in')
-t = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
-            environ_base={'REMOTE_ADDR': '10.9.0.5'}).text
-ok('…and the page without JavaScript: Set up my app now, and the email copy', 'Set up my app now' in t
-   and 'also emailed this link to' in t and 'x***@kiraninteriors.example' in t and 'Check your email' not in t)
+r = c5.post('/trial-request', data=dict(good, phone='9811100048', email='x@kiraninteriors.example'),
+            environ_base={'REMOTE_ADDR': '10.9.0.5'})
+ok('…and without JavaScript: straight on to set up, the email copy sent too', r.status_code == 302
+   and '/start?t=' in r.headers['Location'] and len(glob.glob(box + '/*.eml')) == 2)
 # Buying a plan on the website: the plan buttons open the same form, then straight on to set up and pay (any business,
 # and the link is shown, not emailed: Razorpay checks the payer)
 lp = c5.get('/').text
