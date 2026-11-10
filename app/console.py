@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import quote, urlencode
 
-from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request, session,
+from flask import (Blueprint, abort, current_app, flash, has_request_context, redirect, render_template, request, session,
                    url_for)
 from sqlalchemy import create_engine, text
 from werkzeug.security import check_password_hash
@@ -447,8 +447,19 @@ def _welcome_message(name, url, username, password, ends_on, company=''):
                         company_note=ready, tutorials=_tutorials_line(), ends_on=ends_on.strftime('%d %b %Y'))[1]
 
 
+def _on_computer():
+    """A computer (not a phone or tablet): WhatsApp links open WhatsApp Web, where the Business account is (the
+    desktop app that wa.me opens is the personal one)."""
+    ua = (request.headers.get('User-Agent') or '') if has_request_context() else ''
+    return 'Mozilla/' in ua and not re.search(r'Mobi|Android|iPhone|iPad|iPod|Tablet', ua)   # (a browser)
+
+
 def _wa_link(phone, message):
-    return f"https://wa.me/{phone}?text={quote(message)}" if phone else ''
+    if not phone:
+        return ''
+    if _on_computer():
+        return f"https://web.whatsapp.com/send?phone={phone}&text={quote(message)}"
+    return f"https://wa.me/{phone}?text={quote(message)}"
 
 
 # ── Follow-up messages on WhatsApp ───────────────────────────────────────────

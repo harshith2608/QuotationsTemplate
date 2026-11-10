@@ -153,5 +153,23 @@ document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener(
   if (!confirm(f.dataset.confirm)) e.preventDefault();
 }));
 </script>
+<script>
+// WhatsApp on a computer: open WhatsApp Web (where the Business account is), not the desktop app that wa.me opens.
+// Phones and tablets keep wa.me, which opens the WhatsApp Business app.
+(function () {
+  if (!window.matchMedia || !matchMedia('(pointer: fine)').matches) return;
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest && e.target.closest('a[href^="https://wa.me/"]');
+    if (!a || e.defaultPrevented) return;
+    const u = new URL(a.href);
+    const phone = u.pathname.replace(/\D/g, '');
+    const params = new URLSearchParams();
+    if (phone) params.set('phone', phone);
+    if (u.searchParams.get('text')) params.set('text', u.searchParams.get('text'));
+    e.preventDefault();
+    window.open('https://web.whatsapp.com/send?' + params.toString(), 'whatsapp-web');
+  }, true);
+})();
+</script>
 </body>
 </html>
