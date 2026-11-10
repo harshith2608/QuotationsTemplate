@@ -100,3 +100,21 @@ for bad in ({'boards': [{'name': 'A1', 'difference': 50, 'default': True}]},
         price_list.parse(json.dumps(bad).encode()); ok(f'price list refuses {bad}', False)
     except price_list.PriceListError:
         ok(f'price list refuses {list(bad)[0]} mistakes', True)
+
+# Materials that are items: no "Finish" added, and an item named after its material doesn't repeat it
+from app.materials import finish_name
+ok('finish names: Laminates → Laminate Finish, Acrylic → Acrylic Finish, Glass → Glass Finish',
+   finish_name('Laminates') == 'Laminate Finish' and finish_name('Acrylic') == 'Acrylic Finish' and finish_name('Glass') == 'Glass Finish')
+ok('…an item-like material stays as it is', finish_name('Sliding Wardrobe (Laminate Finish)') == 'Sliding Wardrobe (Laminate Finish)'
+   and finish_name('Kitchen Acrylic Finish - Base Unit') == 'Kitchen Acrylic Finish - Base Unit'
+   and finish_name('Dressing Storage Unit') == 'Dressing Storage Unit')
+with app.app_context():
+    snap = {'rooms': [{'name': 'Hall', 'items': [
+        {'name': 'TV Unit (Laminate)', 'type': 'measured', 'length': 1, 'width': 8, 'area': 8, 'rate': 2400, 'amount': 19200,
+         'material': 'TV Unit (Laminate) · 16mm Bond'},
+        {'name': 'TV Unit', 'type': 'measured', 'length': 1, 'width': 8, 'area': 8, 'rate': 2400, 'amount': 19200,
+         'material': 'TV Unit (Laminate) · 16mm Bond'}]}]}
+    l1, l2 = layout.boq_rows(snap)[0]['lines']
+ok('an item named after its material: size (and board) only, not the name twice',
+   'TV Unit (Laminate)' not in l1['description'] and '16mm Bond' in l1['description'])
+ok('…another name still says its material', l2['description'].startswith('TV Unit (Laminate) · 16mm Bond'))

@@ -113,7 +113,10 @@ def boq_rows(snapshot):
                 size = f"{units.length(it['length'])} × {units.length(it['width'])}"
                 if it.get('count', 1) > 1:
                     size += f" × {it['count']} No's"
-                detail = ' · '.join(x for x in (line_material(it['material']), size) if x)
+                mat = line_material(it['material'])
+                if mat.partition(' · ')[0].strip().lower() == (it['name'] or '').strip().lower():
+                    mat = mat.partition(' · ')[2]      # the item is named after its material: not said twice
+                detail = ' · '.join(x for x in (mat, size) if x)
                 lines.append({'no': n, 'title': it['name'], 'description': '\n'.join(x for x in (detail, desc) if x),
                               'image_id': it.get('image_id'),
                               'qty': units.area_value(it['area']), 'unit': units.area_label(),

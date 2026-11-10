@@ -556,8 +556,10 @@ function initAutocomplete(input, suggestions) {
   function position() {
     const r = input.getBoundingClientRect();
     ul.style.top   = (r.bottom + window.scrollY) + 'px';
-    ul.style.left  = (r.left   + window.scrollX) + 'px';
-    ul.style.width = r.width + 'px';
+    // at least 280px wide (a narrow name box on a phone), never past the screen's right edge
+    const w = Math.min(Math.max(r.width, 280), document.documentElement.clientWidth - 16);
+    ul.style.width = w + 'px';
+    ul.style.left  = (Math.max(8, Math.min(r.left, document.documentElement.clientWidth - w - 8)) + window.scrollX) + 'px';
   }
 
   function render() {
@@ -633,6 +635,30 @@ function _destroyAc(containerEl) {
   });
 }
 
+// A firm whose materials are its items (TV Unit Ledge box (Laminate Finish), Sliding Wardrobe (Acrylic Finish)…):
+// the item name suggests them too, and picking one also picks it as the material.
+function materialNames() {
+  return [...new Set((CATALOG.combos || []).map(c => splitCombo(c.value)[0]).filter(Boolean))];
+}
+function measuredNameSuggestions() {
+  const mats = materialNames();
+  const seen = new Set(mats.map(m => m.toLowerCase()));
+  return mats.concat(masterItems.filter(n => !seen.has(n.toLowerCase())));
+}
+// The first material choice (e.g. its Box Work rate) for a name that is exactly a material, or ''
+function comboForName(name) {
+  const key = (name || '').trim().toLowerCase();
+  if (!key) return '';
+  const c = (CATALOG.combos || []).find(c => splitCombo(c.value)[0].toLowerCase() === key);
+  return c ? c.value : '';
+}
+function pickMaterialFromName(nameEl, comboEl) {
+  const value = comboForName(nameEl?.value);
+  if (!value || !comboEl || splitCombo(comboEl.value)[0] === splitCombo(value)[0]) return;
+  comboEl.value = value;
+  comboEl.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function _readDatalist(id) {
   const dl = document.getElementById(id);
   if (!dl) return [];
@@ -658,8 +684,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalNameInput = document.getElementById('modal_item_name');
   if (modalNameInput) {
     initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name)
-                                          : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : masterItems);
+                                          : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : measuredNameSuggestions());
     modalNameInput.addEventListener('input', () => {
+      if (modalItemType === 'measured') pickMaterialFromName(modalNameInput, document.getElementById('modal_item_combo'));
       if (modalItemType === 'fixed') _applyPriceListPrice();
       if (modalItemType === 'boq' || modalItemType === 'lump') _applySavedBoq();
     });
@@ -1475,7 +1502,10 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   applyUnitInputs(tr);
   // Wire up autocomplete for item name input
   const itemNameInput = document.getElementById('item_name_' + ik);
-  if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
+  if (itemNameInput) {
+    initAutocomplete(itemNameInput, measuredNameSuggestions);
+    itemNameInput.addEventListener('input', () => pickMaterialFromName(itemNameInput, document.getElementById('item_combo_' + ik)));
+  }
   if (area > 0) recalcAll();
   addPhotoControl(rk, ik);
   addCostControl(rk, ik);

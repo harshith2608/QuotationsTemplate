@@ -151,10 +151,12 @@ SHOW_WORK_KEY = 'customer_work_types'   # '1': customers see "Laminates – Box 
 
 
 def finish_name(wood):
-    """'Laminates' → 'Laminate Finish', 'Acrylic' → 'Acrylic Finish' (a plural 's' dropped; 'Glass' keeps its 'ss')."""
+    """'Laminates' → 'Laminate Finish', 'Acrylic' → 'Acrylic Finish' (a plural 's' dropped; 'Glass' keeps its 'ss').
+    A name that already says it, or is an item more than a finish ('Sliding Wardrobe (Laminate Finish)', 'Kitchen
+    Acrylic Finish - Base Unit', 'Dressing Storage Unit'), stays as it is."""
     w = (wood or '').strip()
-    if w.lower().endswith('finish'):
-        return w                                # already says it ('PU Finish')
+    if 'finish' in w.lower() or '(' in w or len(w.split()) > 2:
+        return w                                # already says it ('PU Finish'), or an item
     if w.endswith('s') and not w.endswith('ss') and len(w) > 3:
         w = w[:-1]
     return f'{w} Finish'
