@@ -108,6 +108,7 @@
     <h1>{{ 'Your app is ready!' if new else 'Your app is already set up' }}</h1>
     <p class="lead">{% if paid %}Your app, with its paid plan, is at{% else %}Your free 7-day trial is at{% endif %} <strong>{{ ready }}.{{ base }}</strong>.
       {% if new %}Sign in with the username and password you just chose. Bookmark it, or add it to your phone's home screen.{% endif %}</p>
+    {% if username %}<p class="lead" style="margin-top:-4px">Your username: <strong>{{ username }}</strong>{% if not new %}. Forgot the password? Tap "Forgot password?" on the sign-in page.{% endif %}</p>{% endif %}
     <a class="btn" href="https://{{ ready }}.{{ base }}/login{% if username %}?u={{ username|urlencode }}{% endif %}">Open my app</a>
     <p class="hint" style="text-align:center;margin-top:14px">Need help? <a href="{{ site }}/tutorials">Watch the 1-minute videos</a>
       or reply to us on WhatsApp.</p>
@@ -131,7 +132,7 @@
       <div class="addrbox">Your app's address: <strong id="address">{{ (address ~ '.' ~ base) if address else '…' }}</strong></div>
 
       <label for="username">Your username</label>
-      <input type="text" id="username" name="username" value="{{ form.username }}" maxlength="40" autocapitalize="off" autocomplete="username" required>
+      <input type="text" id="username" name="username" value="{{ form.username }}" maxlength="40" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" required>
       {% if errors.username %}<div class="err">{{ errors.username }}</div>{% endif %}
 
       <label for="password">Password</label>

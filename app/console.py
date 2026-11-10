@@ -2647,7 +2647,7 @@ def start_trial():
     done = _signup(lead_id, lead)
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
-                               plan=plan, price=price, token=token, paid=_paid_plan(done))
+                               plan=plan, price=price, token=token, paid=_paid_plan(done), username=_admin_name(done))
     earlier = earlier_trial(lead_id, lead)
     if earlier and plan:                          # buying: pay for the app they already have (their data is in it)
         with db.engine.begin() as conn:           # so /start/paid matches the payment to it
@@ -2717,6 +2717,18 @@ def start_trial():
     return render_template('console/start.html', form=form, errors=errors, token=token, lead=lead, plan=plan, price=price,
                            address=_free_address(form['company'] or lead['name']), base=tenancy.base_domain(),
                            site=_site_url(), turnstile=signup.turnstile_site_key())
+
+
+def _admin_name(slug):
+    """The trial's admin username (shown again when they reopen the set-up link), or '' if it can't be read."""
+    try:
+        from .models import User
+        with tenancy.tenant_context(slug, tenancy.schema_for(slug)):
+            user = User.query.filter_by(role='admin').order_by(User.id).first()
+            return user.username if user else ''
+    except Exception:
+        db.session.rollback()
+        return ''
 
 
 CALL_PER_IP_PER_HOUR = 3

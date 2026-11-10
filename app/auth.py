@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from .models import User
@@ -25,8 +25,16 @@ def login():
         return redirect(url_for('demo.start', next=request.args.get('next') or None))
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data.strip()).first()
-        if user and check_password_hash(user.password_hash, form.password.data):
+        user = find_user(form.username.data)
+        password = form.password.data or ''
+        right = user and (check_password_hash(user.password_hash, password) or       # (or with a space a phone
+                          (password != password.strip() and                          #  keyboard added at the end)
+                           check_password_hash(user.password_hash, password.strip())))
+        if not user:
+            current_app.logger.info('Sign-in failed: no user %r', (form.username.data or '').strip()[:80])
+        elif not right:
+            current_app.logger.info('Sign-in failed: wrong password for %r', user.username)
+        if right:
             login_user(user, remember=True)
             from .activity import record_login
             record_login()
@@ -40,6 +48,20 @@ def login():
             return redirect(safe_next())
         flash('Invalid username or password.', 'danger')
     return render_template('auth/login.html', form=form, title='Sign In')
+
+
+def find_user(username):
+    """The user signing in: the exact username, or else the same one in other capitals (a phone types "Admin" for
+    "admin"). If two users differ only in capitals, only the exact one matches."""
+    from sqlalchemy import func
+    name = (username or '').strip()
+    if not name:
+        return None
+    user = User.query.filter_by(username=name).first()
+    if user:
+        return user
+    same = User.query.filter(func.lower(User.username) == name.lower()).limit(2).all()
+    return same[0] if len(same) == 1 else None
 
 
 @auth_bp.route('/logout')
@@ -64,7 +86,7 @@ def forgot_password():
     result, username = None, ''
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()[:80]
-        user = User.query.filter_by(username=username).first() if username else None
+        user = find_user(username) if username else None
         result = pr.send_link(user) if user and user.is_admin else 'not_admin'
     return render_template('auth/forgot.html', title='Forgot password', result=result, username=username,
                            email=pr.mask(pr.business_email()), support=support_contact())
