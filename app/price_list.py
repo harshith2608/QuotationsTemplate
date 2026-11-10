@@ -39,7 +39,13 @@ A firm that prices by material ("pricing": "material"):
          {"name": "Kitchen Base Unit", "material": "Laminates", "work": "Box Work"},
          {"name": "Magic Corner", "type": "fitting"}]}]}]}
 Template items with a material are measured items (size typed on the quotation); "type": "fitting" items take the
-fittings price.
+fittings price. A material can say "on_plywood": true (its rate moves with the quotation's board) and "shown": false
+(hidden from the quotation form). Boards (plywood, PVC, WPC; optional): the default first or marked, each other one
+with its difference per sqft; boards the business has and the file doesn't list are hidden:
+    "boards": [{"name": "16mm Century Sainik 710", "default": true, "details": "Century Sainik 710"},
+               {"name": "16mm Century Bond 710", "difference": 100}]
+Lump sums with "pricing": "material": "lines" with "unit": "lump sum". Options for the BOQ table:
+"options": {"layout": "boq", "room_totals": true, "show_board": false}.
 """
 import json
 
@@ -126,7 +132,26 @@ def parse(raw):
                 rates = {'': round(float(m.get('rate') or 0), 2)}
         except (TypeError, ValueError):
             raise PriceListError(f'"{name}": rates should be numbers.')
-        materials.append({'name': name, 'rates': rates})
+        materials.append({'name': name, 'rates': rates, 'on_plywood': m.get('on_plywood'),
+                          'shown': m.get('shown', True) is not False})
+    boards = []
+    for b in data.get('boards') or []:
+        name = _text(b.get('name') if isinstance(b, dict) else '', 60)
+        if len(name) < 2 or '|' in name:
+            raise PriceListError('Each board needs a name (at least 2 characters, no "|").')
+        try:
+            diff = round(float(b.get('difference') or 0), 2)
+        except (TypeError, ValueError):
+            raise PriceListError(f'"{name}": the difference should be a number, e.g. 100 or -100.')
+        boards.append({'name': name, 'difference': diff, 'default': bool(b.get('default')),
+                       'details': _text(b.get('details'), 500), 'shown': b.get('shown', True) is not False})
+    if boards:
+        defaults = [b for b in boards if b['default']] or boards[:1]
+        if len(defaults) > 1:
+            raise PriceListError('Boards: mark only one as the default.')
+        if defaults[0]['difference']:
+            raise PriceListError(f'"{defaults[0]["name"]}" is the default board: your rates are for it, so its difference is 0.')
+        defaults[0]['default'] = True
     fittings = []
     for f in data.get('fittings') or []:
         name = _text(f.get('name') if isinstance(f, dict) else '', 100)
@@ -169,6 +194,16 @@ def parse(raw):
         if not isinstance(raw_opts['show_rate'], bool):
             raise PriceListError('"show_rate" should be true or false.')
         options['show_rate'] = raw_opts['show_rate']
+    for key in ('room_totals', 'show_board'):
+        if key in raw_opts:
+            if not isinstance(raw_opts[key], bool):
+                raise PriceListError(f'"{key}" should be true or false.')
+            options[key] = raw_opts[key]
+    if 'layout' in raw_opts:
+        from . import layout as _layout
+        if raw_opts['layout'] not in _layout.LAYOUTS:
+            raise PriceListError(f'"layout" should be one of {", ".join(_layout.LAYOUTS)}.')
+        options['layout'] = raw_opts['layout']
     if 'presentation' in raw_opts:
         if not isinstance(raw_opts['presentation'], bool):
             raise PriceListError('"presentation" should be true or false.')
@@ -224,7 +259,7 @@ def parse(raw):
             raise PriceListError(f'Quotation {n} ("{q["customer_name"]}") adds up to {inr(got)}, not {inr(float(expect))}.')
     if any(l['finish'] for l in lines) and not finishes:
         raise PriceListError('Some lines say "finish": true, but the file has no "finishes".')
-    if not lines and not templates and not materials and not fittings and not quotations and not options:
+    if not lines and not templates and not materials and not fittings and not quotations and not options and not boards:
         raise PriceListError('The file has no lines.')
     if not data.get('pricing') and not lines and not materials and not fittings:
         pricing = None                         # only quotations / templates: how they price stays as it is
@@ -234,6 +269,7 @@ def parse(raw):
         if key in SETTINGS and isinstance(value, str):
             settings[key] = value.strip()[:5000]
     return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'finishes': finishes,
+            'boards': boards,
             'templates': templates, 'quotations': quotations, 'options': options,
             'settings': settings, '_by_name': by_name}
 
@@ -285,10 +321,12 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
     any with the same name. Settings: only ones never saved,
     unless replace_settings. BOQ lines are turned on (with the BOQ layout). Returns a summary dict."""
     from sqlalchemy import func
-    from . import boq, materials as M, quote_templates
+    from . import boq, materials as M, plywood, quote_templates
     from .models import AppSetting, BoqItem, ItemRate, Material, PriceListItem
     from . import tenancy
     ready = boq._columns_ready(tenancy.current_schema())
+    # a firm pricing by material from its own list: the starter materials and fittings it never changed go too
+    hide_starter_rates = hide_starter_rates or (remove_starter and parsed['pricing'] == 'material' and bool(parsed['materials']))
     if parsed['pricing'] == 'item' and not ready:
         raise PriceListError('This business needs the latest database update first (Updates → Update all).')
     if parsed['pricing'] is None:
@@ -311,8 +349,10 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
             top = db.session.query(func.max(Material.sort_order)).scalar() or 0
             row = Material(name=m['name'], uses_work_types='' not in m['rates'], active=True, sort_order=top + 1)
             db.session.add(row)
-        row.active = True
+        row.active = m.get('shown', True)
         row.uses_work_types = '' not in m['rates']          # the file says: per work type, or one rate
+        if m.get('on_plywood') is not None and plywood.table_ready():
+            row.uses_plywood = bool(m['on_plywood'])
         for work, rate in m['rates'].items():
             r = have_rates.get((row.name, work))
             if r is None:
@@ -335,6 +375,8 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
             if row is not None and name.lower() not in mine and row.price == price and row.unit == unit:
                 db.session.delete(row)
                 del have_fits[name.lower()]
+    if parsed.get('boards') and plywood.table_ready():
+        _apply_boards(parsed['boards'])
     for f in parsed['fittings']:
         row = have_fits.get(f['name'].lower())
         if row is None:
@@ -405,6 +447,15 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
     if 'show_rate' in opts:                             # the customer's BOQ: Rate column shown or hidden
         AppSetting.set(layout.HIDE_RATE_KEY, '' if opts['show_rate'] else '1')
         settings.append('Rate column ' + ('shown' if opts['show_rate'] else 'hidden'))
+    if 'layout' in opts and opts['layout'] in layout.layouts():
+        AppSetting.set(layout.LAYOUT_KEY, opts['layout'])
+        settings.append(f"quotation PDF layout: {opts['layout']}")
+    if 'room_totals' in opts:
+        AppSetting.set(layout.ROOM_TOTALS_KEY, '1' if opts['room_totals'] else '')
+        settings.append('one amount per room' if opts['room_totals'] else 'an amount on every line')
+    if 'show_board' in opts:
+        AppSetting.set(layout.HIDE_BOARD_KEY, '' if opts['show_board'] else '1')
+        settings.append('plywood ' + ('on each line' if opts['show_board'] else 'not on each line'))
     if 'presentation' in opts:                          # title page, About us, …, Next steps
         from . import presentation
         presentation.set_enabled(opts['presentation'])
@@ -417,7 +468,33 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
     db.session.commit()
     return {'added': added, 'updated': updated, 'removed': removed, 'templates': made, 'materials': mats,
             'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'], 'finishes': len(parsed.get('finishes') or []),
+            'boards': len(parsed.get('boards') or []),
             'missing': sorted(set(missing)), 'settings': settings, 'quotations': made_quotes}
+
+
+def _apply_boards(boards):
+    """The firm's boards, by name: the default at ₹0 (the material rates are for it), each other one its difference.
+    Boards the business has that the file doesn't list are hidden (kept: quotations may use them)."""
+    from . import plywood
+    from .models import AppSetting, PlywoodOption
+    have = {r.name.lower(): r for r in PlywoodOption.query.all()}
+    mine = set()
+    for n, b in enumerate(boards):
+        row = have.get(b['name'].lower())
+        if row is None:
+            row = have[b['name'].lower()] = PlywoodOption(name=b['name'], adjustment=0.0)
+            db.session.add(row)
+        row.adjustment, row.cost_adjustment = b['difference'], None
+        row.is_default, row.active, row.sort_order = b['default'], b['shown'] or b['default'], n
+        if b['details'] and plywood.details_ready():
+            row.details = b['details']
+        mine.add(b['name'].lower())
+    for key, row in have.items():
+        if key not in mine:
+            row.is_default, row.active = False, False
+    AppSetting.set(plywood.SEEDED_KEY, '1')                 # never re-given the classic list
+    db.session.flush()
+    plywood.clear_cache()
 
 
 def _add_quotations(quotations):
@@ -460,6 +537,8 @@ def summary_text(result):
         parts.append(f"{result['materials']} materials with their rates")
     if result['fittings']:
         parts.append(f"{result['fittings']} fittings")
+    if result.get('boards'):
+        parts.append(f"{result['boards']} boards")
     if result.get('finishes'):
         parts.append(f"{result['finishes']} finishes")
     if result.get('quotations'):

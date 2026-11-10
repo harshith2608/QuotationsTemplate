@@ -68,3 +68,35 @@ with app.app_context():
     AppSetting.set(boq.KEY, '1'); db.session.commit()
     boq.set_enabled(False); db.session.commit()
     ok('leaving pricing by item goes back to room by room', layout.initial_layout() == layout.LAYOUT_ROOMS)
+
+# Price list file: boards, materials on plywood or hidden, the BOQ-table options
+from app import price_list
+from app.models import Material, PlywoodOption
+from sqlalchemy.orm import undefer
+f = {'pricing': 'material', 'materials': [{'name': 'TV Unit (Laminate)', 'rate': 2400, 'on_plywood': True},
+                                          {'name': 'Putty', 'rate': 20, 'on_plywood': False},
+                                          {'name': 'Veneer Panel', 'rate': 4000, 'shown': False}],
+     'boards': [{'name': '16mm Sainik', 'default': True, 'details': 'Century Sainik 710'},
+                {'name': '16mm Bond', 'difference': 100}],
+     'lines': [{'name': '3D Design', 'unit': 'lump sum', 'rate': 45000}],
+     'options': {'layout': 'boq', 'room_totals': False, 'show_board': True}}
+with app.app_context():
+    r = price_list.apply(price_list.parse(json.dumps(f).encode()), remove_starter=True)
+    mats = {m.name: m for m in Material.query.options(undefer(Material.uses_plywood)).all()}
+    boards = {b.name: b for b in PlywoodOption.query.all()}
+    ok('price list: materials on plywood / not / hidden', mats['TV Unit (Laminate)'].uses_plywood
+       and not mats['Putty'].uses_plywood and not mats['Veneer Panel'].active and mats['Putty'].active)
+    ok('price list: boards (default at 0, the other its difference; others hidden)',
+       boards['16mm Sainik'].is_default and boards['16mm Bond'].adjustment == 100 and boards['16mm Bond'].active
+       and sum(b.is_default for b in boards.values()) == 1
+       and all(not b.active for n, b in boards.items() if n not in ('16mm Sainik', '16mm Bond')))
+    ok('price list: options set the layout and the BOQ table settings', layout.initial_layout() == layout.LAYOUT_BOQ
+       and not layout.room_totals_only() and layout.show_board() and r['boards'] == 2)
+    ok('price list: a lump sum with pricing by material', r['added'] >= 1)
+for bad in ({'boards': [{'name': 'A1', 'difference': 50, 'default': True}]},
+            {'boards': [{'name': 'A1', 'default': True}, {'name': 'B1', 'default': True}]},
+            {'options': {'room_totals': 'yes'}}):
+    try:
+        price_list.parse(json.dumps(bad).encode()); ok(f'price list refuses {bad}', False)
+    except price_list.PriceListError:
+        ok(f'price list refuses {list(bad)[0]} mistakes', True)
