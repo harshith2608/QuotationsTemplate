@@ -61,10 +61,13 @@ def order():
 
 def _contact(brand):
     """The mobile number Razorpay Checkout fills in (it asks for one on every payment in India): the first Indian
-    mobile in the company phone (Settings → Company), which may hold two numbers or a landline too; '' if none."""
+    mobile in the company phone (Settings → Company), which may hold two numbers or a landline too; else the one they
+    gave when they signed up on the website; '' if none."""
     import re
     from .marketing import normalise_phone
-    for part in re.split(r'[,/;|]|\s{2,}|\bor\b', brand.get('phone') or ''):
+    from .models import AppSetting
+    from .ops import SIGNUP_MOBILE_KEY
+    for part in re.split(r'[,/;|]|\s{2,}|\bor\b', brand.get('phone') or '') + [AppSetting.get(SIGNUP_MOBILE_KEY, '') or '']:
         found = normalise_phone(part)
         if found:
             return '+' + found
