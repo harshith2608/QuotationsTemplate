@@ -118,3 +118,26 @@ with app.app_context():
 ok('an item named after its material: size (and board) only, not the name twice',
    'TV Unit (Laminate)' not in l1['description'] and '16mm Bond' in l1['description'])
 ok('…another name still says its material', l2['description'].startswith('TV Unit (Laminate) · 16mm Bond'))
+
+# A description per material (Admin → Rates): saved, follows a rename, offered to the form; loaded from a price list
+from app import materials as MM
+with app.app_context():
+    m = Material.query.filter_by(name='Putty').first(); mid = m.id
+    price_list.apply(price_list.parse(json.dumps({'pricing': 'material', 'materials': [
+        {'name': 'TV Unit (Laminate)', 'rate': 2400, 'description': 'Ledge box with glass door'}]}).encode()), remove_starter=False)
+    ok('price list: a material description', MM.descriptions().get('TV Unit (Laminate)') == 'Ledge box with glass door')
+r = c.post('/admin/rates', data={'item_rates_submit': 'save', f'name_{mid}': 'Wall Putty', f'desc_{mid}': 'Two coats\nSanded'},
+           follow_redirects=True)
+with app.app_context():
+    d = MM.descriptions()
+    ok('Rates: a description saved with the material', d.get('Wall Putty') == 'Two coats\nSanded' and 'Putty' not in d)
+    ok('…kept across a rename, and the others stay', d.get('TV Unit (Laminate)') == 'Ledge box with glass door')
+form = c.get('/projects/new').text
+ok('the quotation form gets the descriptions', 'materialDescs' in form and 'Ledge box with glass door' in form)
+rates_page = c.get('/admin/rates').text
+ok('the Rates page shows the description box', f'name="desc_{mid}"' in rates_page and 'Two coats' in rates_page)
+
+# Measured items' descriptions print on the room-by-room layout too
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms'})
+cust = pdftext(f'/projects/{pid}/pdf/customer')
+ok('room by room: the item description prints under it', 'Glass door in the side' in cust)

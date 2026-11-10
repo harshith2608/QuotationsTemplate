@@ -96,7 +96,7 @@ def form_catalog(extra=()):
             rows.append({'value': key(w, k), 'label': label(w, k) + ' (hidden)', 'wood': w, 'work': k or ''})
             known.add(key(w, k))
     dw, dk = default_combo(active)
-    return {'material_combos': rows, 'default_combo': key(dw, dk)}
+    return {'material_combos': rows, 'default_combo': key(dw, dk), 'material_descs': descriptions()}
 
 
 def clean_name(raw):
@@ -145,6 +145,28 @@ def finish_label_of(combo_key):
         return text
     board = ply[0] if 'ply' in ply[0].lower() else f'{ply[0]} plywood'
     return f'{text} · {board}'
+
+
+DESC_KEY = 'material_descriptions'      # {material name: what it includes}, Admin → Rates (no database update needed)
+DESC_MAX = 2000
+
+
+def descriptions():
+    """{material name: description}: filled in on a quotation line when the material is picked (editable there)."""
+    import json
+    from .models import AppSetting
+    try:
+        data = json.loads(AppSetting.get(DESC_KEY, '') or '{}')
+    except ValueError:
+        return {}
+    return {str(k): str(v) for k, v in data.items() if v} if isinstance(data, dict) else {}
+
+
+def set_descriptions(data):
+    import json
+    from .models import AppSetting
+    clean = {k: '\n'.join(l.rstrip() for l in str(v).strip().splitlines())[:DESC_MAX] for k, v in data.items() if str(v or '').strip()}
+    AppSetting.set(DESC_KEY, json.dumps(clean, ensure_ascii=False) if clean else '')
 
 
 SHOW_WORK_KEY = 'customer_work_types'   # '1': customers see "Laminates – Box Work" (Settings → Quotation PDFs)

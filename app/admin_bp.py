@@ -540,7 +540,7 @@ def rates():
         ply_used = plywood.names_in_use()
         for o in plywood.context()['options']:
             ply_rows.append(dict(o, in_use=o['name'] in ply_used))
-    return render_template('admin/rates.html', title='Manage Rates', materials=rows,
+    return render_template('admin/rates.html', title='Manage Rates', materials=rows, mat_desc=M.descriptions(),
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                            work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,
                            ply_details=ply_ready and plywood.details_ready(),
@@ -715,7 +715,10 @@ def _save_materials_and_rates():
     errors = []
     mats = Material.query.all()
     taken = {m.name.lower(): m.id for m in mats}
+    descs = M.descriptions()
+    descs_changed = False
     for m in mats:
+        old_name = m.name
         new_name = request.form.get(f'name_{m.id}')
         if new_name is not None:
             try:
@@ -735,6 +738,14 @@ def _save_materials_and_rates():
                 taken.pop(m.name.lower(), None)
                 taken[new_name.lower()] = m.id
                 m.name = new_name
+        if m.name != old_name and old_name in descs:           # its description follows a rename
+            descs[m.name] = descs.pop(old_name)
+            descs_changed = True
+        if f'desc_{m.id}' in request.form:                     # filled in on quotation lines when picked
+            text = (request.form.get(f'desc_{m.id}') or '').strip()
+            if text != descs.get(m.name, ''):
+                descs[m.name] = text
+                descs_changed = True
         if f'ply_seen_{m.id}' in request.form and _plywood_ready():
             m.uses_plywood = bool(request.form.get(f'ply_{m.id}'))
         for i, work in enumerate(WORK_TYPES if m.uses_work_types else ['']):
@@ -747,6 +758,8 @@ def _save_materials_and_rates():
                 row.rate_per_sqft = rate
             else:
                 db.session.add(ItemRate(wood_type=m.name, work_type=work, rate_per_sqft=rate))
+    if descs_changed:
+        M.set_descriptions(descs)
     return errors
 
 

@@ -218,7 +218,7 @@ def _room_item(it):
                 'count': f"{boq.qty_text(it['quantity'])} {boq.unit_text(it.get('unit'))}".strip(),
                 'image_id': it.get('image_id')}
     return {'name': it['name'], 'length': it['length'], 'width': it['width'], 'count': it.get('count', 1),
-            'image_id': it.get('image_id')}
+            'image_id': it.get('image_id'), 'description': it.get('description') or ''}
 
 
 def count_text(count):

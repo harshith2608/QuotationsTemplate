@@ -62,6 +62,10 @@
                   <td class="ps-2" data-label="Material">
                     <input type="text" name="name_{{ m.id }}" class="form-control form-control-sm fw-semibold"
                            value="{{ m.name }}" maxlength="60" aria-label="Material name">
+                    <textarea name="desc_{{ m.id }}" class="form-control form-control-sm mt-1 small" rows="1" maxlength="2000"
+                              placeholder="Description (optional): fills in on the quotation line"
+                              aria-label="{{ m.name }} description" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+                              onfocus="this.style.height='auto';this.style.height=this.scrollHeight+'px'">{{ (mat_desc or {}).get(m.name, '') }}</textarea>
                   </td>
                   {% if m.uses_work_types %}
                     {% for i, work, rate in row.rates %}

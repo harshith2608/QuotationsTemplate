@@ -236,6 +236,14 @@ def _with_thanks(elements, paragraph):
     elements.append(KeepTogether(([last] if last is not None else []) + tail + [Spacer(1, 8), paragraph]))
 
 
+def _name_desc(it):
+    """An item's name, with its description (if typed) under it, smaller and grey."""
+    text = escape(it['name'])
+    if it.get('description'):
+        text += '<br/><font size="7" color="#455a64">' + escape(it['description']).replace('\n', '<br/>') + '</font>'
+    return text
+
+
 def _room_rows_elements(project, page_width, palette, styles, snap=None):
     """The room-by-room table of the Initial Quotation (layout.room_rows), then Basic Total, discount and Total.
     snap: a saved revision's snapshot (default: the quotation as it is now)."""
@@ -267,8 +275,8 @@ def _room_rows_elements(project, page_width, palette, styles, snap=None):
             data.append([str(r['no']) if i == 0 else '',
                          Paragraph(escape(r['title']), bold) if i == 0 else '',
                          Paragraph(escape(r['description']).replace('\n', '<br/>'), muted) if i == 0 and r['description'] else '',
-                         ([Paragraph(escape(it['name']), small), item_images.pdf_image(photos[it['image_id']], 2.0, 2.0)]
-                          if photos.get(it.get('image_id')) else Paragraph(escape(it['name']), small)),
+                         ([Paragraph(_name_desc(it), small), item_images.pdf_image(photos[it['image_id']], 2.0, 2.0)]
+                          if photos.get(it.get('image_id')) else Paragraph(_name_desc(it), small)),
                          size(it['length']), size(it['width']),
                          Paragraph(escape(layout.count_text(it['count'])), centred), _money(r['amount']) if i == 0 else ''])
         n = len(data)

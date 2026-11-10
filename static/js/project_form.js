@@ -34,12 +34,12 @@ const BOQ = !!CATALOG.boq;
 const LUMP = !!CATALOG.lumpSum;
 // The description sits on its own full-width row under the item's row (the name column is too narrow for it)
 function addDescRow(tr, ik, value, handler, before, after) {
-  if (!BOQ && !tr.classList.contains('item-row-boq')) return;      // priced by material: only lump sums have one
+  if (!BOQ && tr.classList.contains('item-row-fixed')) return;     // priced by material: measured items and lump sums
   const d = document.createElement('tr');
   d.className = 'ki-desc-row';
   d.id = 'item_descrow_' + ik;
   d.innerHTML = `<td colspan="7" class="pt-0">${before || ''}
-      <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
+      <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="2" maxlength="2000"
                 placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
       <div class="ki-line-tools" id="item_tools_${ik}">${after || ''}</div>
     </td>`;
@@ -652,6 +652,21 @@ function comboForName(name) {
   const c = (CATALOG.combos || []).find(c => splitCombo(c.value)[0].toLowerCase() === key);
   return c ? c.value : '';
 }
+// A material's own description (Admin → Rates) fills in the line's description when it's picked: only into an
+// empty box, or over the previous material's own text (never over what was typed)
+const MATERIAL_DESCS = CATALOG.materialDescs || {};
+function fillMaterialDesc(comboEl, descEl) {
+  if (!comboEl || !descEl) return;
+  const text = MATERIAL_DESCS[splitCombo(comboEl.value)[0]] || '';
+  const prev = descEl.dataset.matDesc;
+  const cur = descEl.value.trim();
+  if (cur && cur !== (prev || '').trim()) return;
+  if (!text && !cur) return;
+  descEl.value = text;
+  descEl.dataset.matDesc = text;
+  if (typeof autoGrow === 'function') autoGrow(descEl);
+  descEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
 function pickMaterialFromName(nameEl, comboEl) {
   const value = comboForName(nameEl?.value);
   if (!value || !comboEl || splitCombo(comboEl.value)[0] === splitCombo(value)[0]) return;
@@ -676,6 +691,8 @@ document.addEventListener('DOMContentLoaded', () => {
   try { priceList = JSON.parse(document.getElementById('price-list-data').textContent || '[]'); } catch (e) { priceList = []; }
 
   document.getElementById('modal_item_combo')?.addEventListener('change', syncModalPly);
+  document.getElementById('modal_item_combo')?.addEventListener('change',
+    e => fillMaterialDesc(e.target, document.getElementById('modal_item_desc')));
   const sizeSlot = document.getElementById('modal_boq_size_slot');
   if (sizeSlot) sizeSlot.innerHTML = sizeStrip('modal_boq', 0, 0, 1, 'modalCalcBoq()');
   applyUnitInputs(document.getElementById('itemModal'));
@@ -955,7 +972,7 @@ function setModalItemType(type) {
   document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq' && !lump);
   document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type !== 'measured');
   // A lump sum is a BOQ line with unit "lump sum": just a description and one amount
-  document.getElementById('modal_desc_wrap')?.classList.toggle('d-none', !BOQ && !lump);
+  document.getElementById('modal_desc_wrap')?.classList.toggle('d-none', !BOQ && !lump && type !== 'measured');
   ['modal_boq_qty_col', 'modal_boq_unit_col', 'modal_boq_size_slot', 'modal_boq_hint'].forEach(id =>
     document.getElementById(id)?.classList.toggle('d-none', lump));
   document.getElementById('modal_lump_hint')?.classList.toggle('d-none', !lump);
@@ -1502,6 +1519,9 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   applyUnitInputs(tr);
   // Wire up autocomplete for item name input
   const itemNameInput = document.getElementById('item_name_' + ik);
+  const comboSel = document.getElementById('item_combo_' + ik), descBox = document.getElementById('item_desc_' + ik);
+  if (descBox && presetDesc && MATERIAL_DESCS[presetWood] === presetDesc) descBox.dataset.matDesc = presetDesc;
+  comboSel?.addEventListener('change', () => fillMaterialDesc(comboSel, descBox));
   if (itemNameInput) {
     initAutocomplete(itemNameInput, measuredNameSuggestions);
     itemNameInput.addEventListener('input', () => pickMaterialFromName(itemNameInput, document.getElementById('item_combo_' + ik)));

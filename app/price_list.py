@@ -40,7 +40,7 @@ A firm that prices by material ("pricing": "material"):
          {"name": "Magic Corner", "type": "fitting"}]}]}]}
 Template items with a material are measured items (size typed on the quotation); "type": "fitting" items take the
 fittings price. A material can say "on_plywood": true (its rate moves with the quotation's board) and "shown": false
-(hidden from the quotation form). Boards (plywood, PVC, WPC; optional): the default first or marked, each other one
+(hidden from the quotation form), and a "description" (filled in on a quotation line when it's picked). Boards (plywood, PVC, WPC; optional): the default first or marked, each other one
 with its difference per sqft; boards the business has and the file doesn't list are hidden:
     "boards": [{"name": "16mm Century Sainik 710", "default": true, "details": "Century Sainik 710"},
                {"name": "16mm Century Bond 710", "difference": 100}]
@@ -133,6 +133,7 @@ def parse(raw):
         except (TypeError, ValueError):
             raise PriceListError(f'"{name}": rates should be numbers.')
         materials.append({'name': name, 'rates': rates, 'on_plywood': m.get('on_plywood'),
+                          'description': str(m.get('description') or '').strip()[:2000],
                           'shown': m.get('shown', True) is not False})
     boards = []
     for b in data.get('boards') or []:
@@ -360,6 +361,9 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
             else:
                 r.rate_per_sqft = rate
         mats += 1
+    descs = {m['name']: m['description'] for m in parsed['materials'] if m.get('description')}
+    if descs:                                           # filled in on quotation lines when the material is picked
+        M.set_descriptions({**M.descriptions(), **descs})
     if hide_starter_rates and parsed['materials']:
         from .catalog import DEFAULT_MATERIALS, DEFAULT_PRICE_LIST, WORK_TYPES
         mine = {m['name'].lower() for m in parsed['materials']}

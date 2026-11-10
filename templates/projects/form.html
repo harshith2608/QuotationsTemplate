@@ -393,7 +393,7 @@
         {% if boq_form.enabled or boq_form.lump_sum %}
         <div class="mb-3" id="modal_desc_wrap">
           <label class="form-label fw-medium small mb-1" for="modal_item_desc">Description <span class="text-muted fw-normal">(optional, printed under the item)</span></label>
-          <textarea class="form-control form-control-sm" id="modal_item_desc" rows="3" maxlength="2000"
+          <textarea class="form-control form-control-sm" id="modal_item_desc" rows="4" maxlength="2000"
                     placeholder="e.g. {{ biz.description_example }}"></textarea>
         </div>
         <!-- BOQ line: its own quantity, unit and rate -->
@@ -553,6 +553,7 @@
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
+    materialDescs: {{ material_descs|tojson }},             // {material: description} filled in when picked (Admin → Rates)
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
     itemImages:  {{ (item_images or false)|tojson }},
     itemCosts:   {{ (item_costs or none)|tojson }},               // your cost on each line (console; admins + allowed staff)

@@ -97,7 +97,7 @@
         <div class="fw-semibold small" style="color:var(--p)">{{ r.no }}. {{ r.title }}</div>
         {% if r.description %}{% for d in r.description.split('\n') %}<div class="small q-muted">{{ d }}</div>{% endfor %}{% endif %}
         <ul class="small mb-1 ps-3">
-          {% for it in r['items'] %}<li>{{ it.name }}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count is string %} · {{ it.count }}{% elif it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
+          {% for it in r['items'] %}<li>{{ it.name }}{% if it.description %}<div class="q-muted" style="white-space:pre-line">{{ it.description }}</div>{% endif %}{% if it.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=it.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}{% if it.length %} · {{ it.length|ft_in }} × {{ it.width|ft_in }}{% endif %}{% if it.count is string %} · {{ it.count }}{% elif it.count != 1 %} · {{ '%g'|format(it.count) }} No's{% endif %}</li>{% endfor %}
         </ul>
       </div>
       <div class="fw-semibold small text-nowrap">&#8377;{{ (r.amount)|inr }}</div>
