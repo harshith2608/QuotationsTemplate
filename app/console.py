@@ -2719,6 +2719,14 @@ def start_trial():
                            site=_site_url(), turnstile=signup.turnstile_site_key())
 
 
+@console_bp.app_template_global('app_login_url')
+def app_login_url(slug, username=''):
+    """Their app's sign-in page with the username filled in (looked up when not given)."""
+    from urllib.parse import quote
+    name = username or _admin_name(slug)
+    return f'https://{slug}.{tenancy.base_domain()}/login' + (f'?u={quote(name)}' if name else '')
+
+
 def _admin_name(slug):
     """The trial's admin username (shown again when they reopen the set-up link), or '' if it can't be read."""
     try:
