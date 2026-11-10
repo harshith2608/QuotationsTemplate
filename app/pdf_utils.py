@@ -346,20 +346,26 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
             ('ALIGN', (last, 0), (last, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
+    from . import pdf_look
+    bw = pdf_look.colours() == pdf_look.BW
     for sec in sections:
         k = len(data)
-        # the room stands out: its letter and name on the brand colour, larger (its notes under it, smaller)
-        on = '#' + ON_BRAND.hexval()[2:]
+        # the room stands out: its letter and name on the brand colour, larger (its notes under it, smaller); in
+        # black & white a solid black band would be heavy on paper: a grey band with bold black text and a rule above
+        bar, ink = (colors.HexColor('#c9c9c9'), colors.black) if bw else (BRAND_DARK, ON_BRAND)
+        on = '#' + ink.hexval()[2:]
         head = f'<font size="10.5" color="{on}">{escape(sec["name"])}</font>'
         if sec['description']:
             head += f'<br/><font size="7.5" color="{on}">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
         # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
         data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))] + [''] * (last - 2)
                     + [_money(sec['total']) if sec['total'] else ''])
-        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_DARK), ('SPAN', (1, k), (-2, k)),
+        if bw:
+            cmds.append(('LINEABOVE', (0, k), (-1, k), 1.5, BRAND_DARK))
+        cmds += [('BACKGROUND', (0, k), (-1, k), bar), ('SPAN', (1, k), (-2, k)),
                  ('FONTNAME', (0, k), (0, k), _F.b), ('FONTNAME', (-1, k), (-1, k), _F.b),
                  ('FONTSIZE', (0, k), (0, k), 12), ('FONTSIZE', (-1, k), (-1, k), 10),
-                 ('TEXTCOLOR', (0, k), (-1, k), ON_BRAND), ('TOPPADDING', (0, k), (-1, k), 7),
+                 ('TEXTCOLOR', (0, k), (-1, k), ink), ('TOPPADDING', (0, k), (-1, k), 7),
                  ('BOTTOMPADDING', (0, k), (-1, k), 7)]
         if sec['lines']:
             cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
