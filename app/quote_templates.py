@@ -99,3 +99,33 @@ def rename(template_id, name):
 
 def delete(template_id):
     _store([t for t in _load() if t['id'] != template_id])
+
+
+ITEM_KEYS = ('name', 'type', 'length', 'width', 'wood_type', 'work_type', 'area', 'quantity', 'unit_price', 'unit',
+             'description', 'count', 'plywood', 'finish', 'tbc', 'pending', 'image_id')
+
+
+def update(template_id, rooms, discount_type='none', discount_value=0, plywood=None):
+    """Save an edited template's rooms (the quotation form in template mode: no customer; lines without a size are
+    kept, marked pending), its discount and plywood. Quotations made from it earlier don't change."""
+    templates = _load()
+    t = next((t for t in templates if t['id'] == template_id), None)
+    if not t:
+        raise ValueError('That template no longer exists.')
+    clean = []
+    for r in rooms if isinstance(rooms, list) else []:
+        if not isinstance(r, dict) or not str(r.get('name') or '').strip():
+            continue
+        items = [{k: v for k, v in it.items() if k in ITEM_KEYS} for it in r.get('items') or []
+                 if isinstance(it, dict) and str(it.get('name') or '').strip()]
+        if items:
+            clean.append({'name': ' '.join(str(r['name']).split())[:100], 'items': items,
+                          'description': str(r.get('description') or '')[:2000]})
+    if not clean:
+        raise ValueError('A template needs at least one room with one line.')
+    t.update(rooms=clean, discount_type=discount_type if discount_type in ('none', 'percentage', 'fixed') else 'none',
+             discount_value=max(float(discount_value or 0), 0), saved_at=datetime.utcnow().isoformat(timespec='seconds'))
+    if plywood is not None:
+        t['plywood'] = plywood or None
+    _store(templates)
+    return t

@@ -548,14 +548,15 @@ def create_project():
     return render_new_form(start, started_from, form_data, form_cat)
 
 
-def render_new_form(start=None, started_from=None, form_data=None, form_cat=None, ai_draft=None):
+def render_new_form(start=None, started_from=None, form_data=None, form_cat=None, ai_draft=None, template_edit=None,
+                    title='New Quotation'):
     """The new quotation form, filled in from `start` (a quotation, template or AI draft: rooms_json, discount,
     plywood) when given. ai_draft: what the AI says to check (app/ai_tools.py)."""
     from . import ai_tools, quote_templates as QT
     from .demo import demo_enabled
     form_data = form_data or {}
     return render_template('projects/form.html',
-                           title='New Quotation',
+                           title=title, template_edit=template_edit,
                            master_rooms=__import__('app.business', fromlist=['room_names']).room_names(),
                            master_items=__import__('app.business', fromlist=['item_names']).item_names(),
                            **(form_cat or _form_catalog(None)),
@@ -606,6 +607,37 @@ def manage_templates():
             flash(str(exc), 'danger')
         return redirect(url_for('projects.manage_templates'))
     return render_template('projects/templates.html', title='Quotation templates', templates=QT.all_templates())
+
+
+@projects_bp.route('/templates/<template_id>/edit')
+@login_required
+@admin_required
+def edit_template(template_id):
+    """The quotation form in template mode: change a template's rooms, lines, descriptions and rates."""
+    from . import quote_templates as QT
+    tpl = QT.get(template_id)
+    if not tpl:
+        flash('That template no longer exists.', 'warning')
+        return redirect(url_for('projects.manage_templates'))
+    start = QT.start_from_template(tpl)
+    return render_new_form(start, template_edit=tpl, title=f'Edit template: {tpl["name"]}')
+
+
+@projects_bp.route('/templates/<template_id>/save', methods=['POST'])
+@login_required
+@admin_required
+def save_template(template_id):
+    from . import quote_templates as QT, plywood
+    try:
+        rooms = json.loads(request.form.get('rooms_data') or '[]')
+        QT.update(template_id, rooms, request.form.get('discount_type'), request.form.get('discount_value', type=float),
+                  plywood.clean_choice(request.form.get('plywood')) if 'plywood' in request.form else None)
+    except (ValueError, TypeError) as exc:
+        flash(str(exc) if isinstance(exc, ValueError) and str(exc) else 'The template could not be saved.', 'danger')
+        return redirect(url_for('projects.edit_template', template_id=template_id))
+    db.session.commit()
+    flash(f'Template "{QT.get(template_id)["name"]}" saved. New quotations from it start with these lines.', 'success')
+    return redirect(url_for('projects.manage_templates'))
 
 
 @projects_bp.route('/projects/<int:project_id>')

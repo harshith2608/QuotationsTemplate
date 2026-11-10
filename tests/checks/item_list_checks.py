@@ -189,3 +189,34 @@ with app.test_request_context():
     els = pdf_utils._section_elements(pdf_utils._styles(), pdf_utils.colors.black, db.session.get(Project, pid))
 ok('sections begin with a half-page conditional page break', isinstance(els[0], CondPageBreak)
    and abs(els[0].height - pdf_utils.SECTIONS_ROOM) < 1 and pdf_utils.SECTIONS_ROOM > 300)
+
+# Templates can be edited (rooms, lines, descriptions, rates), keeping lines that have no size yet
+from app import quote_templates as QT
+with app.app_context():
+    tid = QT.put('Base 2 BHK', [{'name': 'Kitchen', 'items': [
+        {'name': 'Base Unit', 'wood_type': 'TV Unit Ledge box (Acrylic Finish)', 'work_type': '', 'pending': True}]}])
+    db.session.commit()
+page = c.get(f'/templates/{tid}/edit').text
+ok('a template opens for editing: its lines, no customer box, "Save template"', 'Edit template: Base 2 BHK' in page
+   and 'Base Unit' in page and 'id="customer_name"' not in page and 'Save template' in page
+   and f'/templates/{tid}/save' in page)
+manage = c.get('/templates').text
+ok('the templates page has "Edit lines"', f'/templates/{tid}/edit' in manage)
+new_rooms = [{'name': 'Kitchen', 'description': 'Carcass: BWP', 'items': [
+    {'name': 'Base Unit', 'wood_type': 'TV Unit Ledge box (Acrylic Finish)', 'work_type': '', 'count': 1, 'pending': True,
+     'description': 'Below the counter'},
+    {'type': 'fixed', 'name': 'Magic Corner', 'quantity': 1, 'unit_price': 50000, 'cost': 30000}]},
+    {'name': 'Bedroom', 'items': [{'name': 'Wardrobe', 'length': 8, 'width': 7, 'wood_type': 'TV Unit Ledge box (Acrylic Finish)',
+                                    'work_type': '', 'count': 1, 'area': 56}]}]
+r = c.post(f'/templates/{tid}/save', data={'rooms_data': json.dumps(new_rooms), 'discount_type': 'percentage',
+                                           'discount_value': '5'})
+with app.app_context():
+    t = QT.get(tid)
+ok('saving updates the template: rooms, the line still waiting for its size, a new line, the discount',
+   r.status_code == 302 and [rm['name'] for rm in t['rooms']] == ['Kitchen', 'Bedroom']
+   and t['rooms'][0]['items'][0].get('pending') and t['rooms'][0]['items'][0]['description'] == 'Below the counter'
+   and t['rooms'][0]['items'][1]['name'] == 'Magic Corner' and 'cost' not in t['rooms'][0]['items'][1]
+   and t['discount_type'] == 'percentage' and t['discount_value'] == 5)
+r = c.post(f'/templates/{tid}/save', data={'rooms_data': '[]'})
+with app.app_context():
+    ok('an empty template is refused (it keeps its lines)', len(QT.get(tid)['rooms']) == 2)

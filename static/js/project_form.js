@@ -1357,6 +1357,19 @@ function onFixedField(rk, ik) {
 }
 
 // Serialise one item for the server; returns null if incomplete
+// Editing a template (no customer): a line without its size or quantity yet is kept as it is, filled in on each
+// quotation made from the template
+const TEMPLATE_EDIT = !!CATALOG.templateEdit;
+function _pendingPayload(item) {
+  const desc = item.description ? { description: item.description } : {};
+  if (item.type === 'boq') return { type: 'boq', name: item.name, unit: item.unit || 'nos', quantity: 0,
+                                    unit_price: item.unit_price || 0, pending: true,
+                                    ...(item.finish ? { finish: item.finish } : {}), ...desc };
+  if (item.type === 'fixed') return { type: 'fixed', name: item.name, quantity: 1, unit_price: item.unit_price || 0,
+                                      pending: true, ...desc };
+  return { name: item.name, wood_type: item.wood_type, work_type: item.work_type, count: 1, pending: true,
+           plywood: usesPly(item.wood_type) ? (item.plywood || '') : '', ...desc };
+}
 function _itemPayload(item) {
   if (item.type === 'fixed' || item.type === 'boq') {
     // a BOQ line with no quantity is a rate-only line (printed with its rate, not added to the total)
@@ -1813,7 +1826,7 @@ function _validateForm() {
 
     const itemsPayload = [];
     Object.entries(room.items).forEach(([ik, item]) => {
-      const p = _itemPayload(item);
+      const p = _itemPayload(item) || (TEMPLATE_EDIT && item.pending && item.name ? _pendingPayload(item) : null);
       if (!p) return;
       if (itemPhotos[ik]) p.image_id = itemPhotos[ik];
       if (COSTS) p.cost = itemCosts[ik] ?? '';
@@ -1843,7 +1856,7 @@ function _validateForm() {
   if (!valid) return false;
   // Lines still waiting for a size or quantity (from a starting quotation or "Add from my lines"): the ones this home
   // doesn't need are left like that, so they're removed on saving (after asking) — never printed without an amount
-  const pending = Object.entries(rooms).flatMap(([rk, r]) => Object.entries(r.items)
+  const pending = TEMPLATE_EDIT ? [] : Object.entries(rooms).flatMap(([rk, r]) => Object.entries(r.items)
     .filter(([, i]) => i.pending).map(([ik, i]) => ({ rk, ik, name: i.name })));
   if (pending.length) {
     const names = pending.slice(0, 6).map(p => p.name).join(', ') + (pending.length > 6 ? '…' : '');

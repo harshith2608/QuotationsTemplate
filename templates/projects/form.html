@@ -44,7 +44,7 @@
       <i class="bi bi-file-earmark-plus me-2 text-primary"></i>{{ title }}
     </h4>
   </div>
-  {% if not project and templates %}
+  {% if not project and templates and not template_edit %}
   <div class="d-flex align-items-center gap-2 ki-start-from">
     <label class="small text-muted text-nowrap" for="startFrom">Start from</label>
     <select class="form-select form-select-sm" id="startFrom" style="min-width:200px"
@@ -56,11 +56,12 @@
   </div>
   {% endif %}
 </div>
-{% if not project and templates and not started_from and not ai_draft and not request.args.get('blank') and not request.args.get('try') %}
+{% if not project and templates and not started_from and not ai_draft and not template_edit and not request.args.get('blank') and not request.args.get('try') %}
 {# Starting quotations first: most quotations start from one, not from blank #}
 <div class="card shadow-sm border-0 mb-3 ki-start-cards">
   <div class="card-body">
-    <div class="fw-semibold mb-1"><i class="bi bi-files me-1 text-primary"></i>Start from one of your quotations</div>
+    <div class="fw-semibold mb-1 d-flex align-items-center"><span><i class="bi bi-files me-1 text-primary"></i>Start from one of your quotations</span>
+      {% if current_user.is_admin %}<a class="small fw-normal ms-auto" href="{{ url_for('projects.manage_templates') }}"><i class="bi bi-pencil me-1"></i>Edit or delete these</a>{% endif %}</div>
     <p class="small text-muted mb-2">Every room, item, description and rate is filled in. You type the sizes for this home
       and remove what it doesn't need.</p>
     <div class="d-flex flex-wrap gap-2">
@@ -73,7 +74,7 @@
   </div>
 </div>
 {% endif %}
-{% if ai_draft_on and not project and not started_from and not ai_draft %}
+{% if ai_draft_on and not project and not started_from and not ai_draft and not template_edit %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
   <i class="bi bi-chat-text text-primary"></i><span>Have the customer's requirements on WhatsApp, or notes from the site?</span>
   <a class="btn btn-sm btn-outline-primary fw-semibold" href="{{ url_for('ai_tools.draft') }}"><i class="bi bi-stars me-1"></i>Draft from a message or notes</a>{% if demo_mode %}<span class="badge text-bg-success">In the free trial</span>{% endif %}
@@ -128,7 +129,7 @@
 {% endif %}
 
 <!-- Tell JS whether auto-save should run (new form OR editing a draft) -->
-<script>const IS_DRAFT_FORM = {{ 'true' if (not project or project.status == 'draft') else 'false' }};</script>
+<script>const IS_DRAFT_FORM = {{ 'true' if ((not project or project.status == 'draft') and not template_edit) else 'false' }};</script>
 <!-- Item rates for JS: { 'wood|work': rate } -->
 <script id="item-rates-data" type="application/json">{{ item_rates | tojson }}</script>
 <!-- Existing rooms data for edit mode -->
@@ -144,7 +145,7 @@
 </datalist>
 
 <form id="projectForm" method="POST"
-      action="{{ url_for('projects.edit_project', project_id=project.id) if project else url_for('projects.create_project') }}"
+      action="{{ url_for('projects.save_template', template_id=template_edit.id) if template_edit else url_for('projects.edit_project', project_id=project.id) if project else url_for('projects.create_project') }}"
       novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="rooms_data" id="rooms_data_field">
@@ -159,6 +160,9 @@
     <!-- LEFT: Customer + Rooms -->
     <div class="col-12 col-lg-8">
 
+      {% if template_edit %}
+      <div class="alert alert-info small py-2"><i class="bi bi-bookmarks me-1"></i>Editing the template <strong>{{ template_edit.name }}</strong>: change its rooms, lines, descriptions and rates. Lines without a size stay like that (they're filled in on each quotation). Saving updates the template; quotations already made from it don't change.</div>
+      {% else %}
       <!-- Customer Details -->
       <div class="card shadow-sm border-0 mb-3">
         <div class="card-header ki-card-header">
@@ -207,6 +211,8 @@
           </div>
         </div>
       </div>
+
+      {% endif %}
 
       <!-- Rooms Section -->
       <div class="mb-2">
@@ -341,9 +347,9 @@
           <div class="d-grid gap-2">
             <button type="submit" class="btn btn-success fw-bold" onclick="return validateAndSubmit()">
               <i class="bi bi-check-circle me-2"></i>
-              {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
+              {{ 'Save template' if template_edit else 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
             </button>
-            <a href="{{ url_for('projects.list_projects') }}" class="btn btn-outline-secondary btn-sm">
+            <a href="{{ url_for('projects.manage_templates') if template_edit else url_for('projects.list_projects') }}" class="btn btn-outline-secondary btn-sm">
               <i class="bi bi-x-circle me-1"></i>Cancel
             </a>
           </div>
@@ -378,7 +384,7 @@
   <div class="d-lg-none ki-sticky-save">
     <button type="submit" class="btn btn-success w-100 fw-bold py-3" onclick="return validateAndSubmit()">
       <i class="bi bi-check-circle me-2"></i>
-      {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
+      {{ 'Save template' if template_edit else 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
       &nbsp;–&nbsp;<span id="final-total-mobile">&#8377;0.00</span>
     </button>
   </div>
@@ -579,7 +585,8 @@
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
-    materialDescs: {{ material_descs|tojson }},             // {material: description} filled in when picked (Admin → Rates)
+    materialDescs: {{ material_descs|tojson }},
+    templateEdit: {{ (template_edit is defined and template_edit is not none)|tojson }},   // editing a template: no customer; lines without a size stay             // {material: description} filled in when picked (Admin → Rates)
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
     itemImages:  {{ (item_images or false)|tojson }},
     itemCosts:   {{ (item_costs or none)|tojson }},               // your cost on each line (console; admins + allowed staff)
