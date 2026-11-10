@@ -259,6 +259,8 @@ def open_link(slug, plan):
         row = conn.execute(text("SELECT * FROM public.platform_payments WHERE slug = :s AND plan = :p AND status = 'created' "
                                 "AND link_url IS NOT NULL AND created_at > (now() AT TIME ZONE 'utc') - INTERVAL '6 days' "
                                 "ORDER BY id DESC LIMIT 1"), {'s': slug, 'p': plan}).mappings().first()
+    if row and row['amount_paise'] != prices().get(plan, 0) * 100:
+        return None                            # made at an older price: a new link at today's price
     return dict(row) if row else None
 
 

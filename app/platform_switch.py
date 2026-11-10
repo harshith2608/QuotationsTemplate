@@ -49,6 +49,16 @@ def set_switch(key, on):
     set_value(key, '1' if on else '0')
 
 
+def shared(key):
+    """A value the console sets for everyone (Pricing, kinds of business): the console and the shared app read the
+    console's copy (public.console_state); the website reads its own copy (its database's app_settings)."""
+    import os
+    from . import tenancy
+    from .models import AppSetting
+    console = (os.environ.get('CONSOLE_MODE') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+    return value(key) if (tenancy.tenant_mode() or console) else AppSetting.get(key)
+
+
 def set_value(key, value):
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.console_state WHERE key = :k'), {'k': key})
