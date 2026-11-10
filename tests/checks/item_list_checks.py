@@ -172,3 +172,11 @@ with app.app_context():
         DraftItem(kind='measured', name='TV', length_ft=8, width_ft=1, material='laminate tv unit')])])
     _, _, unclear2 = ai_tools.to_form(d2, cat)
 ok('…and one that fits two materials too ("laminate tv unit": two laminate TV units)', unclear2 == ['TV'])
+ok('AI draft: the unclear line is flagged for the checklist, the matched ones aren\'t',
+   its['Mystery'].get('check') == 'material' and 'check' not in its['TV Unit'])
+with app.app_context():
+    d3 = Draft(job_title='x', questions=['Which finish?'], rooms=[DraftRoom(name='Kitchen', items=[
+        DraftItem(kind='fitting', name='Granite Sink'), DraftItem(kind='measured', name='Base', material='TV Unit Ledge box (Acrylic Finish)')])])
+    r3, nr3, _ = ai_tools.to_form(d3, cat)
+ok('…a fitting not in the rates is flagged "price"; a line with no size is pending',
+   r3[0]['items'][0].get('check') == 'price' and r3[0]['items'][1].get('pending'))

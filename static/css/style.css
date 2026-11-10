@@ -737,3 +737,8 @@ body > main { flex: 1 0 auto; }
 /* Current Rates on the quotation form: folded by default; the chevron turns when open */
 .ki-rates-chev { transition: transform .2s; }
 [aria-expanded="true"] > .ki-rates-chev { transform: rotate(180deg); }
+
+/* The step-by-step checklist after an AI draft (projects/form.html #aiSteps): on top, below the header */
+.ki-ai-steps { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 16px));
+  z-index: 1045; }
+.ki-ai-target { outline: 3px solid var(--ki-accent, #f59e0b); outline-offset: -2px; background: #fffbeb !important; }

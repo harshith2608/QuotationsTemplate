@@ -398,6 +398,7 @@ def to_form(draft, cat):
                     row['unit_price'] = round(line['rate'] * (1 + (fin['extra'] if fin else 0) / 100), 2)
                 else:
                     row['tbc'] = True
+                    row['check'] = 'price'                          # the step-by-step checklist: type its price
                     no_rate.append(name)
                 if qty is None:
                     row['pending'] = True
@@ -406,6 +407,7 @@ def to_form(draft, cat):
                 row = {'type': 'fixed', 'name': fit.name if fit else name, 'quantity': qty or 1,
                        'unit_price': fit.price if fit else 0, 'description': ''}
                 if not fit:
+                    row['check'] = 'price'
                     no_rate.append(name)
                 if qty is None:
                     row['pending'] = True
@@ -413,9 +415,14 @@ def to_form(draft, cat):
                 found = _match_material(it.material, it.work_type, cat['combos'])
                 if not found and len(by_wood) > 1:
                     unclear.append(name)
+                    checking = 'material'
+                else:
+                    checking = None
                 wood, work = found or default
                 row = {'type': 'measured', 'name': name, 'wood_type': wood, 'work_type': work, 'count': count,
                        'description': descs.get(wood, '')}
+                if checking:
+                    row['check'] = checking
                 if length and width:
                     row.update(length=length, width=width)
                 else:

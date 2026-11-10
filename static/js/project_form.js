@@ -733,6 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
         _loadItem(rk, id);
+        if (id.pending || id.check) aiSteps.note(rk, 'item_' + itemCounter, id.pending ? 'size' : id.check, id.name);
         if (id.image_id) setPhoto(rk, 'item_' + itemCounter, id.image_id);     // the row just added
         if (id.cost !== undefined && id.cost !== null) setCost('item_' + itemCounter, id.cost);
       });
@@ -759,6 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateNoRoomsHint();
   recalcAll();
   document.querySelectorAll('.ki-item-desc').forEach(autoGrow);
+  aiSteps.start();
 
   // Attach auto-save listeners to customer fields (new form only)
   ['customer_name', 'mobile', 'email'].forEach(id => {
@@ -1926,3 +1928,117 @@ function showFormAlert(message, type) {
   if (form) form.prepend(alert);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+
+// ─── After an AI draft: a checklist on top of the page, one thing at a time ─────────────────────────────────────────
+// Lines waiting for a size, materials that weren't clear, items with no price in the rates, the customer's details,
+// then the questions for the customer. Each step scrolls to its line, outlines it and puts the cursor where it needs
+// typing; it ticks itself done when fixed. Back / Next / close; "Show the checklist" opens it again.
+const aiSteps = (() => {
+  const rowSteps = [];
+  let steps = [], at = 0, data = null;
+  const $ = id => document.getElementById(id);
+  const HOW = {
+    size: 'Type its size (or quantity) in the outlined line. Not needed? Remove the line with its ✕.',
+    material: 'Choose its material in the outlined line: it wasn\'t clear from SOURCE.',
+    price: 'It isn\'t in your rates: type its price in the outlined line.',
+  };
+  function note(rk, ik, kind, name) { rowSteps.push({ kind, rk, ik, name }); }
+  function roomName(rk) { return ($('room_name_' + rk)?.value || '').trim() || 'Room'; }
+  function done(st) {
+    if (st.kind === 'customer') return !!($('customer_name')?.value.trim() && $('mobile')?.value.trim());
+    if (st.kind === 'questions') return true;
+    if (!$('item_row_' + st.ik)) return true;                     // the line was removed
+    if (st.kind === 'size') return !(rooms[st.rk] && rooms[st.rk].items[st.ik] && rooms[st.rk].items[st.ik].pending);
+    if (st.kind === 'price') return parseFloat($('item_price_' + st.ik)?.value) > 0;
+    if (st.kind === 'material') return !!st.chosen;
+    return true;
+  }
+  function target(st) {
+    if (st.kind === 'customer') return $('customer_name')?.value.trim() ? $('mobile') : $('customer_name');
+    const row = $('item_row_' + st.ik);
+    if (!row) return null;
+    if (st.kind === 'material') return $('item_combo_' + st.ik);
+    if (st.kind === 'price') return $('item_price_' + st.ik);
+    return [...row.querySelectorAll('input[type=number]')].find(i => i.offsetParent && !i.value) || $('item_qty_' + st.ik);
+  }
+  function clearMarks() { document.querySelectorAll('.ki-ai-target').forEach(el => el.classList.remove('ki-ai-target')); }
+  function refresh() {
+    const st = steps[at];
+    if (!st) return;
+    $('aiStepsDone').classList.toggle('d-none', !(done(st) && st.kind !== 'questions'));
+  }
+  function show() {
+    const st = steps[at];
+    clearMarks();
+    $('aiStepsCount').textContent = `${at + 1} of ${steps.length}`;
+    $('aiStepsBack').disabled = at === 0;
+    $('aiStepsNext').innerHTML = at === steps.length - 1 ? 'Finish <i class="bi bi-check-lg"></i>' : 'Next <i class="bi bi-chevron-right"></i>';
+    const extra = $('aiStepsExtra');
+    extra.innerHTML = '';
+    if (st.kind === 'customer') {
+      $('aiStepsWhere').textContent = 'Customer';
+      $('aiStepsWhat').textContent = 'The customer\'s name and mobile number';
+      $('aiStepsHow').textContent = `Not in ${data.source}: type them (or check what was filled in).`;
+    } else if (st.kind === 'questions') {
+      $('aiStepsWhere').textContent = 'Last step';
+      $('aiStepsWhat').textContent = 'Ask the customer';
+      $('aiStepsHow').textContent = 'Things that weren\'t in ' + data.source + ':';
+      extra.innerHTML = '<ol class="small ps-3 mb-2">' + data.questions.map(q => `<li>${escHtml(q)}</li>`).join('') + '</ol>'
+        + '<button type="button" class="btn btn-sm btn-outline-primary" id="aiStepsCopy"><i class="bi bi-clipboard me-1"></i>Copy the questions</button>';
+      $('aiStepsCopy').onclick = () => {
+        const text = data.questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+        (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+          () => { $('aiStepsCopy').innerHTML = '<i class="bi bi-check-lg me-1"></i>Copied'; }, () => {});
+      };
+    } else {
+      $('aiStepsWhere').textContent = roomName(st.rk);
+      $('aiStepsWhat').textContent = $('item_name_' + st.ik)?.value || st.name;
+      $('aiStepsHow').textContent = $('item_row_' + st.ik) ? HOW[st.kind].replace('SOURCE', data.source)
+                                                            : 'This line was removed.';
+    }
+    const el = target(st);
+    const row = st.ik ? $('item_row_' + st.ik) : el?.closest('.card');
+    if (row) {
+      if (st.ik) { row.classList.add('ki-ai-target'); $('item_descrow_' + st.ik)?.classList.add('ki-ai-target'); }
+      // just below the checklist (which sits on top of the page), so it never covers the line
+      const below = $('aiSteps').getBoundingClientRect().bottom + 12;
+      window.scrollTo({ top: Math.max(0, row.getBoundingClientRect().top + window.scrollY - below), behavior: 'instant' });
+      if (el) el.focus({ preventScroll: true });
+    }
+    refresh();
+  }
+  function go(step) {
+    if (at + step >= steps.length) { close(); return; }
+    at = Math.max(0, at + step);
+    show();
+  }
+  function open() {
+    if (!steps.length) return;
+    $('aiSteps').classList.remove('d-none');
+    $('aiStepsOpen')?.classList.add('d-none');
+    show();
+  }
+  function close() {
+    $('aiSteps').classList.add('d-none');
+    clearMarks();
+    $('aiStepsOpen')?.classList.remove('d-none');
+  }
+  function start() {
+    const el = $('ai-draft-data');
+    if (!el) return;
+    try { data = JSON.parse(el.textContent || '{}'); } catch (e) { return; }
+    const customer = { kind: 'customer' };
+    steps = (done(customer) ? [] : [customer]).concat(rowSteps)
+      .concat(data.questions && data.questions.length ? [{ kind: 'questions' }] : []);
+    if (!steps.length) return;
+    $('aiDraftList')?.classList.add('d-none');                     // the checklist replaces the list
+    rowSteps.filter(s => s.kind === 'material').forEach(s =>
+      $('item_combo_' + s.ik)?.addEventListener('change', () => { s.chosen = true; refresh(); }));
+    document.addEventListener('input', refresh);
+    document.addEventListener('change', refresh);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('aiSteps').classList.contains('d-none')) close(); });
+    open();
+  }
+  return { note, start, open, close, go };
+})();
