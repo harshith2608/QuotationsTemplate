@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% macro fields(p, locked_name, locked_gstin, pay=None) %}
+{% macro fields(p, locked_name, locked_gstin, pay=None, locked_logo=False) %}
   <div class="row g-2">
     <div class="col-md-6">
       <label class="form-label small fw-semibold mb-1">Company name *</label>
@@ -42,10 +42,10 @@
       {% if p and p.logo_version %}
       <div class="d-flex align-items-center gap-2">
         <img src="{{ url_for('main.brand_logo', p=p.id, v=p.logo_version ~ 't') }}" alt="" style="max-height:48px;max-width:160px">
-        {% if lock %}<span class="small text-muted">Locked once saved. Message us on Support to change it.</span>{% endif %}
+        {% if locked_logo %}<span class="small text-muted">Locked once saved. Message us on Support to change it.</span>{% endif %}
       </div>
       {% endif %}
-      {% if not (p and p.logo_version and lock) %}
+      {% if not locked_logo %}
       <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" class="form-control">
       {% if lock %}<div class="form-check mt-1"><input class="form-check-input" type="checkbox" name="confirm_logo" value="1" id="cl{{ p.id if p else 'new' }}">
         <label class="form-check-label small" for="cl{{ p.id if p else 'new' }}">This is this company's logo (it can't be changed later without contacting support)</label></div>{% endif %}
@@ -73,7 +73,7 @@
     <form method="post" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="id" value="{{ p.id }}">
-      {{ fields(p, lock and p.name, lock and p.gstin, pays[p.id]) }}
+      {{ fields(p, 'name' in locks[p.id], 'gstin' in locks[p.id], pays[p.id], 'logo' in locks[p.id]) }}
       <div class="d-flex gap-2 mt-3">
         <button class="btn btn-primary btn-sm fw-semibold" name="action" value="save">Save</button>
         {% if not used[p.id] %}

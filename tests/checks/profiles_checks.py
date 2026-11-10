@@ -105,8 +105,28 @@ r = c.post('/admin/companies', data={'action': 'delete', 'id': spid}, follow_red
 with app.app_context():
     ok('a company with quotations can\'t be deleted', profiles.get(spid) is not None)
 
+# ── The operator unlocks the name for one change ──
+with app.app_context():
+    st = profiles.console_status()
+    ok('console sees the company, its quotations and what is locked', st['paying'] and st['list'][0]['quotes'] == 1
+       and st['list'][0]['locked'] == ['gstin', 'logo', 'name'])
+    profiles.unlock(spid, ['name']); db.session.commit()
+c.post('/admin/companies', data={'action': 'save', 'id': spid, 'name': 'Sister Concern LLP', 'gstin': 'X', 'phone': '9333344444'})
+with app.app_context():
+    p = profiles.get(spid)
+ok('unlocked name changed once (GSTIN still locked), then locked again', p['name'] == 'Sister Concern LLP'
+   and p['gstin'] == '29ABCDE1234F1Z5' and 'name' in profiles.locked(p))
+
+# ── Paying customers only: a trial never gets it ──
+with app.app_context():
+    AppSetting.set('plan_name', 'trial'); db.session.commit()
+ok('on a trial: no menu, no page, no picker even with the setting on', 'Other companies' not in c.get('/projects').text
+   and c.get('/admin/companies').status_code == 404)
+with app.app_context():
+    AppSetting.set('plan_name', '1y'); db.session.commit()
+
 # ── Turned off: quotations keep it, the menu goes ──
 with app.app_context():
     profiles.set_limit(0); db.session.commit()
 ok('off again: no menu item', 'Other companies' not in c.get('/projects').text)
-ok('…the quotation keeps its company', 'Sister Concern' in pdftext(f'/projects/{pid}/pdf'))
+ok('…the quotation keeps its company', 'Sister Concern LLP' in pdftext(f'/projects/{pid}/pdf'))

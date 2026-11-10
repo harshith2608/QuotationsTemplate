@@ -1264,7 +1264,8 @@ def companies():
                            limit=profiles.limit(), can_add=profiles.can_add(), enabled=profiles.enabled(),
                            lock=branding.lock_enabled(), main=branding.get_brand(),
                            used={p['id']: profiles.quotations_using(p['id']) for p in profiles.all_profiles()},
-                           pays={p['id']: profiles.payment_details(p) for p in profiles.all_profiles()})
+                           pays={p['id']: profiles.payment_details(p) for p in profiles.all_profiles()},
+                           locks={p['id']: profiles.locked(p) for p in profiles.all_profiles()})
 
 
 def _profile_logo(pid):

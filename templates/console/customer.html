@@ -195,7 +195,23 @@
     <label class="small" style="margin:0">How many
       <select name="limit">{% for n in range(0, boq.profiles.max + 1) %}<option value="{{ n }}" {{ 'selected' if n == boq.profiles.limit }}>{{ n if n else '0 (off)' }}</option>{% endfor %}</select></label>
     <button class="btn" type="submit">Save</button>
-  </form>{% endif %}
+  </form>
+  {% if not boq.profiles.paying %}<p class="small" style="margin:0;color:var(--bad)">Their plan is a trial, so it stays off in their app until they pay.</p>{% endif %}
+  {% for p in boq.profiles.list %}
+  <div id="{{ 'companies' if loop.first }}" style="border:1px solid var(--line);border-radius:8px;padding:10px">
+    <div><strong>{{ p.name }}</strong> · GSTIN {{ p.gstin or '—' }} · {{ 'logo' if p.logo else 'no logo' }} ·
+      {{ p.quotes }} quotation{{ '' if p.quotes == 1 else 's' }}</div>
+    <p class="muted small" style="margin:4px 0">Locked: <strong>{{ p.locked|join(', ') or 'nothing' }}</strong>. Unlock lets them change it once.</p>
+    <form method="post" action="{{ url_for('console.customer_company_unlock', slug=row.slug) }}" class="row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="id" value="{{ p.id }}">
+      {% for f, label in [('name', 'Name'), ('gstin', 'GSTIN'), ('logo', 'Logo')] %}
+      <label class="small" style="margin:0"><input type="checkbox" name="fields" value="{{ f }}" {% if f not in p.locked %}disabled{% endif %}> {{ label }}</label>
+      {% endfor %}
+      <button class="btn" type="submit" {% if not p.locked %}disabled{% endif %}>Unlock for one change</button>
+    </form>
+  </div>
+  {% endfor %}{% endif %}
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Presentation pages</strong> · <span class="badge {{ 'b-active' if boq.cover.on else 'b-other' }}">{{ 'on' if boq.cover.on else 'off' }}</span></div>
   <p class="muted small" style="margin:0">Their quotation PDF opens with a title page (their logo and name, then "Quotation
     for" the client) and their About us, and ends with the Next steps and a thank-you note. They write About us and Next

@@ -1006,7 +1006,10 @@ Off for everyone. To allow it: console → Customers → the customer → Featur
 GSTIN, tagline and (optionally) its own UPI / bank details. On a quotation they pick **From: …** under the customer's
 name; that quotation's PDF, link, WhatsApp, email and invoice use that company (the app itself keeps the main company).
 
-- Name, GSTIN and logo lock once saved, like the main company. A company used by a quotation can't be deleted.
+- Paying customers only: the switch is on the Customers page, and the app ignores it on a trial or the demo.
+- The same section lists their companies (GSTIN, logo, how many quotations use each, what's locked).
+- Name, GSTIN and logo lock once saved, like the main company; tick one under that company → **Unlock for one change**
+  when they ask you to correct it. A company used by a quotation can't be deleted.
 - Setting it back to 0 hides the menu and the picker; quotations already from another company keep it.
 - Invoices from every company share one numbering series. Online payment links use the main company's Razorpay.
 - No database update needed.

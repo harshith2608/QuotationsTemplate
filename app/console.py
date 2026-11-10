@@ -2092,6 +2092,25 @@ def customer_companies(slug):
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/customers/<slug>/companies/unlock', methods=['POST'])
+@login_required
+def customer_company_unlock(slug):
+    from .profiles import LOCKABLE
+    _customer_or_404(slug)
+    fields = [f for f in request.form.getlist('fields') if f in LOCKABLE]
+    if not fields:
+        flash('Choose what to unlock.', 'error')
+    else:
+        try:
+            name = _customers().unlock_profile(slug, request.form.get('id', type=int), fields)
+        except Exception as exc:
+            flash(str(exc), 'error')
+        else:
+            audit('customer_company_unlock', slug, f'{name}: {", ".join(fields)}')
+            flash(f'Unlocked {", ".join(fields)} of "{name}" for one change.', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#companies')
+
+
 @console_bp.route('/customers/<slug>/photos', methods=['POST'])
 @login_required
 def customer_photos(slug):

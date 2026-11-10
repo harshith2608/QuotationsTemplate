@@ -2,8 +2,8 @@
 Other company profiles: a business that quotes under more than one name (a second firm, a sister concern) keeps
 each one's name, phone, email, address, GSTIN, tagline and logo here, and picks which one each quotation is from.
 
-Off unless the operator turns it on for that business in the console (customers only), with the number of extra
-profiles allowed. The main company stays in Admin → Settings; these are the others.
+Off unless the operator turns it on for that business in the console, with the number of extra profiles allowed.
+Paying customers only: never on a trial or the demo, whatever the setting says. The main company stays in Admin → Settings; these are the others.
 
 Stored in app_settings (no database update needed):
   company_profiles_limit   how many extra profiles the operator allows ('' / 0 = off)
@@ -49,8 +49,21 @@ def limit():
         return 0
 
 
+def paying():
+    """Only paying customers: never on a trial or the demo (whatever the setting says)."""
+    try:
+        from .demo import demo_enabled
+        if demo_enabled():
+            return False
+        from .models import AppSetting
+        from .plan import PLAN_KEY
+        return (AppSetting.get(PLAN_KEY, '') or '') != 'trial'      # (read directly: the console checks many apps)
+    except Exception:
+        return False
+
+
 def enabled():
-    return limit() > 0
+    return limit() > 0 and paying()
 
 
 def set_limit(n):
@@ -60,8 +73,34 @@ def set_limit(n):
     return n
 
 
+LOCKABLE = ('name', 'gstin', 'logo')
+
+
+def locked(profile):
+    """Which of name / GSTIN / logo are saved and not unlocked by the operator (like branding.locked_fields)."""
+    from . import branding
+    if not branding.lock_enabled():
+        return set()
+    have = {'name': profile.get('name'), 'gstin': profile.get('gstin'), 'logo': profile.get('logo_version')}
+    return {f for f, v in have.items() if v and f not in (profile.get('unlocked') or [])}
+
+
 def console_status():
-    return {'limit': limit(), 'used': len(all_profiles()), 'max': MAX_LIMIT}
+    rows = all_profiles()
+    return {'limit': limit(), 'used': len(rows), 'max': MAX_LIMIT, 'paying': paying(),
+            'list': [{'id': p['id'], 'name': p['name'], 'gstin': p.get('gstin') or '', 'logo': bool(p.get('logo_version')),
+                      'quotes': quotations_using(p['id']), 'locked': sorted(locked(p))} for p in rows]}
+
+
+def unlock(pid, fields):
+    """The operator lets the business change these once (console → customer → Other companies)."""
+    rows = all_profiles()
+    p = next((r for r in rows if r['id'] == int(pid)), None)
+    if not p:
+        raise ProfileError('That company was not found.')
+    p['unlocked'] = sorted(set(p.get('unlocked') or []) | {f for f in fields if f in LOCKABLE})
+    _save_all(rows)
+    return p
 
 
 # ── Profiles ──────────────────────────────────────────────────────────────────
@@ -98,10 +137,9 @@ def clean(form, existing=None):
     from . import branding
     out = {k: (form.get(k) or '').strip() for k in FIELDS}
     out['gstin'] = out['gstin'].upper().replace(' ', '')
-    if existing and branding.lock_enabled():
-        for k in ('name', 'gstin'):
-            if existing.get(k):
-                out[k] = existing[k]
+    if existing:
+        for k in locked(existing) & {'name', 'gstin'}:
+            out[k] = existing[k]
     from .crypto import encrypt
     for k in PAY:
         v = (form.get(k) or '').strip()[:120]
@@ -141,7 +179,10 @@ def update(pid, form):
     existing = next((p for p in rows if p['id'] == int(pid)), None)
     if not existing:
         raise ProfileError('That company was not found.')
-    existing.update(clean(form, existing))
+    cleaned = clean(form, existing)
+    changed = {k for k in ('name', 'gstin') if cleaned[k] != existing.get(k)}
+    existing.update(cleaned)
+    existing['unlocked'] = [f for f in (existing.get('unlocked') or []) if f not in changed]   # one change each
     _save_all(rows)
     return existing
 
@@ -167,7 +208,7 @@ def set_logo(pid, raw):
     p = next((r for r in rows if r['id'] == int(pid)), None)
     if not p:
         raise ProfileError('That company was not found.')
-    if p.get('logo_version') and branding.lock_enabled():
+    if 'logo' in locked(p):
         raise ProfileError('The logo is locked once saved. Message us if it needs changing.')
     try:
         png, version = branding.process_logo_upload(raw)
@@ -175,6 +216,7 @@ def set_logo(pid, raw):
         raise ProfileError(str(exc))
     AppSetting.set(_logo_key(pid), base64.b64encode(png).decode())
     p['logo_version'] = version
+    p['unlocked'] = [f for f in (p.get('unlocked') or []) if f != 'logo']
     _save_all(rows)
 
 

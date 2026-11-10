@@ -589,6 +589,15 @@ def set_profiles(slug, n):
         return n
 
 
+def unlock_profile(slug, pid, fields):
+    """Let a customer change another company's name / GSTIN / logo once."""
+    from . import profiles
+    with open_customer(slug):
+        p = profiles.unlock(pid, fields)
+        db.session.commit()
+        return p['name']
+
+
 def set_boq(slug, on):
     """Pricing by item (BOQ lines) or by material, for a customer."""
     from . import boq
