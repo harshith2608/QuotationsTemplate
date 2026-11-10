@@ -326,11 +326,15 @@
 
       <!-- Rates Reference -->
       <div class="card shadow-sm border-0 mt-3 {{ 'd-none' if boq_form.by_item }}" id="rates-card">
-        <div class="card-header ki-card-header py-2">
+        {% set shown_rates = [] %}{% for c in material_combos if '(hidden)' not in c.label %}{% set _ = shown_rates.append(c) %}{% endfor %}
+        <button type="button" class="card-header ki-card-header py-2 border-0 w-100 text-start d-flex align-items-center collapsed"
+                data-bs-toggle="collapse" data-bs-target="#ratesList" aria-expanded="false" aria-controls="ratesList">
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
-        </div>
-        <ul class="list-group list-group-flush">
-          {% for c in material_combos if '(hidden)' not in c.label %}
+          <span class="small fw-normal opacity-75 ms-2">({{ shown_rates|length }})</span>
+          <i class="bi bi-chevron-down ms-auto ki-rates-chev"></i>
+        </button>
+        <ul class="list-group list-group-flush collapse" id="ratesList">
+          {% for c in shown_rates %}
           <li class="list-group-item d-flex justify-content-between py-2">
             <span class="small fw-medium">{{ c.label }}</span>
             <span class="small text-success fw-bold">&#8377;{{ (item_rates.get(c.value, 0)|rate)|inr(0) }}{{ units.rate_label() }}</span>

@@ -733,3 +733,7 @@ body > main { flex: 1 0 auto; }
 @media (max-width: 575.98px) { .ki-pdf-inner { zoom: .5; } .ki-welcome-price > .card-body { padding: .75rem !important; } }   /* the whole page width, like a PDF on a phone */
 /* A trial's help card: on a phone the two buttons share the width */
 @media (max-width: 575.98px) { .ki-help-actions { width: 100%; } .ki-help-actions .btn { flex: 1 1 0; } }
+
+/* Current Rates on the quotation form: folded by default; the chevron turns when open */
+.ki-rates-chev { transition: transform .2s; }
+[aria-expanded="true"] > .ki-rates-chev { transform: rotate(180deg); }
