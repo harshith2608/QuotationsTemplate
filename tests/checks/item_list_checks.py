@@ -180,3 +180,11 @@ with app.app_context():
     r3, nr3, _ = ai_tools.to_form(d3, cat)
 ok('…a fitting not in the rates is flagged "price"; a line with no size is pending',
    r3[0]['items'][0].get('check') == 'price' and r3[0]['items'][1].get('pending'))
+
+# The sections (Material Specifications, Terms…) start on a new page when less than half a page is left
+from reportlab.platypus import CondPageBreak
+from app import pdf_utils
+with app.test_request_context():
+    els = pdf_utils._section_elements(pdf_utils._styles(), pdf_utils.colors.black)
+ok('sections begin with a half-page conditional page break', isinstance(els[0], CondPageBreak)
+   and abs(els[0].height - pdf_utils.SECTIONS_ROOM) < 1 and pdf_utils.SECTIONS_ROOM > 300)

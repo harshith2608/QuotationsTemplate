@@ -9,7 +9,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, HRFlowable, Image, KeepTogether, PageBreak)
+                                 TableStyle, HRFlowable, Image, KeepTogether, PageBreak,
+                                 CondPageBreak)
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from . import db
@@ -207,6 +208,9 @@ def pdf_filename(project, prefix='Quotation'):
     return f'{prefix}_{name}_{when}.pdf'
 
 
+SECTIONS_ROOM = (A4[1] - 1.5 * cm - 2 * cm) / 2      # half the page's writing area (the PDFs' top and bottom margins)
+
+
 def _section_elements(styles, dark, project=None, rooms=None):
     """Material Specifications, Payment Terms, Delivery Terms, Important Notes and Terms & Conditions
     (Settings → Quotation PDFs): each a numbered list, empty ones left out."""
@@ -219,6 +223,10 @@ def _section_elements(styles, dark, project=None, rooms=None):
     out = []
     values = layout.variables(project, rooms) if project is not None else None
     for title, lines in layout.sections(settings, _get_terms_lines(), values):
+        if not out:
+            # Less than half a page left after the quotation: the sections start on a new page together, rather
+            # than a few points at the bottom of this page and the rest on the next
+            out.append(CondPageBreak(SECTIONS_ROOM))
         points = [Paragraph(f'{i}.&nbsp;&nbsp;{escape(line)}', body) for i, line in enumerate(lines, 1)]
         out.append(KeepTogether([HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6),
                                  Paragraph(escape(title), head)] + points[:1]))   # the heading stays with its first point
