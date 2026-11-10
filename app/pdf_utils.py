@@ -348,14 +348,19 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
     for sec in sections:
         k = len(data)
-        head = escape(sec['name'])
+        # the room stands out: its letter and name on the brand colour, larger (its notes under it, smaller)
+        on = '#' + ON_BRAND.hexval()[2:]
+        head = f'<font size="10.5" color="{on}">{escape(sec["name"])}</font>'
         if sec['description']:
-            head += f'<br/><font size="7" color="#455a64">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
+            head += f'<br/><font size="7.5" color="{on}">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
         # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
-        data.append([sec['letter'], Paragraph(head, title)] + [''] * (last - 2) + [_money(sec['total']) if sec['total'] else ''])
-        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-2, k)),
+        data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))] + [''] * (last - 2)
+                    + [_money(sec['total']) if sec['total'] else ''])
+        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_DARK), ('SPAN', (1, k), (-2, k)),
                  ('FONTNAME', (0, k), (0, k), _F.b), ('FONTNAME', (-1, k), (-1, k), _F.b),
-                 ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
+                 ('FONTSIZE', (0, k), (0, k), 12), ('FONTSIZE', (-1, k), (-1, k), 10),
+                 ('TEXTCOLOR', (0, k), (-1, k), ON_BRAND), ('TOPPADDING', (0, k), (-1, k), 7),
+                 ('BOTTOMPADDING', (0, k), (-1, k), 7)]
         if sec['lines']:
             cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
         for ln in sec['lines']:
