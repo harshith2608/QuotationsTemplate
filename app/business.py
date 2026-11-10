@@ -181,7 +181,7 @@ def kinds_offered():
     from . import platform_switch, tenancy, welcome
     from .models import AppSetting
     try:
-        raw = platform_switch.value(KINDS_KEY) if tenancy.tenant_mode() else AppSetting.get(KINDS_KEY)
+        raw = platform_switch.shared(KINDS_KEY)
     except Exception:
         raw = None
     on = parse_kinds(raw)

@@ -220,3 +220,18 @@ ok('saving updates the template: rooms, the line still waiting for its size, a n
 r = c.post(f'/templates/{tid}/save', data={'rooms_data': '[]'})
 with app.app_context():
     ok('an empty template is refused (it keeps its lines)', len(QT.get(tid)['rooms']) == 2)
+
+# The console reads the prices saved in console → Pricing (it makes the website's payment links): not the defaults
+import os
+from app import platform_switch, pricing
+saved = json.dumps({'plans': {'1m': {'price': 499, 'on': True}, '1y': {'price': 4699, 'on': True}}})
+real = platform_switch.value
+platform_switch.value = lambda key: saved if key == pricing.KEY else None
+os.environ['CONSOLE_MODE'] = '1'
+try:
+    with app.app_context():
+        p = pricing.prices()
+finally:
+    os.environ.pop('CONSOLE_MODE', None)
+    platform_switch.value = real
+ok('console: the saved prices (₹499 a month, ₹4,699 a year), not the defaults', p['1m'] == 499 and p['1y'] == 4699)

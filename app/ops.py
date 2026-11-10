@@ -188,6 +188,7 @@ def schema_of(slug, active_only=True):
 
 
 PREFILLED_NAME_KEY = 'company_name_prefilled'
+SIGNUP_MOBILE_KEY = 'signup_mobile'          # the mobile from the website request (kept if the company phone changes)
 
 
 def phone_display(digits):
@@ -269,6 +270,8 @@ def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda li
                            ('company_email', (email or '').strip()[:120] if '@' in (email or '') else '')):
             if value:
                 AppSetting.set(key, value)
+        if phone:                                   # the number they gave on the website: payments fall back to it
+            AppSetting.set(SIGNUP_MOBILE_KEY, ''.join(ch for ch in str(phone) if ch.isdigit())[-12:])
         if kind:                                    # what they do (the trial form): their examples, words and setup
             from . import business
             business.set_kind(kind)

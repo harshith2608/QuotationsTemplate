@@ -194,7 +194,8 @@ def create_payment_link(slug, plan, business_name='', phone='', email='', kind='
         raise PaymentError('Set PLATFORM_RAZORPAY_KEY_ID and PLATFORM_RAZORPAY_KEY_SECRET on the console first.')
     ensure_table()
     amount = prices()[plan] * 100
-    digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    from .marketing import normalise_phone
+    digits = normalise_phone(phone) or ''.join(ch for ch in (phone or '') if ch.isdigit())   # 9515668800 → 919515668800
     payer_name = (payer_name or '').strip()[:120]
     customer = {k: v for k, v in (('name', (payer_name or business_name or slug)[:60]), ('email', email or ''),
                                   ('contact', ('+' + digits) if digits else '')) if v}
@@ -258,6 +259,8 @@ def open_link(slug, plan):
         row = conn.execute(text("SELECT * FROM public.platform_payments WHERE slug = :s AND plan = :p AND status = 'created' "
                                 "AND link_url IS NOT NULL AND created_at > (now() AT TIME ZONE 'utc') - INTERVAL '6 days' "
                                 "ORDER BY id DESC LIMIT 1"), {'s': slug, 'p': plan}).mappings().first()
+    if row and row['amount_paise'] != prices().get(plan, 0) * 100:
+        return None                            # made at an older price: a new link at today's price
     return dict(row) if row else None
 
 

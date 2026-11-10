@@ -38,7 +38,7 @@ def _stored():
     from . import platform_switch, tenancy
     from .models import AppSetting
     try:
-        raw = platform_switch.value(KEY) if tenancy.tenant_mode() else AppSetting.get(KEY)
+        raw = platform_switch.shared(KEY)          # (the console too: it makes the website's payment links)
         found = json.loads(raw) if raw else None
     except Exception:
         found = None

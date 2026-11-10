@@ -56,7 +56,22 @@ def order():
                     'key_id': subscription._env('PLATFORM_RAZORPAY_KEY_ID'),
                     'description': f'QuoteRoom: {plan_mod.short(plan)}',
                     'prefill': {'name': brand['name'], 'email': brand.get('email') or '',
-                                'contact': ''.join(ch for ch in (brand.get('phone') or '') if ch.isdigit())[-12:]}})
+                                'contact': _contact(brand)}})
+
+
+def _contact(brand):
+    """The mobile number Razorpay Checkout fills in (it asks for one on every payment in India): the first Indian
+    mobile in the company phone (Settings → Company), which may hold two numbers or a landline too; else the one they
+    gave when they signed up on the website; '' if none."""
+    import re
+    from .marketing import normalise_phone
+    from .models import AppSetting
+    from .ops import SIGNUP_MOBILE_KEY
+    for part in re.split(r'[,/;|]|\s{2,}|\bor\b', brand.get('phone') or '') + [AppSetting.get(SIGNUP_MOBILE_KEY, '') or '']:
+        found = normalise_phone(part)
+        if found:
+            return '+' + found
+    return ''
 
 
 @plan_bp.route('/plan/subscribe', methods=['POST'])
@@ -83,7 +98,7 @@ def subscribe():
     return jsonify({'ok': True, 'subscription_id': sub['sub_id'], 'key_id': subscription._env('PLATFORM_RAZORPAY_KEY_ID'),
                     'description': f'QuoteRoom: {plan_mod.PLANS[plan]}, ₹{subscription.prices()[plan]} a month',
                     'prefill': {'name': brand['name'], 'email': brand.get('email') or '',
-                                'contact': ''.join(ch for ch in (brand.get('phone') or '') if ch.isdigit())[-12:]}})
+                                'contact': _contact(brand)}})
 
 
 @plan_bp.route('/plan/subscribed', methods=['POST'])
