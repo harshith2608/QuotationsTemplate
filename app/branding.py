@@ -226,7 +226,7 @@ def prefetch_common(extra=()):
             + [plan.PLAN_KEY, plan.STARTED_KEY, plan.ENDS_KEY, plan.AUTOPAY_KEY] + list(billing.INVOICE_KEYS)
             + ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code', 'razorpay_key_id', 'admin_email',
                'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'terms_conditions', 'plywood_seeded', 'setup_guide', 'quote_templates',
-               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, boq.KEY, business.KEY, welcome.KEY, 'sample_project_id', 'customer_work_types',
+               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, layout.HIDE_RATE_KEY, layout.ROOM_TOTALS_KEY, layout.HIDE_BOARD_KEY, 'material_descriptions', boq.KEY, business.KEY, welcome.KEY, 'sample_project_id', 'customer_work_types',
                'company_profiles_limit', 'company_profiles']
             + [k for k, _ in layout.SECTION_KEYS] + list(extra))
     return AppSetting.prefetch(keys)

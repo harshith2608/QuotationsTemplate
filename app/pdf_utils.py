@@ -9,7 +9,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, HRFlowable, Image, KeepTogether, PageBreak)
+                                 TableStyle, HRFlowable, Image, KeepTogether, PageBreak,
+                                 CondPageBreak)
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from . import db
@@ -207,6 +208,9 @@ def pdf_filename(project, prefix='Quotation'):
     return f'{prefix}_{name}_{when}.pdf'
 
 
+SECTIONS_ROOM = (A4[1] - 1.5 * cm - 2 * cm) / 2      # half the page's writing area (the PDFs' top and bottom margins)
+
+
 def _section_elements(styles, dark, project=None, rooms=None):
     """Material Specifications, Payment Terms, Delivery Terms, Important Notes and Terms & Conditions
     (Settings → Quotation PDFs): each a numbered list, empty ones left out."""
@@ -219,6 +223,10 @@ def _section_elements(styles, dark, project=None, rooms=None):
     out = []
     values = layout.variables(project, rooms) if project is not None else None
     for title, lines in layout.sections(settings, _get_terms_lines(), values):
+        if not out:
+            # Less than half a page left after the quotation: the sections start on a new page together, rather
+            # than a few points at the bottom of this page and the rest on the next
+            out.append(CondPageBreak(SECTIONS_ROOM))
         points = [Paragraph(f'{i}.&nbsp;&nbsp;{escape(line)}', body) for i, line in enumerate(lines, 1)]
         out.append(KeepTogether([HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6),
                                  Paragraph(escape(title), head)] + points[:1]))   # the heading stays with its first point
@@ -234,6 +242,14 @@ def _with_thanks(elements, paragraph):
         tail.insert(0, elements.pop())
     last = elements.pop() if elements else None
     elements.append(KeepTogether(([last] if last is not None else []) + tail + [Spacer(1, 8), paragraph]))
+
+
+def _name_desc(it):
+    """An item's name, with its description (if typed) under it, smaller and grey."""
+    text = escape(it['name'])
+    if it.get('description'):
+        text += '<br/><font size="7" color="#455a64">' + escape(it['description']).replace('\n', '<br/>') + '</font>'
+    return text
 
 
 def _room_rows_elements(project, page_width, palette, styles, snap=None):
@@ -267,8 +283,8 @@ def _room_rows_elements(project, page_width, palette, styles, snap=None):
             data.append([str(r['no']) if i == 0 else '',
                          Paragraph(escape(r['title']), bold) if i == 0 else '',
                          Paragraph(escape(r['description']).replace('\n', '<br/>'), muted) if i == 0 and r['description'] else '',
-                         ([Paragraph(escape(it['name']), small), item_images.pdf_image(photos[it['image_id']], 2.0, 2.0)]
-                          if photos.get(it.get('image_id')) else Paragraph(escape(it['name']), small)),
+                         ([Paragraph(_name_desc(it), small), item_images.pdf_image(photos[it['image_id']], 2.0, 2.0)]
+                          if photos.get(it.get('image_id')) else Paragraph(_name_desc(it), small)),
                          size(it['length']), size(it['width']),
                          Paragraph(escape(layout.count_text(it['count'])), centred), _money(r['amount']) if i == 0 else ''])
         n = len(data)
@@ -329,7 +345,8 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     from . import item_images
     photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
     grid = colors.HexColor('#bdbdbd')
-    rate_col = layout.show_rate()              # some firms show quantities and amounts only (Settings → Quotation PDFs)
+    per_room = layout.room_totals_only()       # some firms show an amount per room only (Settings → Quotation PDFs)
+    rate_col = layout.show_rate() and not per_room     # or quantities and amounts, no rates
     # columns: Sr. No., Description, [Photo only when some line has one], Qty, Unit, [Rate], Amount
     heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + ['Qty', 'Unit'] + (['Rate'] if rate_col else []) \
         + ['Amount (Rs.)']
@@ -345,23 +362,34 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
             ('ALIGN', (last, 0), (last, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
+    from . import pdf_look
+    bw = pdf_look.colours() == pdf_look.BW
     for sec in sections:
         k = len(data)
-        head = escape(sec['name'])
+        # the room stands out: its letter and name on the brand colour, larger (its notes under it, smaller); in
+        # black & white a solid black band would be heavy on paper: a grey band with bold black text and a rule above
+        bar, ink = (colors.HexColor('#c9c9c9'), colors.black) if bw else (BRAND_DARK, ON_BRAND)
+        on = '#' + ink.hexval()[2:]
+        head = f'<font size="10.5" color="{on}">{escape(sec["name"])}</font>'
         if sec['description']:
-            head += f'<br/><font size="7" color="#455a64">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
+            head += f'<br/><font size="7.5" color="{on}">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
         # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
-        data.append([sec['letter'], Paragraph(head, title)] + [''] * (last - 2) + [_money(sec['total']) if sec['total'] else ''])
-        cmds += [('BACKGROUND', (0, k), (-1, k), BRAND_LIGHT), ('SPAN', (1, k), (-2, k)),
+        data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))] + [''] * (last - 2)
+                    + [_money(sec['total']) if sec['total'] else ''])
+        if bw:
+            cmds.append(('LINEABOVE', (0, k), (-1, k), 1.5, BRAND_DARK))
+        cmds += [('BACKGROUND', (0, k), (-1, k), bar), ('SPAN', (1, k), (-2, k)),
                  ('FONTNAME', (0, k), (0, k), _F.b), ('FONTNAME', (-1, k), (-1, k), _F.b),
-                 ('TEXTCOLOR', (0, k), (-1, k), BRAND_DARK)]
+                 ('FONTSIZE', (0, k), (0, k), 12), ('FONTSIZE', (-1, k), (-1, k), 10),
+                 ('TEXTCOLOR', (0, k), (-1, k), ink), ('TOPPADDING', (0, k), (-1, k), 7),
+                 ('BOTTOMPADDING', (0, k), (-1, k), 7)]
         if sec['lines']:
             cmds.append(('NOSPLIT', (0, k), (-1, k + 1)))      # a section heading stays with its first line
         for ln in sec['lines']:
             text = f'<b>{escape(ln["title"])}</b>'
             if ln['description']:
                 text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
-            amount = 'Price to follow' if ln.get('tbc') else _money(ln['amount']) if ln['amount'] else '—'
+            amount = 'Price to follow' if ln.get('tbc') else '' if per_room else _money(ln['amount']) if ln['amount'] else '—'
             if not rate_col and not ln['qty'] and ln['rate']:          # a rate-only line still says its rate
                 amount = f"Rate {_money(ln['rate'], 0)}"
             data.append([str(ln['no']), Paragraph(text, small)]

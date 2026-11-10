@@ -1254,8 +1254,19 @@ def whatsapp_share(project_id):
 
     from . import layout as _layout_wa
     _show_rate = _layout_wa.show_rate()        # some firms show quantities and amounts only
-    for room in rooms:
+    _per_room = _layout_wa.room_totals_only()  # or an amount per room only
+    _per_room_secs = _layout_wa.boq_rows(billing.quotation_snapshot(project, rooms)) if _per_room else []
+    for _r_i, room in enumerate(rooms):
         lines.append(f"\n🏠 *{room.name}*")
+        if _per_room:                          # the same lines as the PDF, without prices; the room's amount
+            _sec = _per_room_secs[_r_i] if _r_i < len(_per_room_secs) else {}
+            for ln in _sec.get('lines', []):
+                _first = (ln['description'] or '').split('\n')[0]
+                lines.append(f"  • {ln['title']}" + (f": {_first}" if _first else '')
+                             + (': price to follow' if ln.get('tbc') else ''))
+            if _sec.get('total'):
+                lines.append(f"  *Amount: Rs.{inr(_sec['total'], 0)}*")
+            continue
         for item in room.item_list:
             if item.price_to_follow:
                 lines.append(f"  • {item.display_name}: price to follow")
@@ -1275,17 +1286,18 @@ def whatsapp_share(project_id):
                 count_note = f" × {item.count}" if item.count > 1 else ''
                 lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)}{count_note} = {units.area(item.area)} ({item.wood_type}{ply_note})")
 
-    lines += ["", "*Material Summary:*"]
     from . import materials as M
-    for key in M.ordered_keys(combo_totals):
+    if not _per_room:
+        lines += ["", "*Material Summary:*"]
+    for key in (M.ordered_keys(combo_totals) if not _per_room else []):
         area = combo_totals[key]
         if area > 0:
             rate = item_rates.get(key, 0.0)
             lines.append(f"  • {plywood.label(key, project)}: {units.area(area)} × Rs.{inr(units.rate_value(rate), 0)}{units.rate_label()} = Rs.{inr(area * rate, 0)}")
-    if fixed_total > 0:
+    if fixed_total > 0 and not _per_room:
         lines.append(f"  • {FIXED_ITEMS_LABEL}: Rs.{inr(fixed_total, 0)}")
     boq_total = project.boq_items_total(rooms)
-    if boq_total > 0:
+    if boq_total > 0 and not _per_room:
         lines.append(f"  • {BOQ_ITEMS_LABEL}: Rs.{inr(boq_total, 0)}")
 
     lines.append("")

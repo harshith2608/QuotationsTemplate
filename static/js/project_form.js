@@ -34,12 +34,12 @@ const BOQ = !!CATALOG.boq;
 const LUMP = !!CATALOG.lumpSum;
 // The description sits on its own full-width row under the item's row (the name column is too narrow for it)
 function addDescRow(tr, ik, value, handler, before, after) {
-  if (!BOQ && !tr.classList.contains('item-row-boq')) return;      // priced by material: only lump sums have one
+  if (!BOQ && tr.classList.contains('item-row-fixed')) return;     // priced by material: measured items and lump sums
   const d = document.createElement('tr');
   d.className = 'ki-desc-row';
   d.id = 'item_descrow_' + ik;
   d.innerHTML = `<td colspan="7" class="pt-0">${before || ''}
-      <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="1" maxlength="2000"
+      <textarea class="form-control form-control-sm ki-item-desc" id="item_desc_${ik}" rows="2" maxlength="2000"
                 placeholder="Description (optional): specification, what's included…" oninput="autoGrow(this); ${handler}">${escHtml(value || '')}</textarea>
       <div class="ki-line-tools" id="item_tools_${ik}">${after || ''}</div>
     </td>`;
@@ -556,8 +556,10 @@ function initAutocomplete(input, suggestions) {
   function position() {
     const r = input.getBoundingClientRect();
     ul.style.top   = (r.bottom + window.scrollY) + 'px';
-    ul.style.left  = (r.left   + window.scrollX) + 'px';
-    ul.style.width = r.width + 'px';
+    // at least 280px wide (a narrow name box on a phone), never past the screen's right edge
+    const w = Math.min(Math.max(r.width, 280), document.documentElement.clientWidth - 16);
+    ul.style.width = w + 'px';
+    ul.style.left  = (Math.max(8, Math.min(r.left, document.documentElement.clientWidth - w - 8)) + window.scrollX) + 'px';
   }
 
   function render() {
@@ -633,6 +635,54 @@ function _destroyAc(containerEl) {
   });
 }
 
+// A firm whose materials are its items (TV Unit Ledge box (Laminate Finish), Sliding Wardrobe (Acrylic Finish)…):
+// the item name suggests them too, and picking one also picks it as the material.
+function materialNames() {
+  return [...new Set((CATALOG.combos || []).map(c => splitCombo(c.value)[0]).filter(Boolean))];
+}
+function measuredNameSuggestions() {
+  const mats = materialNames();
+  const seen = new Set(mats.map(m => m.toLowerCase()));
+  return mats.concat(masterItems.filter(n => !seen.has(n.toLowerCase())));
+}
+// The first material choice (e.g. its Box Work rate) for a name that is exactly a material, or ''
+function comboForName(name) {
+  const key = (name || '').trim().toLowerCase();
+  if (!key) return '';
+  const c = (CATALOG.combos || []).find(c => splitCombo(c.value)[0].toLowerCase() === key);
+  return c ? c.value : '';
+}
+// A material's own description (Admin → Rates) fills in the line's description when it's picked: only into an
+// empty box, or over the previous material's own text (never over what was typed)
+const MATERIAL_DESCS = CATALOG.materialDescs || {};
+function fillMaterialDesc(comboEl, descEl) {
+  if (!comboEl || !descEl) return;
+  const text = MATERIAL_DESCS[splitCombo(comboEl.value)[0]] || '';
+  const prev = descEl.dataset.matDesc;
+  const cur = descEl.value.trim();
+  if (cur && cur !== (prev || '').trim()) return;
+  if (!text && !cur) return;
+  descEl.value = text;
+  descEl.dataset.matDesc = text;
+  if (typeof autoGrow === 'function') autoGrow(descEl);
+  // a line on the page saves it; not the add-item window (its "typed" flag would stop a lump sum's own text later)
+  if (descEl.id !== 'modal_item_desc') descEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function pickMaterialFromName(nameEl, comboEl, descEl) {
+  const value = comboForName(nameEl?.value);
+  if (!value || !comboEl) return;
+  if (splitCombo(comboEl.value)[0] === splitCombo(value)[0]) { fillMaterialDesc(comboEl, descEl); return; }  // already it
+  comboEl.value = value;
+  comboEl.dispatchEvent(new Event('change', { bubbles: true }));      // (fills the description too)
+}
+// The add-item window: a filled-in material description goes when it becomes a fitting or a lump sum
+function clearMaterialDesc(descEl) {
+  if (descEl && descEl.dataset.matDesc && descEl.value.trim() === descEl.dataset.matDesc.trim()) {
+    descEl.value = '';
+    descEl.dataset.matDesc = '';
+  }
+}
+
 function _readDatalist(id) {
   const dl = document.getElementById(id);
   if (!dl) return [];
@@ -650,6 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
   try { priceList = JSON.parse(document.getElementById('price-list-data').textContent || '[]'); } catch (e) { priceList = []; }
 
   document.getElementById('modal_item_combo')?.addEventListener('change', syncModalPly);
+  document.getElementById('modal_item_combo')?.addEventListener('change',
+    e => fillMaterialDesc(e.target, document.getElementById('modal_item_desc')));
   const sizeSlot = document.getElementById('modal_boq_size_slot');
   if (sizeSlot) sizeSlot.innerHTML = sizeStrip('modal_boq', 0, 0, 1, 'modalCalcBoq()');
   applyUnitInputs(document.getElementById('itemModal'));
@@ -658,8 +710,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalNameInput = document.getElementById('modal_item_name');
   if (modalNameInput) {
     initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name)
-                                          : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : masterItems);
+                                          : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : measuredNameSuggestions());
     modalNameInput.addEventListener('input', () => {
+      if (modalItemType === 'measured') pickMaterialFromName(modalNameInput, document.getElementById('modal_item_combo'),
+                                                             document.getElementById('modal_item_desc'));
       if (modalItemType === 'fixed') _applyPriceListPrice();
       if (modalItemType === 'boq' || modalItemType === 'lump') _applySavedBoq();
     });
@@ -689,6 +743,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (rd.description) renderRoomDescriptions(rk, rd.description.split('\n'));
       (rd.items || []).forEach(id => {
         _loadItem(rk, id);
+        if (id.pending || id.check) aiSteps.note(rk, 'item_' + itemCounter, id.pending ? 'size' : id.check, id.name);
         if (id.image_id) setPhoto(rk, 'item_' + itemCounter, id.image_id);     // the row just added
         if (id.cost !== undefined && id.cost !== null) setCost('item_' + itemCounter, id.cost);
       });
@@ -715,6 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateNoRoomsHint();
   recalcAll();
   document.querySelectorAll('.ki-item-desc').forEach(autoGrow);
+  aiSteps.start();
 
   // Attach auto-save listeners to customer fields (new form only)
   ['customer_name', 'mobile', 'email'].forEach(id => {
@@ -886,7 +942,7 @@ function openItemModal(rk) {
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
   const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
-  const descEl = document.getElementById('modal_item_desc');   if (descEl) descEl.value = '';
+  const descEl = document.getElementById('modal_item_desc');   if (descEl) { descEl.value = ''; descEl.dataset.matDesc = ''; }
   const bq = document.getElementById('modal_boq_qty');   if (bq) bq.value = 1;
   const bu = document.getElementById('modal_boq_unit');
   if (bu) { bu.innerHTML = unitOptions('sqft'); syncLumpSum(bu, document.getElementById('modal_boq_qty')); }
@@ -928,7 +984,7 @@ function setModalItemType(type) {
   document.getElementById('modal_boq_fields')?.classList.toggle('d-none', type !== 'boq' && !lump);
   document.getElementById('modal_measured_fields')?.classList.toggle('d-none', type !== 'measured');
   // A lump sum is a BOQ line with unit "lump sum": just a description and one amount
-  document.getElementById('modal_desc_wrap')?.classList.toggle('d-none', !BOQ && !lump);
+  document.getElementById('modal_desc_wrap')?.classList.toggle('d-none', !BOQ && !lump && type !== 'measured');
   ['modal_boq_qty_col', 'modal_boq_unit_col', 'modal_boq_size_slot', 'modal_boq_hint'].forEach(id =>
     document.getElementById(id)?.classList.toggle('d-none', lump));
   document.getElementById('modal_lump_hint')?.classList.toggle('d-none', !lump);
@@ -946,6 +1002,8 @@ function setModalItemType(type) {
   const descIn = document.getElementById('modal_item_desc');
   if (descIn) descIn.placeholder = lump ? 'e.g. Extension of wall with block work, plastering and painting'
                                         : `e.g. ${BIZ.description}`;
+  if (type === 'measured') fillMaterialDesc(document.getElementById('modal_item_combo'), descIn);   // its material's own
+  else clearMaterialDesc(descIn);
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
   if (type === 'boq' || lump) _applySavedBoq();
   syncModalPly();
@@ -1475,7 +1533,14 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   applyUnitInputs(tr);
   // Wire up autocomplete for item name input
   const itemNameInput = document.getElementById('item_name_' + ik);
-  if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
+  const comboSel = document.getElementById('item_combo_' + ik), descBox = document.getElementById('item_desc_' + ik);
+  if (descBox && presetDesc && MATERIAL_DESCS[presetWood] === presetDesc) descBox.dataset.matDesc = presetDesc;
+  comboSel?.addEventListener('change', () => fillMaterialDesc(comboSel, descBox));
+  if (itemNameInput) {
+    initAutocomplete(itemNameInput, measuredNameSuggestions);
+    itemNameInput.addEventListener('input', () => pickMaterialFromName(itemNameInput, document.getElementById('item_combo_' + ik),
+                                                                       document.getElementById('item_desc_' + ik)));
+  }
   if (area > 0) recalcAll();
   addPhotoControl(rk, ik);
   addCostControl(rk, ik);
@@ -1876,3 +1941,117 @@ function showFormAlert(message, type) {
   if (form) form.prepend(alert);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+
+// ─── After an AI draft: a checklist on top of the page, one thing at a time ─────────────────────────────────────────
+// Lines waiting for a size, materials that weren't clear, items with no price in the rates, the customer's details,
+// then the questions for the customer. Each step scrolls to its line, outlines it and puts the cursor where it needs
+// typing; it ticks itself done when fixed. Back / Next / close; "Show the checklist" opens it again.
+const aiSteps = (() => {
+  const rowSteps = [];
+  let steps = [], at = 0, data = null;
+  const $ = id => document.getElementById(id);
+  const HOW = {
+    size: 'Type its size (or quantity) in the outlined line. Not needed? Remove the line with its ✕.',
+    material: 'Choose its material in the outlined line: it wasn\'t clear from SOURCE.',
+    price: 'It isn\'t in your rates: type its price in the outlined line.',
+  };
+  function note(rk, ik, kind, name) { rowSteps.push({ kind, rk, ik, name }); }
+  function roomName(rk) { return ($('room_name_' + rk)?.value || '').trim() || 'Room'; }
+  function done(st) {
+    if (st.kind === 'customer') return !!($('customer_name')?.value.trim() && $('mobile')?.value.trim());
+    if (st.kind === 'questions') return true;
+    if (!$('item_row_' + st.ik)) return true;                     // the line was removed
+    if (st.kind === 'size') return !(rooms[st.rk] && rooms[st.rk].items[st.ik] && rooms[st.rk].items[st.ik].pending);
+    if (st.kind === 'price') return parseFloat($('item_price_' + st.ik)?.value) > 0;
+    if (st.kind === 'material') return !!st.chosen;
+    return true;
+  }
+  function target(st) {
+    if (st.kind === 'customer') return $('customer_name')?.value.trim() ? $('mobile') : $('customer_name');
+    const row = $('item_row_' + st.ik);
+    if (!row) return null;
+    if (st.kind === 'material') return $('item_combo_' + st.ik);
+    if (st.kind === 'price') return $('item_price_' + st.ik);
+    return [...row.querySelectorAll('input[type=number]')].find(i => i.offsetParent && !i.value) || $('item_qty_' + st.ik);
+  }
+  function clearMarks() { document.querySelectorAll('.ki-ai-target').forEach(el => el.classList.remove('ki-ai-target')); }
+  function refresh() {
+    const st = steps[at];
+    if (!st) return;
+    $('aiStepsDone').classList.toggle('d-none', !(done(st) && st.kind !== 'questions'));
+  }
+  function show() {
+    const st = steps[at];
+    clearMarks();
+    $('aiStepsCount').textContent = `${at + 1} of ${steps.length}`;
+    $('aiStepsBack').disabled = at === 0;
+    $('aiStepsNext').innerHTML = at === steps.length - 1 ? 'Finish <i class="bi bi-check-lg"></i>' : 'Next <i class="bi bi-chevron-right"></i>';
+    const extra = $('aiStepsExtra');
+    extra.innerHTML = '';
+    if (st.kind === 'customer') {
+      $('aiStepsWhere').textContent = 'Customer';
+      $('aiStepsWhat').textContent = 'The customer\'s name and mobile number';
+      $('aiStepsHow').textContent = `Not in ${data.source}: type them (or check what was filled in).`;
+    } else if (st.kind === 'questions') {
+      $('aiStepsWhere').textContent = 'Last step';
+      $('aiStepsWhat').textContent = 'Ask the customer';
+      $('aiStepsHow').textContent = 'Things that weren\'t in ' + data.source + ':';
+      extra.innerHTML = '<ol class="small ps-3 mb-2">' + data.questions.map(q => `<li>${escHtml(q)}</li>`).join('') + '</ol>'
+        + '<button type="button" class="btn btn-sm btn-outline-primary" id="aiStepsCopy"><i class="bi bi-clipboard me-1"></i>Copy the questions</button>';
+      $('aiStepsCopy').onclick = () => {
+        const text = data.questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+        (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+          () => { $('aiStepsCopy').innerHTML = '<i class="bi bi-check-lg me-1"></i>Copied'; }, () => {});
+      };
+    } else {
+      $('aiStepsWhere').textContent = roomName(st.rk);
+      $('aiStepsWhat').textContent = $('item_name_' + st.ik)?.value || st.name;
+      $('aiStepsHow').textContent = $('item_row_' + st.ik) ? HOW[st.kind].replace('SOURCE', data.source)
+                                                            : 'This line was removed.';
+    }
+    const el = target(st);
+    const row = st.ik ? $('item_row_' + st.ik) : el?.closest('.card');
+    if (row) {
+      if (st.ik) { row.classList.add('ki-ai-target'); $('item_descrow_' + st.ik)?.classList.add('ki-ai-target'); }
+      // just below the checklist (which sits on top of the page), so it never covers the line
+      const below = $('aiSteps').getBoundingClientRect().bottom + 12;
+      window.scrollTo({ top: Math.max(0, row.getBoundingClientRect().top + window.scrollY - below), behavior: 'instant' });
+      if (el) el.focus({ preventScroll: true });
+    }
+    refresh();
+  }
+  function go(step) {
+    if (at + step >= steps.length) { close(); return; }
+    at = Math.max(0, at + step);
+    show();
+  }
+  function open() {
+    if (!steps.length) return;
+    $('aiSteps').classList.remove('d-none');
+    $('aiStepsOpen')?.classList.add('d-none');
+    show();
+  }
+  function close() {
+    $('aiSteps').classList.add('d-none');
+    clearMarks();
+    $('aiStepsOpen')?.classList.remove('d-none');
+  }
+  function start() {
+    const el = $('ai-draft-data');
+    if (!el) return;
+    try { data = JSON.parse(el.textContent || '{}'); } catch (e) { return; }
+    const customer = { kind: 'customer' };
+    steps = (done(customer) ? [] : [customer]).concat(rowSteps)
+      .concat(data.questions && data.questions.length ? [{ kind: 'questions' }] : []);
+    if (!steps.length) return;
+    $('aiDraftList')?.classList.add('d-none');                     // the checklist replaces the list
+    rowSteps.filter(s => s.kind === 'material').forEach(s =>
+      $('item_combo_' + s.ik)?.addEventListener('change', () => { s.chosen = true; refresh(); }));
+    document.addEventListener('input', refresh);
+    document.addEventListener('change', refresh);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('aiSteps').classList.contains('d-none')) close(); });
+    open();
+  }
+  return { note, start, open, close, go };
+})();

@@ -96,7 +96,7 @@ def form_catalog(extra=()):
             rows.append({'value': key(w, k), 'label': label(w, k) + ' (hidden)', 'wood': w, 'work': k or ''})
             known.add(key(w, k))
     dw, dk = default_combo(active)
-    return {'material_combos': rows, 'default_combo': key(dw, dk)}
+    return {'material_combos': rows, 'default_combo': key(dw, dk), 'material_descs': descriptions()}
 
 
 def clean_name(raw):
@@ -147,14 +147,38 @@ def finish_label_of(combo_key):
     return f'{text} · {board}'
 
 
+DESC_KEY = 'material_descriptions'      # {material name: what it includes}, Admin → Rates (no database update needed)
+DESC_MAX = 2000
+
+
+def descriptions():
+    """{material name: description}: filled in on a quotation line when the material is picked (editable there)."""
+    import json
+    from .models import AppSetting
+    try:
+        data = json.loads(AppSetting.get(DESC_KEY, '') or '{}')
+    except ValueError:
+        return {}
+    return {str(k): str(v) for k, v in data.items() if v} if isinstance(data, dict) else {}
+
+
+def set_descriptions(data):
+    import json
+    from .models import AppSetting
+    clean = {k: '\n'.join(l.rstrip() for l in str(v).strip().splitlines())[:DESC_MAX] for k, v in data.items() if str(v or '').strip()}
+    AppSetting.set(DESC_KEY, json.dumps(clean, ensure_ascii=False) if clean else '')
+
+
 SHOW_WORK_KEY = 'customer_work_types'   # '1': customers see "Laminates – Box Work" (Settings → Quotation PDFs)
 
 
 def finish_name(wood):
-    """'Laminates' → 'Laminate Finish', 'Acrylic' → 'Acrylic Finish' (a plural 's' dropped; 'Glass' keeps its 'ss')."""
+    """'Laminates' → 'Laminate Finish', 'Acrylic' → 'Acrylic Finish' (a plural 's' dropped; 'Glass' keeps its 'ss').
+    A name that already says it, or is an item more than a finish ('Sliding Wardrobe (Laminate Finish)', 'Kitchen
+    Acrylic Finish - Base Unit', 'Dressing Storage Unit'), stays as it is."""
     w = (wood or '').strip()
-    if w.lower().endswith('finish'):
-        return w                                # already says it ('PU Finish')
+    if 'finish' in w.lower() or '(' in w or len(w.split()) > 2:
+        return w                                # already says it ('PU Finish'), or an item
     if w.endswith('s') and not w.endswith('ss') and len(w) > 3:
         w = w[:-1]
     return f'{w} Finish'

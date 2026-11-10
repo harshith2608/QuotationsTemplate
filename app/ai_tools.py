@@ -239,8 +239,13 @@ There are no prices in your answer: the business's own rates are used."""
 # only for a business that prices by material (one pricing by item has no measured items)
 MEASURED_RULE = """  measured: furniture priced by its area (wardrobes, kitchen cabinets, lofts, TV units, panelling, beds, study
     tables…). length_ft and width_ft: the two sizes it is priced by (the width and height of a wardrobe's front; the
-    run and height of a kitchen cabinet). material and work_type: from the business's list, the one asked for, else
-    ''; a finish asked for an item also goes on what belongs with it (a wardrobe's loft).
+    run and height of a kitchen cabinet). material and work_type: from the business's list, copied exactly as listed.
+    The one asked for; when the text names none, the material in the list that best fits the item, in its most
+    basic finish (usually laminate). A business's materials are often its items ("TV Unit Ledge box (Laminate
+    Finish)", "Kitchen Laminate Finish - Wall Unit" for an overhead cabinet, "Panelling with Laminate Finish" for a
+    head panel): pick the one for that item. '' only when nothing in the list fits it. When you chose the finish
+    yourself, ask the customer which finish they want (one question for all of them). A finish asked for an item
+    also goes on what belongs with it (a wardrobe's loft).
 """
 
 
@@ -321,19 +326,47 @@ def _finish(material, cat):
     return (cat.get('finishes') or {}).get(key) if key else None
 
 
+def _words(text):
+    import re
+    return re.sub(r'[^a-z0-9]+', ' ', (text or '').lower()).split()
+
+
+def _match_material(material, work, cat_combos):
+    """The business's (material, work type) for what the AI wrote, or None when it isn't clear. Exact first; then
+    ignoring capitals and punctuation ('TV Unit Ledge Box - Acrylic Finish'); then the one material containing all
+    its words ('acrylic tv unit')."""
+    if not (material or '').strip():
+        return None
+    woods = list(dict.fromkeys(w for w, _, _ in cat_combos))
+    want = ' '.join(_words(material))
+    pick = next((w for w in woods if w.lower() == material.strip().lower()), None) \
+        or next((w for w in woods if ' '.join(_words(w)) == want), None)
+    if not pick:
+        found = [w for w in woods if set(_words(material)) <= set(_words(w))]
+        pick = found[0] if len(found) == 1 else None
+    if not pick:
+        return None
+    works = [k for w, k, _ in cat_combos if w == pick]
+    k = next((x for x in works if (x or '').lower() == (work or '').strip().lower()), works[0])
+    return pick, k
+
+
 def _size(value):
     return value if value is not None and 0 < value <= 100 else None
 
 
 def to_form(draft, cat):
-    """The AI's draft → the quotation form's rooms (the business's rates), and the notes for the person."""
+    """The AI's draft → (the quotation form's rooms at the business's rates, names with no rate, measured items whose
+    material wasn't clear)."""
     from . import boq, materials as M
     combos = {(w.lower(), (k or '').lower()): (w, k) for w, k, _ in cat['combos']}
     by_wood = {}
     for w, k, _ in cat['combos']:
         by_wood.setdefault(w.lower(), (w, k))
     default = M.default_combo(cat['combos'])
+    descs = M.descriptions()
     rooms, no_rate = [], []
+    unclear = []                                        # measured items whose material wasn't clear: to check
     for room in draft.rooms:
         items = []
         for it in room.items:
@@ -365,6 +398,7 @@ def to_form(draft, cat):
                     row['unit_price'] = round(line['rate'] * (1 + (fin['extra'] if fin else 0) / 100), 2)
                 else:
                     row['tbc'] = True
+                    row['check'] = 'price'                          # the step-by-step checklist: type its price
                     no_rate.append(name)
                 if qty is None:
                     row['pending'] = True
@@ -373,14 +407,22 @@ def to_form(draft, cat):
                 row = {'type': 'fixed', 'name': fit.name if fit else name, 'quantity': qty or 1,
                        'unit_price': fit.price if fit else 0, 'description': ''}
                 if not fit:
+                    row['check'] = 'price'
                     no_rate.append(name)
                 if qty is None:
                     row['pending'] = True
             else:
-                wood, work = combos.get((it.material.lower(), it.work_type.lower())) or by_wood.get(it.material.lower()) \
-                    or default
+                found = _match_material(it.material, it.work_type, cat['combos'])
+                if not found and len(by_wood) > 1:
+                    unclear.append(name)
+                    checking = 'material'
+                else:
+                    checking = None
+                wood, work = found or default
                 row = {'type': 'measured', 'name': name, 'wood_type': wood, 'work_type': work, 'count': count,
-                       'description': ''}
+                       'description': descs.get(wood, '')}
+                if checking:
+                    row['check'] = checking
                 if length and width:
                     row.update(length=length, width=width)
                 else:
@@ -388,7 +430,7 @@ def to_form(draft, cat):
             items.append(row)
         if items:
             rooms.append({'name': ' '.join(room.name.split())[:100] or 'Room', 'items': items})
-    return rooms, no_rate
+    return rooms, no_rate, unclear
 
 
 def draft(message, photos=()):
@@ -413,7 +455,7 @@ def draft(message, photos=()):
     else:
         prompt = text_part
     answer, used = _ask(feature, prompt, Draft, 6000, n=max(len(photos), 1))
-    rooms, no_rate = to_form(answer, cat)
+    rooms, no_rate, unclear = to_form(answer, cat)
     if not rooms:
         ai_import._log(feature, False, tokens_in=used['in'], tokens_out=used['out'], note='nothing to quote')
         raise AIProblem('No rooms or items could be read from that. ' + (
@@ -431,6 +473,7 @@ def draft(message, photos=()):
     return {'rooms_json': json.dumps(rooms), 'title': ' '.join(answer.job_title.split())[:60],
             'customer': {k: v for k, v in customer.items() if v},
             'questions': [q.strip() for q in answer.questions if q.strip()][:6], 'no_rate': no_rate[:10],
+            'check_material': list(dict.fromkeys(unclear))[:10],
             'waiting': sum(1 for r in rooms for i in r['items'] if i.get('pending'))}
 
 

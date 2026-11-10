@@ -88,12 +88,38 @@
     {% for src in ai_draft.photos %}<a href="{{ src }}" target="_blank" rel="noopener" title="Open the photo"><img src="{{ src }}" alt="Site notes, page {{ loop.index }}" class="rounded border" style="height:110px"></a>{% endfor %}
   </div>
   {% endif %}
-  <ul class="mb-0 ps-3">
+  <button type="button" class="btn btn-sm btn-primary fw-semibold d-none" id="aiStepsOpen" onclick="aiSteps.open()">
+    <i class="bi bi-list-check me-1"></i>Show the checklist</button>
+  {# without JavaScript (or before it runs): the same as a list; the checklist replaces it #}
+  <ul class="mb-0 ps-3" id="aiDraftList">
     {% if ai_draft.waiting %}<li>{{ ai_draft.waiting }} line{{ 's are' if ai_draft.waiting != 1 else ' is' }} waiting for a size or quantity (highlighted).</li>{% endif %}
     {% if ai_draft.no_rate %}<li>Not in your rates, so no price yet: {{ ai_draft.no_rate|join(', ') }}.</li>{% endif %}
+    {% if ai_draft.check_material %}<li><strong>Choose the material</strong> (not clear from {{ 'the notes' if ai_draft.photos else 'the message' }}): {{ ai_draft.check_material|join(', ') }}.</li>{% endif %}
     {% if ai_draft.questions %}<li>Ask the customer:
       <ul class="mb-0">{% for q in ai_draft.questions %}<li>{{ q }}</li>{% endfor %}</ul></li>{% endif %}
   </ul>
+</div>
+<script id="ai-draft-data" type="application/json">{{ {'questions': ai_draft.questions or [], 'photos': ai_draft.photos or [],
+  'source': 'the notes' if ai_draft.photos else 'the message'}|tojson }}</script>
+{# The step-by-step checklist after an AI draft: on top of the page, one thing at a time; the line it's about is
+   scrolled to and outlined, and you fix it right there (static/js/project_form.js aiSteps) #}
+<div id="aiSteps" class="ki-ai-steps card shadow-lg border-0 d-none" role="dialog" aria-labelledby="aiStepsTitle" aria-live="polite">
+  <div class="card-header ki-card-header py-2 d-flex align-items-center gap-2">
+    <i class="bi bi-stars"></i><span class="fw-semibold" id="aiStepsTitle">Finish the draft</span>
+    <span class="small opacity-75" id="aiStepsCount"></span>
+    <button type="button" class="btn-close btn-close-white ms-auto" aria-label="Close the checklist" onclick="aiSteps.close()"></button>
+  </div>
+  <div class="card-body py-2">
+    <div class="small text-muted" id="aiStepsWhere"></div>
+    <div class="fw-semibold" id="aiStepsWhat"></div>
+    <div class="small mt-1" id="aiStepsHow"></div>
+    <div class="mt-2" id="aiStepsExtra"></div>
+    <div class="d-flex align-items-center gap-2 mt-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="aiStepsBack" onclick="aiSteps.go(-1)"><i class="bi bi-chevron-left"></i> Back</button>
+      <span class="small text-success fw-semibold d-none" id="aiStepsDone"><i class="bi bi-check-circle-fill me-1"></i>Done</span>
+      <button type="button" class="btn btn-sm btn-primary fw-semibold ms-auto" id="aiStepsNext" onclick="aiSteps.go(1)">Next <i class="bi bi-chevron-right"></i></button>
+    </div>
+  </div>
 </div>
 {% endif %}
 {% if started_from %}
@@ -326,11 +352,15 @@
 
       <!-- Rates Reference -->
       <div class="card shadow-sm border-0 mt-3 {{ 'd-none' if boq_form.by_item }}" id="rates-card">
-        <div class="card-header ki-card-header py-2">
+        {% set shown_rates = [] %}{% for c in material_combos if '(hidden)' not in c.label %}{% set _ = shown_rates.append(c) %}{% endfor %}
+        <button type="button" class="card-header ki-card-header py-2 border-0 w-100 text-start d-flex align-items-center collapsed"
+                data-bs-toggle="collapse" data-bs-target="#ratesList" aria-expanded="false" aria-controls="ratesList">
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
-        </div>
-        <ul class="list-group list-group-flush">
-          {% for c in material_combos if '(hidden)' not in c.label %}
+          <span class="small fw-normal opacity-75 ms-2">({{ shown_rates|length }})</span>
+          <i class="bi bi-chevron-down ms-auto ki-rates-chev"></i>
+        </button>
+        <ul class="list-group list-group-flush collapse" id="ratesList">
+          {% for c in shown_rates %}
           <li class="list-group-item d-flex justify-content-between py-2">
             <span class="small fw-medium">{{ c.label }}</span>
             <span class="small text-success fw-bold">&#8377;{{ (item_rates.get(c.value, 0)|rate)|inr(0) }}{{ units.rate_label() }}</span>
@@ -389,7 +419,7 @@
         {% if boq_form.enabled or boq_form.lump_sum %}
         <div class="mb-3" id="modal_desc_wrap">
           <label class="form-label fw-medium small mb-1" for="modal_item_desc">Description <span class="text-muted fw-normal">(optional, printed under the item)</span></label>
-          <textarea class="form-control form-control-sm" id="modal_item_desc" rows="3" maxlength="2000"
+          <textarea class="form-control form-control-sm" id="modal_item_desc" rows="4" maxlength="2000"
                     placeholder="e.g. {{ biz.description_example }}"></textarea>
         </div>
         <!-- BOQ line: its own quantity, unit and rate -->
@@ -549,6 +579,7 @@
     boq:         {{ boq_form.enabled|tojson }},              // BOQ lines and item descriptions (console: per business)
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
+    materialDescs: {{ material_descs|tojson }},             // {material: description} filled in when picked (Admin → Rates)
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
     itemImages:  {{ (item_images or false)|tojson }},
     itemCosts:   {{ (item_costs or none)|tojson }},               // your cost on each line (console; admins + allowed staff)
