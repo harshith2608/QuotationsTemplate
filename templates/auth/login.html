@@ -30,7 +30,7 @@
                    class="form-control form-control-lg {% if form.username.errors %}is-invalid{% endif %}"
                    placeholder="Enter username"
                    value="{{ form.username.data or request.args.get('u', '')[:80] }}"
-                   autofocus autocomplete="username" required>
+                   autofocus autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
             {% for err in form.username.errors %}
               <div class="invalid-feedback">{{ err }}</div>
             {% endfor %}
@@ -87,5 +87,19 @@
       icon.className = 'bi bi-eye';
     }
   });
+  // The username carries forward: from the set-up page (?u=), or the last one used on this device; then the
+  // cursor waits in the password box.
+  (function () {
+    const user = document.getElementById('username'), pwd = document.getElementById('password');
+    const KEY = 'qr_last_username';
+    try {
+      if (user.value.trim()) localStorage.setItem(KEY, user.value.trim());
+      else if (localStorage.getItem(KEY)) user.value = localStorage.getItem(KEY);
+    } catch (e) {}
+    if (user.value.trim()) pwd.focus();
+    user.form.addEventListener('submit', function () {
+      try { if (user.value.trim()) localStorage.setItem(KEY, user.value.trim()); } catch (e) {}
+    });
+  })();
 </script>
 {% endblock %}

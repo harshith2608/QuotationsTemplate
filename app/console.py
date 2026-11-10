@@ -2078,6 +2078,39 @@ def customer_costs(slug):
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/customers/<slug>/companies', methods=['POST'])
+@login_required
+def customer_companies(slug):
+    _customer_or_404(slug)
+    try:
+        n = _customers().set_profiles(slug, request.form.get('limit', type=int) or 0)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_companies', slug, str(n))
+        flash(f'Other companies are now {"off" if not n else "on, up to " + str(n)} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/companies/unlock', methods=['POST'])
+@login_required
+def customer_company_unlock(slug):
+    from .profiles import LOCKABLE
+    _customer_or_404(slug)
+    fields = [f for f in request.form.getlist('fields') if f in LOCKABLE]
+    if not fields:
+        flash('Choose what to unlock.', 'error')
+    else:
+        try:
+            name = _customers().unlock_profile(slug, request.form.get('id', type=int), fields)
+        except Exception as exc:
+            flash(str(exc), 'error')
+        else:
+            audit('customer_company_unlock', slug, f'{name}: {", ".join(fields)}')
+            flash(f'Unlocked {", ".join(fields)} of "{name}" for one change.', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#companies')
+
+
 @console_bp.route('/customers/<slug>/photos', methods=['POST'])
 @login_required
 def customer_photos(slug):
@@ -2614,7 +2647,7 @@ def start_trial():
     done = _signup(lead_id, lead)
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
-                               plan=plan, price=price, token=token, paid=_paid_plan(done))
+                               plan=plan, price=price, token=token, paid=_paid_plan(done), username=_admin_name(done))
     earlier = earlier_trial(lead_id, lead)
     if earlier and plan:                          # buying: pay for the app they already have (their data is in it)
         with db.engine.begin() as conn:           # so /start/paid matches the payment to it
@@ -2684,6 +2717,26 @@ def start_trial():
     return render_template('console/start.html', form=form, errors=errors, token=token, lead=lead, plan=plan, price=price,
                            address=_free_address(form['company'] or lead['name']), base=tenancy.base_domain(),
                            site=_site_url(), turnstile=signup.turnstile_site_key())
+
+
+@console_bp.app_template_global('app_login_url')
+def app_login_url(slug, username=''):
+    """Their app's sign-in page with the username filled in (looked up when not given)."""
+    from urllib.parse import quote
+    name = username or _admin_name(slug)
+    return f'https://{slug}.{tenancy.base_domain()}/login' + (f'?u={quote(name)}' if name else '')
+
+
+def _admin_name(slug):
+    """The trial's admin username (shown again when they reopen the set-up link), or '' if it can't be read."""
+    try:
+        from .models import User
+        with tenancy.tenant_context(slug, tenancy.schema_for(slug)):
+            user = User.query.filter_by(role='admin').order_by(User.id).first()
+            return user.username if user else ''
+    except Exception:
+        db.session.rollback()
+        return ''
 
 
 CALL_PER_IP_PER_HOUR = 3

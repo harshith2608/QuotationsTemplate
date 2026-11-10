@@ -701,7 +701,18 @@ def view_project(project_id):
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            material_list_on=__import__('app.material_list', fromlist=['available']).available(),
                            ai_check_on=__import__('app.ai_tools', fromlist=['available']).available('check'),
+                           company=_company_picker(project),
                            title=f'Quotation – {project.customer_name}')
+
+
+def _company_picker(project):
+    """{'choices', 'current', 'locked'} when the business has other companies (or this quotation is from one), else None."""
+    from . import profiles
+    current = profiles.for_project(project.id)
+    if not (current or (profiles.enabled() and profiles.all_profiles())):
+        return None
+    return {'choices': profiles.choices(), 'current': current['id'] if current else 0,
+            'locked': bool(billing.active_invoice(project))}
 
 
 def _staff_sees_costs():
@@ -723,6 +734,33 @@ def _safe_next(default):
     """Only allow redirects back to a path on this site."""
     nxt = request.form.get('next', '')
     return nxt if nxt.startswith('/') and not nxt.startswith('//') else default
+
+
+@projects_bp.route('/projects/<int:project_id>/company', methods=['POST'])
+@login_required
+def set_company(project_id):
+    """Which company the quotation is from (Admin → Other companies): its PDF, link, WhatsApp and email use it."""
+    from . import access, profiles
+    project = Project.query.get_or_404(project_id)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    if billing.active_invoice(project):
+        flash('This quotation has an invoice, so the company it is from can\'t be changed. Cancel the invoice first.', 'warning')
+        return redirect(url_for('projects.view_project', project_id=project.id))
+    try:
+        profiles.set_for_project(project.id, request.form.get('profile', type=int) or None)
+    except profiles.ProfileError as exc:
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        chosen = profiles.for_project(project.id)
+        flash(f'This quotation is now from {chosen["name"] if chosen else get_brand_main()}.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id))
+
+
+def get_brand_main():
+    from flask import g
+    return (g.get('app_brand') or get_brand())['name']
 
 
 @projects_bp.route('/projects/<int:project_id>/stage', methods=['POST'])
@@ -940,6 +978,8 @@ def delete_project(project_id):
         return redirect(url_for('projects.view_project', project_id=project.id))
     from . import material_list
     material_list.delete_for(project)
+    from . import profiles
+    profiles.forget_project(project.id)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')
@@ -1362,6 +1402,7 @@ def razorpay_webhook():
     if project is None:
         current_app.logger.warning(f'Razorpay webhook: project not found for link {link_id}')
         return jsonify({'error': 'Project not found'}), 404
+    __import__('app.profiles', fromlist=['apply']).apply(project.id)   # the receipt names the quotation's company
 
     # ── 4. Deduplicate — skip if this Razorpay payment ID was already recorded
     if razorpay_pay_id and Payment.query.filter_by(razorpay_payment_id=razorpay_pay_id).first():

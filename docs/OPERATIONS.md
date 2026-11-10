@@ -999,6 +999,21 @@ Razorpay doesn't match the one saved in the app, or the webhook URL / event (`pa
 
 ---
 
+### Other companies (a customer that quotes under more than one name)
+
+Off for everyone. To allow it: console → Customers → the customer → Features → **Other companies** → choose how many
+(1–10) → Save. Their admins then get **Admin → Other companies**: each company's name, logo, phone, email, address,
+GSTIN, tagline and (optionally) its own UPI / bank details. On a quotation they pick **From: …** under the customer's
+name; that quotation's PDF, link, WhatsApp, email and invoice use that company (the app itself keeps the main company).
+
+- Paying customers only: the switch is on the Customers page, and the app ignores it on a trial or the demo.
+- The same section lists their companies (GSTIN, logo, how many quotations use each, what's locked).
+- Name, GSTIN and logo lock once saved, like the main company; tick one under that company → **Unlock for one change**
+  when they ask you to correct it. A company used by a quotation can't be deleted.
+- Setting it back to 0 hides the menu and the picker; quotations already from another company keep it.
+- Invoices from every company share one numbering series. Online payment links use the main company's Razorpay.
+- No database update needed.
+
 ## 9. Ending a customer
 
 > **With the console:** for an export, open the customer → **Show connection details** (gives the two values

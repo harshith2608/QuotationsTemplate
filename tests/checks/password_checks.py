@@ -53,3 +53,16 @@ ok('no email on the business: "message us", nothing sent', "can't email a reset 
 from app.password_reset import mask
 ok('the address is masked: first and last two letters', mask('pola.harshith2000@gmail.com') == 'po*************00@gmail.com'
    and mask('ab@x.in') == 'a*@x.in')
+
+# ── Signing in from a phone: capitals and a trailing space ──
+login = lambda u, p: app.test_client().post('/login', data={'username': u, 'password': p})
+ok('"Owner" (a phone\'s capital) signs in as owner', login('Owner', 'brand-new-pass').status_code == 302)
+ok('…"OWNER " too', login('OWNER ', 'brand-new-pass').status_code == 302)
+ok('a space a keyboard added after the password still works', login('owner', 'brand-new-pass ').status_code == 302)
+ok('a wrong password is still refused', login('owner', 'brand-new-pas').status_code == 200)
+with app.app_context():
+    db.session.add(User(username='Staff1', password_hash=generate_password_hash('other-pass-123'), role='employee'))
+    db.session.commit()
+ok('two users differing only in capitals: each signs in only exactly',
+   login('staff1', 'staff-pass-123').status_code == 302 and login('Staff1', 'other-pass-123').status_code == 302
+   and login('STAFF1', 'staff-pass-123').status_code == 200)

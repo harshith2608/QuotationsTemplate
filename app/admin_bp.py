@@ -1230,3 +1230,49 @@ def clear_notifications():
 @admin_bp.route('/projects')
 def all_projects():
     return redirect(url_for('projects.list_projects'))
+
+
+# ── Other companies (app/profiles.py): turned on per business by the operator ───────────────────────────────────
+
+@admin_bp.route('/companies', methods=['GET', 'POST'])
+def companies():
+    """The business's other companies: each one's name, contact, GSTIN, tagline and logo, chosen per quotation."""
+    from . import profiles
+    if not profiles.enabled():
+        abort(404)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        pid = request.form.get('id', type=int)
+        try:
+            if action == 'add':
+                p = profiles.add(request.form)
+                _profile_logo(p['id'])
+                flash(f'"{p["name"]}" added. Choose it on a quotation (under the customer\'s name).', 'success')
+            elif action == 'save' and pid:
+                p = profiles.update(pid, request.form)
+                _profile_logo(pid)
+                flash(f'"{p["name"]}" saved.', 'success')
+            elif action == 'delete' and pid:
+                profiles.delete(pid)
+                flash('Company deleted.', 'success')
+            db.session.commit()
+        except profiles.ProfileError as exc:
+            db.session.rollback()
+            flash(str(exc), 'danger')
+        return redirect(url_for('admin.companies'))
+    return render_template('admin/companies.html', title='Other companies', profiles=profiles.all_profiles(),
+                           limit=profiles.limit(), can_add=profiles.can_add(), enabled=profiles.enabled(),
+                           lock=branding.lock_enabled(), main=branding.get_brand(),
+                           used={p['id']: profiles.quotations_using(p['id']) for p in profiles.all_profiles()},
+                           pays={p['id']: profiles.payment_details(p) for p in profiles.all_profiles()},
+                           locks={p['id']: profiles.locked(p) for p in profiles.all_profiles()})
+
+
+def _profile_logo(pid):
+    from . import profiles
+    f = request.files.get('logo')
+    if f and f.filename:
+        if branding.lock_enabled() and not request.form.get('confirm_logo'):
+            raise profiles.ProfileError('Tick "This is this company\'s logo" to upload it. It can\'t be changed later '
+                                        'without contacting support.')
+        profiles.set_logo(pid, f.read())

@@ -37,7 +37,11 @@ def favicon():
 @main_bp.route('/brand/logo.png')
 def brand_logo():
     """Logo uploaded in Admin → Settings. The ?v= version changes on every upload, so cache hard."""
-    png = load_logo_png()
+    if request.args.get('p', type=int):                 # another company's logo (app/profiles.py)
+        from . import profiles
+        png = profiles.logo_png(request.args.get('p', type=int))
+    else:
+        png = load_logo_png()
     if not png:
         abort(404)
     cache = 'public, max-age=31536000, immutable' if request.args.get('v') else 'no-cache'

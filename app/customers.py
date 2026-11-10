@@ -528,7 +528,8 @@ def boq_status(slug):
         from . import presentation
         from . import item_costs
         return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status(),
-                    show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status())
+                    show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status(),
+                    profiles=__import__('app.profiles', fromlist=['console_status']).console_status())
 
 
 def set_presentation(slug, on):
@@ -577,6 +578,24 @@ def set_photos(slug, on):
             raise CustomerError('This customer needs the latest database update first (Updates → Update all).')
         item_images.set_enabled(on)
         db.session.commit()
+
+
+def set_profiles(slug, n):
+    """How many other companies (app/profiles.py) a customer may add; 0 turns it off."""
+    from . import profiles
+    with open_customer(slug):
+        n = profiles.set_limit(n)
+        db.session.commit()
+        return n
+
+
+def unlock_profile(slug, pid, fields):
+    """Let a customer change another company's name / GSTIN / logo once."""
+    from . import profiles
+    with open_customer(slug):
+        p = profiles.unlock(pid, fields)
+        db.session.commit()
+        return p['name']
 
 
 def set_boq(slug, on):
