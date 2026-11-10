@@ -91,6 +91,7 @@
   <ul class="mb-0 ps-3">
     {% if ai_draft.waiting %}<li>{{ ai_draft.waiting }} line{{ 's are' if ai_draft.waiting != 1 else ' is' }} waiting for a size or quantity (highlighted).</li>{% endif %}
     {% if ai_draft.no_rate %}<li>Not in your rates, so no price yet: {{ ai_draft.no_rate|join(', ') }}.</li>{% endif %}
+    {% if ai_draft.check_material %}<li><strong>Choose the material</strong> (not clear from {{ 'the notes' if ai_draft.photos else 'the message' }}): {{ ai_draft.check_material|join(', ') }}.</li>{% endif %}
     {% if ai_draft.questions %}<li>Ask the customer:
       <ul class="mb-0">{% for q in ai_draft.questions %}<li>{{ q }}</li>{% endfor %}</ul></li>{% endif %}
   </ul>

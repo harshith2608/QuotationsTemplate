@@ -141,3 +141,34 @@ ok('the Rates page shows the description box', f'name="desc_{mid}"' in rates_pag
 c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms'})
 cust = pdftext(f'/projects/{pid}/pdf/customer')
 ok('room by room: the item description prints under it', 'Glass door in the side' in cust)
+
+# AI drafts: a business whose materials are its items (SP): the material is matched even when written a bit
+# differently; one that isn't clear is listed to choose, not silently priced as the first material
+from app import ai_tools
+from app.ai_tools import Draft, DraftRoom, DraftItem
+with app.app_context():
+    price_list.apply(price_list.parse(json.dumps({'pricing': 'material', 'materials': [
+        {'name': 'TV Unit Ledge box (Acrylic Finish)', 'rate': 2800, 'description': 'Acrylic ledge box'},
+        {'name': 'TV Unit Ledge box (Laminate Finish)', 'rate': 2400},
+        {'name': 'Sliding Wardrobe (Laminate Finish)', 'rates': {'Box Work': 2300, 'Frame Work': 1400}}]}).encode()),
+        remove_starter=False)
+    cat = ai_tools._catalog()
+    d = Draft(job_title='2 BHK', questions=[], rooms=[DraftRoom(name='Living', items=[
+        DraftItem(kind='measured', name='TV Unit', length_ft=8, width_ft=1, material='TV unit ledge box - acrylic finish'),
+        DraftItem(kind='measured', name='TV Unit 2', length_ft=8, width_ft=1, material='laminate ledge box'),
+        DraftItem(kind='measured', name='Wardrobe', length_ft=7, width_ft=8, material='Sliding Wardrobe (Laminate Finish)',
+                  work_type='frame work'),
+        DraftItem(kind='measured', name='Mystery', length_ft=2, width_ft=2, material='marble cladding')])])
+    rooms, no_rate, unclear = ai_tools.to_form(d, cat)
+    its = {i['name']: i for i in rooms[0]['items']}
+ok('AI draft: material matched ignoring capitals and punctuation, with its description',
+   its['TV Unit']['wood_type'] == 'TV Unit Ledge box (Acrylic Finish)' and its['TV Unit']['description'] == 'Acrylic ledge box')
+ok('…matched by its words ("laminate ledge box")', its['TV Unit 2']['wood_type'] == 'TV Unit Ledge box (Laminate Finish)')
+ok('…with the work type asked for', (its['Wardrobe']['wood_type'], its['Wardrobe']['work_type'])
+   == ('Sliding Wardrobe (Laminate Finish)', 'Frame Work'))
+ok('…a material that isn\'t clear is listed to choose', unclear == ['Mystery'])
+with app.app_context():
+    d2 = Draft(job_title='x', questions=[], rooms=[DraftRoom(name='Hall', items=[
+        DraftItem(kind='measured', name='TV', length_ft=8, width_ft=1, material='laminate tv unit')])])
+    _, _, unclear2 = ai_tools.to_form(d2, cat)
+ok('…and one that fits two materials too ("laminate tv unit": two laminate TV units)', unclear2 == ['TV'])
