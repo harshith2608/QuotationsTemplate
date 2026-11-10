@@ -665,13 +665,22 @@ function fillMaterialDesc(comboEl, descEl) {
   descEl.value = text;
   descEl.dataset.matDesc = text;
   if (typeof autoGrow === 'function') autoGrow(descEl);
-  descEl.dispatchEvent(new Event('input', { bubbles: true }));
+  // a line on the page saves it; not the add-item window (its "typed" flag would stop a lump sum's own text later)
+  if (descEl.id !== 'modal_item_desc') descEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
-function pickMaterialFromName(nameEl, comboEl) {
+function pickMaterialFromName(nameEl, comboEl, descEl) {
   const value = comboForName(nameEl?.value);
-  if (!value || !comboEl || splitCombo(comboEl.value)[0] === splitCombo(value)[0]) return;
+  if (!value || !comboEl) return;
+  if (splitCombo(comboEl.value)[0] === splitCombo(value)[0]) { fillMaterialDesc(comboEl, descEl); return; }  // already it
   comboEl.value = value;
-  comboEl.dispatchEvent(new Event('change', { bubbles: true }));
+  comboEl.dispatchEvent(new Event('change', { bubbles: true }));      // (fills the description too)
+}
+// The add-item window: a filled-in material description goes when it becomes a fitting or a lump sum
+function clearMaterialDesc(descEl) {
+  if (descEl && descEl.dataset.matDesc && descEl.value.trim() === descEl.dataset.matDesc.trim()) {
+    descEl.value = '';
+    descEl.dataset.matDesc = '';
+  }
 }
 
 function _readDatalist(id) {
@@ -703,7 +712,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initAutocomplete(modalNameInput, () => modalItemType === 'fixed' ? priceList.map(p => p.name)
                                           : (modalItemType === 'boq' || modalItemType === 'lump') ? BOQ_SAVED.map(b => b.name) : measuredNameSuggestions());
     modalNameInput.addEventListener('input', () => {
-      if (modalItemType === 'measured') pickMaterialFromName(modalNameInput, document.getElementById('modal_item_combo'));
+      if (modalItemType === 'measured') pickMaterialFromName(modalNameInput, document.getElementById('modal_item_combo'),
+                                                             document.getElementById('modal_item_desc'));
       if (modalItemType === 'fixed') _applyPriceListPrice();
       if (modalItemType === 'boq' || modalItemType === 'lump') _applySavedBoq();
     });
@@ -932,7 +942,7 @@ function openItemModal(rk) {
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
   const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
-  const descEl = document.getElementById('modal_item_desc');   if (descEl) descEl.value = '';
+  const descEl = document.getElementById('modal_item_desc');   if (descEl) { descEl.value = ''; descEl.dataset.matDesc = ''; }
   const bq = document.getElementById('modal_boq_qty');   if (bq) bq.value = 1;
   const bu = document.getElementById('modal_boq_unit');
   if (bu) { bu.innerHTML = unitOptions('sqft'); syncLumpSum(bu, document.getElementById('modal_boq_qty')); }
@@ -992,6 +1002,8 @@ function setModalItemType(type) {
   const descIn = document.getElementById('modal_item_desc');
   if (descIn) descIn.placeholder = lump ? 'e.g. Extension of wall with block work, plastering and painting'
                                         : `e.g. ${BIZ.description}`;
+  if (type === 'measured') fillMaterialDesc(document.getElementById('modal_item_combo'), descIn);   // its material's own
+  else clearMaterialDesc(descIn);
   if (type === 'fixed') { _applyPriceListPrice(); modalCalcFixed(); }
   if (type === 'boq' || lump) _applySavedBoq();
   syncModalPly();
@@ -1526,7 +1538,8 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   comboSel?.addEventListener('change', () => fillMaterialDesc(comboSel, descBox));
   if (itemNameInput) {
     initAutocomplete(itemNameInput, measuredNameSuggestions);
-    itemNameInput.addEventListener('input', () => pickMaterialFromName(itemNameInput, document.getElementById('item_combo_' + ik)));
+    itemNameInput.addEventListener('input', () => pickMaterialFromName(itemNameInput, document.getElementById('item_combo_' + ik),
+                                                                       document.getElementById('item_desc_' + ik)));
   }
   if (area > 0) recalcAll();
   addPhotoControl(rk, ik);
