@@ -36,7 +36,7 @@ with app.app_context():
     ok('off: a BOQ line sent anyway is kept as a fixed-price line (same amount); a lump sum stays a lump sum',
        it.item_type == 'fixed' and it.quantity * it.unit_price == 25000 and its['Site Cleaning'].is_boq)
 s = c.get('/admin/settings?tab=documents').text
-ok('off: no BOQ layout in Settings → Quotation PDFs', 'il_boq' not in s)
+ok('pricing by material: the BOQ table is offered too (items on their own lines)', 'il_boq' in s)
 
 # ── On ──
 with app.app_context():
@@ -241,10 +241,13 @@ ok('customer link in BOQ layout: sections, lines, units, Basic Total', 'Bill of 
    and '696 Sq.ft' in pub and 'Conduit, polycab wire considered' in pub and 'Basic Total' in pub)
 
 # ── Off again ──
-setting(boq.KEY, '')
+with app.app_context():
+    boq.set_enabled(False)
+    db.session.commit()
 ok('off: no BOQ lines list in Admin → Rates', 'id="boq-lines"' not in c.get('/admin/rates').text)
 with app.app_context():
-    ok('off again: the BOQ layout falls back to room by room', layout.initial_layout() == layout.LAYOUT_ROOMS)
+    ok('off again: the BOQ layout goes back to room by room (it can be picked again)',
+       layout.initial_layout() == layout.LAYOUT_ROOMS)
 e = c.get(f'/projects/{pid}/edit').text
 ok('off again: a quotation that has BOQ lines can still edit them', 'modal_type_boq' in e)
 ok('off again: new quotations don\'t offer them', 'modal_type_boq' not in c.get('/projects/new').text)

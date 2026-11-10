@@ -27,6 +27,33 @@ def show_rate():
     """The Rate column on the customer's BOQ (PDF, link, WhatsApp). On unless the business turned it off."""
     from .models import AppSetting
     return AppSetting.get(HIDE_RATE_KEY, '') != '1'
+
+
+# Some firms' customers want the BOQ without a price on each line (only each section's total), or without the board
+# (plywood) on every line: it goes in the Terms instead, with {plywood}. Settings → Quotation PDFs.
+ROOM_TOTALS_KEY = 'boq_room_totals'  # '1': lines show their quantity; only each room (section) has an amount
+HIDE_BOARD_KEY = 'boq_hide_board'    # '1': a line says "TV Unit Ledge box (Laminate Finish)", not "… · 16mm Sainik"
+
+
+def room_totals_only():
+    """The customer's BOQ shows an amount per room only (PDF, link, WhatsApp)."""
+    from .models import AppSetting
+    return AppSetting.get(ROOM_TOTALS_KEY, '') == '1'
+
+
+def show_board():
+    from .models import AppSetting
+    return AppSetting.get(HIDE_BOARD_KEY, '') != '1'
+
+
+def line_material(text):
+    """A line's material as the customer sees it; without the board ('… · 16mm Century Sainik') when the firm
+    prints that in its Terms instead."""
+    from .materials import customer_label
+    text = customer_label(text)
+    return text if show_board() else text.partition(' · ')[0]
+
+
 SECTION_KEYS = [('material_specs', 'Material Specifications'), ('payment_terms', 'Payment Terms'),
                 ('delivery_terms', 'Delivery Terms'), ('important_notes', 'Important Notes')]
 
@@ -49,16 +76,17 @@ def description_options():
 def initial_layout():
     from .models import AppSetting
     value = AppSetting.get(LAYOUT_KEY, '')
-    if value == LAYOUT_BOQ:
+    if value == LAYOUT_BOQ:                    # (pricing by material too: every item on its own line)
         from . import boq
-        return value if boq.enabled() else LAYOUT_ROOMS        # BOQ lines turned off: back to room by room
+        return value if boq.ready() else LAYOUT_ROOMS
     return value if value in LAYOUTS else LAYOUT_ROOMS
 
 
 def layouts():
-    """The Initial Quotation layouts this business can choose (BOQ only with BOQ lines on)."""
+    """The Initial Quotation layouts this business can choose. BOQ (every line numbered, in sections A, B, C) also
+    suits a business pricing by material that wants each item on its own line with its photo."""
     from . import boq
-    return {k: v for k, v in LAYOUTS.items() if k != LAYOUT_BOQ or boq.enabled()}
+    return {k: v for k, v in LAYOUTS.items() if k != LAYOUT_BOQ or boq.ready()}
 
 
 def single_pdf():
@@ -72,7 +100,8 @@ def single_pdf():
 def boq_rows(snapshot):
     """Sections A, B, C… (the rooms), each with numbered lines: {'letter', 'name', 'description', 'lines': [{'no',
     'title', 'description', 'qty', 'unit', 'rate', 'amount', 'tbc'}]} (tbc: "Price to follow"). Measured items show their area, rate per area and
-    size; fittings their quantity and price; BOQ lines exactly as typed. Amounts come from the snapshot."""
+    size; fittings their quantity and price; BOQ lines exactly as typed. Amounts come from the snapshot.
+    A measured line says its material and size first, then what the business typed about it."""
     from . import boq, units
     out = []
     for r_i, room in enumerate(snapshot.get('rooms', [])):
@@ -84,9 +113,8 @@ def boq_rows(snapshot):
                 size = f"{units.length(it['length'])} × {units.length(it['width'])}"
                 if it.get('count', 1) > 1:
                     size += f" × {it['count']} No's"
-                from .materials import customer_label
-                detail = f"{customer_label(it['material'])} · {size}"
-                lines.append({'no': n, 'title': it['name'], 'description': '\n'.join(x for x in (desc, detail) if x),
+                detail = ' · '.join(x for x in (line_material(it['material']), size) if x)
+                lines.append({'no': n, 'title': it['name'], 'description': '\n'.join(x for x in (detail, desc) if x),
                               'image_id': it.get('image_id'),
                               'qty': units.area_value(it['area']), 'unit': units.area_label(),
                               'rate': units.rate_value(it['rate']), 'amount': it['amount']})
@@ -137,10 +165,9 @@ def room_description(room):
 def auto_description(items):
     """What a room is made of, from its measured items' materials (snapshot items), as the customer sees them, e.g.
     'Laminate Finish · 18mm BWP, Glass'."""
-    from .materials import customer_label
     seen = []
     for it in items:                           # (as the customer sees them: "Laminate Finish", once)
-        text = customer_label(it.get('material')) if it.get('type') == 'measured' else ''
+        text = line_material(it.get('material')) if it.get('type') == 'measured' else ''
         if text and text not in seen:
             seen.append(text)
     return ', '.join(seen)

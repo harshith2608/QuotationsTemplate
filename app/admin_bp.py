@@ -1131,6 +1131,10 @@ def settings():
             if 'boq_rate_shown' in request.form:     # the BOQ's Rate column (only offered with the BOQ layout)
                 shown = '1' in request.form.getlist('boq_rate_shown')
                 AppSetting.set(layout.HIDE_RATE_KEY, '' if shown else '1')
+            if 'boq_room_totals' in request.form:    # one amount per room, none on the lines
+                AppSetting.set(layout.ROOM_TOTALS_KEY, '1' if '1' in request.form.getlist('boq_room_totals') else '')
+            if 'boq_board_shown' in request.form:    # the plywood on each line, or once in the Terms
+                AppSetting.set(layout.HIDE_BOARD_KEY, '' if '1' in request.form.getlist('boq_board_shown') else '1')
         elif tab == 'pricing':
             from . import boq
             mode = request.form.get('pricing_mode')
@@ -1181,6 +1185,9 @@ def settings():
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
+                           room_totals=layout.room_totals_only() if tab == 'documents' else False,
+                           show_board=layout.show_board() if tab == 'documents' else True,
+                           single_pdf=layout.single_pdf(),
                            show_work_types=AppSetting.get('customer_work_types') == '1',
                            pdf_look=pdf_look.choices() if tab == 'documents' else None,
                            preview_pid=db.session.query(db.func.max(Project.id)).scalar() if tab == 'documents' else None,

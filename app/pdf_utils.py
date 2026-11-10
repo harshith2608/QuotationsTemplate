@@ -329,7 +329,8 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     from . import item_images
     photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
     grid = colors.HexColor('#bdbdbd')
-    rate_col = layout.show_rate()              # some firms show quantities and amounts only (Settings → Quotation PDFs)
+    per_room = layout.room_totals_only()       # some firms show an amount per room only (Settings → Quotation PDFs)
+    rate_col = layout.show_rate() and not per_room     # or quantities and amounts, no rates
     # columns: Sr. No., Description, [Photo only when some line has one], Qty, Unit, [Rate], Amount
     heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + ['Qty', 'Unit'] + (['Rate'] if rate_col else []) \
         + ['Amount (Rs.)']
@@ -361,7 +362,7 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
             text = f'<b>{escape(ln["title"])}</b>'
             if ln['description']:
                 text += '<br/><font color="#455a64">' + escape(ln['description']).replace('\n', '<br/>') + '</font>'
-            amount = 'Price to follow' if ln.get('tbc') else _money(ln['amount']) if ln['amount'] else '—'
+            amount = 'Price to follow' if ln.get('tbc') else '' if per_room else _money(ln['amount']) if ln['amount'] else '—'
             if not rate_col and not ln['qty'] and ln['rate']:          # a rate-only line still says its rate
                 amount = f"Rate {_money(ln['rate'], 0)}"
             data.append([str(ln['no']), Paragraph(text, small)]
