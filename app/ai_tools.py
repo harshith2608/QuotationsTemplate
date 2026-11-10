@@ -239,10 +239,13 @@ There are no prices in your answer: the business's own rates are used."""
 # only for a business that prices by material (one pricing by item has no measured items)
 MEASURED_RULE = """  measured: furniture priced by its area (wardrobes, kitchen cabinets, lofts, TV units, panelling, beds, study
     tables…). length_ft and width_ft: the two sizes it is priced by (the width and height of a wardrobe's front; the
-    run and height of a kitchen cabinet). material and work_type: from the business's list, copied exactly as listed:
-    the one asked for (a business's materials can be its items, e.g. "TV Unit Ledge box (Acrylic Finish)": pick the
-    one for that item and finish), else ''; a finish asked for an item also goes on what belongs with it (a
-    wardrobe's loft).
+    run and height of a kitchen cabinet). material and work_type: from the business's list, copied exactly as listed.
+    The one asked for; when the text names none, the material in the list that best fits the item, in its most
+    basic finish (usually laminate). A business's materials are often its items ("TV Unit Ledge box (Laminate
+    Finish)", "Kitchen Laminate Finish - Wall Unit" for an overhead cabinet, "Panelling with Laminate Finish" for a
+    head panel): pick the one for that item. '' only when nothing in the list fits it. When you chose the finish
+    yourself, ask the customer which finish they want (one question for all of them). A finish asked for an item
+    also goes on what belongs with it (a wardrobe's loft).
 """
 
 
