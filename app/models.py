@@ -438,8 +438,19 @@ class AppSetting(db.Model):
                 cache[k] = found.get(k)
         return cache
 
+    PAY_KEYS = ('upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code')
+
+    @staticmethod
+    def _profile_pay():
+        """On a quotation from another company with its own payment details (app/profiles.py): those details."""
+        from flask import g, has_app_context
+        return g.get('profile_pay') if has_app_context() else None
+
     @classmethod
     def get(cls, key, default=None):
+        pay = cls._profile_pay() if key in cls.PAY_KEYS else None
+        if pay is not None:
+            return pay.get(key) or default
         raw = cls.prefetch([key]).get(key)
         return cls._out(key, raw) if raw is not None else default
 
@@ -447,7 +458,11 @@ class AppSetting(db.Model):
     def get_many(cls, keys, default=''):
         """Fetch several settings in one query (or none, if already read): {key: value or default}."""
         raw = cls.prefetch(keys)
-        return {k: (cls._out(k, raw[k]) if raw.get(k) is not None else None) or default for k in keys}
+        out = {k: (cls._out(k, raw[k]) if raw.get(k) is not None else None) or default for k in keys}
+        pay = cls._profile_pay()
+        if pay is not None:
+            out.update({k: pay.get(k) or default for k in keys if k in cls.PAY_KEYS})
+        return out
 
     @classmethod
     def set(cls, key, value):

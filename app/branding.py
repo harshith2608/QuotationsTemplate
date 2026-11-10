@@ -217,7 +217,7 @@ def build_brand(saved):
     return brand
 
 
-def prefetch_common():
+def prefetch_common(extra=()):
     """Read, in ONE query, the settings nearly every page needs: brand, units, plan, invoice and payment settings
     (AppSetting keeps them for the rest of the request). Returns the raw values."""
     from . import billing, boq, business, layout, plan, units, welcome
@@ -226,8 +226,9 @@ def prefetch_common():
             + [plan.PLAN_KEY, plan.STARTED_KEY, plan.ENDS_KEY, plan.AUTOPAY_KEY] + list(billing.INVOICE_KEYS)
             + ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code', 'razorpay_key_id', 'admin_email',
                'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'terms_conditions', 'plywood_seeded', 'setup_guide', 'quote_templates',
-               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, boq.KEY, business.KEY, welcome.KEY, 'sample_project_id', 'customer_work_types']
-            + [k for k, _ in layout.SECTION_KEYS])
+               layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, boq.KEY, business.KEY, welcome.KEY, 'sample_project_id', 'customer_work_types',
+               'company_profiles_limit', 'company_profiles']
+            + [k for k, _ in layout.SECTION_KEYS] + list(extra))
     return AppSetting.prefetch(keys)
 
 
@@ -411,8 +412,13 @@ _trimmed = {}
 
 
 def load_logo_png():
-    """Uploaded logo bytes (margins trimmed, also for logos uploaded before trimming existed), or None."""
+    """Uploaded logo bytes (margins trimmed, also for logos uploaded before trimming existed), or None.
+    On a quotation from another company (app/profiles.py), that company's logo."""
     from .models import AppSetting
+    if g.get('profile_logo_id'):
+        from . import profiles
+        png = profiles.logo_png(g.profile_logo_id)
+        return png
     data = AppSetting.get(LOGO_DATA_KEY, '')
     if not data:
         return None

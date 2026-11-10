@@ -2078,6 +2078,20 @@ def customer_costs(slug):
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/customers/<slug>/companies', methods=['POST'])
+@login_required
+def customer_companies(slug):
+    _customer_or_404(slug)
+    try:
+        n = _customers().set_profiles(slug, request.form.get('limit', type=int) or 0)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_companies', slug, str(n))
+        flash(f'Other companies are now {"off" if not n else "on, up to " + str(n)} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/customers/<slug>/photos', methods=['POST'])
 @login_required
 def customer_photos(slug):

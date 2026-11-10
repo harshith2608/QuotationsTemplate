@@ -130,6 +130,8 @@ def _share_or_404(token):
     project = db.session.get(Project, share.project_id)
     if not project or project.status == 'draft':
         abort(404)
+    from . import profiles
+    profiles.apply(project.id)                     # the company this quotation is from
     return share, project
 
 
@@ -279,6 +281,7 @@ def invoice_view(token):
     inv = _invoice_or_404(token)
     from .models import AppSetting, Project
     project = db.session.get(Project, inv.project_id)
+    __import__('app.profiles', fromlist=['apply']).apply(inv.project_id)
     data = billing.invoice_data(inv)
     paid = billing.paid_total(project) if inv.status == 'issued' else 0
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
@@ -294,6 +297,7 @@ def invoice_pdf(token):
     from .models import Project
     from .pdf_utils import generate_invoice_pdf
     project = db.session.get(Project, inv.project_id)
+    __import__('app.profiles', fromlist=['apply']).apply(inv.project_id)
     paid = billing.paid_total(project) if inv.status == 'issued' else 0
     buf = generate_invoice_pdf(inv, billing.invoice_data(inv), total_paid=paid)
     return _private(send_file(buf, mimetype='application/pdf', as_attachment=False,

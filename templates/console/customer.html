@@ -185,6 +185,17 @@
     <input type="hidden" name="on" value="{{ '0' if boq.show_rate else '1' }}">
     <button class="btn" type="submit">{{ 'Hide the Rate column' if boq.show_rate else 'Show the Rate column' }}</button>
   </form>{% endif %}
+  {% if boq.profiles %}<div style="border-top:1px solid var(--line);padding-top:12px"><strong>Other companies</strong> · <span class="badge {{ 'b-active' if boq.profiles.limit else 'b-other' }}">{{ ('up to ' ~ boq.profiles.limit ~ ', ' ~ boq.profiles.used ~ ' added') if boq.profiles.limit else ('off' ~ (', ' ~ boq.profiles.used ~ ' added' if boq.profiles.used else '')) }}</span></div>
+  <p class="muted small" style="margin:0">For a firm that quotes under more than one name: Admin → Other companies, where
+    they add each one's name, logo, phone, address and GSTIN, then choose the company on each quotation (its PDF, link,
+    WhatsApp and invoice use it). Set how many they may add; 0 turns it off (the menu goes, quotations already from
+    another company keep it). Name, GSTIN and logo lock once saved, like the main company. Invoices share one numbering.</p>
+  <form method="post" action="{{ url_for('console.customer_companies', slug=row.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="small" style="margin:0">How many
+      <select name="limit">{% for n in range(0, boq.profiles.max + 1) %}<option value="{{ n }}" {{ 'selected' if n == boq.profiles.limit }}>{{ n if n else '0 (off)' }}</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Save</button>
+  </form>{% endif %}
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Presentation pages</strong> · <span class="badge {{ 'b-active' if boq.cover.on else 'b-other' }}">{{ 'on' if boq.cover.on else 'off' }}</span></div>
   <p class="muted small" style="margin:0">Their quotation PDF opens with a title page (their logo and name, then "Quotation
     for" the client) and their About us, and ends with the Next steps and a thank-you note. They write About us and Next

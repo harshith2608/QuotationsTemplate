@@ -1,7 +1,7 @@
 import hashlib
 import os
 from datetime import datetime
-from flask import Flask, url_for
+from flask import Flask, g, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -106,6 +106,8 @@ def create_app(config_name='default'):
 
     app.before_request(tenancy.resolve_tenant)
     app.teardown_request(tenancy.release_tenant)
+    from .profiles import apply_for_request
+    app.before_request(apply_for_request)        # a quotation's pages use the company it is from (first settings read)
 
     from .auth import auth_bp
     from .main import main_bp
@@ -195,6 +197,16 @@ def create_app(config_name='default'):
         from . import units
         return units.rate_value(per_sqft)
 
+    def _companies_on(user):
+        """Admin → Other companies is in the menu while the operator has it turned on."""
+        if not (getattr(user, 'is_authenticated', False) and user.is_admin):
+            return False
+        try:
+            from . import profiles
+            return profiles.enabled()
+        except Exception:
+            return False
+
     @app.context_processor
     def inject_globals():
         from flask_login import current_user
@@ -240,7 +252,7 @@ def create_app(config_name='default'):
         from .marketing import call_url
         return {'biz': business.profile(), 'help_card': help_card, 'call_url': call_url(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
-                'brand': get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
+                'companies_on': _companies_on(current_user), 'brand': get_brand(), 'app_brand': g.get('app_brand') or get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
 
     @app.context_processor
