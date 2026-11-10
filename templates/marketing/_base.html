@@ -516,7 +516,7 @@ footer nav { display: flex; gap: 1.2rem; }
         if (!data.ok) { showErrors(data.errors || { form: 'Something went wrong. Please try again.' }); return; }
         if (data.pay_url) {                 // buying a plan: on to choose a password and pay
           track('InitiateCheckout', true, { value: ({{ plan_values|tojson }})[form.plan.value] || 4999, currency: 'INR' });
-          location.href = data.pay_url;
+          setTimeout(() => { location.href = data.pay_url; }, 350);
           return;
         }
         // Only real target businesses count as a Lead, so the ads learn to find more of them;
@@ -524,6 +524,10 @@ footer nav { display: flex; gap: 1.2rem; }
         const btype = (new FormData(form).get('business_type') || '');
         if (btype && btype !== 'other') track('Lead', true, { value: T.leadValue, currency: 'INR', content_category: btype });
         else track('LeadOther');
+        if (data.setup_url) {               // the trades it's for: straight on to choose a password (no "request
+          setTimeout(() => { location.href = data.setup_url; }, 350);   // received" stop; a moment for the ad pixel)
+          return;
+        }
         const done = root.querySelector('[data-trial-done]');
         root.querySelector('[data-trial-start]').hidden = true;
         done.querySelector('[data-done-title]').textContent = `Thanks, ${data.name}! Request received.`;

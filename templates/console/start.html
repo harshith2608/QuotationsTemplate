@@ -118,7 +118,8 @@
     <p class="lead">Hi {{ lead.name }}! You chose the <strong>{{ plan_title }},
       ₹{{ (price)|inr(0) }}{{ per }}</strong>. Check your company name and choose a password, then pay{{ ' (one month: pay again each month, or turn on autopay later in your app)' if monthly }}.</p>
     {% else %}
-    <p class="lead">Hi {{ lead.name }}! Check your company name and choose a password. Your free 7-day trial starts right away.</p>
+    <p class="step" style="margin:0 0 4px;font-weight:600;color:var(--muted, #6b7280);font-size:.85rem">Step 2 of 2</p>
+    <p class="lead">Hi {{ lead.name }}! Choose a password and your app is ready in a minute. Your free 7-day trial starts right away.</p>
     {% endif %}
     {% if errors.form %}<div class="formerr">{{ errors.form }}</div>{% endif %}
     <form method="post" action="{{ url_for('console.start_trial') }}" id="startForm" novalidate>
