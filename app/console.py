@@ -2637,6 +2637,32 @@ def email_clicked(token, n):
 
 
 @console_bp.route('/start', methods=['GET', 'POST'])
+def _in_app_browser():
+    """'Facebook app' / 'Instagram app' when the page is open in their own browser (where ads open), else ''."""
+    ua = request.headers.get('User-Agent', '')
+    if 'Instagram' in ua:
+        return 'Instagram app'
+    if 'FBAN' in ua or 'FBAV' in ua or 'FB_IAB' in ua:
+        return 'Facebook app'
+    return ''
+
+
+SETUP_REASONS = {'company': 'company name', 'username': 'username', 'password': 'password too short',
+                 'password2': 'passwords didn\'t match', 'terms': 'terms not ticked'}
+
+
+def _setup_failed(lead_id, lead, form, errors, in_app):
+    """A set-up attempt that didn't go through: why, in the activity log, and a Telegram alert."""
+    why = ', '.join(errors['form'] if k == 'form' else SETUP_REASONS.get(k, k) for k in errors)
+    audit('trial_setup_failed', None, f'lead #{lead_id}, {form.get("company") or ""}: {why}' + (f' ({in_app})' if in_app else ''))
+    try:
+        from . import notify
+        notify.send(f'⚠️ Set-up didn\'t go through: {form.get("company") or lead.get("company_name") or lead.get("name") or ""}',
+                    [why, in_app], phone=lead.get('phone') or '', console_path='/#newRequests')
+    except Exception:
+        pass
+
+
 def start_trial():
     """Public: the business that asked for a trial on the website sets up its own app (signed, single-use link).
     ?plan=6m|1y: they chose a plan on the website, so after the app is made they go on to pay for it."""
@@ -2692,6 +2718,8 @@ def start_trial():
             errors['terms'] = 'Please accept the terms to continue.'
         if not errors and not signup.turnstile_ok(request.form.get('cf-turnstile-response'), _client_ip()):
             errors['form'] = 'Please complete the check that you\'re not a robot.'
+        if errors:          # why set-ups stop: in the activity log, and an alert to call them while they're keen
+            _setup_failed(lead_id, lead, form, errors, _in_app_browser())
         t = None
         for _ in range(3) if not errors else ():   # the address comes from the firm's name (a number added if taken)
             slug = _free_address(form['company'])
