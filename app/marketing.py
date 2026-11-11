@@ -298,6 +298,18 @@ def _lead_value():
     return value if value > 0 else 1000.0
 
 
+def _ad_source(utm_source):
+    """Where the ad ran: Meta's ads link says "facebook" for Instagram too, but Instagram's own browser names itself
+    ("Instagram" in its User-Agent), as Facebook's does (FBAN / FBAV)."""
+    ua = request.headers.get('User-Agent', '')
+    meta = (utm_source or '').strip().lower() in ('', 'facebook', 'fb', 'meta', 'ig', 'instagram')
+    if meta and 'Instagram' in ua:
+        return 'instagram'
+    if meta and ('FBAN' in ua or 'FBAV' in ua):
+        return 'facebook'
+    return utm_source
+
+
 @marketing_bp.route('/free-trial')
 def free_trial():
     """The trial form as its own page: works without JavaScript and can be linked from ads."""
@@ -353,7 +365,7 @@ def trial_request():
                     setattr(dup, col, data[col])
         if not dup:
             source = ' · '.join(filter(None, [
-                (request.form.get('utm_source') or '')[:60], (request.form.get('utm_campaign') or '')[:60],
+                _ad_source((request.form.get('utm_source') or '')[:60]), (request.form.get('utm_campaign') or '')[:60],
                 (request.form.get('page') or '')[:60], f'buying {plan}' if plan else '']))[:200]
             values = dict(name=data['name'], phone=data['phone'], business_type=data['business_type'],
                           business_other=data['business_other'], source=source or None, ip_hash=ip_hash)
