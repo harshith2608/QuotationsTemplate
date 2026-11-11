@@ -247,3 +247,14 @@ _ct.post('/trial-request', data=dict(good, phone='9811100088', company_name='Ale
 ok('a new trial request alerts you on Telegram (app not set up yet, phone, console link); a repeat doesn\'t',
    len(_tg) == 1 and _tg[0][0] == '📝 Trial request: Alert Studio' and 'App not set up yet' in _tg[0][1][0]
    and _tg[0][2] == '919811100088' and _tg[0][3] == '/#newRequests')
+
+# Where the ad ran: Instagram's own browser says so (Meta's ad link says "facebook" for both)
+from app.marketing import _ad_source
+with app.test_request_context(headers={'User-Agent': 'Mozilla/5.0 (iPhone) Instagram 312.0.0'}):
+    ig = _ad_source('facebook')
+with app.test_request_context(headers={'User-Agent': 'Mozilla/5.0 (Linux; Android) [FBAN/EMA;FBAV/400.0]'}):
+    fb = _ad_source('')
+with app.test_request_context(headers={'User-Agent': 'Mozilla/5.0 (Windows) Chrome/130'}):
+    other = _ad_source('google')
+ok('lead source: Instagram app → instagram, Facebook app → facebook, others as the link says',
+   ig == 'instagram' and fb == 'facebook' and other == 'google')
