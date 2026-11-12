@@ -258,3 +258,18 @@ with app.test_request_context(headers={'User-Agent': 'Mozilla/5.0 (Windows) Chro
     other = _ad_source('google')
 ok('lead source: Instagram app → instagram, Facebook app → facebook, others as the link says',
    ig == 'instagram' and fb == 'facebook' and other == 'google')
+
+# /ready: on the way from the set-up page to the new app (the pixel's CompleteRegistration), only to an app's sign-in
+rc = app.test_client()
+good = rc.get('/ready?to=' + 'https%3A%2F%2Fnest-grain.quote-room.co.in%2Flogin%3Fu%3Dadmin&k=trial',
+              headers={'Host': 'www.quote-room.co.in'})
+ok('/ready: an app\'s sign-in page → the hand-off page (CompleteRegistration in the page script)',
+   good.status_code == 200 and 'data-ready-to="https://nest-grain.quote-room.co.in/login?u=admin"' in good.text
+   and 'CompleteRegistration' in good.text)
+qa = rc.get('/ready?to=' + 'https%3A%2F%2Fnest-grain.qa.quote-room.co.in%2Flogin', headers={'Host': 'www.quote-room.co.in'})
+ok('/ready: a QA app is allowed too', qa.status_code == 200)
+bad = ['https://evil.com/login', 'http://nest-grain.quote-room.co.in/login', 'https://nest-grain.quote-room.co.in/admin',
+       'https://a.b.quote-room.co.in/login', 'https://x@evil.com/login', 'https://quote-room.co.in.evil.com/login', '']
+from urllib.parse import quote as _q
+ok('/ready: anything else goes to the home page, never elsewhere',
+   all(rc.get('/ready?to=' + _q(u, safe=''), headers={'Host': 'www.quote-room.co.in'}).status_code == 302 for u in bad))

@@ -2766,6 +2766,14 @@ def app_login_url(slug, username=''):
     return f'https://{slug}.{tenancy.base_domain()}/login' + (f'?u={quote(name)}' if name else '')
 
 
+@console_bp.app_template_global()
+def app_ready_url(slug, username='', kind='trial'):
+    """"Open my app" right after set-up: through the website's /ready (the ad pixel's CompleteRegistration, with
+    their consent), then their app's sign-in page."""
+    from urllib.parse import quote
+    return f"{_site_url()}/ready?to={quote(app_login_url(slug, username), safe='')}&k={kind}"
+
+
 def _admin_name(slug):
     """The trial's admin username (shown again when they reopen the set-up link), or '' if it can't be read."""
     try:

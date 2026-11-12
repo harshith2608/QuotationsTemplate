@@ -446,7 +446,7 @@ footer nav { display: flex; gap: 1.2rem; }
     }
   }
   // Meta standard events use 'track'; our own names (StartTrialClick, DemoClick) use 'trackCustom'
-  const STANDARD = new Set(['PageView', 'Lead', 'Contact', 'InitiateCheckout']);
+  const STANDARD = new Set(['PageView', 'Lead', 'Contact', 'InitiateCheckout', 'CompleteRegistration']);
   function track(metaEvent, googleConversion, params) {
     try { if (window.fbq) fbq(STANDARD.has(metaEvent) ? 'track' : 'trackCustom', metaEvent, params || {}); } catch (e) {}
     try { if (googleConversion && window.gtag && T.gconv) gtag('event', 'conversion', { send_to: T.gconv }); } catch (e) {}
@@ -575,6 +575,25 @@ footer nav { display: flex; gap: 1.2rem; }
     });
     dialog.querySelector('[data-close-dialog]').addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });   // tap outside closes
+  }
+
+  // ── /ready: their app was just set up (the set-up page sends them here on the way to it). With ad consent, the
+  // pixel records CompleteRegistration once per app, so the ads learn who goes on to use the app; then on to it ──
+  const ready = document.querySelector('[data-ready-to]');
+  if (ready) {
+    const to = ready.dataset.readyTo, once = 'qr_registered_' + (ready.dataset.readyApp || '');
+    let wait = 0;
+    if (store.get() === 'granted' && T.pixel) {
+      let seen = null;
+      try { seen = localStorage.getItem(once); } catch (e) {}
+      if (!seen) {
+        loadTracking();
+        track('CompleteRegistration', false, { content_name: ready.dataset.readyKind || 'trial' });
+        try { localStorage.setItem(once, '1'); } catch (e) {}
+        wait = 900;                                 // time for the pixel to send it
+      }
+    }
+    setTimeout(() => location.replace(to), wait);
   }
 })();
 </script>
