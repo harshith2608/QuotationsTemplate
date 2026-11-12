@@ -550,7 +550,7 @@ def _rooms_text(project, rooms):
             elif i.is_fitting:
                 out.append(f'- {i.name}: fitting × {i.quantity or 0:g} at {_money(i.unit_price or 0)}')
             else:
-                size = f'{units.length(i.length)} × {units.length(i.width)}'
+                size = f'{units.length(i.length)} × {units.length(i.width)}' if i.length else 'area typed directly'
                 out.append(f'- {i.name}: {size}{f" × {i.count}" if i.count > 1 else ""} ({units.area(i.area)}), '
                            f'{i.wood_type}{f" {i.work_type}" if i.work_type else ""}')
     return '\n'.join(out)

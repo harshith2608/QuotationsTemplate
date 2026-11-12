@@ -110,8 +110,8 @@ def boq_rows(snapshot):
         for n, it in enumerate(room['items'], 1):
             desc = it.get('description') or ''
             if it['type'] == 'measured':
-                size = f"{units.length(it['length'])} × {units.length(it['width'])}"
-                if it.get('count', 1) > 1:
+                size = f"{units.length(it['length'])} × {units.length(it['width'])}" if it.get('length') else ''
+                if size and it.get('count', 1) > 1:
                     size += f" × {it['count']} No's"
                 mat = line_material(it['material'])
                 if mat.partition(' · ')[0].strip().lower() == (it['name'] or '').strip().lower():
@@ -217,6 +217,10 @@ def _room_item(it):
         return {'name': it['name'], 'length': it.get('length') or None, 'width': it.get('width') or None,
                 'count': f"{boq.qty_text(it['quantity'])} {boq.unit_text(it.get('unit'))}".strip(),
                 'image_id': it.get('image_id')}
+    if not it.get('length'):                   # its area typed directly (no size): the area in No's, e.g. "42.5 sqft"
+        from . import units
+        return {'name': it['name'], 'length': None, 'width': None, 'count': units.area(it.get('area') or 0),
+                'image_id': it.get('image_id'), 'description': it.get('description') or ''}
     return {'name': it['name'], 'length': it['length'], 'width': it['width'], 'count': it.get('count', 1),
             'image_id': it.get('image_id'), 'description': it.get('description') or ''}
 

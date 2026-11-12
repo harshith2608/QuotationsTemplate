@@ -220,11 +220,13 @@ def restore_preview(project, snap):
             rate = rates.get(key, 0.0)
             if round(rate, 2) != round(it.get('rate', rate), 2):
                 changes[it['material']] = (it['material'], it['rate'], rate)
+            typed = not (it['length'] and it['width'])        # its area typed directly, no size
             items.append({'name': it['name'], 'type': 'measured', 'length': it['length'], 'width': it['width'],
                           'wood_type': it['wood_type'], 'work_type': it['work_type'], 'plywood': it.get('plywood'),
                           'count': it.get('count', 1), 'description': it.get('description', ''),
+                          **({'area': it['area'], 'size_mode': 'area'} if typed else {}),
                           **({'image_id': it['image_id']} if it.get('image_id') else {})})
-            subtotal += round(it['length'] * it['width'] * it.get('count', 1), 4) * rate
+            subtotal += (round(it['area'], 4) if typed else round(it['length'] * it['width'] * it.get('count', 1), 4)) * rate
         rooms.append({'name': room['name'], 'items': items, 'description': room.get('description')})
     subtotal = round(subtotal, 2)
     d = snap.get('discount') or {}
@@ -260,6 +262,9 @@ def _describe(item):
     if item['type'] == 'fixed':
         return f"{item['quantity']:g} × ₹{inr(item['unit_price'], 0)}"
     count = f" × {item['count']}" if item.get('count', 1) > 1 else ''
+    if not item.get('length'):                  # its area typed directly
+        from . import units
+        return f"{units.area(item.get('area') or 0)}, {item['material']}"
     return f"{_fmt_dim(item['length'])} × {_fmt_dim(item['width'])}{count}, {item['material']}"
 
 
@@ -538,9 +543,9 @@ def invoice_lines(snapshot, hsn='', layout=LAYOUT_ROOMS):
                 else:
                     from . import materials as M
                     lines.append({'room': room['name'], 'description': it['name'],
-                                  'detail': f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])}"
-                                            f"{' × ' + str(it['count']) if it.get('count', 1) > 1 else ''} · "
-                                            f"{M.customer_label(it['material'])}",
+                                  'detail': (f"{_fmt_dim(it['length'])} × {_fmt_dim(it['width'])}"
+                                             f"{' × ' + str(it['count']) if it.get('count', 1) > 1 else ''} · "
+                                             if it.get('length') else '') + f"{M.customer_label(it['material'])}",
                                   'hsn': hsn, 'qty': round(units.area_value(it['area']), 2), 'unit': units.area_label(),
                                   'rate': round(units.rate_value(it['rate']), 2), 'amount': it['amount']})
         return lines

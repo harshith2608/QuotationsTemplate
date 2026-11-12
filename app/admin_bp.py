@@ -525,7 +525,7 @@ def rates():
     rate_map = {(r.wood_type, r.work_type): r.rate_per_sqft for r in ItemRate.query.all()}
     rows = []
     ply_ready = plywood.table_ready()
-    q = Material.query.order_by(Material.sort_order, Material.id)
+    q = Material.query.order_by(db.func.lower(Material.name), Material.id)   # A to Z (easier to find in a long list)
     if ply_ready:
         from sqlalchemy.orm import undefer
         q = q.options(undefer(Material.uses_plywood))

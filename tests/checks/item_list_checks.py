@@ -4,7 +4,7 @@ import io, json, re
 from urllib.parse import unquote
 from pypdf import PdfReader
 from app import create_app, db, billing, layout
-from app.models import AppSetting, Project, QuoteShare
+from app.models import AppSetting, ItemRate, Material, Project, QuoteShare
 from app.numbers import inr
 
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
@@ -235,3 +235,29 @@ finally:
     os.environ.pop('CONSOLE_MODE', None)
     platform_switch.value = real
 ok('console: the saved prices (₹499 a month, ₹4,699 a year), not the defaults', p['1m'] == 499 and p['1y'] == 4699)
+
+# A measured line by its area alone (no size): saved, priced, printed with its area
+with app.app_context():
+    m0 = Material.query.filter_by(active=True).first()
+    wood = m0.name
+    work = '' if not m0.uses_work_types else 'Box Work'
+    rate0 = ItemRate.query.filter_by(wood_type=wood, work_type=work).first().rate_per_sqft
+r = c.post('/projects/new', data={'customer_name': 'Area Only', 'mobile': '9000000444', 'discount_type': 'none',
+                                  'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Hall', 'items': [
+    {'name': 'Panelling', 'length': 0, 'width': 0, 'area': 42.5, 'size_mode': 'area', 'count': 3,
+     'wood_type': wood, 'work_type': work},
+    {'name': 'Bogus', 'length': 0, 'width': 0, 'area': 10, 'wood_type': wood, 'work_type': work}]}])})
+with app.app_context():
+    pa = Project.query.order_by(Project.id.desc()).first()
+    its = {i.name: i for i in pa.rooms_with_items()[0].item_list}
+ok('area typed directly: saved with no size, No\'s 1, priced on that area; without size_mode it\'s ignored',
+   'Panelling' in its and its['Panelling'].length == 0 and its['Panelling'].area == 42.5 and its['Panelling'].count == 1
+   and 'Bogus' not in its and round(pa.grand_total, 2) == round(42.5 * rate0, 2))
+cust = pdftext(f'/projects/{pa.id}/pdf/customer')
+ok('…its PDF shows the area, no "0 ft" size', '42.5' in cust and '0 ft ×' not in cust and '0 mm ×' not in cust)
+full = pdftext(f'/projects/{pa.id}/pdf')
+ok('…the full PDF too', '42.5' in full and '0 ft' not in full)
+ok('…its page and edit page open', c.get(f'/projects/{pa.id}').status_code == 200
+   and c.get(f'/projects/{pa.id}/edit').status_code == 200 and '"area": 42.5' in c.get(f'/projects/{pa.id}/edit').text)
+wa = unquote(c.get(f'/projects/{pa.id}/whatsapp').headers.get('Location', ''))
+ok('…WhatsApp gives its area', 'Panelling' in wa and '0 ft ×' not in wa)

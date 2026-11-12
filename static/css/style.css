@@ -742,3 +742,7 @@ body > main { flex: 1 0 auto; }
 .ki-ai-steps { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 16px));
   z-index: 1045; }
 .ki-ai-target { outline: 3px solid var(--ki-accent, #f59e0b); outline-offset: -2px; background: #fffbeb !important; }
+
+/* A measured line's area: worked out from the size, or typed directly (then shown with a dotted underline) */
+.ki-area-input { max-width: 96px; margin: 0 auto; }
+.ki-area-input.ki-area-typed { text-decoration: underline dotted; }

@@ -762,6 +762,11 @@ document.addEventListener('DOMContentLoaded', () => {
           markPending(rk, mk, true);
           return;
         }
+        if (!id.length && id.area > 0) {      // an area typed directly, no size
+          const ak = _insertItemRow(rk, id.name, '', '', '', '', id.wood_type, id.work_type, id.plywood || '', 1, id.description || '');
+          setTypedArea(rk, ak, id.area);
+          return;
+        }
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
         addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type, id.plywood || '', id.count || 1, id.description || '');
@@ -1383,6 +1388,12 @@ function _itemPayload(item) {
   }
   const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
   const wDec = ftInToDecimal(item.widthFt  || 0, item.widthIn  || 0);
+  if (item.name && !(lDec > 0 && wDec > 0) && item.areaTyped > 0) {      // the area typed directly, no size
+    return { name: item.name, length: 0, width: 0, count: 1, area: item.areaTyped, size_mode: 'area',
+             wood_type: item.wood_type, work_type: item.work_type,
+             plywood: usesPly(item.wood_type) ? (item.plywood || '') : '',
+             ...(item.description ? { description: item.description } : {}) };
+  }
   if (!item.name || lDec <= 0 || wDec <= 0) return null;
   const count = Math.max(parseInt(item.count || 1, 10) || 1, 1);
   return {
@@ -1529,9 +1540,10 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
                 onchange="onItemField('${rk}','${ik}')">${plyOptions(ply)}</select></div>` : ''}
     </td>
     <td class="text-center">
-      <span class="area-display fw-bold text-primary" id="item_area_${ik}">
-        ${area > 0 ? showArea(area) : '0.00'}
-      </span>
+      <input type="number" class="form-control form-control-sm text-center fw-bold text-primary px-1 ki-area-input"
+             id="item_area_${ik}" min="0" step="any" inputmode="decimal" placeholder="0"
+             value="${area > 0 ? showArea(area) : ''}" oninput="onAreaTyped('${rk}','${ik}')"
+             title="Type the length and width, or the ${UNITS.areaLabel} directly" aria-label="Area in ${UNITS.areaLabel}">
     </td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item"
@@ -1603,7 +1615,10 @@ function onItemField(rk, ik) {
   const count = Math.min(Math.max(parseInt(cntEl?.value, 10) || 1, 1), 999);
   const lDec = ftInToDecimal(lFt, lIn);
   const wDec = ftInToDecimal(wFt, wIn);
-  const area  = parseFloat((lDec * wDec * count).toFixed(4));
+  const sized = lDec > 0 && wDec > 0;
+  // An area typed directly (no size): kept until a length and width are typed
+  const typed = sized ? null : (rooms[rk].items[ik].areaTyped || null);
+  const area  = sized ? parseFloat((lDec * wDec * count).toFixed(4)) : (typed || 0);
 
   const comboParts = splitCombo(comboEl?.value || DEFAULT_COMBO);
   const plyEl = document.getElementById('item_ply_' + ik);
@@ -1617,13 +1632,32 @@ function onItemField(rk, ik) {
     plywood:   plyEl ? plyEl.value : '',
     count,
     area,
+    areaTyped: typed,
     description: descOf(ik)
   };
   if (wasPending) markPending(rk, ik, !(area > 0));
   syncPlyVisibility(ik, comboParts[0]);
 
-  if (areaEl) areaEl.textContent = showArea(area);
+  if (areaEl && document.activeElement !== areaEl) areaEl.value = area > 0 ? showArea(area) : '';
+  areaEl?.classList.toggle('ki-area-typed', !!typed);
   recalcAll();
+}
+
+// The area typed straight into a measured line (in the business's area unit): its length and width are cleared,
+// No's goes back to 1, and the line is priced on that area
+function onAreaTyped(rk, ik) {
+  if (!rooms[rk] || !rooms[rk].items[ik]) return;
+  const v = parseFloat(document.getElementById('item_area_' + ik)?.value);
+  ['item_lft_', 'item_lin_', 'item_wft_', 'item_win_'].forEach(p => { const el = document.getElementById(p + ik); if (el) el.value = ''; });
+  const cnt = document.getElementById('item_cnt_' + ik); if (cnt) cnt.value = 1;
+  rooms[rk].items[ik].areaTyped = v > 0 ? parseFloat((v / UNITS.areaFactor).toFixed(4)) : null;   // kept in sqft
+  onItemField(rk, ik);
+}
+function setTypedArea(rk, ik, sqft) {
+  const el = document.getElementById('item_area_' + ik);
+  if (!el || !(sqft > 0)) return;
+  el.value = showArea(sqft);
+  onAreaTyped(rk, ik);
 }
 
 // ─── Calculations ─────────────────────────────────────────────────────────────
