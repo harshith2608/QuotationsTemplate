@@ -73,7 +73,7 @@
         <tr><td>{{ it.name }}</td>
           {% if it.type == 'boq' %}<td>{{ '%g'|format(it.quantity) }} {{ it.unit }}{% if it.tbc %}, price to follow{% else %} × &#8377;{{ (it.unit_price)|inr(0) }}{% endif %}</td><td>BOQ</td>
           {% elif it.type == 'fixed' %}<td>{{ '%g'|format(it.quantity) }} × &#8377;{{ (it.unit_price)|inr(0) }}</td><td></td>
-          {% else %}<td>{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {{ it.area|area }}</td><td>{{ it.material }}</td>{% endif %}
+          {% else %}<td>{% if it.length %}{{ it.length|ft_in }} × {{ it.width|ft_in }}{% if it.count and it.count > 1 %} × {{ it.count }}{% endif %} = {% endif %}{{ it.area|area }}</td><td>{{ it.material }}</td>{% endif %}
           <td class="text-end">&#8377;{{ (it.amount)|inr }}</td></tr>
       {% endfor %}
       </tbody>

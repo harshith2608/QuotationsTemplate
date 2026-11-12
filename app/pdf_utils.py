@@ -612,8 +612,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 room_total_cost += subtotal
                 rows.append([
                     _name_cell(item),
-                    ft_in(item.length),
-                    ft_in(item.width),
+                    ft_in(item.length) if item.length else '—',     # (an area typed directly: no size)
+                    ft_in(item.width) if item.width else '—',
                     Paragraph(escape(plywood.finish_label(_key, project)), material_style),   # wraps: never cut off
                     f'{inr(units.area_value(item.area))}',
                     f'{_money(subtotal)}'

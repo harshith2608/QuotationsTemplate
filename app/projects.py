@@ -287,13 +287,22 @@ def _save_project_data(project, rooms_data, remember=True):
                 width = float(id_.get('width', 0))
             except (ValueError, TypeError):
                 continue
+            typed_area = None                  # the area typed directly (no size): length and width stay 0
             if length <= 0 or width <= 0:
-                continue
+                try:
+                    typed_area = float(id_.get('area') or 0) if id_.get('size_mode') == 'area' else 0
+                except (ValueError, TypeError):
+                    typed_area = 0
+                if not (0 < typed_area <= 100000):
+                    continue
+                length = width = 0.0
             try:
                 count = min(max(int(float(id_.get('count') or 1)), 1), 999)   # "No's": identical pieces
             except (ValueError, TypeError):
                 count = 1
-            area = round(length * width * count, 4)
+            if typed_area:
+                count = 1
+            area = round(typed_area, 4) if typed_area else round(length * width * count, 4)
             wood_type = str(id_.get('wood_type') or '')
             work_type = str(id_.get('work_type') or '')       # '' = a material with one rate (e.g. Glass)
             if (wood_type, work_type) not in valid_combos:
@@ -1316,7 +1325,8 @@ def whatsapp_share(project_id):
                 own_ply = plywood.item_plywood(item)
                 ply_note = f", {own_ply}" if own_ply and item.wood_type in plywood.context()['materials'] else ''
                 count_note = f" × {item.count}" if item.count > 1 else ''
-                lines.append(f"  • {item.name}: {_ft_in(item.length)} × {_ft_in(item.width)}{count_note} = {units.area(item.area)} ({item.wood_type}{ply_note})")
+                _sz = f"{_ft_in(item.length)} × {_ft_in(item.width)}{count_note} = " if item.length else ''
+                lines.append(f"  • {item.name}: {_sz}{units.area(item.area)} ({item.wood_type}{ply_note})")
 
     from . import materials as M
     if not _per_room:
