@@ -2636,7 +2636,6 @@ def email_clicked(token, n):
     return redirect(url if url and url.startswith(('https://', 'http://')) else _site_url())
 
 
-@console_bp.route('/start', methods=['GET', 'POST'])
 def _in_app_browser():
     """'Facebook app' / 'Instagram app' when the page is open in their own browser (where ads open), else ''."""
     ua = request.headers.get('User-Agent', '')
@@ -2663,6 +2662,7 @@ def _setup_failed(lead_id, lead, form, errors, in_app):
         pass
 
 
+@console_bp.route('/start', methods=['GET', 'POST'])
 def start_trial():
     """Public: the business that asked for a trial on the website sets up its own app (signed, single-use link).
     ?plan=6m|1y: they chose a plan on the website, so after the app is made they go on to pay for it."""
