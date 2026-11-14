@@ -1,0 +1,13 @@
+{% extends "marketing/_base.html" %}
+{% block title %}Opening your app – {{ product }}{% endblock %}
+{% block description %}Opening your {{ product }} app.{% endblock %}
+{% block content %}
+<section class="trial-page">
+  <div class="wrap">
+    <div class="trial-card" data-ready-to="{{ to }}" data-ready-app="{{ app_slug }}" data-ready-kind="{{ kind }}">
+      <h1>Opening your app…</h1>
+      <p class="trial-lede"><a href="{{ to }}">Tap here</a> if it doesn't open in a moment.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

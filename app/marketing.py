@@ -310,6 +310,25 @@ def _ad_source(utm_source):
     return utm_source
 
 
+@marketing_bp.route('/ready')
+def ready():
+    """On the way from the set-up page to their new app: the ad pixel's CompleteRegistration (with their cookie
+    consent, once per app), then their app's sign-in page. Only to a QuoteRoom app address."""
+    if not marketing_enabled():
+        abort(404)
+    from urllib.parse import urlparse
+    from . import tenancy
+    to = request.args.get('to', '')
+    u = urlparse(to)
+    base = tenancy.base_domain() or request.host.split(':')[0].removeprefix('www.')
+    app = (u.hostname or '')[:-len('.' + base)] if (u.hostname or '').endswith('.' + base) else ''
+    if not (u.scheme == 'https' and re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}(\.qa)?', app) and u.path == '/login'
+            and not u.netloc.count('@')):
+        return redirect(url_for('main.index'))
+    return render_template('marketing/ready.html', to=to, app_slug=app, kind=request.args.get('k', 'trial')[:12],
+                           **_context())
+
+
 @marketing_bp.route('/free-trial')
 def free_trial():
     """The trial form as its own page: works without JavaScript and can be linked from ads."""

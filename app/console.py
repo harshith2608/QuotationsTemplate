@@ -2636,7 +2636,6 @@ def email_clicked(token, n):
     return redirect(url if url and url.startswith(('https://', 'http://')) else _site_url())
 
 
-@console_bp.route('/start', methods=['GET', 'POST'])
 def _in_app_browser():
     """'Facebook app' / 'Instagram app' when the page is open in their own browser (where ads open), else ''."""
     ua = request.headers.get('User-Agent', '')
@@ -2663,6 +2662,7 @@ def _setup_failed(lead_id, lead, form, errors, in_app):
         pass
 
 
+@console_bp.route('/start', methods=['GET', 'POST'])
 def start_trial():
     """Public: the business that asked for a trial on the website sets up its own app (signed, single-use link).
     ?plan=6m|1y: they chose a plan on the website, so after the app is made they go on to pay for it."""
@@ -2764,6 +2764,14 @@ def app_login_url(slug, username=''):
     from urllib.parse import quote
     name = username or _admin_name(slug)
     return f'https://{slug}.{tenancy.base_domain()}/login' + (f'?u={quote(name)}' if name else '')
+
+
+@console_bp.app_template_global()
+def app_ready_url(slug, username='', kind='trial'):
+    """"Open my app" right after set-up: through the website's /ready (the ad pixel's CompleteRegistration, with
+    their consent), then their app's sign-in page."""
+    from urllib.parse import quote
+    return f"{_site_url()}/ready?to={quote(app_login_url(slug, username), safe='')}&k={kind}"
 
 
 def _admin_name(slug):
