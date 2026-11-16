@@ -261,3 +261,24 @@ ok('…its page and edit page open', c.get(f'/projects/{pa.id}').status_code == 
    and c.get(f'/projects/{pa.id}/edit').status_code == 200 and '"area": 42.5' in c.get(f'/projects/{pa.id}/edit').text)
 wa = unquote(c.get(f'/projects/{pa.id}/whatsapp').headers.get('Location', ''))
 ok('…WhatsApp gives its area', 'Panelling' in wa and '0 ft ×' not in wa)
+
+# Rich text in the quotation sections (Settings → Quotation PDFs): kept formatted, cleaned, printed on the PDF
+html_terms = ('<p><strong>Payment</strong> as below<script>alert(1)</script></p><ol><li data-list="ordered">10% advance '
+              'with <span style="color: rgb(230, 0, 0);">order</span></li><li data-list="ordered">Board: {plywood}</li></ol>')
+c.post('/admin/settings', data={'section': 'documents', 'payment_terms': html_terms,
+                                'important_notes': 'Plain note one\nPlain note two'})
+with app.app_context():
+    saved_pt = AppSetting.get('payment_terms')
+    sec = {t: (lines, html) for t, lines, html in
+           layout.sections({'payment_terms': saved_pt, 'important_notes': AppSetting.get('important_notes')}, '',
+                           {'plywood': 'Ply & Co <18mm>'})}
+ok('rich text saved cleaned: formatting kept, the script dropped', '<strong>Payment</strong>' in saved_pt
+   and 'script' not in saved_pt and 'alert' not in saved_pt and 'color' in saved_pt)
+ok('…{plywood} filled in (escaped), plain sections still lines', 'Ply &amp; Co &lt;18mm&gt;' in sec['Payment Terms'][1]
+   and sec['Important Notes'][1] is None and sec['Important Notes'][0] == ['Plain note one', 'Plain note two'])
+pt_pdf = pdftext(f'/projects/{pid}/pdf/customer')
+ok('…printed on the PDF: the formatted section and the plain one', 'Payment as below' in pt_pdf and '10% advance with order'
+   in pt_pdf and 'Plain note one' in pt_pdf and 'alert' not in pt_pdf)
+page = c.get('/admin/settings?tab=documents').text
+ok('…the settings page opens them in editors (plain text as a numbered list)', 'data-for="sec_payment_terms"' in page
+   and 'data-for="sec_terms_conditions"' in page and '&lt;li data-list=&#34;ordered&#34;&gt;Plain note one' in page)
