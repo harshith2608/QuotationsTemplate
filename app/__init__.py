@@ -156,8 +156,9 @@ def create_app(config_name='default'):
     from .projects import razorpay_webhook
     csrf.exempt(razorpay_webhook)
     # Public trial form: no login or session involved; protected by a honeypot and a rate limit instead
-    from .marketing import trial_request
+    from .marketing import trial_request, trial_request_after
     csrf.exempt(trial_request)
+    csrf.exempt(trial_request_after)            # (its signed link is the check)
 
     @app.template_global()
     def asset_url(filename):

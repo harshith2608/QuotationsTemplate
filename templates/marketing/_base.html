@@ -514,6 +514,10 @@ footer nav { display: flex; gap: 1.2rem; }
         const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         const data = await res.json();
         if (!data.ok) { showErrors(data.errors || { form: 'Something went wrong. Please try again.' }); return; }
+        if (data.after) {                   // the alert and set-up email, sent while we move on (not waited for)
+          const f = new FormData(); f.append('t', data.after); if (form.plan && form.plan.value) f.append('plan', form.plan.value);
+          try { navigator.sendBeacon('{{ url_for("marketing.trial_request_after") }}', f); } catch (e) {}
+        }
         if (data.pay_url) {                 // buying a plan: on to choose a password and pay
           track('InitiateCheckout', true, { value: ({{ plan_values|tojson }})[form.plan.value] || 4999, currency: 'INR' });
           setTimeout(() => { location.href = data.pay_url; }, 350);

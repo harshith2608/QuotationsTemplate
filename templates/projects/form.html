@@ -532,9 +532,13 @@
           <select class="form-select" id="modal_item_ply"></select>
         </div>
         {% endif %}
-        <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
-          <span class="small text-muted fw-medium">Calculated Area</span>
-          <span class="fw-bold text-primary fs-6"><span id="modal_item_area">0.00</span> {{ units.area_label() }}</span>
+        <div class="d-flex align-items-center justify-content-between gap-2 bg-light rounded px-3 py-2">
+          <label for="modal_item_area" class="small text-muted fw-medium mb-0">Area <span class="fw-normal">(from the size, or type it)</span></label>
+          <div class="input-group input-group-sm" style="max-width:170px">
+            <input type="number" class="form-control text-end fw-bold text-primary" id="modal_item_area" min="0" step="any"
+                   inputmode="decimal" placeholder="0" oninput="modalAreaTyped()">
+            <span class="input-group-text">{{ units.area_label() }}</span>
+          </div>
         </div>
         </div>{# /modal_measured_fields #}
       </div>

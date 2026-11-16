@@ -945,7 +945,7 @@ function openItemModal(rk) {
   const plyEl = document.getElementById('modal_item_ply');
   if (plyEl) { plyEl.innerHTML = plyOptions(''); plyEl.value = ''; }
   const areaEl = document.getElementById('modal_item_area');
-  if (areaEl) areaEl.textContent = '0.00';
+  if (areaEl) { areaEl.value = ''; areaEl.dataset.typed = ''; }
   const qtyEl = document.getElementById('modal_item_qty');     if (qtyEl) qtyEl.value = 1;
   const descEl = document.getElementById('modal_item_desc');   if (descEl) { descEl.value = ''; descEl.dataset.matDesc = ''; }
   const bq = document.getElementById('modal_boq_qty');   if (bq) bq.value = 1;
@@ -978,7 +978,18 @@ function modalCalcArea() {
   const cnt = Math.max(parseInt(document.getElementById('modal_item_count')?.value, 10) || 1, 1);
   const area = ftInToDecimal(lFt, lIn) * ftInToDecimal(wFt, wIn) * cnt;
   const el = document.getElementById('modal_item_area');
-  if (el) el.textContent = showArea(area);
+  if (!el) return;
+  if (area > 0) { el.value = showArea(area); el.dataset.typed = ''; }          // a size wins over a typed area
+  else if (!el.dataset.typed) el.value = '';
+}
+// The area typed in the add-item window (no size): its length and width are cleared, No's 1
+function modalAreaTyped() {
+  const el = document.getElementById('modal_item_area');
+  ['modal_item_lft', 'modal_item_lin', 'modal_item_wft', 'modal_item_win'].forEach(id => {
+    const f = document.getElementById(id); if (f) f.value = '';
+  });
+  const cnt = document.getElementById('modal_item_count'); if (cnt) cnt.value = 1;
+  el.dataset.typed = parseFloat(el.value) > 0 ? '1' : '';
 }
 
 // ─── Fixed-price items (fittings & accessories) ──────────────────────────────
@@ -1449,7 +1460,10 @@ function saveItemFromModal() {
   const ply = document.getElementById('modal_item_ply')?.value || '';
   const cnt = Math.min(Math.max(parseInt(document.getElementById('modal_item_count')?.value, 10) || 1, 1), 999);
 
-  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply, cnt, desc);
+  const areaIn = document.getElementById('modal_item_area');
+  const typedArea = areaIn && areaIn.dataset.typed ? parseFloat(areaIn.value) / UNITS.areaFactor : 0;   // kept in sqft
+  const mk = _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work, ply, cnt, desc);
+  if (typedArea > 0 && !(ftInToDecimal(lFt, lIn) > 0 && ftInToDecimal(wFt, wIn) > 0)) setTypedArea(_modalRoomKey, mk, typedArea);
 
   const modalEl = document.getElementById('itemModal');
   const instance = bootstrap.Modal.getInstance(modalEl);

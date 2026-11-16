@@ -341,6 +341,73 @@ def free_trial():
     return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, form=form, **ctx)
 
 
+AFTER_KEY = 'lead_after_{}'          # set once a request's alert and set-up email are sent (never twice)
+
+
+def _after_request(lead_id, data, plan, setup, alert=True):
+    """A new request's Telegram alert ("📝 Trial request") and its set-up link by email, sent together. Returns the
+    masked address it was emailed to, or None."""
+    from concurrent.futures import ThreadPoolExecutor
+    from . import mailer, notify, signup
+
+    def tell():
+        if alert:                                # a "🆕 New trial" follows once they set up their app
+            notify.send(f'📝 Trial request: {data.get("company_name") or data.get("name")}',
+                        ['App not set up yet' + (f' · buying the {plan} plan' if plan else ''),
+                         ' · '.join(filter(None, (data.get('name'), data.get('city')))),
+                         data.get('business_other') or BUSINESS_TYPES.get(data.get('business_type'), '')],
+                        phone=data.get('phone') or '', console_path='/#newRequests')
+
+    def mail():
+        if setup and mailer.enabled() and data.get('email'):     # the same link by email, to find it later
+            if signup.email_setup_link(data['email'], data.get('name'), data.get('company_name'), setup, lead_id=lead_id):
+                return mailer.mask(data['email'])
+        return None
+
+    # Side by side: the alert (a plain call to Telegram) on its own thread while the email goes out here (the email
+    # needs this request's app and database)
+    from flask import current_app
+    app = current_app._get_current_object()
+
+    def tell_in_app():
+        with app.app_context():
+            tell()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        alert_done = pool.submit(tell_in_app)
+        try:
+            emailed = mail()
+        except Exception:
+            emailed = None
+        try:
+            alert_done.result()
+        except Exception:
+            pass
+    return emailed
+
+
+@marketing_bp.route('/trial-request/after', methods=['POST'])
+def trial_request_after():
+    """The page's script, as it moves on to set-up or payment: the request's alert and set-up email (once only)."""
+    if not marketing_enabled():
+        abort(404)
+    from . import db, signup
+    from .models import AppSetting, Lead
+    lead_id = signup.read_token(request.form.get('t', ''))
+    lead = db.session.get(Lead, lead_id) if lead_id else None
+    if not lead or AppSetting.get(AFTER_KEY.format(lead_id)):
+        return ('', 204)
+    AppSetting.set(AFTER_KEY.format(lead_id), '1')
+    db.session.commit()
+    plan = request.form.get('plan') if signup.plan_ok(request.form.get('plan')) else None
+    data = {'name': lead.name, 'phone': lead.phone, 'business_type': lead.business_type,
+            'business_other': lead.business_other or '',
+            **{c: (getattr(lead, c) or '') if lead_has(c) else '' for c in LATER_LEAD_COLUMNS}}
+    setup = signup.setup_url(lead_id) if not plan and signup.website_offers(lead.business_type) else None
+    _after_request(lead_id, data, plan, setup)
+    return ('', 204)
+
+
 @marketing_bp.route('/trial-request', methods=['POST'])
 def trial_request():
     """The "Start free trial" form. Answers JSON for the page's script, or a thank-you page without JS."""
@@ -394,29 +461,23 @@ def trial_request():
             lead_id = db.session.execute(Lead.__table__.insert().values(**values)).inserted_primary_key[0]
         Lead.query.filter(Lead.created_at < now - timedelta(days=KEEP_LEADS_DAYS)).delete()
         db.session.commit()
-        if not dup:                              # Telegram (app/notify.py): a "🆕 New trial" follows once they set
-            from . import notify                 # up their app; none following means they stopped: call them
-            notify.send(f'📝 Trial request: {data["company_name"] or data["name"]}',
-                        ['App not set up yet' + (f' · buying the {plan} plan' if plan else ''),
-                         ' · '.join(filter(None, (data['name'], data['city']))),
-                         data['business_other'] or BUSINESS_TYPES.get(data['business_type'], '')],
-                        phone=data['phone'], console_path='/#newRequests')
+    from . import signup
+    setup = signup.setup_url(lead_id) if lead_id and not plan and signup.website_offers(data['business_type']) else None
+    # The Telegram alert and the set-up email take a few seconds (they wait for Telegram and the mail server): the
+    # page's script asks for them separately (/trial-request/after) while it moves on, so the next page comes at once
+    after = signup.make_token(lead_id) if lead_id and wants_json and (setup or plan) and lead_has('email') else None
+    emailed = None
+    if lead_id and not after:
+        emailed = _after_request(lead_id, data, plan, setup, alert=not dup)
 
     # Buying a plan: straight on to set up the app and pay (Razorpay checks who's paying)
-    from . import mailer, signup
     if plan and lead_id:
         pay_url = signup.setup_url(lead_id, plan=plan)
         if wants_json:
-            return jsonify({'ok': True, 'name': data['name'], 'pay_url': pay_url})
+            return jsonify({'ok': True, 'name': data['name'], 'pay_url': pay_url, 'after': after})
         return redirect(pay_url)
-    # The trades QuoteRoom is for can set up their app straight away (app/signup.py)
-    setup = signup.setup_url(lead_id) if lead_id and signup.website_offers(data['business_type']) else None
-    emailed = None
-    if setup and mailer.enabled():               # set up straight away here; the same link by email, to find it later
-        if signup.email_setup_link(data['email'], data['name'], data['company_name'], setup, lead_id=lead_id):
-            emailed = mailer.mask(data['email'])
     if wants_json:
-        return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup, 'emailed_to': emailed})
+        return jsonify({'ok': True, 'name': data['name'], 'setup_url': setup, 'emailed_to': emailed, 'after': after})
     if setup:                                    # without JS too: straight on to choose a password
         return redirect(setup)
     return render_template('marketing/free_trial.html', standalone_trial=True, errors={}, name=data['name'],

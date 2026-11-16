@@ -261,11 +261,11 @@ ok('lead source: Instagram app → instagram, Facebook app → facebook, others 
 
 # /ready: on the way from the set-up page to the new app (the pixel's CompleteRegistration), only to an app's sign-in
 rc = app.test_client()
-good = rc.get('/ready?to=' + 'https%3A%2F%2Fnest-grain.quote-room.co.in%2Flogin%3Fu%3Dadmin&k=trial',
+ready_ok = rc.get('/ready?to=' + 'https%3A%2F%2Fnest-grain.quote-room.co.in%2Flogin%3Fu%3Dadmin&k=trial',
               headers={'Host': 'www.quote-room.co.in'})
 ok('/ready: an app\'s sign-in page → the hand-off page (CompleteRegistration in the page script)',
-   good.status_code == 200 and 'data-ready-to="https://nest-grain.quote-room.co.in/login?u=admin"' in good.text
-   and 'CompleteRegistration' in good.text)
+   ready_ok.status_code == 200 and 'data-ready-to="https://nest-grain.quote-room.co.in/login?u=admin"' in ready_ok.text
+   and 'CompleteRegistration' in ready_ok.text)
 qa = rc.get('/ready?to=' + 'https%3A%2F%2Fnest-grain.qa.quote-room.co.in%2Flogin', headers={'Host': 'www.quote-room.co.in'})
 ok('/ready: a QA app is allowed too', qa.status_code == 200)
 bad = ['https://evil.com/login', 'http://nest-grain.quote-room.co.in/login', 'https://nest-grain.quote-room.co.in/admin',
@@ -273,3 +273,36 @@ bad = ['https://evil.com/login', 'http://nest-grain.quote-room.co.in/login', 'ht
 from urllib.parse import quote as _q
 ok('/ready: anything else goes to the home page, never elsewhere',
    all(rc.get('/ready?to=' + _q(u, safe=''), headers={'Host': 'www.quote-room.co.in'}).status_code == 302 for u in bad))
+
+# Self-serve on: the alert and set-up email aren't waited for; the page's script asks for them (once only)
+os.environ.update(SIGNUP_SECRET='test-signup-secret', SIGNUP_URL='https://ops.example', AUTO_TRIALS='1')
+with app.app_context():                       # (the columns an earlier check dropped: the database as it is now)
+    have = {c['name'] for c in __import__('sqlalchemy').inspect(db.session.connection()).get_columns('leads')}
+    for col in ('company_name', 'city', 'email'):
+        if col not in have:
+            db.session.execute(text(f'ALTER TABLE leads ADD COLUMN {col} TEXT'))
+    db.session.commit()
+_mk._lead_columns.clear()
+from app import notify as _notify, marketing as _mk
+sent = []
+_real_send = _notify.send
+_notify.send = lambda title, lines=(), **k: sent.append(title) or True
+try:
+    r = c.post('/trial-request', data=dict(good, phone='9876543299', email='fast@example.com', company_name='Fast Co'),
+               headers=J, environ_base={'REMOTE_ADDR': '10.77.0.1'}).get_json()
+    ok('self-serve: the reply comes before the alert (a link to send it after), with the set-up link',
+       r['ok'] and (r.get('setup_url') or '').startswith('https://ops.example/start?t=') and r.get('after') and not sent)
+    a1 = c.post('/trial-request/after', data={'t': r['after']})
+    a2 = c.post('/trial-request/after', data={'t': r['after']})
+    a3 = c.post('/trial-request/after', data={'t': 'forged.123.abc'})
+    ok('/trial-request/after: sends the alert once, never twice, nothing for a bad link',
+       a1.status_code == 204 and a2.status_code == 204 and a3.status_code == 204
+       and sent == ['📝 Trial request: Fast Co'])
+    nojs = c.post('/trial-request', data=dict(good, phone='9876543298', email='slow@example.com', company_name='Slow Co'),
+                  environ_base={'REMOTE_ADDR': '10.77.0.2'})
+    ok('without the script: still sent on the spot, then on to set-up', nojs.status_code == 302
+       and 'Slow Co' in ' '.join(sent))
+finally:
+    _notify.send = _real_send
+    for k in ('SIGNUP_SECRET', 'SIGNUP_URL', 'AUTO_TRIALS'):
+        os.environ.pop(k, None)
