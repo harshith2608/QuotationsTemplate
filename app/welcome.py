@@ -39,7 +39,7 @@ ICONS = {'interiors': 'house-door', 'turnkey': 'buildings', 'furniture': 'lamp',
 # Asked for an old quotation or rate Excel: the kinds that usually have one. The others start from typical items.
 FILE_KINDS = ('interiors', 'turnkey')
 # Asked how they price (by item or by material): the kinds that may quote by material. Every other kind is by item.
-PRICING_KINDS = ('interiors', 'turnkey', 'furniture')
+PRICING_KINDS = ()          # (was interiors, turnkey, furniture) no one is asked how they price: new trials price by item
 OLD_KINDS = {'kitchens': 'interiors'}      # kinds offered before, as they're now named
 
 # Typical items and rates (per sqft, rft, nos or point) for a business with no file: a starting point they change.

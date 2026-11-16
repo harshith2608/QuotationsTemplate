@@ -60,11 +60,10 @@ with app.app_context():
        and B.enabled() and W.step() == 'rates' and W.state()['pricing'] == 'item' and W.state()['kind'] == 'upvc')
 ok('…and not offered the by material page', loc(c.get('/welcome/pricing')).endswith('/welcome/work'))
 r = c.post('/welcome/work', data={'kind': 'interiors'})
-ok('…interiors: asked how they price', loc(r).endswith('/welcome/pricing'))
-t = c.get('/welcome/pricing').text
-ok('how you price: the quotation PDF each makes (in their units: mm)', 'Step 3 of 6' in t
-   and 'By item' in t and 'By material' in t and 'Laminates – Box Work' in t and '2,134 mm' in t
-   and 'Bill of Quantities' in t and 'CUSTOMER QUOTATION' in t)
+with app.app_context():
+    ok('…interiors: priced by item too, without being asked (no "how do you price" step), on to step 4',
+       loc(r).endswith('/welcome/') and B.enabled() and W.step() == 'rates' and W.state()['pricing'] == 'item')
+ok('…the "how do you price" page sends anyone back to what they do', loc(c.get('/welcome/pricing')).endswith('/welcome/work'))
 with app.app_context():
     eg = W.pricing_examples('interiors')
     ok('…by item: each item its own rate (the loft cheaper); by material: one rate for Laminates – Box Work',
@@ -75,9 +74,6 @@ with app.app_context():
        and [(x['name'], [r['name'] for r in x['rows']]) for x in eg['item']] == [
            ('Master Bedroom', ['Wardrobe', 'Loft']), ('Living Room', ['TV Unit']), ('Design & Services', ['3D Design'])]
        and eg['item_total'] == '1,83,600.00')
-r = c.post('/welcome/pricing', data={'mode': 'item'})
-with app.app_context():
-    ok('…by item chosen: priced by item, on to step 4', B.enabled() and W.step() == 'rates' and W.state()['pricing'] == 'item')
 with app.app_context():
     before = AppSetting.query.count(), BoqItem.query.count()
 r = c.post('/welcome/rates', data={'kind': 'upvc'})
@@ -131,8 +127,7 @@ with app.app_context():
 ok('Back on every step after the first (keeping the business chosen)', 'id="wBack"' not in c.get('/welcome/business').text
    and 'href="/welcome/business" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/units').text
    and 'href="/welcome/units" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/work').text
-   and 'href="/welcome/work" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/pricing').text
-   and 'href="/welcome/pricing" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check?kind=interiors').text)
+   and 'href="/welcome/work" class="text-decoration-none me-2" id="wBack"' in c.get('/welcome/rates/check?kind=interiors').text)
 with app.app_context():
     ok('…opening a step again puts the tour back on it', W.step() == 'rates')
 t = c.get('/welcome/rates/check?kind=upvc').text
@@ -216,7 +211,7 @@ r = c.post('/welcome/rates', data={'kind': 'interiors'})
 t = c.get('/welcome/rates/file?kind=interiors').text
 ok('interiors with Bring your old quotation on: do you have a file?', loc(r).endswith('/welcome/rates/file?kind=interiors')
    and 'old quotation or your rate list' in t and 'Yes, upload it' in t and 'No, start with typical rates' in t
-   and 'href="/welcome/pricing" class="text-decoration-none me-2" id="wBack"' in t)
+   and 'href="/welcome/work" class="text-decoration-none me-2" id="wBack"' in t)
 r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'no'})
 ok('…no: its typical items, not saved yet', loc(r).endswith('/welcome/rates/check?kind=interiors'))
 r = c.post('/welcome/rates/file?kind=interiors', data={'file': 'yes'})
@@ -258,10 +253,10 @@ ok('…a number saved the old way is shown right on step 1', 'value="+91 98765 4
 # ── Priced by material: their materials and rates on step 4 ──
 import re as _re
 c.post('/welcome/restart')
-r = c.post('/welcome/pricing', data={'mode': 'material'})
-with app.app_context():
+with app.app_context():            # (no one is asked any more: by material when an old quotation was read that way)
     from app import boq as B
-    ok('by material chosen: priced by material', not B.enabled() and W.by_material() and W.step() == 'rates')
+    B.set_pricing(B.MATERIAL, starter=False); W.set_pricing(B.MATERIAL); W.go_to('rates'); db.session.commit()
+    ok('by material (from an old quotation): priced by material', not B.enabled() and W.by_material() and W.step() == 'rates')
 r = c.post('/welcome/rates', data={'kind': 'furniture'})
 ok('…what you do → your materials and rates (not item lines)', loc(r).endswith('/welcome/rates/materials?kind=furniture'))
 ok('…and the item lines page sends you there too', loc(c.get('/welcome/rates/check?kind=furniture')).endswith(

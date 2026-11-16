@@ -272,6 +272,12 @@ def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda li
                 AppSetting.set(key, value)
         if phone:                                   # the number they gave on the website: payments fall back to it
             AppSetting.set(SIGNUP_MOBILE_KEY, ''.join(ch for ch in str(phone) if ch.isdigit())[-12:])
+        try:                                        # new trials price by item (no "how do you price" question)
+            from . import boq
+            if boq._columns_ready(schema):
+                boq.set_pricing(boq.ITEM, starter=False)
+        except Exception:
+            pass
         if kind:                                    # what they do (the trial form): their examples, words and setup
             from . import business
             business.set_kind(kind)
