@@ -222,11 +222,18 @@ def _section_elements(styles, dark, project=None, rooms=None):
     settings = AppSetting.get_many([k for k, _ in layout.SECTION_KEYS])
     out = []
     values = layout.variables(project, rooms) if project is not None else None
-    for title, lines in layout.sections(settings, _get_terms_lines(), values):
+    for title, lines, html in layout.sections(settings, terms_text(), values):
         if not out:
             # Less than half a page left after the quotation: the sections start on a new page together, rather
             # than a few points at the bottom of this page and the rest on the next
             out.append(CondPageBreak(SECTIONS_ROOM))
+        if html:                               # typed in the rich text editor: as formatted, at the sections' size
+            rich = _rich_flowables(html, dark, styles, compact=True)
+            out.append(KeepTogether([HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6),
+                                     Paragraph(escape(title), head)] + rich[:1]))
+            out += rich[1:]
+            out.append(Spacer(1, 10))
+            continue
         points = [Paragraph(f'{i}.&nbsp;&nbsp;{escape(line)}', body) for i, line in enumerate(lines, 1)]
         out.append(KeepTogether([HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=6),
                                  Paragraph(escape(title), head)] + points[:1]))   # the heading stays with its first point
@@ -1332,13 +1339,14 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     return out
 
 
-def _rich_flowables(html, dark, styles):
-    """Text from the rich text editor (app/richtext.py) as PDF paragraphs: headings, alignment, colours, lists."""
+def _rich_flowables(html, dark, styles, compact=False):
+    """Text from the rich text editor (app/richtext.py) as PDF paragraphs: headings, alignment, colours, lists.
+    compact: the quotation's sections (Material Specifications, Terms…), at their small size."""
     from . import richtext
     align = {'left': TA_LEFT, 'center': TA_CENTER, 'right': TA_RIGHT, 'justify': TA_JUSTIFY}
-    body = ParagraphStyle('RtB', parent=styles['Normal'], fontSize=10.5, leading=16, textColor=colors.HexColor('#263238'),
-                          spaceAfter=8)
-    heads = {'h1': (17, 8), 'h2': (14, 6), 'h3': (12, 4)}
+    body = ParagraphStyle('RtB', parent=styles['Normal'], fontSize=8 if compact else 10.5, leading=12 if compact else 16,
+                          textColor=colors.HexColor('#333333' if compact else '#263238'), spaceAfter=3 if compact else 8)
+    heads = {'h1': (11, 4), 'h2': (10, 3), 'h3': (9, 2)} if compact else {'h1': (17, 8), 'h2': (14, 6), 'h3': (12, 4)}
     out, counters = [], {}
     for b in richtext.blocks(html):
         al = align.get(b['align'], TA_LEFT)
@@ -1357,13 +1365,14 @@ def _rich_flowables(html, dark, styles):
                 mark = f'{counters[level]}.'
             else:
                 mark = '•'
-            st = ParagraphStyle('RtLi', parent=body, leftIndent=18 + 16 * level, bulletIndent=4 + 16 * level,
-                                spaceAfter=4, alignment=al)
+            st = ParagraphStyle('RtLi', parent=body, leftIndent=(12 if compact else 18) + 16 * level,
+                                bulletIndent=(0 if compact else 4) + 16 * level, spaceAfter=1.5 if compact else 4, alignment=al,
+                                bulletFontSize=body.fontSize, bulletFontName=body.fontName)   # numbers the text's size
             out.append(Paragraph(b['markup'] or '&nbsp;', st, bulletText=mark))
         else:
             counters.clear()
             if not b['markup'] or b['markup'] == '<br/>':
-                out.append(Spacer(1, 8))
+                out.append(Spacer(1, 4 if compact else 8))
                 continue
             out.append(Paragraph(b['markup'], ParagraphStyle('RtP', parent=body, alignment=al)))
     return out

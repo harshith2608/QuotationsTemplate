@@ -489,10 +489,13 @@
     <div class="card-header ki-card-header"><i class="bi bi-card-checklist me-2"></i>Material Specifications</div>
     <div class="card-body">
       <p class="small text-muted mb-3">
-        Appears in every quotation PDF, first of the sections below. One point per line; the PDFs number them. Leave blank to omit the section. Use <strong>Insert</strong> to add details that change per quotation, e.g. <code>{plywood_details} for all the carcass and shutters</code>.
+        Appears in every quotation PDF, first of the sections below. Bold, colours, headings and lists print as you see
+        them here. Leave blank to omit the section. Use <strong>Insert</strong> to add details that change per quotation,
+        e.g. <code>{plywood_details} for all the carcass and shutters</code>.
       </p>
-      <textarea name="material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6"
-                placeholder="{{ 'e.g. MATERIAL SPECIFICATIONS:&#10;● Plywood: Gurjan 18mm BWP...' if biz.interiors else 'e.g. MATERIAL SPECIFICATIONS:&#10;● ' ~ biz.item_example ~ ': ' ~ biz.description_example }}">{{ saved.material_specs }}</textarea>
+      <div class="ki-rich ki-rich-section mb-1" data-for="sec_material_specs"
+           data-placeholder="{{ 'e.g. Plywood: Gurjan 18mm BWP…' if biz.interiors else 'e.g. ' ~ biz.item_example ~ ': ' ~ biz.description_example }}"></div>
+      <textarea name="material_specs" id="sec_material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6">{{ saved.material_specs_html }}</textarea>
       <div class="text-end mt-2"><button type="submit" name="back_to" value="material-specs" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
@@ -502,9 +505,9 @@
   <div class="card shadow-sm border-0 mb-3" id="{{ key }}">
     <div class="card-header ki-card-header"><i class="bi bi-{{ icon }} me-2"></i>{{ title }}</div>
     <div class="card-body">
-      <p class="small text-muted mb-3">One point per line; the PDFs number them. Leave blank to leave the section out.</p>
-      <textarea name="{{ key }}" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6"
-                placeholder="{{ example|safe }}">{{ saved[key] }}</textarea>
+      <p class="small text-muted mb-3">Bold, colours, headings and lists print as you see them here. Leave blank to leave the section out.</p>
+      <div class="ki-rich ki-rich-section mb-1" data-for="sec_{{ key }}" data-placeholder="{{ example|replace('&#10;', '  ·  ') }}"></div>
+      <textarea name="{{ key }}" id="sec_{{ key }}" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6">{{ saved[key ~ '_html'] }}</textarea>
       <div class="text-end mt-2"><button type="submit" name="back_to" value="{{ key }}" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
@@ -512,9 +515,9 @@
   <div class="card shadow-sm border-0" id="terms">
     <div class="card-header ki-card-header"><i class="bi bi-file-text me-2"></i>Terms &amp; Conditions</div>
     <div class="card-body">
-      <p class="small text-muted mb-3">Printed at the bottom of every quotation PDF. One term per line.</p>
-      <textarea name="terms_conditions" class="form-control font-monospace" rows="8" style="font-size:0.82rem; line-height:1.6"
-                placeholder="1. This is a preliminary estimate...">{{ saved.terms_conditions }}</textarea>
+      <p class="small text-muted mb-3">Printed at the bottom of every quotation PDF. Bold, colours, headings and lists print as you see them here.</p>
+      <div class="ki-rich ki-rich-section mb-1" data-for="sec_terms_conditions" data-placeholder="This is a preliminary estimate…"></div>
+      <textarea name="terms_conditions" id="sec_terms_conditions" class="form-control font-monospace" rows="8" style="font-size:0.82rem; line-height:1.6">{{ saved.terms_conditions_html }}</textarea>
       <div class="text-end mt-2"><button type="submit" name="back_to" value="terms" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
@@ -537,13 +540,20 @@
       b.type = 'button'; b.className = 'btn btn-sm btn-outline-secondary py-0 px-2';
       b.textContent = '+ ' + label; b.title = `Inserts {${key}}: filled in from each quotation`;
       b.addEventListener('click', () => {
-        const token = `{${key}}`, start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? start;
+        const token = `{${key}}`;
+        if (ta._quill) {                   // the rich text editor: at its cursor (or the end)
+          const q = ta._quill, sel = q.getSelection(true), at = sel ? sel.index : q.getLength() - 1;
+          q.insertText(at, token, 'user'); q.setSelection(at + token.length, 0);
+          return;
+        }
+        const start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? start;
         ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
         ta.focus(); ta.selectionStart = ta.selectionEnd = start + token.length;
       });
       bar.appendChild(b);
     });
-    ta.parentNode.insertBefore(bar, ta);
+    const help = ta.closest('.card-body')?.querySelector('p');      // under the section's description, above the editor
+    help ? help.after(bar) : ta.parentNode.insertBefore(bar, ta);
   });
 })();
 </script>
@@ -817,7 +827,7 @@
 {% endblock %}
 
 {% block scripts %}
-{% if presentation %}
+{% if tab == 'documents' %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
 <script>
@@ -833,6 +843,7 @@
     const q = new Quill(div, { theme: 'snow', placeholder: div.dataset.placeholder || '', modules: { toolbar } });
     if (box.value.trim()) q.clipboard.dangerouslyPasteHTML(box.value);
     box.classList.add('d-none');
+    box._quill = q;                         // (the Insert buttons type into it)
     const sync = () => { box.value = q.getText().trim() ? q.root.innerHTML : ''; };
     q.on('text-change', sync);
     box.form && box.form.addEventListener('submit', sync);

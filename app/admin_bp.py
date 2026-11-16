@@ -1129,9 +1129,15 @@ def settings():
         elif tab == 'documents':
             # Multi-line fields — preserve newlines, allow blanking
             from . import layout
+            from . import richtext
             for key in ('material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions',
                         layout.DESCRIPTIONS_KEY):
-                AppSetting.set(key, request.form.get(key, '').strip())
+                if key not in request.form:
+                    continue
+                value = request.form.get(key, '').strip()
+                if key != layout.DESCRIPTIONS_KEY and richtext.is_html(value):
+                    value = richtext.clean(value)   # from the rich text editor: only its formatting kept
+                AppSetting.set(key, value)
             if request.form.get('initial_layout') in layout.layouts():
                 AppSetting.set(layout.LAYOUT_KEY, request.form.get('initial_layout'))
             if 'customer_work_types' in request.form:   # Box Work / Frame Work on what the customer sees
@@ -1185,7 +1191,11 @@ def settings():
                                   'room_descriptions'])
     saved = AppSetting.get_many(saved_keys)
     from .pdf_utils import terms_text
+    from . import layout as layout_mod
     saved['terms_conditions'] = terms_text()          # defaults until first saved; empty stays empty
+    if tab == 'documents':                            # the rich text editors open with HTML (plain text: a numbered list)
+        for key in ('material_specs', 'payment_terms', 'delivery_terms', 'important_notes', 'terms_conditions'):
+            saved[key + '_html'] = layout_mod.section_editor_html(saved.get(key) or '')
     defaults = {branding.FIELDS[k][0]: branding.env_default(k)
                 for k in branding.COMPANY_KEYS + branding.THEME_KEYS}
     from . import billing

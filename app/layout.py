@@ -272,9 +272,33 @@ def fill(text, values):
     return _VAR.sub(lambda m: values.get(m.group(1), ''), text or '') if values else (text or '')
 
 
-def sections(settings, terms_lines, values=None):
-    """[(title, [lines])] in print order, placeholders filled in; empty sections are left out. T&C last."""
-    out = [(title, section_lines(fill(settings.get(key), values))) for key, title in SECTION_KEYS]
-    terms = [_NUMBERED.sub('', fill(t, values)).strip() for t in terms_lines]
-    out.append(('Terms & Conditions', [t for t in terms if t]))
-    return [(t, lines) for t, lines in out if lines]
+def fill_html(html, values):
+    """fill() for formatted text: the values are escaped (a plywood name with & or < stays text)."""
+    from html import escape
+    return _VAR.sub(lambda m: escape(values.get(m.group(1), '')), html or '') if values else (html or '')
+
+
+def sections(settings, terms_text, values=None):
+    """[(title, [lines], html)] in print order, placeholders filled in; empty sections are left out. T&C last.
+    A section typed in the rich text editor (Settings → Quotation PDFs) has its cleaned HTML (lines: its plain text);
+    plain text (from before, or a price list file) has html None and prints as a numbered list."""
+    from . import richtext
+    out = []
+    for key, title in SECTION_KEYS + [('terms_conditions', 'Terms & Conditions')]:
+        raw = terms_text if key == 'terms_conditions' else settings.get(key)
+        if richtext.is_html(raw):
+            html = richtext.clean(fill_html(raw, values))
+            lines = [l.strip() for l in richtext.plain_text(html).split('  ') if l.strip()]
+            if html:
+                out.append((title, lines, html))
+        else:
+            lines = section_lines(fill(raw, values))
+            if lines:
+                out.append((title, lines, None))
+    return out
+
+
+def section_editor_html(raw):
+    """What the rich text editor opens with: the saved HTML, or plain text as the numbered list the PDF prints."""
+    from . import richtext
+    return richtext.clean(raw) if richtext.is_html(raw) else richtext.from_plain(raw, numbered=True)

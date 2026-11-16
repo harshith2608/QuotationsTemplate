@@ -746,3 +746,6 @@ body > main { flex: 1 0 auto; }
 /* A measured line's area: worked out from the size, or typed directly (then shown with a dotted underline) */
 .ki-area-input { max-width: 96px; margin: 0 auto; }
 .ki-area-input.ki-area-typed { text-decoration: underline dotted; }
+
+/* The quotation sections (Material Specifications, Terms…) in the rich text editor: a little shorter */
+.ki-rich-section .ql-editor { min-height: 90px; font-size: .9rem; }
