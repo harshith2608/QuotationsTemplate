@@ -90,9 +90,55 @@ def set_printing(project_id, cover, gallery):
     AppSetting.set(_opts_key(project_id), json.dumps({'cover': bool(cover), 'gallery': bool(gallery)}))
 
 
+# ── The business's defaults (Settings → Quotation PDFs → Cover page): for any quotation without its own ──
+DEFAULT_COVER_KEY, DEFAULT_GALLERY_KEY = 'cover_default_photo', 'gallery_default'
+
+
+def default_cover():
+    from . import item_images
+    from .models import AppSetting
+    try:
+        i = int(AppSetting.get(DEFAULT_COVER_KEY, '') or 0)
+    except ValueError:
+        return None
+    return i if i and item_images.valid_ids([i]) else None
+
+
+def set_default_cover(image_id):
+    from .models import AppSetting
+    AppSetting.set(DEFAULT_COVER_KEY, str(int(image_id)) if image_id else '')
+
+
+def default_gallery():
+    from . import item_images
+    from .models import AppSetting
+    try:
+        ids = [int(i) for i in json.loads(AppSetting.get(DEFAULT_GALLERY_KEY, '') or '[]')]
+    except (ValueError, TypeError):
+        return []
+    have = item_images.valid_ids(ids) if ids else set()
+    return [i for i in ids if i in have]
+
+
+def set_default_gallery(ids):
+    from .models import AppSetting
+    ids = [int(i) for i in ids][:MAX_PAGES]
+    AppSetting.set(DEFAULT_GALLERY_KEY, json.dumps(ids) if ids else '')
+
+
+def effective_cover(project_id):
+    """The quotation's own cover photo, else the business's default."""
+    return cover_photo(project_id) or default_cover()
+
+
+def effective_gallery(project_id):
+    """The quotation's own gallery, else the business's default."""
+    return for_project(project_id) or default_gallery()
+
+
 def cover_shown(project):
-    """The designed cover prints for this quotation: it has a cover photo and "Print the cover" is ticked."""
-    return bool(enabled() and cover_photo(project.id) and printing(project.id)['cover'])
+    """The designed cover prints for this quotation: a cover photo (its own or the default), "Print the cover" ticked."""
+    return bool(enabled() and effective_cover(project.id) and printing(project.id)['cover'])
 
 
 def gallery_shown(project):
@@ -307,8 +353,8 @@ def with_pages(project, buffer):
     """The quotation PDF with its designed cover and photo gallery in front (when the quotation prints them); else the
     PDF as it is."""
     from . import item_images
-    ids = for_project(project.id) if gallery_shown(project) else []
-    cover = cover_photo(project.id) if cover_shown(project) else None
+    ids = effective_gallery(project.id) if gallery_shown(project) else []
+    cover = effective_cover(project.id) if cover_shown(project) else None
     if not ids and not cover:
         return buffer
     data = item_images.data_for(ids + ([cover] if cover else []))

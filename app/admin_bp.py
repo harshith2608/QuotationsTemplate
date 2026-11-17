@@ -1267,6 +1267,51 @@ def all_projects():
     return redirect(url_for('projects.list_projects'))
 
 
+# ── Cover & gallery defaults (app/photo_pages.py): for every quotation without its own ─────────────────────────
+
+@admin_bp.route('/cover-photos', methods=['GET', 'POST'])
+def cover_photos():
+    """The business's default cover photo and gallery, for quotations without their own (started from scratch too)."""
+    from . import item_images, photo_pages as PP
+    if not PP.enabled():
+        abort(404)
+    if request.method == 'POST':
+        do = request.form.get('do', '')
+        try:
+            if do == 'cover':
+                f = request.files.get('photo')
+                if f and f.filename:
+                    PP.set_default_cover(item_images.save_upload(f.read(), max_side=PP.PAGE_SIDE).id)
+            elif do == 'cover_remove':
+                PP.set_default_cover(None)
+            elif do == 'add':
+                raws = [f.read() for f in request.files.getlist('photos') if f and f.filename]
+                ids = PP.default_gallery()
+                if len(ids) + len(raws) > PP.MAX_PAGES:
+                    raise item_images.ImageError(f'Up to {PP.MAX_PAGES} gallery photos.')
+                PP.set_default_gallery(ids + [item_images.save_upload(r, max_side=PP.PAGE_SIDE).id for r in raws])
+            elif do.startswith(('up:', 'down:', 'remove:')):
+                act, img = do.split(':', 1)
+                ids = PP.default_gallery()
+                if img.isdigit() and int(img) in ids:
+                    i = ids.index(int(img))
+                    if act == 'remove':
+                        ids.pop(i)
+                    else:
+                        j = max(0, min(len(ids) - 1, i + (-1 if act == 'up' else 1)))
+                        ids[i], ids[j] = ids[j], ids[i]
+                    PP.set_default_gallery(ids)
+        except item_images.ImageError as exc:
+            db.session.rollback()
+            flash(str(exc), 'danger')
+        else:
+            db.session.commit()
+            flash('Saved.', 'success')
+        return redirect(url_for('admin.cover_photos'))
+    return render_template('admin/cover_photos.html', title='Cover & gallery', cover=PP.default_cover(),
+                           gallery=PP.default_gallery(), texts=PP.texts())
+
+
 # ── Other companies (app/profiles.py): turned on per business by the operator ───────────────────────────────────
 
 @admin_bp.route('/companies', methods=['GET', 'POST'])
