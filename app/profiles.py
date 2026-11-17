@@ -292,7 +292,7 @@ def apply(project_id):
         from . import branding
         branding.prefetch_common(extra=[_project_key(project_id), f'quote_pdf_{int(project_id)}',   # with the page's
                                         f'quote_pages_{int(project_id)}', f'quote_cover_{int(project_id)}',  # other
-                                        f'quote_package_{int(project_id)}'])                          # settings: one query
+                                        f'quote_package_{int(project_id)}', f'quote_photo_opts_{int(project_id)}'])
         profile = for_project(project_id)
     except Exception:
         return None

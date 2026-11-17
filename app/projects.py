@@ -1290,6 +1290,9 @@ def quote_cover(project_id):
             photo_pages.set_cover_photo(project.id, None)
         if 'package' in request.form:
             photo_pages.set_package(project.id, request.form.get('package'))
+        if 'print_seen' in request.form:              # "Print the cover" / "Print the gallery"
+            photo_pages.set_printing(project.id, request.form.get('print_cover') == '1',
+                                     request.form.get('print_gallery') == '1')
     except item_images.ImageError as exc:
         db.session.rollback()
         flash(str(exc), 'danger')
@@ -1341,7 +1344,8 @@ def _cover_info(project):
     from . import photo_pages
     if not photo_pages.enabled():
         return None
-    return {'photo': photo_pages.cover_photo(project.id), 'package': photo_pages.package(project.id), **photo_pages.texts()}
+    return {'photo': photo_pages.cover_photo(project.id), 'package': photo_pages.package(project.id),
+            'printing': photo_pages.printing(project.id), **photo_pages.texts()}
 
 
 def _pdf_pick(project):
@@ -1349,12 +1353,8 @@ def _pdf_pick(project):
     from . import layout, pdf_choices
     if not pdf_choices.enabled() or layout.initial_layout() != layout.LAYOUT_BOQ:
         return None
-    from . import item_images, photo_pages
+    from . import item_images
     skip = set() if item_images.enabled() else {'photos'}
-    if not (photo_pages.enabled() and photo_pages.for_project(project.id)):
-        skip.add('photo_pages')
-    if not (photo_pages.enabled() and photo_pages.cover_photo(project.id)):
-        skip.add('cover')
     return {'fields': [f for f in pdf_choices.FIELDS if f[0] not in skip], 'chosen': pdf_choices.for_project(project.id)}
 
 

@@ -324,9 +324,11 @@ from app import item_images as IMG, photo_pages as PP
 from PIL import Image as _Img
 def _page_png(colour):
     b = io.BytesIO(); _Img.new('RGB', (1414, 2000), colour).save(b, 'PNG'); return b.getvalue()
+ok('cover & gallery: off unless switched on (its own switch, not Item photos or PDF choices)',
+   'id="photoPages"' not in c.get(f'/projects/{pid}').text)
 with app.app_context():
-    IMG.set_enabled(True); PC.set_enabled(True); db.session.commit()
-ok('photo pages: the card on the quotation (with Item photos on)', 'id="photoPages"' in c.get(f'/projects/{pid}').text)
+    PP.set_enabled(True); PC.set_enabled(True); db.session.commit()
+ok('…switched on: the card on the quotation', 'id="photoPages"' in c.get(f'/projects/{pid}').text)
 pages_before = len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages)
 r = c.post(f'/projects/{pid}/pages', data={'pages': [(io.BytesIO(_page_png('teal')), 'cover.png'),
                                                      (io.BytesIO(_page_png('white')), 'about.png')]},
@@ -335,13 +337,12 @@ with app.app_context():
     ids = PP.for_project(pid)
     big = db.session.get(__import__('app.models', fromlist=['ItemImage']).ItemImage, ids[0])
 ok('…two pages added, stored at print size (not the 900 px of line photos)', len(ids) == 2 and big.height > 1500)
-c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS})
 pdf_pages = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages
-ok('…the PDF: the two pictures in front, each a whole page, then the quotation', len(pdf_pages) == pages_before + 2
-   and not (pdf_pages[0].extract_text() or '').strip() and 'TV Unit' in (pdf_pages[2].extract_text() or ''))
-c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS if k != 'photo_pages'})
-ok('…unticked "Photo pages at the front": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == pages_before)
-c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS})
+ok('…the PDF: the photos together on one gallery page in front, then the quotation', len(pdf_pages) == pages_before + 1
+   and not (pdf_pages[0].extract_text() or '').strip() and 'TV Unit' in (pdf_pages[1].extract_text() or ''))
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1'})          # gallery unticked
+ok('…unticked "Print the gallery" on the quotation: left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == pages_before)
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1', 'print_gallery': '1'})
 with app.app_context():
     sh3 = QuoteShare.query.filter_by(project_id=pid, active=True).first()
 if sh3:
@@ -378,6 +379,7 @@ with app.app_context():
     ok('cover: slogan and tagline saved in Settings → Quotation PDFs', PP.texts() == {
         'slogan': 'Luxury crafted for modern living', 'tagline': 'Your dream home, professionally managed'})
 ok('…the settings card is there', 'id="cover-page"' in c.get('/admin/settings?tab=documents').text)
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1'})          # (the gallery off: just the cover)
 before_cover = len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages)
 c.post(f'/projects/{pid}/cover', data={'photo': (io.BytesIO(_page_png('olive')), 'door.png'), 'package': 'DIY Package'},
        content_type='multipart/form-data')
@@ -386,9 +388,10 @@ first = re.sub(r'\s+', ' ', cov_pdf.pages[0].extract_text() or '')
 ok('…with a cover photo: the cover is the first page (name, slogan, tagline, package name)',
    len(cov_pdf.pages) == before_cover + 1 and 'LUXURY CRAFTED FOR MODERN LIVING' in first
    and 'Your dream home, professionally managed' in first and 'DIY PACKAGE' in first)
-c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS if k != 'cover'})
-ok('…unticked "Cover page": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == before_cover)
-c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS})
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1'})
+ok('…unticked "Print the cover": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == before_cover
+   and 'LUXURY' not in (PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages[0].extract_text() or ''))
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1', 'print_gallery': '1'})
 with app.app_context():
     cover_id = PP.cover_photo(pid)
 c.post(f'/projects/{pid}/template', data={'name': 'Premium Package'})

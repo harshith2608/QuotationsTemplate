@@ -65,10 +65,11 @@
   </div>
 
   {% if pages %}
-  <div class="q-card p-2">
-    {% for pid_ in pages %}<img src="{{ url_for('share.photo', token=share.token, image_id=pid_) }}" alt="Page {{ loop.index }}"
-         loading="lazy" class="d-block w-100 rounded {{ 'mt-2' if not loop.first }}">{% endfor %}
-  </div>
+  <div class="q-card p-2"><div class="row g-2">
+    {% for pid_ in pages %}<div class="col-6 col-md-4"><a href="{{ url_for('share.photo', token=share.token, image_id=pid_) }}" target="_blank" rel="noopener">
+      <img src="{{ url_for('share.photo', token=share.token, image_id=pid_) }}" alt="Photo {{ loop.index }}" loading="lazy"
+           class="d-block w-100 rounded" style="aspect-ratio:1/1;object-fit:cover"></a></div>{% endfor %}
+  </div></div>
   {% endif %}
 
   {% if share.detail == 'full' %}

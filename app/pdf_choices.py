@@ -9,9 +9,9 @@ Off unless the operator turns it on for the business (console → Features). Sto
 import json
 
 SWITCH_KEY = 'pdf_choices'
-FIELDS = [('cover', 'Cover page'), ('description', 'Description'), ('material', 'Material'), ('size', 'Size (length × width)'),
+FIELDS = [('description', 'Description'), ('material', 'Material'), ('size', 'Size (length × width)'),
           ('qty', 'Quantity & unit (area)'), ('rate', 'Rate'), ('amount', 'Amount on each line'),
-          ('room_total', 'Room total'), ('photos', 'Photos on lines'), ('photo_pages', 'Photo pages at the front')]
+          ('room_total', 'Room total'), ('photos', 'Photos on lines')]
 KEYS = [k for k, _ in FIELDS]
 
 
@@ -35,7 +35,7 @@ def defaults():
     per_room = layout.room_totals_only()
     return {'description': True, 'material': True, 'size': True, 'qty': True,
             'rate': layout.show_rate() and not per_room, 'amount': not per_room, 'room_total': True, 'photos': True,
-            'photo_pages': True, 'cover': True}
+}
 
 
 def for_project(project_id):

@@ -386,8 +386,9 @@ def _step_data(row, log):
             start_on = plan_mod.today()
             end = plan_mod.add_length(start_on, plan_mod.length_of(row['plan']) or row['plan'])
             plan_mod.save_plan(row['plan'], start_on, end)
-            from . import pdf_choices
-            pdf_choices.set_enabled(True)                 # new businesses choose what their PDF shows
+            from . import pdf_choices, photo_pages
+            pdf_choices.set_enabled(True)                 # new businesses choose what their PDF shows,
+            photo_pages.set_enabled(True)                 # and get the cover & gallery
             db.session.commit()
         s['pending_password'] = password                  # shown once on the customer page, then removed
         _save_secrets(slug, s)
@@ -532,7 +533,8 @@ def boq_status(slug):
         return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status(),
                     show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status(),
                     profiles=__import__('app.profiles', fromlist=['console_status']).console_status(),
-                    pdf_choices=__import__('app.pdf_choices', fromlist=['enabled']).enabled())
+                    pdf_choices=__import__('app.pdf_choices', fromlist=['enabled']).enabled(),
+                    photo_pages=__import__('app.photo_pages', fromlist=['console_status']).console_status()['on'])
 
 
 def set_presentation(slug, on):
@@ -540,6 +542,14 @@ def set_presentation(slug, on):
     from . import presentation
     with open_customer(slug):
         presentation.set_enabled(on)
+        db.session.commit()
+
+
+def set_photo_pages(slug, on):
+    """Cover & gallery on or off, for a customer."""
+    from . import photo_pages
+    with open_customer(slug):
+        photo_pages.set_enabled(on)
         db.session.commit()
 
 

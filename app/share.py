@@ -145,6 +145,11 @@ def _private(resp):
     return resp
 
 
+def _gallery(project):
+    from . import photo_pages
+    return photo_pages.for_project(project.id) if photo_pages.gallery_shown(project) else []
+
+
 @share_bp.route('/q/<token>')
 def view(token):
     share, project = _share_or_404(token)
@@ -167,8 +172,7 @@ def view(token):
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
                                     pay=pay, paid=billing.paid_total(project), room_rows=rows, boq_sections=boq_sections,
                                     show_rate=show['rate'], per_room=not show['amount'], show=show,
-                                    pages=__import__('app.photo_pages', fromlist=['for_project']).for_project(project.id)
-                                    if show.get('photo_pages', True) and __import__('app.photo_pages', fromlist=['enabled']).enabled() else []))
+                                    pages=_gallery(project)))
 
 
 @share_bp.route('/q/<token>/pdf')

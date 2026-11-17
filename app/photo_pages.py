@@ -71,10 +71,32 @@ def save_texts(slogan, tagline):
     AppSetting.set(TAGLINE_KEY, ' '.join((tagline or '').split())[:TEXT_MAX])
 
 
+def _opts_key(project_id):
+    return f'quote_photo_opts_{int(project_id)}'
+
+
+def printing(project_id):
+    """{'cover', 'gallery'}: whether this quotation prints them (ticked on the quotation's card; both by default)."""
+    from .models import AppSetting
+    try:
+        saved = json.loads(AppSetting.get(_opts_key(project_id), '') or '{}') if project_id else {}
+    except ValueError:
+        saved = {}
+    return {'cover': saved.get('cover', True) is not False, 'gallery': saved.get('gallery', True) is not False}
+
+
+def set_printing(project_id, cover, gallery):
+    from .models import AppSetting
+    AppSetting.set(_opts_key(project_id), json.dumps({'cover': bool(cover), 'gallery': bool(gallery)}))
+
+
 def cover_shown(project):
-    """The designed cover prints for this quotation: it has a cover photo and the quotation shows it."""
-    from . import pdf_choices
-    return bool(enabled() and cover_photo(project.id) and pdf_choices.for_project(project.id).get('cover', True))
+    """The designed cover prints for this quotation: it has a cover photo and "Print the cover" is ticked."""
+    return bool(enabled() and cover_photo(project.id) and printing(project.id)['cover'])
+
+
+def gallery_shown(project):
+    return enabled() and printing(project.id)['gallery']
 
 
 def _draw_cover(c, project, photo):
@@ -142,10 +164,24 @@ def _key(project_id):
     return f'quote_pages_{int(project_id)}'
 
 
+SWITCH_KEY = 'feature_photo_pages'      # the operator's switch (console → Features → Cover & gallery)
+
+
 def enabled():
-    """With Item photos on, or Choose what the PDF shows (on for new trials and customers)."""
-    from . import item_images, pdf_choices
-    return item_images.ready() and (item_images.enabled() or pdf_choices.enabled())
+    """On for this business (on for new trials and customers; console → Features), and its database is ready."""
+    from . import item_images
+    from .models import AppSetting
+    return AppSetting.get(SWITCH_KEY, '') == '1' and item_images.ready()
+
+
+def set_enabled(on):
+    from .models import AppSetting
+    AppSetting.set(SWITCH_KEY, '1' if on else '')
+
+
+def console_status():
+    from .models import AppSetting
+    return {'on': AppSetting.get(SWITCH_KEY, '') == '1'}
 
 
 def for_project(project_id):
@@ -195,40 +231,97 @@ def move(project_id, image_id, step):
 
 def forget(project_id):
     from .models import AppSetting, db
-    for k in (_key(project_id), _cover_key(project_id), _package_key(project_id)):
+    for k in (_key(project_id), _cover_key(project_id), _package_key(project_id), _opts_key(project_id)):
         row = db.session.get(AppSetting, k)
         if row:
             db.session.delete(row)
 
 
+GALLERY_PER_ROW = 3           # at most this many photos side by side
+GALLERY_ROWS = 3              # rows on a page (at most)
+GALLERY_GAP = 9               # pt between photos
+GALLERY_MARGIN = 36           # pt round the page
+
+
+def gallery_layout(sizes, width, height):
+    """Photos (their (w, h) in order) laid out like a photo book: rows of 2 or 3 sized by their shapes, each row
+    exactly the page's width with no cropping, up to GALLERY_ROWS rows a page. Returns pages: [[(index, x, y, w, h)]]
+    with y from the top of the content area. A last row of one or two isn't stretched taller than a normal row."""
+    row_h_target = (height - GALLERY_GAP * (GALLERY_ROWS - 1)) / GALLERY_ROWS
+    rows, cur = [], []
+    for i, (w, h) in enumerate(sizes):
+        cur.append((i, w / h))
+        aspects = sum(a for _, a in cur)
+        # a row is full at 3 photos, or at 2 when they're wide (landscapes) and already fill the width
+        if len(cur) == GALLERY_PER_ROW or (len(cur) >= 2 and aspects * row_h_target >= width - GALLERY_GAP * (len(cur) - 1)):
+            rows.append(cur)
+            cur = []
+    if cur:
+        rows.append(cur)
+    pages, page, used = [], [], 0.0
+    for k, row in enumerate(rows):
+        gaps = GALLERY_GAP * (len(row) - 1)
+        aspects = sum(a for _, a in row)
+        h = (width - gaps) / aspects                   # the row's height when it spans the width exactly
+        last = k == len(rows) - 1
+        if last and h > row_h_target * 1.15:           # a short last row: a normal height, not stretched
+            h = row_h_target * 1.15
+        h = min(h, height)
+        if page and (used + h > height + 0.5 or len(page) == GALLERY_ROWS):
+            pages.append([p for r in page for p in r])
+            page, used = [], 0.0
+        row_w = sum(a * h for _, a in row) + gaps
+        x = (width - row_w) / 2
+        placed = []
+        for i, a in row:
+            placed.append((i, x, used, a * h, h))
+            x += a * h + GALLERY_GAP
+        page.append(placed)
+        used += h + GALLERY_GAP
+    if page:
+        pages.append([p for r in page for p in r])
+    return pages
+
+
+def _draw_gallery(c, photos):
+    """The gallery pages: the photos (jpeg bytes, in order) laid out by gallery_layout, rounded corners."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    pw, ph = A4
+    imgs = [ImageReader(io.BytesIO(d)) for d in photos]
+    width, height = pw - 2 * GALLERY_MARGIN, ph - 2 * GALLERY_MARGIN
+    for page in gallery_layout([im.getSize() for im in imgs], width, height):
+        rows_h = max(y + h for _, _, y, _, h in page)
+        top = ph - GALLERY_MARGIN - (height - rows_h) / 2     # the photos centred on the page
+        for i, x, y, w, h in page:
+            px, py = GALLERY_MARGIN + x, top - y - h
+            c.saveState()
+            path = c.beginPath(); path.roundRect(px, py, w, h, 8)
+            c.clipPath(path, stroke=0, fill=0)
+            c.drawImage(imgs[i], px, py, width=w, height=h)
+            c.restoreState()
+        c.showPage()
+
+
 def with_pages(project, buffer):
-    """The quotation PDF with its photo pages in front (each picture filling an A4 page, centred, nothing cut off),
-    when the quotation shows them; else the PDF as it is."""
-    from . import item_images, pdf_choices
-    ids = for_project(project.id) if enabled() else []
-    if not pdf_choices.for_project(project.id).get('photo_pages', True):
-        ids = []
+    """The quotation PDF with its designed cover and photo gallery in front (when the quotation prints them); else the
+    PDF as it is."""
+    from . import item_images
+    ids = for_project(project.id) if gallery_shown(project) else []
     cover = cover_photo(project.id) if cover_shown(project) else None
     if not ids and not cover:
         return buffer
     data = item_images.data_for(ids + ([cover] if cover else []))
     from pypdf import PdfReader, PdfWriter
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen import canvas
     pages = io.BytesIO()
     c = canvas.Canvas(pages, pagesize=A4)
-    pw, ph = A4
     if cover and data.get(cover):
         _draw_cover(c, project, data[cover])
-    for i in ids:
-        if not data.get(i):
-            continue
-        img = ImageReader(io.BytesIO(data[i]))
-        w, h = img.getSize()
-        s = min(pw / w, ph / h)
-        c.drawImage(img, (pw - w * s) / 2, (ph - h * s) / 2, width=w * s, height=h * s)
-        c.showPage()
+    photos = [data[i] for i in ids if data.get(i)]
+    if photos:
+        _draw_gallery(c, photos)
     c.save()
     out = PdfWriter()
     for src in (PdfReader(io.BytesIO(pages.getvalue())), PdfReader(buffer)):
