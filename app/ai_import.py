@@ -235,6 +235,96 @@ def _excel_text(raw):
     return body[:MAX_TEXT]
 
 
+# ── 1b. A clean rate table (a product master): read directly, no AI ───────────
+# Its columns, by their headings (lower case, letters only); the first heading found of each list wins.
+TABLE_NAME = ('productname', 'itemname', 'item', 'name', 'product', 'particulars', 'particular', 'itemdescription',
+              'workname', 'work')
+TABLE_RATE = ('rate', 'sellingrate', 'sellingprice', 'unitrate', 'unitprice', 'rateperunit', 'price', 'mrp', 'rates',
+              'raters', 'rateinrs', 'rateinr', 'priceperunit')
+TABLE_UNIT = ('unit', 'uom', 'units', 'per')
+TABLE_DESC = ('description', 'details', 'specification', 'specifications', 'desc', 'remarks', 'itemdetails')
+TABLE_GROUP = ('productcategory', 'category', 'section', 'group', 'room', 'area', 'head', 'itemcategory')
+TABLE_QTY = ('qty', 'quantity', 'nos', 'noof', 'count')          # a quotation, not a rate list: left to the AI
+TABLE_COST = ('agency', 'cost', 'purchase', 'buying', 'vendor', 'labour', 'total', 'amount')   # never the selling rate
+TABLE_MIN_ROWS = 5
+ACRONYMS = {'Ac': 'AC', 'Tv': 'TV', 'Pop': 'POP', 'Mdf': 'MDF', 'Led': 'LED', 'Pvc': 'PVC', 'Wpc': 'WPC', 'Mr': 'MR',
+            'Hdhmr': 'HDHMR', 'Upvc': 'uPVC', 'Bwp': 'BWP', 'Bwr': 'BWR', 'Cnc': 'CNC', 'Ms': 'MS', 'Ss': 'SS', 'Gi': 'GI',
+            'Pu': 'PU', '3d': '3D', '2d': '2D', 'Bhk': 'BHK', 'Rcc': 'RCC'}
+
+
+def _heading(value):
+    return re.sub(r'[^a-z]', '', str(value or '').lower())
+
+
+def _pick(heads, wanted, avoid=()):
+    for w in wanted:
+        for i, h in enumerate(heads):
+            if h == w and not any(a in h for a in avoid):
+                return i
+    for w in wanted:                          # "Rate (Rs.)", "Product Name *"
+        for i, h in enumerate(heads):
+            if h.startswith(w) and not any(a in h for a in avoid):
+                return i
+    return None
+
+
+def _caps_name(value):
+    """ALL CAPS from a spreadsheet → normal case, keeping acronyms (AC PELMET → AC Pelmet)."""
+    v = ' '.join(str(value or '').split())
+    if v.isupper():
+        v = re.sub(r"[A-Za-z0-9']+", lambda m: ACRONYMS.get(m.group(0), m.group(0)), v.title())
+    return v
+
+
+def rate_table(raw):
+    """A product master / rate list Excel (a heading row with an item name and a rate, no quantities) read as it is:
+    the review data (see tidy), or None when it isn't one (then the AI reads the file). Exact, instant, no AI."""
+    from openpyxl import load_workbook
+    from . import boq
+    try:
+        book = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    except Exception:
+        return None
+    for sheet in book.worksheets[:5]:
+        rows = [r for r in sheet.iter_rows(values_only=True, max_row=5000)]
+        for h_at, row in enumerate(rows[:15]):
+            heads = [_heading(v) for v in row]
+            name_i, rate_i = _pick(heads, TABLE_NAME), _pick(heads, TABLE_RATE, TABLE_COST)
+            if name_i is None or rate_i is None or name_i == rate_i:
+                continue
+            if any(h in TABLE_QTY for h in heads):
+                return None                   # quantities: a quotation (the AI reads it, with its totals)
+            unit_i, desc_i, group_i = _pick(heads, TABLE_UNIT), _pick(heads, TABLE_DESC), _pick(heads, TABLE_GROUP)
+            if desc_i == name_i:
+                desc_i = None
+            groups, seen, names = {}, set(), Counter()
+            for r in rows[h_at + 1:]:
+                cell = lambda i: r[i] if i is not None and i < len(r) else None
+                name, rate = _caps_name(cell(name_i)), _num(cell(rate_i))
+                if not name or rate is None or rate < 0:
+                    continue
+                desc = boq.clean_description(cell(desc_i)) if desc_i is not None else ''
+                unit = boq.clean_unit(cell(unit_i)) if unit_i is not None and cell(unit_i) else 'nos'
+                base = re.sub(r'\s*[-–(]\s*(clone|copy)\)?\s*$', '', name, flags=re.I)
+                key = (base.lower(), rate, desc, unit)
+                if key in seen:
+                    continue                  # an identical copy ("AC PELMET - Clone")
+                seen.add(key)
+                names[base.lower()] += 1
+                shown = base if names[base.lower()] == 1 else f'{base} ({names[base.lower()]})'
+                group = _caps_name(cell(group_i)) if group_i is not None and cell(group_i) else 'Items'
+                groups.setdefault(group.lower(), {'name': group[:100], 'lines': []})['lines'].append(
+                    {'name': shown[:100], 'description': desc, 'unit': unit, 'quantity': None, 'rate': rate,
+                     'amount': None, 'material': '', 'work': '', 'no_amount': False})
+            if sum(len(g['lines']) for g in groups.values()) < TABLE_MIN_ROWS:
+                return None
+            return {'rate_list': True, 'pricing': 'item', 'table': True,
+                    'pricing_reason': 'Read straight from your sheet: every item, rate and description as you wrote them.',
+                    'job_title': 'My rates', 'sections': list(groups.values()), 'charges': [], 'subtotal': None,
+                    'discount': 0, 'gst_percent': None, 'grand_total': None, 'payment_terms': '', 'notes': ''}
+    return None
+
+
 # ── 2. Read it ───────────────────────────────────────────────────────────────
 
 class Line(BaseModel):
@@ -320,6 +410,12 @@ def read(body):
 
 def read_upload(filename, raw):
     """The whole of steps 1–2 for an upload, within the limit: the review data (see tidy). Raises ImportProblem."""
+    name = (filename or '').lower()
+    if raw and len(raw) <= MAX_BYTES and (name.endswith('.xlsx') or name.endswith('.xlsm')):
+        table = rate_table(raw)              # a clean rate list: read as it is (exact, instant, not counted)
+        if table:
+            _log('excel', True, sum(len(s['lines']) for s in table['sections']), note='rate table, read directly')
+            return table
     if left()[0] <= 0:
         raise ImportProblem(f'You\'ve used all your quotation imports ({left()[1]}). Message us on WhatsApp if you '
                             'need another.')
@@ -419,7 +515,7 @@ def from_form(form):
             p = f's{i}_{j}_'
             if not form.get(p + 'keep') or not _name(form.get(p + 'name')):
                 continue
-            lines.append({'name': _name(form.get(p + 'name')), 'description': (form.get(p + 'description') or '').strip()[:500],
+            lines.append({'name': _name(form.get(p + 'name')), 'description': (form.get(p + 'description') or '').strip()[:2000],
                           'unit': (form.get(p + 'unit') or '').strip(), 'quantity': _num(form.get(p + 'quantity')),
                           'rate': _num(form.get(p + 'rate')),
                           'material': ' '.join((form.get(p + 'material') or '').split())[:60], 'work': _work(form.get(p + 'work'))})

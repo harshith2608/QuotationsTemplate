@@ -262,6 +262,71 @@ n = len(calls)
 r = upload(QUOTE, 'again.pdf')
 ok('limit reached: refused before anything is read', 'used all your quotation imports' in r.text and len(calls) == n)
 
+# A clean rate table (a product master): read straight from the sheet, no AI, even with the AI limit used up
+import openpyxl, html as _h
+book = openpyxl.Workbook(); sh = book.active
+sh.append(['Product master'])                           # a title row above the headings
+sh.append(['productCategory', 'productName', 'description', 'unit', 'length', 'height', 'rate', 'total', 'agencyPrice'])
+sh.append(['CARPENTRY', 'AC PELMET', 'BASE frame : MR ply\nDecorative : paint finish', 'SQ FEET', 10, 2, 750, 15000, 10500])
+sh.append(['CARPENTRY', 'AC PELMET - Clone', 'BASE frame : MR ply\nDecorative : paint finish', 'SQ FEET', 10, 2, 750, 15000, 10500])
+sh.append(['TV UNIT', 'TV UNIT - PREMIUM', 'Laminate 1mm', 'SQ FEET', 8, 4, 1850, 59200, 1300])
+sh.append(['LOOSE ITEMS', 'BENCH', 'Wooden legs', 'R.FEET', 4, 1, 3500, 14000, 2450])
+sh.append(['CHAIR', 'ARM CHAIR', 'Fabric as per selection', 'NOS', 1, 1, 18500, 18500, 12950])
+sh.append(['CLEANING SERVICE', 'Deep cleaning', '', 'NOS', 1, 1, 6000, 6000, 4000])
+buf = io.BytesIO(); book.save(buf); master = buf.getvalue()
+quote_book = openpyxl.Workbook(); q = quote_book.active
+q.append(['Item', 'Qty', 'Rate', 'Amount'])
+for i in range(8):
+    q.append([f'Item {i}', 2, 100, 200])
+qbuf = io.BytesIO(); quote_book.save(qbuf)
+ok('a sheet with quantities is a quotation: left to the AI', AI.rate_table(qbuf.getvalue()) is None)
+n = len(calls)
+r = upload(master, 'ProductMaster.xlsx')
+t = r.text
+ok('a product master: read as it is, without the AI (and not counted against the limit)', len(calls) == n
+   and 'used all your quotation imports' not in t and 'value="AC Pelmet"' in t and 'AC Pelmet - Clone' not in t
+   and 'value="TV Unit - Premium"' in t and 'value="10500"' not in t and 'value="750"' in t)
+ok('…its descriptions with their line breaks, units in the app\'s words, its categories as sections',
+   'BASE frame : MR ply\nDecorative : paint finish</textarea>' in _h.unescape(t)
+   and 'value="rft"' in t and 'value="Loose Items"' in t and 'value="Tv Unit"' not in t)
+from html.parser import HTMLParser
+
+
+class _Form(HTMLParser):                   # what the browser sends: inputs (ticked boxes), textareas, selected options
+    def __init__(self):
+        super().__init__(convert_charrefs=True); self.data, self.area, self.sel = {}, None, None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == 'input' and a.get('name') and (a.get('type') != 'checkbox' or 'checked' in a):
+            self.data[a['name']] = a.get('value') or ''
+        elif tag == 'textarea':
+            self.area = a.get('name'); self.data[self.area] = ''
+        elif tag == 'select':
+            self.sel = a.get('name')
+        elif tag == 'option' and self.sel and 'selected' in a:
+            self.data[self.sel] = a.get('value', '')
+
+    def handle_data(self, d):
+        if self.area:
+            self.data[self.area] += d
+
+    def handle_endtag(self, tag):
+        if tag == 'textarea':
+            self.area = None
+        elif tag == 'select':
+            self.sel = None
+
+
+_fp = _Form(); _fp.feed(t); form = _fp.data
+r = admin.post('/admin/import/set-up', data=form)
+with app.app_context():
+    lines = {b.name: b for b in BoqItem.query.all()}
+    ok('…set up: every item at its own rate, in its section, the description kept line by line',
+       lines['AC Pelmet'].rate == 750 and lines['AC Pelmet'].unit == 'sqft' and lines['Bench'].unit == 'rft'
+       and lines['Arm Chair'].rate == 18500 and lines['TV Unit - Premium'].category == 'TV Unit'
+       and lines['AC Pelmet'].description == 'BASE frame : MR ply\nDecorative : paint finish')
+
 # The demo never offers it
 os.environ['DEMO_MODE'] = '1'
 demo = create_app('development')

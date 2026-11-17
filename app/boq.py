@@ -139,7 +139,8 @@ def clean_unit(value):
     """'Sq.ft' → 'sqft', 'Nos.' → 'nos', 'LS' → 'lump sum'; anything else as typed (short)."""
     v = ' '.join(str(value or '').split())[:UNIT_MAX]
     key = v.lower().replace('.', '').replace(' ', '')
-    aliases = {'sqft': 'sqft', 'sft': 'sqft', 'squarefeet': 'sqft', 'rft': 'rft', 'runningft': 'rft', 'rf': 'rft',
+    aliases = {'sqft': 'sqft', 'sft': 'sqft', 'squarefeet': 'sqft', 'sqfeet': 'sqft', 'squarefoot': 'sqft', 'sqfoot': 'sqft',
+               'rft': 'rft', 'runningft': 'rft', 'rf': 'rft', 'rfeet': 'rft', 'runningfeet': 'rft', 'rfoot': 'rft',
                'nos': 'nos', 'no': 'nos', 'numbers': 'nos', 'pcs': 'nos', 'piece': 'nos', 'pieces': 'nos',
                'point': 'point', 'points': 'point', 'pt': 'point', 'sqm': 'sq m', 'rmt': 'rmt', 'set': 'set',
                'ls': LUMP_SUM, 'lumpsum': LUMP_SUM, 'lumsum': LUMP_SUM, 'job': LUMP_SUM}

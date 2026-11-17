@@ -95,7 +95,7 @@
           <input class="form-check-input mt-2" type="checkbox" name="{{ p }}keep" value="1" checked aria-label="Keep this line" data-keep>
           <div class="flex-grow-1">
             <input class="form-control form-control-sm fw-semibold mb-1" name="{{ p }}name" value="{{ l.name }}" maxlength="100" aria-label="Item">
-            <input class="form-control form-control-sm mb-1 text-muted" name="{{ p }}description" value="{{ l.description }}" maxlength="500" placeholder="Description" aria-label="Description">
+            <textarea class="form-control form-control-sm mb-1 text-muted" name="{{ p }}description" rows="{{ [[(l.description or '').count('\n') + 1, 1]|max, 4]|min }}" maxlength="2000" placeholder="Description" aria-label="Description">{{ l.description or '' }}</textarea>
             <div class="row g-1">
               <div class="col-3"><input class="form-control form-control-sm" name="{{ p }}unit" value="{{ l.unit }}" maxlength="20" aria-label="Unit" title="Unit"></div>
               <div class="col-3"><input class="form-control form-control-sm" name="{{ p }}quantity" type="number" step="any" min="0" value="{{ l.quantity if l.quantity is not none }}" placeholder="Qty" aria-label="Quantity" data-qty></div>
