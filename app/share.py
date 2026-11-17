@@ -6,7 +6,7 @@ No login: the long random token is the key. Staff turn the link on and off from 
 import secrets
 from datetime import datetime
 
-from flask import Blueprint, abort, flash, make_response, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, flash, g, make_response, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 
 from . import billing, db
@@ -145,6 +145,15 @@ def _private(resp):
     return resp
 
 
+def _link_rates(share, project):
+    """A link made by an employee who can't see this quotation's rates hides them (until their request is approved)."""
+    from flask import g
+    from . import rate_access
+    from .models import User
+    maker = db.session.get(User, share.created_by) if share.created_by else None
+    g.link_no_rates = bool(maker and not rate_access.can_see(maker, project.id))
+
+
 def _gallery(project):
     from . import photo_pages
     return photo_pages.for_project(project.id) if photo_pages.gallery_shown(project) else []
@@ -167,6 +176,7 @@ def view(token):
     chosen = layout.initial_layout() if share.detail != 'full' or layout.single_pdf() else None
     rows = layout.room_rows(snap) if chosen == layout.LAYOUT_ROOMS else None
     from . import pdf_choices
+    _link_rates(share, project)
     show = pdf_choices.for_project(project.id)       # what this quotation shows (as its PDF)
     boq_sections = layout.boq_rows(snap, show) if chosen == layout.LAYOUT_BOQ else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
@@ -182,7 +192,8 @@ def pdf(token):
     from .pdf_utils import generate_customer_pdf, generate_pdf
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     from . import layout
-    full = share.detail == 'full' and not layout.single_pdf()                     # priced by item: one quotation PDF
+    _link_rates(share, project)
+    full = share.detail == 'full' and not layout.single_pdf() and not g.get('link_no_rates')   # (by item: one PDF)
     make = generate_pdf if full else generate_customer_pdf                        # full or material breakdown
     buf = make(project, payment_settings=pay, total_paid=billing.paid_total(project))
     from .pdf_utils import pdf_filename

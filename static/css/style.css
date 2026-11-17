@@ -749,3 +749,7 @@ body > main { flex: 1 0 auto; }
 
 /* The quotation sections (Material Specifications, Terms…) in the rich text editor: a little shorter */
 .ki-rich-section .ql-editor { min-height: 90px; font-size: .9rem; }
+
+/* An employee who can't see rates (app/rate_access.py): rates and line amounts hidden; sizes and totals stay */
+.ki-no-rates .ki-rate { display: none !important; }
+.ki-no-rates .ki-rate-cell > * { visibility: hidden !important; }   /* (form cells: the space kept, columns line up) */

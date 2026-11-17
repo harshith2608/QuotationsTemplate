@@ -231,8 +231,46 @@ def dashboard():
 def users():
     all_users = User.query.order_by(User.created_at.desc()).all()
     form = CreateUserForm()
+    from . import rate_access
+    pending = rate_access.requests('pending')
+    names = {u.id: (u.full_name or u.username) for u in all_users}
+    titles = {p.id: p for p in Project.query.filter(Project.id.in_([r['project_id'] for r in pending] or [0])).all()}
+    asks = [dict(r, who=names.get(r['user_id'], 'A user'), project=titles.get(r['project_id'])) for r in pending
+            if titles.get(r['project_id'])]
     return render_template('admin/users.html', title='User Management',
-                           users=all_users, form=form)
+                           users=all_users, form=form, rate_asks=asks,
+                           can_rates={u.id for u in all_users if rate_access.allowed_everywhere(u)})
+
+
+@admin_bp.route('/users/<int:user_id>/rates', methods=['POST'])
+def user_rates(user_id):
+    """Can see rates (and line amounts) on every quotation: ticked per employee (app/rate_access.py)."""
+    from . import rate_access
+    user = User.query.get_or_404(user_id)
+    on = request.form.get('on') == '1'
+    rate_access.set_allowed(user.id, on)
+    db.session.commit()
+    flash(f'{user.full_name or user.username} {"can now see" if on else "no longer sees"} rates and line amounts.', 'success')
+    return redirect(url_for('admin.users'))
+
+
+@admin_bp.route('/rate-requests/<int:req_id>', methods=['POST'])
+def rate_request(req_id):
+    """Approve (or decline) an employee's request for one quotation's rates."""
+    from . import rate_access
+    approve = request.form.get('approve') == '1'
+    req = rate_access.decide(req_id, approve, current_user)
+    if req is None:
+        flash('That request was already answered.', 'info')
+    else:
+        user = db.session.get(User, req['user_id'])
+        project = db.session.get(Project, req['project_id'])
+        who = (user.full_name or user.username) if user else 'The employee'
+        what = (project.customer_name + "'s quotation") if project else 'the quotation'
+        db.session.commit()
+        flash(f'{who} can now see the rates on {what}.' if approve else f'Declined: {who} won\'t see the rates on {what}.',
+              'success')
+    return redirect(url_for('admin.users'))
 
 
 @admin_bp.route('/users/new', methods=['POST'])

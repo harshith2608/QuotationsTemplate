@@ -29,6 +29,7 @@ function comboLabel(wood, work) { return work ? `${wood} – ${work}` : (wood ||
 const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
 // also carry a description
+const NO_RATES = !!CATALOG.noRates;     // an employee who can't see rates (app/rate_access.py): rates hidden
 const BOQ = !!CATALOG.boq;
 // Priced by material: one-off work as a lump sum (a BOQ line with unit "lump sum": Pooja civil works ₹30,000…)
 const LUMP = !!CATALOG.lumpSum;
@@ -353,7 +354,7 @@ function updateRoomHeader(rk, hasMeasured, hasPriced) {
   if (!th('c1')) return;
   if (!th('c1').dataset.measured) ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => { th(c).dataset.measured = th(c).textContent; });
   const m = c => th(c).dataset.measured;
-  const priced = { c1: 'Qty', c2: 'Unit', c3: 'Rate (₹)', c4: 'Type', c5: 'Amount' };
+  const priced = { c1: 'Qty', c2: 'Unit', c3: NO_RATES ? '' : 'Rate (₹)', c4: 'Type', c5: NO_RATES ? '' : 'Amount' };
   if (!hasMeasured && !hasPriced && CATALOG.byItem) hasPriced = true;   // empty, priced by item: its lines' columns
   ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => {
     th(c).textContent = hasPriced && !hasMeasured ? priced[c] : hasPriced ? `${m(c)} / ${priced[c]}` : m(c);
@@ -1193,7 +1194,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit" ${BOQ ? '' : 'disabled'}
               onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
     </td>
-    <td data-label="Rate">
+    <td data-label="Rate" class="ki-rate-cell">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -1201,7 +1202,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
-    <td class="text-center" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
+    <td class="text-center ki-rate-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
         <i class="bi bi-x-lg"></i>
@@ -1326,7 +1327,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
              value="${qty}" oninput="onFixedField('${rk}','${ik}')" title="Quantity">
     </td>
     <td class="small text-muted text-center" data-label="Unit" id="item_unit_${ik}">${escHtml((_findPrice(name) || {}).unit || 'nos')}</td>
-    <td data-label="Rate">
+    <td data-label="Rate" class="ki-rate-cell">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -1334,7 +1335,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-fitting">Fitting</span></td>
-    <td class="text-center" data-label="Amount">
+    <td class="text-center ki-rate-cell" data-label="Amount">
       <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
     </td>
     <td class="text-center">
@@ -1832,7 +1833,7 @@ function renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal) {
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${escHtml(label)}</span>
         </span>
         <span class="text-muted small">${showArea(area)} ${escHtml(UNITS.areaLabel)}</span>
-        <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+        <span class="summary-wood-value ki-rate">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
   if (fixedTotal > 0) {
@@ -1941,6 +1942,11 @@ function _boqProblems() {
         return;
       }
       if (it.tbc || it.pending) return;         // still waiting for a size: filled in, or removed on saving
+      if (NO_RATES && !typedRate) {             // an employee who can't see rates: a new line is "price to follow"
+        it.tbc = true;
+        const t = document.getElementById('item_tbc_' + ik); if (t) t.checked = true;
+        return;
+      }
       if (it.quantity > 0 && !typedRate)
         out.push({ text: `${roomName} → ${it.name}: no rate. Type the rate, or tick "Price to follow".`, el: rateEl });
       else if (!(it.quantity > 0) && !typedRate)

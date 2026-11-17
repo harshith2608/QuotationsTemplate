@@ -187,6 +187,8 @@ def quotation_email(project_id):
         return _back(project)
     from . import layout
     full = request.form.get('pdf') == 'full' and not layout.single_pdf()     # priced by item: one quotation PDF
+    if full and not __import__('app.rate_access', fromlist=['can_see']).can_see(current_user, project.id):
+        full = False                                  # an employee who can't see rates: the customer copy
     link = ''
     if request.form.get('with_link') and billing.ready():
         share = _active_share(project)

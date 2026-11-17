@@ -42,13 +42,22 @@ def for_project(project_id):
     """{field: shown} for this quotation: its own choice (with the feature on), else the business's settings."""
     from .models import AppSetting
     base = defaults()
-    if not project_id or not enabled():
-        return base
-    try:
-        saved = json.loads(AppSetting.get(_key(project_id), '') or '{}')
-    except ValueError:
-        saved = {}
-    return {k: bool(saved[k]) if k in saved else v for k, v in base.items()}
+    if project_id and enabled():
+        try:
+            saved = json.loads(AppSetting.get(_key(project_id), '') or '{}')
+        except ValueError:
+            saved = {}
+        base = {k: bool(saved[k]) if k in saved else v for k, v in base.items()}
+    return _without_rates(base, project_id)
+
+
+def _without_rates(show, project_id):
+    """An employee who can't see rates (app/rate_access.py), or a customer's link made by one: no rates or line
+    amounts, whatever the quotation says (its room totals and total stay)."""
+    from flask import g, has_app_context
+    from . import rate_access
+    hide = (has_app_context() and g.get('link_no_rates')) or not rate_access.current_can_see(project_id)
+    return {**show, 'rate': False, 'amount': False} if hide else show
 
 
 def save(project_id, form):

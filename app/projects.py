@@ -708,6 +708,37 @@ def save_template(template_id):
     return redirect(url_for('projects.manage_templates'))
 
 
+@projects_bp.route('/projects/<int:project_id>/ask-rates', methods=['POST'])
+@login_required
+def ask_rates(project_id):
+    """An employee who can't see rates asks the admin for this quotation's (app/rate_access.py): an email from
+    QuoteRoom and a notification; the admin approves on the Users page."""
+    from . import rate_access, mailer
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+        abort(403)
+    if rate_access.can_see(current_user, project.id):
+        return redirect(url_for('projects.view_project', project_id=project.id))
+    already = rate_access.pending_for(project.id, current_user.id)
+    rate_access.ask(project, current_user)
+    if not already:
+        who = current_user.full_name or current_user.username
+        db.session.add(Notification(title=f'{who} asks to see rates – {project.customer_name}',
+                                    message=f'{who} asked to see the rates and line amounts on {project.customer_name}\'s '
+                                            f'quotation (#{project.id}). Approve or decline it on the Users page.',
+                                    project_id=project.id))
+        db.session.commit()
+        to = rate_access.admin_email()
+        link = url_for('admin.users', _external=True) + '#rate-requests'
+        mailer.send(to, f'{who} asks to see the rates on {project.customer_name}\'s quotation',
+                    f'Hello,\n\n{who} asked to see the rates and line amounts on {project.customer_name}\'s quotation '
+                    f'(#{project.id}) in {get_brand()["name"]}.\n\nApprove or decline it here (sign in as admin):\n{link}\n\n'
+                    f'Approving shows {who} the rates on this one quotation only.\n\nQuoteRoom')
+    db.session.commit()
+    flash('Asked your admin. You\'ll see the rates on this quotation once they approve.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id))
+
+
 @projects_bp.route('/projects/<int:project_id>')
 @login_required
 def view_project(project_id):
@@ -777,7 +808,9 @@ def view_project(project_id):
     latest_rev = q2c['history'][0][0] if q2c['history'] else None
     q2c['changed_after_invoice'] = bool(invoice and latest_rev and latest_rev.created_at > invoice.created_at)
     from . import layout as _layout
+    from . import rate_access as _ra
     return render_template('projects/view.html',
+                           rates_asked=bool(not current_user.is_admin and _ra.pending_for(project.id, current_user.id)),
                            project=project, single_pdf=_layout.single_pdf(),
                            rooms=rooms,
                            item_summary=item_summary,
@@ -1286,6 +1319,9 @@ def download_pdf(project_id):
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
     make = generate_customer_pdf if layout.single_pdf() else generate_pdf      # priced by item: one quotation PDF
+    from . import rate_access
+    if not rate_access.can_see(current_user, project.id):
+        make = generate_customer_pdf                       # (the full one has every rate)
     pdf_buffer = make(project, payment_settings=pay_settings, total_paid=total_paid)
     from .pdf_utils import pdf_filename
     filename = pdf_filename(project)
@@ -1468,6 +1504,8 @@ def whatsapp_share(project_id):
     from . import layout as _layout_wa
     _show_rate = _layout_wa.show_rate()        # some firms show quantities and amounts only
     _per_room = _layout_wa.room_totals_only()  # or an amount per room only
+    if not __import__('app.rate_access', fromlist=['can_see']).can_see(current_user, project.id):
+        _per_room = True                       # an employee who can't see rates: room totals, no rates or line amounts
     _per_room_secs = _layout_wa.boq_rows(billing.quotation_snapshot(project, rooms)) if _per_room else []
     for _r_i, room in enumerate(rooms):
         lines.append(f"\n🏠 *{room.name}*")
