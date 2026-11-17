@@ -46,13 +46,15 @@ def start_from_project(project):
     from . import photo_pages
     return {'rooms_json': _build_rooms_json(project), 'discount_type': project.discount_type or 'none',
             'discount_value': project.discount_value or 0, 'plywood_thickness': project.plywood_thickness or '',
-            'photo_pages': photo_pages.for_project(project.id)}
+            'photo_pages': photo_pages.for_project(project.id), 'cover_photo': photo_pages.cover_photo(project.id),
+            'package': photo_pages.package(project.id)}
 
 
 def start_from_template(template):
     return {'rooms_json': json.dumps(template.get('rooms') or []), 'discount_type': template.get('discount_type') or 'none',
             'discount_value': template.get('discount_value') or 0, 'plywood_thickness': template.get('plywood_thickness') or '',
-            'plywood': template.get('plywood'), 'photo_pages': template.get('photo_pages') or []}
+            'plywood': template.get('plywood'), 'photo_pages': template.get('photo_pages') or [],
+            'cover_photo': template.get('cover_photo'), 'package': template.get('name') or ''}   # the package: its name
 
 
 def save(name, project):
@@ -70,6 +72,7 @@ def save(name, project):
                       'discount_type': start['discount_type'], 'discount_value': start['discount_value'],
                       'plywood_thickness': start['plywood_thickness'], 'plywood': plywood.project_plywood(project),
                       'photo_pages': start.get('photo_pages') or [],          # its cover / About us / gallery pages
+                      'cover_photo': start.get('cover_photo'),                 # the designed cover's photo
                       'saved_at': datetime.utcnow().isoformat(timespec='seconds')})
     _store(templates)
     return tid

@@ -475,6 +475,23 @@
     </div>
   </div>
   {% endif %}
+  {% if cover_texts %}
+  <div class="card shadow-sm border-0 mb-3" id="cover-page">
+    <div class="card-header ki-card-header"><i class="bi bi-journal-richtext me-2"></i>Cover page</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">The first page of a quotation that has a cover photo (added on the quotation, and
+        copied with templates): your logo and name, this slogan and tagline, the package name (the template it was made
+        from, e.g. "DIY Package") and the photo.</p>
+      <div class="row g-2">
+        <div class="col-md-6"><label class="form-label small fw-semibold mb-1" for="cover_slogan">Slogan</label>
+          <input class="form-control" id="cover_slogan" name="cover_slogan" maxlength="120" value="{{ cover_texts.slogan }}" placeholder="e.g. Luxury crafted for modern living"></div>
+        <div class="col-md-6"><label class="form-label small fw-semibold mb-1" for="cover_tagline">Tagline</label>
+          <input class="form-control" id="cover_tagline" name="cover_tagline" maxlength="120" value="{{ cover_texts.tagline }}" placeholder="e.g. Your dream home, professionally managed"></div>
+      </div>
+      <div class="text-end mt-2"><button type="submit" name="back_to" value="cover-page" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
+    </div>
+  </div>
+  {% endif %}
   <div class="card shadow-sm border-0 mb-3" id="room-descriptions">
     <div class="card-header ki-card-header"><i class="bi bi-list-ul me-2"></i>Room descriptions</div>
     <div class="card-body">

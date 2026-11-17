@@ -370,3 +370,38 @@ c.post(f'/projects/{pid}/pages/{ids[0]}', data={'do': 'remove'})
 with app.app_context():
     ok('…removing one from a quotation leaves the template and the other quotation as they were',
        PP.for_project(pid) == [ids[1]] and PP.for_project(newp.id) == [ids[1], ids[0]])
+
+# The designed cover page: slogan / tagline in Settings, package name from the template, the cover photo copied
+c.post('/admin/settings', data={'section': 'documents', 'cover_slogan': 'Luxury crafted for modern living',
+                                'cover_tagline': 'Your dream home, professionally managed'})
+with app.app_context():
+    ok('cover: slogan and tagline saved in Settings → Quotation PDFs', PP.texts() == {
+        'slogan': 'Luxury crafted for modern living', 'tagline': 'Your dream home, professionally managed'})
+ok('…the settings card is there', 'id="cover-page"' in c.get('/admin/settings?tab=documents').text)
+before_cover = len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages)
+c.post(f'/projects/{pid}/cover', data={'photo': (io.BytesIO(_page_png('olive')), 'door.png'), 'package': 'DIY Package'},
+       content_type='multipart/form-data')
+cov_pdf = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data))
+first = re.sub(r'\s+', ' ', cov_pdf.pages[0].extract_text() or '')
+ok('…with a cover photo: the cover is the first page (name, slogan, tagline, package name)',
+   len(cov_pdf.pages) == before_cover + 1 and 'LUXURY CRAFTED FOR MODERN LIVING' in first
+   and 'Your dream home, professionally managed' in first and 'DIY PACKAGE' in first)
+c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS if k != 'cover'})
+ok('…unticked "Cover page": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == before_cover)
+c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS})
+with app.app_context():
+    cover_id = PP.cover_photo(pid)
+c.post(f'/projects/{pid}/template', data={'name': 'Premium Package'})
+with app.app_context():
+    tpl2 = next(t for t in QT2._load() if t['name'] == 'Premium Package')
+ok('…Save as template copies the cover photo', tpl2.get('cover_photo') == cover_id)
+form2 = c.get(f'/projects/new?template={tpl2["id"]}').text
+ok('…a quotation from it: the same cover photo, the package named after the template',
+   f'name="cover_photo" value="{cover_id}"' in form2 and 'name="package" value="Premium Package"' in form2)
+c.post('/projects/new', data={'customer_name': 'Cover Copy', 'mobile': '9000000222', 'discount_type': 'none',
+                              'discount_value': '0', 'cover_photo': str(cover_id), 'package': 'Premium Package',
+                              'rooms_data': json.dumps([{'name': 'Hall', 'items': [{'name': 'Shelf', 'length': 3, 'width': 1,
+                                                                                    'wood_type': wood, 'work_type': work}]}])})
+with app.app_context():
+    p3 = Project.query.order_by(Project.id.desc()).first()
+    ok('…saved with them', PP.cover_photo(p3.id) == cover_id and PP.package(p3.id) == 'Premium Package')

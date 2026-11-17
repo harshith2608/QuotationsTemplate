@@ -1143,6 +1143,9 @@ def settings():
             if 'customer_work_types' in request.form:   # Box Work / Frame Work on what the customer sees
                 from .materials import SHOW_WORK_KEY
                 AppSetting.set(SHOW_WORK_KEY, '1' if request.form.get('customer_work_types') == '1' else '')
+            if 'cover_slogan' in request.form:      # the designed cover page (app/photo_pages.py)
+                from . import photo_pages
+                photo_pages.save_texts(request.form.get('cover_slogan'), request.form.get('cover_tagline'))
             if 'about_us' in request.form:          # presentation pages (shown when turned on from the console)
                 from . import presentation
                 presentation.save_texts(request.form.get('about_us'), request.form.get('next_steps'))
@@ -1209,6 +1212,8 @@ def settings():
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
                            room_totals=layout.room_totals_only() if tab == 'documents' else False,
+                           cover_texts=__import__('app.photo_pages', fromlist=['texts']).texts()
+                           if tab == 'documents' and __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            show_board=layout.show_board() if tab == 'documents' else True,
                            single_pdf=layout.single_pdf(),
                            show_work_types=AppSetting.get('customer_work_types') == '1',

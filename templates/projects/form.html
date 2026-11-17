@@ -150,6 +150,8 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="rooms_data" id="rooms_data_field">
   {% if start and start.photo_pages and not template_edit %}<input type="hidden" name="photo_pages" value="{{ start.photo_pages|join(',') }}">{% endif %}
+  {% if start and start.cover_photo and not template_edit %}<input type="hidden" name="cover_photo" value="{{ start.cover_photo }}">{% endif %}
+  {% if start and start.package and not template_edit %}<input type="hidden" name="package" value="{{ start.package }}">{% endif %}
   <input type="hidden" name="draft_id" id="draft_id_field"
          value="{{ project.id if project and project.status == 'draft' else '' }}">
   <input type="hidden" name="discount_type"  id="discount_type_field"

@@ -113,12 +113,34 @@
 <!-- Photo pages (app/photo_pages.py): full-page pictures at the front of this quotation's PDF and link -->
 <div class="card shadow-sm border-0 mb-3" id="photoPages">
   <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
-    <span><i class="bi bi-images me-2"></i>Photo pages <span class="small fw-normal opacity-75">({{ pages|length }})</span></span>
+    <span><i class="bi bi-images me-2"></i>Cover &amp; photo pages <span class="small fw-normal opacity-75">({{ pages|length + (1 if cover and cover.photo else 0) }})</span></span>
     <small class="fw-normal" style="opacity:.8">at the front of the PDF</small>
   </div>
   <div class="card-body py-2">
-    <p class="small text-muted mb-2">Your own full-page pictures before the quotation: a cover, About us, photos of your
-      work. Each prints as one A4 page; portrait A4 pictures fill it. Saving as a template copies them.</p>
+    {% if cover %}
+    <div class="fw-semibold small mb-1"><i class="bi bi-journal-richtext me-1"></i>Cover page</div>
+    <div class="d-flex flex-wrap gap-3 align-items-start mb-3 pb-3 border-bottom">
+      {% if cover.photo %}<img src="{{ url_for('projects.item_image', image_id=cover.photo) }}" alt="Cover photo" style="width:96px;height:96px;object-fit:cover" class="rounded border">{% endif %}
+      <form method="post" action="{{ url_for('projects.quote_cover', project_id=project.id) }}" enctype="multipart/form-data" class="flex-grow-1" style="min-width:240px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="small text-muted mb-1" for="coverPackage">Package name (top right of the cover)</label>
+        <input class="form-control form-control-sm mb-2" id="coverPackage" name="package" maxlength="60" value="{{ cover.package }}" placeholder="e.g. DIY Package" {{ 'disabled' if not can_edit }}>
+        {% if can_edit %}
+        <label class="small text-muted mb-1" for="coverPhoto">{{ 'Change the cover photo' if cover.photo else 'Cover photo (the big picture on the cover)' }}</label>
+        <input class="form-control form-control-sm mb-2" type="file" id="coverPhoto" name="photo" accept="image/jpeg,image/png,image/webp">
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit">Save cover</button>
+          {% if cover.photo %}<button class="btn btn-sm btn-link text-danger" type="submit" name="remove" value="1">Remove the cover</button>{% endif %}
+        </div>
+        {% endif %}
+        <div class="form-text">With a cover photo, the PDF opens with your cover: logo, name, {{ ('"' ~ cover.slogan ~ '"') if cover.slogan else 'slogan' }}, tagline
+          and this package name. Slogan and tagline: <a href="{{ url_for('admin.settings', tab='documents') }}#cover-page">Settings → Quotation PDFs</a>.</div>
+      </form>
+    </div>
+    {% endif %}
+    <div class="fw-semibold small mb-1"><i class="bi bi-images me-1"></i>More pages</div>
+    <p class="small text-muted mb-2">Your own full-page pictures after the cover: About us, photos of your work. Each prints
+      as one A4 page; portrait A4 pictures fill it. Saving as a template copies them, and the cover.</p>
     {% if pages %}
     <div class="d-flex flex-wrap gap-2 mb-2">
       {% for pid_ in pages %}

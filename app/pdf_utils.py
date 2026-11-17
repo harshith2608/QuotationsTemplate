@@ -921,7 +921,9 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     closing = cover and closing
     palette = (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND)
     if cover:
-        elements += _title_page(project, cust, ref, page_width, palette, styles)
+        from . import photo_pages as _pp
+        if not _pp.cover_shown(project):      # (the designed cover page, in front, takes its place)
+            elements += _title_page(project, cust, ref, page_width, palette, styles)
         if closing:
             elements += _about_page(page_width, palette, styles)
     else:

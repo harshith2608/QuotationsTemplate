@@ -525,6 +525,13 @@ def create_project():
             wanted = [v for v in request.form.get('photo_pages').split(',') if v.strip().isdigit()]
             have = item_images.valid_ids(wanted)
             photo_pages.set_for_project(project.id, [int(v) for v in wanted if int(v) in have])
+        if photo_pages.enabled():                            # its cover photo and package name (a template's name)
+            from . import item_images
+            cp = request.form.get('cover_photo', '')
+            if cp.isdigit() and item_images.valid_ids([cp]):
+                photo_pages.set_cover_photo(project.id, int(cp))
+            if request.form.get('package'):
+                photo_pages.set_package(project.id, request.form.get('package'))
         db.session.commit()
         billing.record_revision(project, current_user)       # R1
         db.session.commit()
@@ -751,6 +758,7 @@ def view_project(project_id):
                            company=_company_picker(project), pdf_pick=_pdf_pick(project),
                            pages=__import__('app.photo_pages', fromlist=['for_project']).for_project(project.id)
                            if __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
+                           cover=_cover_info(project),
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -1264,6 +1272,33 @@ def add_photo_pages(project_id):
     return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
 
 
+@projects_bp.route('/projects/<int:project_id>/cover', methods=['POST'])
+@login_required
+def quote_cover(project_id):
+    """The designed cover page: its photo (upload / remove) and the package name."""
+    from . import access, item_images, photo_pages
+    project = Project.query.get_or_404(project_id)
+    if not photo_pages.enabled():
+        abort(404)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    try:
+        f = request.files.get('photo')
+        if f and f.filename:
+            photo_pages.set_cover_photo(project.id, item_images.save_upload(f.read(), max_side=photo_pages.PAGE_SIDE).id)
+        if request.form.get('remove'):
+            photo_pages.set_cover_photo(project.id, None)
+        if 'package' in request.form:
+            photo_pages.set_package(project.id, request.form.get('package'))
+    except item_images.ImageError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash('Cover page saved.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
+
+
 @projects_bp.route('/projects/<int:project_id>/pages/<int:image_id>', methods=['POST'])
 @login_required
 def photo_page(project_id, image_id):
@@ -1298,6 +1333,14 @@ def choose_pdf(project_id):
     return redirect(url_for('projects.download_customer_pdf', project_id=project.id))
 
 
+def _cover_info(project):
+    """{'photo', 'package', 'slogan', 'tagline'} for the cover controls (with photo pages on), else None."""
+    from . import photo_pages
+    if not photo_pages.enabled():
+        return None
+    return {'photo': photo_pages.cover_photo(project.id), 'package': photo_pages.package(project.id), **photo_pages.texts()}
+
+
 def _pdf_pick(project):
     """The tick-boxes for the Quotation PDF button (the BOQ table, with the feature on), else None."""
     from . import layout, pdf_choices
@@ -1307,6 +1350,8 @@ def _pdf_pick(project):
     skip = set() if item_images.enabled() else {'photos'}
     if not (photo_pages.enabled() and photo_pages.for_project(project.id)):
         skip.add('photo_pages')
+    if not (photo_pages.enabled() and photo_pages.cover_photo(project.id)):
+        skip.add('cover')
     return {'fields': [f for f in pdf_choices.FIELDS if f[0] not in skip], 'chosen': pdf_choices.for_project(project.id)}
 
 
