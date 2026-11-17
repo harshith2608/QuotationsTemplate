@@ -77,6 +77,9 @@ def create(project_id):
         flash('Save the quotation first.', 'warning')
     elif not _active_share(project):
         billing.ensure_first_revision(project, current_user)
+        from . import pdf_choices
+        if request.form.get('pick') and pdf_choices.enabled():     # chosen in What should the PDF show?
+            pdf_choices.save(project.id, request.form)
         detail = request.form.get('detail')
         db.session.add(QuoteShare(project_id=project.id, token=secrets.token_urlsafe(24),
                                   created_by=current_user.id, detail=detail if detail in DETAILS else 'summary'))

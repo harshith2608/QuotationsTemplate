@@ -893,6 +893,11 @@
       <div class="d-flex flex-wrap gap-2 align-items-center">
         <a class="btn btn-sm btn-success" target="_blank" rel="noopener"
            href="https://wa.me/{{ q2c.wa_number }}?text={{ wa_text|urlencode }}"><i class="bi bi-whatsapp me-1"></i>Send link on WhatsApp</a>
+        {% if pdf_pick %}
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#pdfPickModal"
+                data-pick-action="{{ url_for('projects.choose_pdf', project_id=project.id) }}" data-pick-mode="link"
+                data-pick-label="Save"><i class="bi bi-ui-checks me-1"></i>What the link shows</button>
+        {% endif %}
         <span class="small text-muted">{% if sh.share.view_count %}Opened {{ sh.share.view_count }} time{{ '' if sh.share.view_count == 1 else 's' }}, last {{ sh.share.last_viewed_at|ist_time('%d %b, %I:%M %p') }}{% else %}Not opened yet{% endif %}</span>
         <form method="POST" action="{{ url_for('share.disable', project_id=project.id) }}" class="ms-auto"
               onsubmit="return confirm('Turn off this link? The customer will no longer be able to open it.')">
@@ -913,7 +918,13 @@
           <label class="btn btn-outline-primary" for="detFull">Full detailed quotation</label>
         </div>
         {% endif %}
+        {% if pdf_pick %}
+        <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#pdfPickModal"
+                data-pick-action="{{ url_for('share.create', project_id=project.id) }}" data-pick-mode="create"
+                data-pick-label="Create approval link"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
+        {% else %}
         <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
+        {% endif %}
       </form>
       {% if not single_pdf %}<div class="form-text">Material breakdown: amounts per material, items listed by room without sizes (like the Initial Quotation PDF).
         Full: every item with its size and amount, room by room (like the Full Quotation PDF).</div>{% endif %}
@@ -1123,8 +1134,10 @@
 <div class="modal fade" id="pdfPickModal" tabindex="-1" aria-labelledby="pdfPickLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form class="modal-content" method="post" action="{{ url_for('projects.choose_pdf', project_id=project.id) }}" target="_blank"
-          onsubmit="setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('pdfPickModal'))?.hide(), 100)">
+          id="pdfPickForm" onsubmit="setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('pdfPickModal'))?.hide(), 100)">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="pick" value="1">
+      <input type="hidden" name="then" value="" id="pdfPickThen">
       <div class="modal-header ki-modal-header">
         <h6 class="modal-title fw-bold mb-0" id="pdfPickLabel"><i class="bi bi-file-earmark-text me-2"></i>What should the PDF show?</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1145,11 +1158,25 @@
       </div>
       <div class="modal-footer pt-2">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm fw-semibold"><i class="bi bi-box-arrow-up-right me-1"></i>Open PDF</button>
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold" id="pdfPickGo"><i class="bi bi-box-arrow-up-right me-1"></i>Open PDF</button>
       </div>
     </form>
   </div>
 </div>
+<script>
+  // One window for the PDF and the customer's link: the button that opened it says where it goes
+  document.getElementById('pdfPickModal').addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget, form = document.getElementById('pdfPickForm'), go = document.getElementById('pdfPickGo');
+    const mode = b && b.dataset.pickMode;
+    form.action = (b && b.dataset.pickAction) || {{ url_for('projects.choose_pdf', project_id=project.id)|tojson }};
+    form.target = mode ? '_self' : '_blank';                       // the link: this page; the PDF: a new tab
+    document.getElementById('pdfPickThen').value = mode === 'link' ? 'link' : '';
+    go.innerHTML = mode === 'create' ? '<i class="bi bi-link-45deg me-1"></i>Create approval link'
+                 : mode === 'link' ? '<i class="bi bi-check-lg me-1"></i>Save' : '<i class="bi bi-box-arrow-up-right me-1"></i>Open PDF';
+    document.getElementById('pdfPickLabel').innerHTML = mode ? '<i class="bi bi-link-45deg me-2"></i>What should the link show?'
+                                                             : '<i class="bi bi-file-earmark-text me-2"></i>What should the PDF show?';
+  });
+</script>
 {% endif %}
 {% endblock %}
 

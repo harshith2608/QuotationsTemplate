@@ -1330,6 +1330,9 @@ def choose_pdf(project_id):
     if pdf_choices.enabled():
         pdf_choices.save(project.id, request.form)
         db.session.commit()
+    if request.form.get('then') == 'link':                # changed for the customer's link: back to it
+        flash('Saved. Your customer\'s link (and PDF) show these now.', 'success')
+        return redirect(url_for('projects.view_project', project_id=project.id) + '#approval')
     return redirect(url_for('projects.download_customer_pdf', project_id=project.id))
 
 

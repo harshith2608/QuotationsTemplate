@@ -405,3 +405,26 @@ c.post('/projects/new', data={'customer_name': 'Cover Copy', 'mobile': '90000002
 with app.app_context():
     p3 = Project.query.order_by(Project.id.desc()).first()
     ok('…saved with them', PP.cover_photo(p3.id) == cover_id and PP.package(p3.id) == 'Premium Package')
+
+# The approval link: the same "what should it show" window before creating it, and to change it after
+with app.app_context():
+    PC.set_enabled(True); db.session.commit()
+page3 = c.get(f'/projects/{p3.id}').text
+ok('approval link: "Create approval link" opens the same window (pointed at creating the link)',
+   f'data-pick-action="/projects/{p3.id}/share"' in page3 and 'data-pick-mode="create"' in page3)
+r = c.post(f'/projects/{p3.id}/share', data={'pick': '1', 'description': '1', 'room_total': '1'})
+with app.app_context():
+    sh4 = QuoteShare.query.filter_by(project_id=p3.id, active=True).first()
+    ch4 = PC.for_project(p3.id)
+ok('…created with the choice (no rates or line amounts)', sh4 is not None and not ch4['rate'] and not ch4['amount']
+   and ch4['description'] and r.headers['Location'].endswith('#approval'))
+page3 = c.get(f'/projects/{p3.id}').text
+ok('…then "What the link shows" changes it (same window, saving back to the link)', 'data-pick-mode="link"' in page3
+   and 'What the link shows' in page3)
+r = c.post(f'/projects/{p3.id}/pdf/choose', data={'then': 'link', **{k: '1' for k in PC.KEYS}})
+with app.app_context():
+    ch5 = PC.for_project(p3.id)
+ok('…saved for the link: back to the link (not a PDF), now with rates and amounts', r.headers['Location'].endswith('#approval')
+   and ch5['rate'] and ch5['amount'])
+pub4 = app.test_client().get(f'/q/{sh4.token}').text
+ok('…and the customer\'s link follows it', 'Shelf' in pub4)
