@@ -1,0 +1,8 @@
+{# Settings → Pricing → Hide rates while making quotations (app/rate_access.py): show them on this page for a moment #}
+{% if hide_unit_rates and not no_rates %}
+<button type="button" class="btn btn-outline-secondary btn-sm ki-rates-peek-btn ms-2 align-middle"
+        onclick="document.body.classList.toggle('ki-hide-unit-rates')" title="Rates are hidden on screen (Settings → Pricing)">
+  <span class="ki-when-hidden"><i class="bi bi-eye me-1"></i>Show rates</span>
+  <span class="ki-when-shown"><i class="bi bi-eye-slash me-1"></i>Hide rates</span>
+</button>
+{% endif %}

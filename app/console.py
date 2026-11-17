@@ -1685,6 +1685,28 @@ def trial_rate_column(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/photo-pages', methods=['POST'])
+@login_required
+def trial_photo_pages(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    ops.set_photo_pages(slug, on)
+    audit('trial_photo_pages', slug, 'on' if on else 'off')
+    flash(f'"Cover & gallery" is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/trials/<slug>/pdf-choices', methods=['POST'])
+@login_required
+def trial_pdf_choices(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    ops.set_pdf_choices(slug, on)
+    audit('trial_pdf_choices', slug, 'on' if on else 'off')
+    flash(f'"Choose what the PDF shows" is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/trials/<slug>/presentation', methods=['POST'])
 @login_required
 def trial_presentation(slug):
@@ -2149,6 +2171,36 @@ def customer_gst(slug):
     else:
         audit('customer_gst', slug, f"on {request.form.get('rate')}%" if on else 'off')
         flash(f'GST on quotations is now {"on at " + request.form.get("rate", "18") + "%" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/photo-pages', methods=['POST'])
+@login_required
+def customer_photo_pages(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_photo_pages(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_photo_pages', slug, 'on' if on else 'off')
+        flash(f'"Cover & gallery" is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/pdf-choices', methods=['POST'])
+@login_required
+def customer_pdf_choices(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_pdf_choices(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_pdf_choices', slug, 'on' if on else 'off')
+        flash(f'"Choose what the PDF shows" is now {"on" if on else "off"} for "{slug}".', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 

@@ -231,8 +231,46 @@ def dashboard():
 def users():
     all_users = User.query.order_by(User.created_at.desc()).all()
     form = CreateUserForm()
+    from . import rate_access
+    pending = rate_access.requests('pending')
+    names = {u.id: (u.full_name or u.username) for u in all_users}
+    titles = {p.id: p for p in Project.query.filter(Project.id.in_([r['project_id'] for r in pending] or [0])).all()}
+    asks = [dict(r, who=names.get(r['user_id'], 'A user'), project=titles.get(r['project_id'])) for r in pending
+            if titles.get(r['project_id'])]
     return render_template('admin/users.html', title='User Management',
-                           users=all_users, form=form)
+                           users=all_users, form=form, rate_asks=asks,
+                           can_rates={u.id for u in all_users if rate_access.allowed_everywhere(u)})
+
+
+@admin_bp.route('/users/<int:user_id>/rates', methods=['POST'])
+def user_rates(user_id):
+    """Can see rates (and line amounts) on every quotation: ticked per employee (app/rate_access.py)."""
+    from . import rate_access
+    user = User.query.get_or_404(user_id)
+    on = request.form.get('on') == '1'
+    rate_access.set_allowed(user.id, on)
+    db.session.commit()
+    flash(f'{user.full_name or user.username} {"can now see" if on else "no longer sees"} rates and line amounts.', 'success')
+    return redirect(url_for('admin.users'))
+
+
+@admin_bp.route('/rate-requests/<int:req_id>', methods=['POST'])
+def rate_request(req_id):
+    """Approve (or decline) an employee's request for one quotation's rates."""
+    from . import rate_access
+    approve = request.form.get('approve') == '1'
+    req = rate_access.decide(req_id, approve, current_user)
+    if req is None:
+        flash('That request was already answered.', 'info')
+    else:
+        user = db.session.get(User, req['user_id'])
+        project = db.session.get(Project, req['project_id'])
+        who = (user.full_name or user.username) if user else 'The employee'
+        what = (project.customer_name + "'s quotation") if project else 'the quotation'
+        db.session.commit()
+        flash(f'{who} can now see the rates on {what}.' if approve else f'Declined: {who} won\'t see the rates on {what}.',
+              'success')
+    return redirect(url_for('admin.users'))
 
 
 @admin_bp.route('/users/new', methods=['POST'])
@@ -1143,6 +1181,13 @@ def settings():
             if 'customer_work_types' in request.form:   # Box Work / Frame Work on what the customer sees
                 from .materials import SHOW_WORK_KEY
                 AppSetting.set(SHOW_WORK_KEY, '1' if request.form.get('customer_work_types') == '1' else '')
+            if 'quote_valid_days' in request.form:  # Validity: "Valid until" on the PDFs (empty: not shown)
+                err = layout.set_valid_days(request.form.get('quote_valid_days'))
+                if err:
+                    errors.append(err)
+            if 'cover_slogan' in request.form:      # the designed cover page (app/photo_pages.py)
+                from . import photo_pages
+                photo_pages.save_texts(request.form.get('cover_slogan'), request.form.get('cover_tagline'))
             if 'about_us' in request.form:          # presentation pages (shown when turned on from the console)
                 from . import presentation
                 presentation.save_texts(request.form.get('about_us'), request.form.get('next_steps'))
@@ -1161,8 +1206,12 @@ def settings():
                 errors.append('Choose how you price your work.')
             elif mode == boq.ITEM and not boq.ready():
                 errors.append('Pricing by item needs the latest update of your app. Please contact support.')
-            else:
+            elif mode != boq.pricing_mode():                 # (saved unchanged: the PDF layout stays as chosen)
                 boq.set_pricing(mode)
+            else:
+                __import__('app.setup_guide', fromlist=['mark']).mark('pricing')
+            from . import rate_access
+            AppSetting.set(rate_access.SCREEN_KEY, '1' if request.form.get('hide_rates_on_screen') == '1' else '0')
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1204,11 +1253,16 @@ def settings():
     support_links = {key: branding.support_message_url(what, current_user, request.host_url)
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     from . import layout, boq
-    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready()} if tab == 'pricing' else None
+    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready(),
+               'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen()} \
+        if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
                            room_totals=layout.room_totals_only() if tab == 'documents' else False,
+                           valid_days=layout.valid_days() if tab == 'documents' else None,
+                           cover_texts=__import__('app.photo_pages', fromlist=['texts']).texts()
+                           if tab == 'documents' and __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            show_board=layout.show_board() if tab == 'documents' else True,
                            single_pdf=layout.single_pdf(),
                            show_work_types=AppSetting.get('customer_work_types') == '1',

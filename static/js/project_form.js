@@ -29,6 +29,7 @@ function comboLabel(wood, work) { return work ? `${wood} – ${work}` : (wood ||
 const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
 // also carry a description
+const NO_RATES = !!CATALOG.noRates;     // an employee who can't see rates (app/rate_access.py): rates hidden
 const BOQ = !!CATALOG.boq;
 // Priced by material: one-off work as a lump sum (a BOQ line with unit "lump sum": Pooja civil works ₹30,000…)
 const LUMP = !!CATALOG.lumpSum;
@@ -353,10 +354,13 @@ function updateRoomHeader(rk, hasMeasured, hasPriced) {
   if (!th('c1')) return;
   if (!th('c1').dataset.measured) ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => { th(c).dataset.measured = th(c).textContent; });
   const m = c => th(c).dataset.measured;
-  const priced = { c1: 'Qty', c2: 'Unit', c3: 'Rate (₹)', c4: 'Type', c5: 'Amount' };
+  const RATE = '<span class="ki-unit-rate">Rate (₹)</span>';      // (hidden with Hide rates while making quotations)
+  const priced = { c1: 'Qty', c2: 'Unit', c3: NO_RATES ? '' : RATE, c4: 'Type', c5: NO_RATES ? '' : 'Amount' };
   if (!hasMeasured && !hasPriced && CATALOG.byItem) hasPriced = true;   // empty, priced by item: its lines' columns
   ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => {
-    th(c).textContent = hasPriced && !hasMeasured ? priced[c] : hasPriced ? `${m(c)} / ${priced[c]}` : m(c);
+    const label = priced[c] === RATE ? priced[c] : escHtml(priced[c]);
+    th(c).innerHTML = hasPriced && !hasMeasured ? label
+      : hasPriced ? `${escHtml(m(c))} <span class="${priced[c] === RATE ? 'ki-unit-rate' : ''}">/ ${label}</span>` : escHtml(m(c));
   });
   const was = card.classList.contains('ki-priced-only');
   card.classList.toggle('ki-priced-only', hasPriced && !hasMeasured);   // no Type column, more room for name and rate
@@ -1090,8 +1094,10 @@ function modalCalcBoq() {
 
 // ─── Add from my lines: tick several saved BOQ lines, add them to a room at once ──
 let _pickRoom = null;
+const _picked = new Set();                 // what's ticked in this window (kept while searching, cleared on opening)
 function openBoqPicker(rk) {
   _pickRoom = rk;
+  _picked.clear();                         // a fresh start for each room: nothing ticked from last time
   const search = document.getElementById('boqPickSearch');
   if (search) search.value = '';
   renderBoqPicker();
@@ -1102,7 +1108,6 @@ function renderBoqPicker() {
   const list = document.getElementById('boqPickList');
   if (!list) return;
   const q = (document.getElementById('boqPickSearch')?.value || '').trim().toLowerCase();
-  const ticked = new Set(Array.from(list.querySelectorAll('input:checked')).map(c => c.value));
   const inRoom = new Set(Object.values(rooms[_pickRoom]?.items || {}).map(i => (i.name || '').toLowerCase()));
   const groups = {};
   BOQ_SAVED.forEach((b, i) => {
@@ -1121,13 +1126,13 @@ function renderBoqPicker() {
       ${groups[g].map(([b, i]) => `
         <label class="ki-pick-row d-flex gap-2 align-items-start py-1 border-bottom" for="bp_${i}">
           <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="bp_${i}" value="${i}"
-                 ${ticked.has(String(i)) ? 'checked' : ''} onchange="countBoqPicks()">
+                 ${_picked.has(String(i)) ? 'checked' : ''} onchange="countBoqPicks(this)">
           <span class="flex-grow-1" style="min-width:0">
             <span class="fw-semibold small">${escHtml(b.name)}</span>
             ${inRoom.has(b.name.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : ''}
             ${b.description ? `<span class="d-block small text-muted text-truncate">${escHtml(b.description.split('\n')[0])}</span>` : ''}
           </span>
-          <span class="small text-nowrap text-muted">${b.rate ? '₹' + Number(b.rate).toLocaleString('en-IN') : '—'} / ${escHtml(b.unit)}</span>
+          <span class="small text-nowrap text-muted"><span class="ki-unit-rate">${b.rate ? '₹' + Number(b.rate).toLocaleString('en-IN') : '—'} / </span>${escHtml(b.unit)}</span>
         </label>`).join('')}
     </div>`).join('') : '<p class="text-muted small my-3">No saved lines match.</p>';
   countBoqPicks();
@@ -1135,16 +1140,17 @@ function renderBoqPicker() {
 function pickGroup(btn) {
   const boxes = btn.closest('.ki-pick-group').querySelectorAll('input[type=checkbox]');
   const all = Array.from(boxes).every(b => b.checked);
-  boxes.forEach(b => { b.checked = !all; });
+  boxes.forEach(b => { b.checked = !all; all ? _picked.delete(b.value) : _picked.add(b.value); });
   countBoqPicks();
 }
-function countBoqPicks() {
-  const n = document.querySelectorAll('#boqPickList input:checked').length;
+function countBoqPicks(box) {
+  if (box) box.checked ? _picked.add(box.value) : _picked.delete(box.value);
+  const n = _picked.size;
   const btn = document.getElementById('boqPickAdd');
   if (btn) { btn.disabled = !n; btn.textContent = n ? `Add ${n} line${n > 1 ? 's' : ''}` : 'Add lines'; }
 }
 function addBoqPicks() {
-  const picks = Array.from(document.querySelectorAll('#boqPickList input:checked')).map(c => BOQ_SAVED[+c.value]);
+  const picks = Array.from(_picked).sort((a, b) => a - b).map(i => BOQ_SAVED[+i]).filter(Boolean);   // (hidden by a search too)
   picks.forEach(b => {
     const lump = b.unit === 'lump sum';
     _insertBoqRow(_pickRoom, b.name, lump ? 1 : 0, b.unit, b.rate || '', b.description, false, 0, 0, 1, !lump);
@@ -1191,7 +1197,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit" ${BOQ ? '' : 'disabled'}
               onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
     </td>
-    <td data-label="Rate">
+    <td data-label="Rate" class="ki-rate-cell ki-unit-rate-cell">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -1199,7 +1205,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
-    <td class="text-center" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
+    <td class="text-center ki-rate-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
         <i class="bi bi-x-lg"></i>
@@ -1324,7 +1330,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
              value="${qty}" oninput="onFixedField('${rk}','${ik}')" title="Quantity">
     </td>
     <td class="small text-muted text-center" data-label="Unit" id="item_unit_${ik}">${escHtml((_findPrice(name) || {}).unit || 'nos')}</td>
-    <td data-label="Rate">
+    <td data-label="Rate" class="ki-rate-cell ki-unit-rate-cell">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -1332,7 +1338,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-fitting">Fitting</span></td>
-    <td class="text-center" data-label="Amount">
+    <td class="text-center ki-rate-cell" data-label="Amount">
       <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
     </td>
     <td class="text-center">
@@ -1830,7 +1836,7 @@ function renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal) {
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${escHtml(label)}</span>
         </span>
         <span class="text-muted small">${showArea(area)} ${escHtml(UNITS.areaLabel)}</span>
-        <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+        <span class="summary-wood-value ki-rate">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
   if (fixedTotal > 0) {
@@ -1939,6 +1945,11 @@ function _boqProblems() {
         return;
       }
       if (it.tbc || it.pending) return;         // still waiting for a size: filled in, or removed on saving
+      if (NO_RATES && !typedRate) {             // an employee who can't see rates: a new line is "price to follow"
+        it.tbc = true;
+        const t = document.getElementById('item_tbc_' + ik); if (t) t.checked = true;
+        return;
+      }
       if (it.quantity > 0 && !typedRate)
         out.push({ text: `${roomName} → ${it.name}: no rate. Type the rate, or tick "Price to follow".`, el: rateEl });
       else if (!(it.quantity > 0) && !typedRate)

@@ -50,11 +50,6 @@
       <div class="text-end small q-muted">{% if status.current_revision and status.current_revision > 1 %}Rev {{ status.current_revision }}<br>{% endif %}
         {{ project.created_at|ist_time('%d %b %Y') }}</div>
     </div>
-    <hr>
-    <div class="d-flex justify-content-between align-items-end">
-      <div class="q-muted">Total{% if snap.gst %} (incl. GST){% endif %}</div>
-      <div class="q-total">&#8377;{{ (snap.payable or snap.total)|inr }}</div>
-    </div>
     {% set l = status.latest %}
     {% if l and status.latest_is_current and l.kind == 'accepted' %}
       <div class="alert alert-success mt-3 mb-0"><i class="bi bi-check-circle-fill me-1"></i>Accepted by {{ l.name }} on {{ l.created_at|ist_time('%d %b %Y') }}. Thank you!</div>
@@ -68,6 +63,14 @@
       {% endif %}
     </div>
   </div>
+
+  {% if pages %}
+  <div class="q-card p-2"><div class="row g-2">
+    {% for pid_ in pages %}<div class="col-6 col-md-4"><a href="{{ url_for('share.photo', token=share.token, image_id=pid_) }}" target="_blank" rel="noopener">
+      <img src="{{ url_for('share.photo', token=share.token, image_id=pid_) }}" alt="Photo {{ loop.index }}" loading="lazy"
+           class="d-block w-100 rounded" style="aspect-ratio:1/1;object-fit:cover"></a></div>{% endfor %}
+  </div></div>
+  {% endif %}
 
   {% if share.detail == 'full' %}
   <div class="q-card">
@@ -109,16 +112,16 @@
     <div class="fw-semibold mb-2">Bill of quantities</div>
     {% for sec in boq_sections %}
     <div class="fw-bold mt-3 mb-1 d-flex justify-content-between rounded px-2 py-1" style="background:var(--p);color:var(--on-p)"><span>{{ sec.letter }}. {{ sec.name }}</span>
-      {% if sec.total %}<span class="text-nowrap">&#8377;{{ (sec.total)|inr }}</span>{% endif %}</div>
+      {% if sec.total and (show is not defined or show.room_total) %}<span class="text-nowrap">&#8377;{{ (sec.total)|inr }}</span>{% endif %}</div>
     {% if sec.description %}<div class="small q-muted" style="white-space:pre-line">{{ sec.description }}</div>{% endif %}
     <div class="table-responsive"><table class="table table-sm small mb-0">
       <tbody>
       {% for ln in sec.lines %}
         <tr>
           <td class="text-muted" style="width:2em">{{ ln.no }}</td>
-          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
-            {% if ln.qty %}<div class="q-muted">{{ ((ln.qty)|inr).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ (ln.rate)|inr(0) }}{% endif %}</div>
-            {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ (ln.rate)|inr(0) }} per {{ ln.unit }}</div>{% endif %}</td>
+          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id and (show is not defined or show.photos) %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
+            {% if ln.qty and (show is not defined or show.qty) %}<div class="q-muted">{{ ((ln.qty)|inr).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ (ln.rate)|inr(0) }}{% endif %}</div>
+            {% elif ln.rate and show_rate %}<div class="q-muted">Rate &#8377;{{ (ln.rate)|inr(0) }} per {{ ln.unit }}</div>{% endif %}</td>
           <td class="text-end text-nowrap">{% if ln.tbc %}price to follow{% elif per_room %}{% elif ln.amount %}&#8377;{{ (ln.amount)|inr }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}
@@ -154,9 +157,9 @@
       {% if snap.gst %}
       <tr><td>Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.total)|inr }}</td></tr>
       <tr><td>GST @ {{ '%g' % snap.gst_rate }}%</td><td class="text-end text-nowrap">&#8377;{{ (snap.gst)|inr }}</td></tr>
-      <tr class="fw-bold"><td>Grand total (incl. GST)</td><td class="text-end text-nowrap">&#8377;{{ (snap.payable)|inr }}</td></tr>
+      <tr class="fw-bold"><td class="align-middle">Grand total (incl. GST)</td><td class="text-end text-nowrap q-total">&#8377;{{ (snap.payable)|inr }}</td></tr>
       {% else %}
-      <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.total)|inr }}</td></tr>
+      <tr class="fw-bold"><td class="align-middle">Total</td><td class="text-end text-nowrap q-total">&#8377;{{ (snap.total)|inr }}</td></tr>
       {% endif %}
       {% if paid %}<tr class="text-success"><td>Paid</td><td class="text-end text-nowrap">&#8377;{{ (paid)|inr }}</td></tr>{% endif %}
       </tbody>

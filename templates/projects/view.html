@@ -17,7 +17,7 @@
       <i class="bi bi-file-earmark-text me-2 text-primary"></i>
       {{ project.customer_name }}
       {% if q2c.history and q2c.history[0][0].number > 1 %}<a href="#revisions" class="badge bg-light text-dark border align-middle small text-decoration-none">Rev {{ q2c.history[0][0].number }}</a>{% endif %}
-      <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>
+      <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>{% include '_rates_peek.html' %}
     </h4>
     {% if company %}
     <form method="post" action="{{ url_for('projects.set_company', project_id=project.id) }}" class="d-flex align-items-center gap-2 mt-2" id="companyPicker">
@@ -66,7 +66,26 @@
       <button type="submit" class="btn btn-outline-secondary btn-sm fw-semibold"><i class="bi bi-bookmark-plus me-1"></i>Save as template</button>
     </form>
     {% endif %}
-    {% if single_pdf %}
+    {% if no_rates %}
+    <!-- An employee who can't see rates (app/rate_access.py): asks the admin for this quotation's -->
+    {% if rates_asked %}
+    <span class="btn btn-outline-secondary btn-sm disabled"><i class="bi bi-hourglass-split me-1"></i>Rates asked for</span>
+    {% else %}
+    <form method="post" action="{{ url_for('projects.ask_rates', project_id=project.id) }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-warning btn-sm fw-semibold"
+              title="Rates and line amounts are hidden for you. Ask your admin to show them on this quotation.">
+        <i class="bi bi-unlock me-1"></i>Ask admin for rates
+      </button>
+    </form>
+    {% endif %}
+    {% endif %}
+    {% if single_pdf and pdf_pick %}
+    <!-- Priced by item, choosing what it shows: the tick-boxes first (#pdfPickModal), then the PDF -->
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#pdfPickModal">
+      <i class="bi bi-file-earmark-text me-1"></i>Quotation PDF
+    </button>
+    {% elif single_pdf %}
     <!-- Priced by item: one quotation PDF (the BOQ, every line with its rate and amount) -->
     <a href="{{ url_for('projects.download_customer_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
        class="btn btn-primary btn-sm fw-semibold">
@@ -78,11 +97,17 @@
        class="btn btn-primary btn-sm fw-semibold">
       <i class="bi bi-file-earmark-text me-1"></i>Full Quotation
     </a>
-    <!-- Initial Quotation: summary PDF without measurements. Opens to view -->
+    <!-- Initial Quotation: summary PDF without measurements. Opens to view (choosing what it shows first, when on) -->
+    {% if pdf_pick %}
+    <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#pdfPickModal">
+      <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
+    </button>
+    {% else %}
     <a href="{{ url_for('projects.download_customer_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
        class="btn btn-outline-primary btn-sm fw-semibold">
       <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
     </a>
+    {% endif %}
     {% endif %}
     {% if q2c.email_ready and project.status != 'draft' %}
     <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#emailQuoteModal">
@@ -97,6 +122,77 @@
     {% endif %}
   </div>
 </div>
+
+{% if pages is not none %}
+<!-- Photo pages (app/photo_pages.py): full-page pictures at the front of this quotation's PDF and link -->
+<div class="card shadow-sm border-0 mb-3" id="photoPages">
+  <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-images me-2"></i>Cover &amp; gallery <span class="small fw-normal opacity-75">({{ pages|length + (1 if cover and cover.photo else 0) }} photos)</span></span>
+    <small class="fw-normal" style="opacity:.8">at the front of the PDF and link</small>
+  </div>
+  <div class="card-body py-2">
+    {% if cover %}
+    <div class="fw-semibold small mb-1"><i class="bi bi-journal-richtext me-1"></i>Cover page</div>
+    <div class="d-flex flex-wrap gap-3 align-items-start mb-3 pb-3 border-bottom">
+      {% if cover.photo %}<img src="{{ url_for('projects.item_image', image_id=cover.photo) }}" alt="Cover photo" style="width:96px;height:96px;object-fit:cover" class="rounded border">{% endif %}
+      <form method="post" action="{{ url_for('projects.quote_cover', project_id=project.id) }}" enctype="multipart/form-data" class="flex-grow-1" style="min-width:240px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="small text-muted mb-1" for="coverPackage">Package name (top right of the cover)</label>
+        <input class="form-control form-control-sm mb-2" id="coverPackage" name="package" maxlength="60" value="{{ cover.package }}" placeholder="e.g. DIY Package" {{ 'disabled' if not can_edit }}>
+        {% if can_edit %}
+        <input type="hidden" name="print_seen" value="1">
+        <div class="d-flex flex-wrap gap-3 mb-2">
+          <div class="form-check"><input class="form-check-input" type="checkbox" name="print_cover" value="1" id="printCover" {{ 'checked' if cover.printing.cover }}>
+            <label class="form-check-label small" for="printCover">Print the cover</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" name="print_gallery" value="1" id="printGallery" {{ 'checked' if cover.printing.gallery }}>
+            <label class="form-check-label small" for="printGallery">Print the gallery</label></div>
+        </div>
+        <label class="small text-muted mb-1" for="coverPhoto">{{ 'Change the cover photo' if cover.photo else 'Cover photo (the big picture on the cover)' }}</label>
+        <input class="form-control form-control-sm mb-2" type="file" id="coverPhoto" name="photo" accept="image/jpeg,image/png,image/webp">
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit">Save</button>
+          {% if cover.photo %}<button class="btn btn-sm btn-link text-danger" type="submit" name="remove" value="1">Remove the cover</button>{% endif %}
+        </div>
+        {% endif %}
+        <div class="form-text">With a cover photo, the PDF opens with your cover: logo, name, {{ ('"' ~ cover.slogan ~ '"') if cover.slogan else 'slogan' }}, tagline
+          and this package name. Slogan and tagline: <a href="{{ url_for('admin.settings', tab='documents') }}#cover-page">Settings → Quotation PDFs</a>.</div>
+      </form>
+    </div>
+    {% endif %}
+    <div class="fw-semibold small mb-1"><i class="bi bi-images me-1"></i>Gallery</div>
+    <p class="small text-muted mb-2">Photos of your work, printed together after the cover: 2 or 3 to a row, sized by their
+      shape (nothing cut off), a few rows to a page. Saving as a template copies them, and the cover.</p>
+    {% if pages %}
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      {% for pid_ in pages %}
+      <div class="border rounded p-1 text-center" style="width:104px">
+        <a href="{{ url_for('projects.item_image', image_id=pid_) }}" target="_blank" rel="noopener">
+          <img src="{{ url_for('projects.item_image', image_id=pid_) }}" alt="Gallery photo {{ loop.index }}" loading="lazy" style="width:96px;height:96px;object-fit:cover" class="rounded"></a>
+        {% if can_edit %}
+        <form method="post" action="{{ url_for('projects.photo_page', project_id=project.id, image_id=pid_) }}" class="d-flex justify-content-between mt-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-link p-0" name="do" value="up" title="Earlier" {{ 'disabled' if loop.first }}><i class="bi bi-arrow-left"></i></button>
+          <span class="small text-muted">{{ loop.index }}</span>
+          <button class="btn btn-sm btn-link p-0" name="do" value="down" title="Later" {{ 'disabled' if loop.last }}><i class="bi bi-arrow-right"></i></button>
+          <button class="btn btn-sm btn-link p-0 text-danger" name="do" value="remove" title="Remove"
+                  onclick="return confirm('Remove this photo from the gallery?')"><i class="bi bi-x-lg"></i></button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('projects.add_photo_pages', project_id=project.id) }}" enctype="multipart/form-data"
+          class="d-flex flex-wrap align-items-center gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="pages" accept="image/jpeg,image/png,image/webp" multiple class="form-control form-control-sm" style="max-width:320px" required>
+      <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit"><i class="bi bi-plus-lg me-1"></i>Add photos</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <!-- Project Stage -->
 {% set off_path = project.stage not in catalog.STAGE_PATH %}
@@ -275,9 +371,9 @@
           <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
             <div>
               <span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }} d-block mb-1">{{ row.label }}</span>
-              <span class="text-muted small">{{ row.area|area }} &times; &#8377;{{ (row.rate|rate)|inr(0) }}{{ units.rate_label() }}</span>
+              <span class="text-muted small">{{ row.area|area }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (row.rate|rate)|inr(0) }}{{ units.rate_label() }}</span></span>
             </div>
-            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ (row.subtotal)|inr }}</span>
+            <span class="fw-semibold ms-3 text-nowrap ki-rate">&#8377;{{ (row.subtotal)|inr }}</span>
           </div>
           {% endfor %}
           {% if fixed_total %}
@@ -319,8 +415,8 @@
             <tr>
               <th>Material &amp; Work</th>
               <th class="text-end">Area ({{ units.area_label() }})</th>
-              <th class="text-end">Rate (&#8377;{{ units.rate_label() }})</th>
-              <th class="text-end">Amount (&#8377;)</th>
+              <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;{{ units.rate_label() }})</th>
+              <th class="text-end ki-rate">Amount (&#8377;)</th>
             </tr>
           </thead>
           <tbody>
@@ -328,8 +424,8 @@
             <tr>
               <td><span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }}">{{ row.label }}</span></td>
               <td class="text-end">{{ (units.area_value(row.area))|inr }}</td>
-              <td class="text-end">{{ (row.rate|rate)|inr(0) }}</td>
-              <td class="text-end fw-semibold">{{ (row.subtotal)|inr }}</td>
+              <td class="text-end ki-rate ki-unit-rate">{{ (row.rate|rate)|inr(0) }}</td>
+              <td class="text-end fw-semibold ki-rate">{{ (row.subtotal)|inr }}</td>
             </tr>
             {% endfor %}
             {% if fixed_total %}
@@ -434,7 +530,7 @@
           <table class="table table-sm table-bordered align-middle mb-0">
             <thead class="table-light">
               <tr><th>Item</th><th class="text-center">Qty</th><th class="text-center">Unit</th>
-                  <th class="text-end">Rate (&#8377;)</th><th class="text-end">Amount (&#8377;)</th></tr>
+                  <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;)</th><th class="text-end ki-rate">Amount (&#8377;)</th></tr>
             </thead>
             <tbody>
               {% for item in room.item_list %}
@@ -444,8 +540,8 @@
                   {% if item.is_boq and item.length %}<div class="small text-muted fw-normal">Size: {{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }} Nos.{% endif %}</div>{% endif %}</td>
                 <td class="text-center text-nowrap">{{ '%g' % item.quantity if item.quantity else '—' }}</td>
                 <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
-                <td class="text-end text-nowrap">{% if item.price_to_follow %}—{% else %}{{ (item.unit_price or 0)|inr(0) }}{% endif %}</td>
-                <td class="text-end fw-semibold text-success text-nowrap">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
+                <td class="text-end text-nowrap ki-rate ki-unit-rate">{% if item.price_to_follow %}—{% else %}{{ (item.unit_price or 0)|inr(0) }}{% endif %}</td>
+                <td class="text-end fw-semibold text-success text-nowrap ki-rate">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -467,7 +563,7 @@
                 <th class="text-center d-none d-md-table-cell">Width</th>
                 <th class="text-center">Area ({{ units.area_label() }})</th>
                 <th class="text-center">Material &amp; Work</th>
-                <th class="text-end">Subtotal (&#8377;)</th>
+                <th class="text-end ki-rate">Subtotal (&#8377;)</th>
               </tr>
             </thead>
             <tbody>
@@ -482,11 +578,11 @@
                 <td class="text-center">
                   {% if item.is_boq %}<span class="badge ki-badge-boq">{{ 'Lump sum' if item.unit_text == 'LS' else 'BOQ' }}</span>
                   {% if item.length %}<div class="small text-muted mt-1">{{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }}{% endif %}</div>{% endif %}
-                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %} &times; &#8377;{{ (item.unit_price)|inr(0) }}{% endif %}{% else %}Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}{% endif %}</div>
+                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span>{% endif %}{% else %}<span class="ki-rate ki-unit-rate">Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}</span>{% endif %}</div>
                   {% else %}<span class="badge ki-badge-fitting">Fitting</span>
-                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }} &times; &#8377;{{ (item.unit_price)|inr(0) }}</div>{% endif %}
+                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span></div>{% endif %}
                 </td>
-                <td class="text-end fw-semibold text-success">&#8377;{{ (item_subtotal)|inr }}</td>
+                <td class="text-end fw-semibold text-success ki-rate">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>
               {% else %}
               <tr>
@@ -504,7 +600,7 @@
                         style="{% if item.work_type == 'Box Work' %}background:#7c3aed{% endif %}">{{ item.work_type }}</span>
                   {% endif %}
                 </td>
-                <td class="text-end fw-semibold text-success">&#8377;{{ (item_subtotal)|inr }}</td>
+                <td class="text-end fw-semibold text-success ki-rate">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>
               {% endif %}
               {% endfor %}
@@ -818,6 +914,11 @@
       <div class="d-flex flex-wrap gap-2 align-items-center">
         <a class="btn btn-sm btn-success" target="_blank" rel="noopener"
            href="https://wa.me/{{ q2c.wa_number }}?text={{ wa_text|urlencode }}"><i class="bi bi-whatsapp me-1"></i>Send link on WhatsApp</a>
+        {% if pdf_pick %}
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#pdfPickModal"
+                data-pick-action="{{ url_for('projects.choose_pdf', project_id=project.id) }}" data-pick-mode="link"
+                data-pick-label="Save"><i class="bi bi-ui-checks me-1"></i>What the link shows</button>
+        {% endif %}
         <span class="small text-muted">{% if sh.share.view_count %}Opened {{ sh.share.view_count }} time{{ '' if sh.share.view_count == 1 else 's' }}, last {{ sh.share.last_viewed_at|ist_time('%d %b, %I:%M %p') }}{% else %}Not opened yet{% endif %}</span>
         <form method="POST" action="{{ url_for('share.disable', project_id=project.id) }}" class="ms-auto"
               onsubmit="return confirm('Turn off this link? The customer will no longer be able to open it.')">
@@ -838,7 +939,13 @@
           <label class="btn btn-outline-primary" for="detFull">Full detailed quotation</label>
         </div>
         {% endif %}
+        {% if pdf_pick %}
+        <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#pdfPickModal"
+                data-pick-action="{{ url_for('share.create', project_id=project.id) }}" data-pick-mode="create"
+                data-pick-label="Create approval link"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
+        {% else %}
         <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-link-45deg me-1"></i>Create approval link</button>
+        {% endif %}
       </form>
       {% if not single_pdf %}<div class="form-text">Material breakdown: amounts per material, items listed by room without sizes (like the Initial Quotation PDF).
         Full: every item with its size and amount, room by room (like the Full Quotation PDF).</div>{% endif %}
@@ -1042,6 +1149,55 @@
     </div>
   </div>
 </div>
+{% endif %}
+{% if pdf_pick %}
+<!-- Choose what the Quotation PDF shows (app/pdf_choices.py): kept for this quotation (its link and emailed PDF too) -->
+<div class="modal fade" id="pdfPickModal" tabindex="-1" aria-labelledby="pdfPickLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('projects.choose_pdf', project_id=project.id) }}" target="_blank"
+          id="pdfPickForm" onsubmit="setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('pdfPickModal'))?.hide(), 100)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="pick" value="1">
+      <input type="hidden" name="then" value="" id="pdfPickThen">
+      <div class="modal-header ki-modal-header">
+        <h6 class="modal-title fw-bold mb-0" id="pdfPickLabel"><i class="bi bi-file-earmark-text me-2"></i>What should the PDF show?</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">The item name is always shown. Your choice is kept for this quotation: its link
+          and the emailed PDF show the same.</p>
+        <div class="row g-2">
+          {% for key, label in pdf_pick.fields %}
+          <div class="col-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="{{ key }}" value="1" id="pp_{{ key }}" {{ 'checked' if pdf_pick.chosen[key] }}>
+              <label class="form-check-label small" for="pp_{{ key }}">{{ label }}</label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer pt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold" id="pdfPickGo"><i class="bi bi-box-arrow-up-right me-1"></i>Open PDF</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  // One window for the PDF and the customer's link: the button that opened it says where it goes
+  document.getElementById('pdfPickModal').addEventListener('show.bs.modal', e => {
+    const b = e.relatedTarget, form = document.getElementById('pdfPickForm'), go = document.getElementById('pdfPickGo');
+    const mode = b && b.dataset.pickMode;
+    form.action = (b && b.dataset.pickAction) || {{ url_for('projects.choose_pdf', project_id=project.id)|tojson }};
+    form.target = mode ? '_self' : '_blank';                       // the link: this page; the PDF: a new tab
+    document.getElementById('pdfPickThen').value = mode === 'link' ? 'link' : '';
+    go.innerHTML = mode === 'create' ? '<i class="bi bi-link-45deg me-1"></i>Create approval link'
+                 : mode === 'link' ? '<i class="bi bi-check-lg me-1"></i>Save' : '<i class="bi bi-box-arrow-up-right me-1"></i>Open PDF';
+    document.getElementById('pdfPickLabel').innerHTML = mode ? '<i class="bi bi-link-45deg me-2"></i>What should the link show?'
+                                                             : '<i class="bi bi-file-earmark-text me-2"></i>What should the PDF show?';
+  });
+</script>
 {% endif %}
 {% endblock %}
 

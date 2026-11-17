@@ -6,7 +6,7 @@ No login: the long random token is the key. Staff turn the link on and off from 
 import secrets
 from datetime import datetime
 
-from flask import Blueprint, abort, flash, make_response, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, flash, g, make_response, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 
 from . import billing, db
@@ -77,6 +77,9 @@ def create(project_id):
         flash('Save the quotation first.', 'warning')
     elif not _active_share(project):
         billing.ensure_first_revision(project, current_user)
+        from . import pdf_choices
+        if request.form.get('pick') and pdf_choices.enabled():     # chosen in What should the PDF show?
+            pdf_choices.save(project.id, request.form)
         detail = request.form.get('detail')
         db.session.add(QuoteShare(project_id=project.id, token=secrets.token_urlsafe(24),
                                   created_by=current_user.id, detail=detail if detail in DETAILS else 'summary'))
@@ -142,6 +145,20 @@ def _private(resp):
     return resp
 
 
+def _link_rates(share, project):
+    """A link made by an employee who can't see this quotation's rates hides them (until their request is approved)."""
+    from flask import g
+    from . import rate_access
+    from .models import User
+    maker = db.session.get(User, share.created_by) if share.created_by else None
+    g.link_no_rates = bool(maker and not rate_access.can_see(maker, project.id))
+
+
+def _gallery(project):
+    from . import photo_pages
+    return photo_pages.for_project(project.id) if photo_pages.gallery_shown(project) else []
+
+
 @share_bp.route('/q/<token>')
 def view(token):
     share, project = _share_or_404(token)
@@ -158,11 +175,14 @@ def view(token):
     from . import layout
     chosen = layout.initial_layout() if share.detail != 'full' or layout.single_pdf() else None
     rows = layout.room_rows(snap) if chosen == layout.LAYOUT_ROOMS else None
-    boq_sections = layout.boq_rows(snap) if chosen == layout.LAYOUT_BOQ else None
+    from . import pdf_choices
+    _link_rates(share, project)
+    show = pdf_choices.for_project(project.id)       # what this quotation shows (as its PDF)
+    boq_sections = layout.boq_rows(snap, show) if chosen == layout.LAYOUT_BOQ else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
                                     pay=pay, paid=billing.paid_total(project), room_rows=rows, boq_sections=boq_sections,
-                                    show_rate=layout.show_rate() and not layout.room_totals_only(),
-                                    per_room=layout.room_totals_only()))
+                                    show_rate=show['rate'], per_room=not show['amount'], show=show,
+                                    pages=_gallery(project)))
 
 
 @share_bp.route('/q/<token>/pdf')
@@ -172,7 +192,8 @@ def pdf(token):
     from .pdf_utils import generate_customer_pdf, generate_pdf
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     from . import layout
-    full = share.detail == 'full' and not layout.single_pdf()                     # priced by item: one quotation PDF
+    _link_rates(share, project)
+    full = share.detail == 'full' and not layout.single_pdf() and not g.get('link_no_rates')   # (by item: one PDF)
     make = generate_pdf if full else generate_customer_pdf                        # full or material breakdown
     buf = make(project, payment_settings=pay, total_paid=billing.paid_total(project))
     from .pdf_utils import pdf_filename
@@ -187,8 +208,10 @@ def photo(token, image_id):
     from . import item_images
     from .models import Item, ItemImage, Room
     from sqlalchemy.orm import undefer
-    if not item_images.ready() or not db.session.query(Item.id).join(Room, Item.room_id == Room.id).filter(
-            Room.project_id == project.id, Item.image_id == image_id).first():
+    from . import photo_pages
+    on_a_line = item_images.ready() and db.session.query(Item.id).join(Room, Item.room_id == Room.id).filter(
+        Room.project_id == project.id, Item.image_id == image_id).first()
+    if not on_a_line and image_id not in photo_pages.for_project(project.id):     # or one of its photo pages
         abort(404)
     row = ItemImage.query.options(undefer(ItemImage.data)).filter_by(id=image_id).first_or_404()
     resp = make_response(row.data)

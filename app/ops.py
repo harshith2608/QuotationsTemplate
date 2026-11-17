@@ -272,6 +272,15 @@ def _finish_trial(slug, schema, company, phone, city, email, days, log=lambda li
                 AppSetting.set(key, value)
         if phone:                                   # the number they gave on the website: payments fall back to it
             AppSetting.set(SIGNUP_MOBILE_KEY, ''.join(ch for ch in str(phone) if ch.isdigit())[-12:])
+        try:                                        # new trials price by item (no "how do you price" question)
+            from . import boq
+            if boq._columns_ready(schema):
+                boq.set_pricing(boq.ITEM, starter=False)
+        except Exception:
+            pass
+        from . import pdf_choices, photo_pages      # choose what their PDF shows; their cover & gallery (older: off)
+        pdf_choices.set_enabled(True)
+        photo_pages.set_enabled(True)
         if kind:                                    # what they do (the trial form): their examples, words and setup
             from . import business
             business.set_kind(kind)
@@ -441,7 +450,25 @@ def boq_status(slug):
         from . import presentation
         from . import item_costs
         return dict(boq.console_status(), photos=item_images.console_status(), gst=quote_gst.console_status(),
-                    show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status())
+                    show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status(),
+                    pdf_choices=__import__('app.pdf_choices', fromlist=['enabled']).enabled(),
+                    photo_pages=__import__('app.photo_pages', fromlist=['console_status']).console_status()['on'])
+
+
+def set_photo_pages(slug, on):
+    """Cover & gallery on or off, for a trial."""
+    from . import photo_pages
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        photo_pages.set_enabled(on)
+        db.session.commit()
+
+
+def set_pdf_choices(slug, on):
+    """Choose what the quotation PDF shows (tick-boxes before it opens) on or off, for a trial."""
+    from . import pdf_choices
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        pdf_choices.set_enabled(on)
+        db.session.commit()
 
 
 def set_presentation(slug, on):

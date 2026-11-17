@@ -198,7 +198,14 @@ def _quote_ref(project):
     from .billing import latest_revision_number
     rev = latest_revision_number(project)
     return ((f'Rev {rev}\n' if rev and rev > 1 else '')
-            + f'Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
+            + f'Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}' + _valid_line(project.created_at))
+
+
+def _valid_line(dated):
+    """'\nValid until: …' (Settings → Quotation PDFs → Validity), '' when it's left empty."""
+    from . import layout
+    until = layout.valid_until(dated)
+    return f'\nValid until: {until.strftime("%d %B %Y")}' if until else ''
 
 
 def pdf_filename(project, prefix='Quotation'):
@@ -348,15 +355,19 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     snap = snap or billing.quotation_snapshot(project)
     small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
     title = ParagraphStyle('BQT', parent=small, fontName=_F.b)
-    sections = layout.boq_rows(snap)
+    from . import pdf_choices
+    show = pdf_choices.for_project(project.id)   # what this quotation's PDF shows (the business's settings by default)
+    sections = layout.boq_rows(snap, show)
     from . import item_images
-    photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
+    photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines']) if show['photos'] else {}
     grid = colors.HexColor('#bdbdbd')
-    per_room = layout.room_totals_only()       # some firms show an amount per room only (Settings → Quotation PDFs)
-    rate_col = layout.show_rate() and not per_room     # or quantities and amounts, no rates
-    # columns: Sr. No., Description, [Photo only when some line has one], Qty, Unit, [Rate], Amount
-    heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + ['Qty', 'Unit'] + (['Rate'] if rate_col else []) \
-        + ['Amount (Rs.)']
+    per_room = not show['amount']              # an amount per room only (or none at all)
+    rate_col = show['rate']
+    qty_cols = show['qty']
+    amount_col = show['amount'] or show['room_total']
+    # columns: Sr. No., Description, [Photo only when some line has one], [Qty, Unit], [Rate], [Amount]
+    heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + (['Qty', 'Unit'] if qty_cols else []) \
+        + (['Rate'] if rate_col else []) + (['Amount (Rs.)'] if amount_col else [])
     fixed = {'Sr. No.': 0.07, 'Photo': 0.15, 'Qty': 0.09, 'Unit': 0.09, 'Rate': 0.11, 'Amount (Rs.)': 0.15}
     widths = [fixed.get(h, 0) for h in heads]
     widths[1] = 1 - sum(widths)                # the description takes what's left
@@ -365,10 +376,13 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     last = len(heads) - 1
     cmds = [('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, 0), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (last - 1, -1), 'CENTER'),
-            ('ALIGN', (last, 0), (last, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
+    if last >= 3:                              # (with only the description chosen there are no number columns)
+        cmds.append(('ALIGN', (2, 0), (last - 1, -1), 'CENTER'))
+    if last >= 2:
+        cmds.append(('ALIGN', (last, 0), (last, -1), 'RIGHT' if amount_col else 'CENTER'))
     from . import pdf_look
     bw = pdf_look.colours() == pdf_look.BW
     for sec in sections:
@@ -381,11 +395,12 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
         if sec['description']:
             head += f'<br/><font size="7.5" color="{on}">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
         # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
-        data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))] + [''] * (last - 2)
-                    + [_money(sec['total']) if sec['total'] else ''])
+        total_txt = _money(sec['total']) if sec['total'] and show['room_total'] else ''
+        data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))]
+                    + ([''] * (last - 2) + [total_txt] if amount_col else [''] * (last - 1)))
         if bw:
             cmds.append(('LINEABOVE', (0, k), (-1, k), 1.5, BRAND_DARK))
-        cmds += [('BACKGROUND', (0, k), (-1, k), bar), ('SPAN', (1, k), (-2, k)),
+        cmds += [('BACKGROUND', (0, k), (-1, k), bar), ('SPAN', (1, k), (-2 if amount_col else -1, k)),
                  ('FONTNAME', (0, k), (0, k), _F.b), ('FONTNAME', (-1, k), (-1, k), _F.b),
                  ('FONTSIZE', (0, k), (0, k), 12), ('FONTSIZE', (-1, k), (-1, k), 10),
                  ('TEXTCOLOR', (0, k), (-1, k), ink), ('TOPPADDING', (0, k), (-1, k), 7),
@@ -401,8 +416,8 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
                 amount = f"Rate {_money(ln['rate'], 0)}"
             data.append([str(ln['no']), Paragraph(text, small)]
                         + ([item_images.pdf_image(photos.get(ln.get('image_id')), 2.6, 2.6) or ''] if photos else [])
-                        + [f'{inr(ln["qty"])}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']]
-                        + ([_money(ln['rate'], 0) if ln['rate'] else ''] if rate_col else []) + [amount])
+                        + ([f'{inr(ln["qty"])}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']] if qty_cols else [])
+                        + ([_money(ln['rate'], 0) if ln['rate'] else ''] if rate_col else []) + ([amount] if amount_col else []))
     table = Table(data, colWidths=cw, repeatRows=1)
     table.setStyle(TableStyle(cmds))
     return [table] + _totals_elements(snap, page_width, palette)
@@ -905,7 +920,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
 
     ref = _quote_ref(project) if rsnap is None else (
         f'Rev {revision.number}\n'                          # an earlier version: always say which
-        + f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}')
+        + f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}' + _valid_line(revision.created_at))
     cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
                                             'email': project.email or '', 'address': project.address or ''}
     from . import presentation
@@ -913,7 +928,9 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     closing = cover and closing
     palette = (BRAND_DARK, BRAND_ACCENT, BRAND_LIGHT, TABLE_HEADER_BG, ROOM_HEADER_BG, TABLE_HEADER_FG, TOTAL_ROW_BG, ON_BRAND)
     if cover:
-        elements += _title_page(project, cust, ref, page_width, palette, styles)
+        from . import photo_pages as _pp
+        if not _pp.cover_shown(project):      # (the designed cover page, in front, takes its place)
+            elements += _title_page(project, cust, ref, page_width, palette, styles)
         if closing:
             elements += _about_page(page_width, palette, styles)
     else:
@@ -1150,7 +1167,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         elements += _closing_page(page_width, palette, styles)
     _build(doc, elements)
     buffer.seek(0)
-    return buffer
+    from . import photo_pages                    # its own full-page pictures in front (cover, About us, gallery)
+    return photo_pages.with_pages(project, buffer)
 
 
 def generate_invoice_pdf(invoice, data, total_paid=0.0):
@@ -1339,6 +1357,29 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     return out
 
 
+def _rich_table(rows, body, dark, compact):
+    """A table typed in the rich text editor: the page's width shared by its columns (each sized to its longest
+    text), a grid, the first row in bold on a light band (its heading row)."""
+    from . import richtext
+    width = A4[0] - 3 * cm - 12                   # (the frame's own padding: lines up with the rules above)
+    cell = ParagraphStyle('RtTd', parent=body, spaceAfter=0, leftIndent=0, firstLineIndent=0)
+    head = ParagraphStyle('RtTh', parent=cell, fontName=_F.b, textColor=dark)
+    cols = len(rows[0])
+    longest = [max(min(len(richtext.plain_text(r[i]).strip()), 40) for r in rows) + 4 for i in range(cols)]
+    widths = [width * n / sum(longest) for n in longest]
+    data = [[Paragraph(c or '&nbsp;', head if i == 0 and len(rows) > 1 else cell) for c in r] for i, r in enumerate(rows)]
+    pad = 3 if compact else 5
+    style = [('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+             ('TOPPADDING', (0, 0), (-1, -1), pad), ('BOTTOMPADDING', (0, 0), (-1, -1), pad),
+             ('LEFTPADDING', (0, 0), (-1, -1), pad + 1), ('RIGHTPADDING', (0, 0), (-1, -1), pad + 1)]
+    if len(rows) > 1:
+        style.append(('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f3f5')))
+    t = Table(data, colWidths=widths, repeatRows=1 if len(rows) > 2 else 0, hAlign='LEFT', spaceBefore=3,
+              spaceAfter=8 if compact else 10)
+    t.setStyle(TableStyle(style))
+    return t
+
+
 def _rich_flowables(html, dark, styles, compact=False):
     """Text from the rich text editor (app/richtext.py) as PDF paragraphs: headings, alignment, colours, lists.
     compact: the quotation's sections (Material Specifications, Terms…), at their small size."""
@@ -1350,6 +1391,10 @@ def _rich_flowables(html, dark, styles, compact=False):
     out, counters = [], {}
     for b in richtext.blocks(html):
         al = align.get(b['align'], TA_LEFT)
+        if b['kind'] == 'table':
+            counters.clear()
+            out.append(_rich_table(b['rows'], body, dark, compact))
+            continue
         if b['kind'] in heads:
             size, after = heads[b['kind']]
             st = ParagraphStyle(f'Rt{b["kind"]}', parent=body, fontName=_F.b, fontSize=size, leading=size * 1.3,

@@ -8,6 +8,14 @@
     section{{ '' if data.sections | length == 1 else 's' }}. Correct anything that's wrong, untick what you don't want,
     then set up your app. Nothing is saved until you do.{% if data.rate_list %} This is your rate list, so only
     your rates and terms are saved (no quotation is made from it); quantities can stay empty.{% endif %}</p>
+  {% if data.columns %}
+  <div class="small border rounded-3 px-3 py-2 mb-2 bg-light" id="columnsUsed">
+    <i class="bi bi-layout-three-columns me-1 text-primary"></i><strong>Columns read</strong>
+    {{ '(picked out by AI from your headings and first rows)' if data.columns_by == 'ai' else '(by their headings)' }}:
+    <span class="text-muted">{{ data.columns }}</span>.
+    Every row was then copied as written. A column wrong? Rename its heading in your sheet and upload it again.
+  </div>
+  {% endif %}
   <div class="alert alert-warning py-2 small" id="sumWarn" hidden></div>
   <div class="alert alert-success py-2 small" id="sumOk" hidden></div>
 </div>
@@ -95,7 +103,7 @@
           <input class="form-check-input mt-2" type="checkbox" name="{{ p }}keep" value="1" checked aria-label="Keep this line" data-keep>
           <div class="flex-grow-1">
             <input class="form-control form-control-sm fw-semibold mb-1" name="{{ p }}name" value="{{ l.name }}" maxlength="100" aria-label="Item">
-            <input class="form-control form-control-sm mb-1 text-muted" name="{{ p }}description" value="{{ l.description }}" maxlength="500" placeholder="Description" aria-label="Description">
+            <textarea class="form-control form-control-sm mb-1 text-muted" name="{{ p }}description" rows="{{ [[(l.description or '').count('\n') + 1, 1]|max, 4]|min }}" maxlength="2000" placeholder="Description" aria-label="Description">{{ l.description or '' }}</textarea>
             <div class="row g-1">
               <div class="col-3"><input class="form-control form-control-sm" name="{{ p }}unit" value="{{ l.unit }}" maxlength="20" aria-label="Unit" title="Unit"></div>
               <div class="col-3"><input class="form-control form-control-sm" name="{{ p }}quantity" type="number" step="any" min="0" value="{{ l.quantity if l.quantity is not none }}" placeholder="Qty" aria-label="Quantity" data-qty></div>

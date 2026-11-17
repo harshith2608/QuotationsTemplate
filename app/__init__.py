@@ -107,7 +107,9 @@ def create_app(config_name='default'):
     app.before_request(tenancy.resolve_tenant)
     app.teardown_request(tenancy.release_tenant)
     from .profiles import apply_for_request
-    app.before_request(apply_for_request)        # a quotation's pages use the company it is from (first settings read)
+    app.before_request(apply_for_request)
+    from .rate_access import mark_request       # an employee who can't see rates: g.no_rates (pages hide them)
+    app.before_request(mark_request)        # a quotation's pages use the company it is from (first settings read)
 
     from .auth import auth_bp
     from .main import main_bp
@@ -253,8 +255,16 @@ def create_app(config_name='default'):
         from .marketing import call_url
         return {'biz': business.profile(), 'help_card': help_card, 'call_url': call_url(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
-                'companies_on': _companies_on(current_user), 'brand': get_brand(), 'app_brand': g.get('app_brand') or get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
+                'companies_on': _companies_on(current_user), 'no_rates': g.get('no_rates', False), 'hide_unit_rates': _hide_unit_rates(), 'brand': get_brand(), 'app_brand': g.get('app_brand') or get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
+
+    def _hide_unit_rates():
+        """Settings → Pricing → Hide rates while making quotations (app/rate_access.py), for signed-in pages."""
+        from flask_login import current_user as _cu
+        if not getattr(_cu, 'is_authenticated', False):
+            return False
+        from .rate_access import hidden_on_screen
+        return hidden_on_screen()
 
     @app.context_processor
     def _announcements():

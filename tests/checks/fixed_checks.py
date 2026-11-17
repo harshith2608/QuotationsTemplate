@@ -16,7 +16,8 @@ with app.app_context():
 
 v = c.get('/projects/1').text
 ok('view: Fittings & Accessories summary line', 'Fittings &amp; Accessories' in v and '36,000.00' in v)
-ok('view: itemised in room table', 'Magic Corner' in v and '1 &times; &#8377;18,000' in v and '4 &times; &#8377;4,500' in v)
+vt = re.sub(r'<span class="ki-rate[^"]*">', '', v)    # (the rate is in its own span: hidden for employees, app/rate_access.py)
+ok('view: itemised in room table', 'Magic Corner' in v and '1 &times; &#8377;18,000' in vt and '4 &times; &#8377;4,500' in vt)
 full = pdftext('/projects/1/pdf')
 ok('Full PDF: each fitting in its room', 'Magic Corner' in full and 'Tandem Drawer' in full and 'Fitting: 4 × Rs. 4,500' in full)
 ok('Full PDF: fittings line in cost summary + subtotal', 'Fittings & Accessories' in full and '1,81,800.00' in full)

@@ -65,3 +65,22 @@ with app.app_context():
        in price_list.summary_text(r) and presentation.content()['about'] == ['From the file.'])
     presentation.set_enabled(False); db.session.commit()
 ok('off again: back to the usual PDF', len(pages(f'/projects/{pid}/pdf/customer')) == len(before))
+
+# Tables in the rich text editors (app/richtext.py): kept when saved, printed as a table in the PDF's sections
+from app import richtext
+from app.models import AppSetting
+raw = ('<p>Stages:</p><table><tbody><tr><td data-row="row-a1"><strong>Stage</strong></td><td data-row="row-a1" '
+       'onclick="x()">Share</td></tr><tr><td data-row="row-b2">Advance</td><td data-row="row-b2">10%</td></tr>'
+       '<tr><td data-row="row-c3">Handover</td><td data-row="row-c3"><br></td></tr></tbody></table>')
+kept = richtext.clean(raw)
+ok('a table is kept when saved (cells keep their row; nothing else added)', '<table>' in kept and 'data-row="row-b2"' in kept
+   and 'onclick' not in kept)
+tb = [b for b in richtext.blocks(kept) if b['kind'] == 'table']
+ok('read as rows of cells (an empty cell stays a cell)', tb and tb[0]['rows'] == [['<b>Stage</b>', 'Share'], ['Advance', '10%'],
+                                                                                 ['Handover', '']])
+with app.app_context():
+    AppSetting.set('payment_terms', kept); db.session.commit()
+text = ' '.join(pages(f'/projects/{pid}/pdf/customer'))
+ok('the PDF prints the table under Payment Terms', 'Payment Terms' in text and 'Stage Share Advance 10% Handover' in text)
+with app.app_context():
+    AppSetting.set('payment_terms', ''); db.session.commit()

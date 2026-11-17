@@ -519,6 +519,19 @@ def create_project():
         project.grand_total = grand_total
         project.status = 'complete'
         _ensure_creator_access(project, current_user)
+        from . import photo_pages                            # a template's / duplicated quotation's photo pages
+        if request.form.get('photo_pages') and photo_pages.enabled():
+            from . import item_images
+            wanted = [v for v in request.form.get('photo_pages').split(',') if v.strip().isdigit()]
+            have = item_images.valid_ids(wanted)
+            photo_pages.set_for_project(project.id, [int(v) for v in wanted if int(v) in have])
+        if photo_pages.enabled():                            # its cover photo and package name (a template's name)
+            from . import item_images
+            cp = request.form.get('cover_photo', '')
+            if cp.isdigit() and item_images.valid_ids([cp]):
+                photo_pages.set_cover_photo(project.id, int(cp))
+            if request.form.get('package'):
+                photo_pages.set_package(project.id, request.form.get('package'))
         db.session.commit()
         billing.record_revision(project, current_user)       # R1
         db.session.commit()
@@ -558,14 +571,14 @@ def create_project():
 
 
 def render_new_form(start=None, started_from=None, form_data=None, form_cat=None, ai_draft=None, template_edit=None,
-                    title='New Quotation'):
+                    title='New Quotation', template_media=False):
     """The new quotation form, filled in from `start` (a quotation, template or AI draft: rooms_json, discount,
     plywood) when given. ai_draft: what the AI says to check (app/ai_tools.py)."""
     from . import ai_tools, quote_templates as QT
     from .demo import demo_enabled
     form_data = form_data or {}
     return render_template('projects/form.html',
-                           title=title, template_edit=template_edit,
+                           title=title, template_edit=template_edit, template_media=template_media,
                            master_rooms=__import__('app.business', fromlist=['room_names']).room_names(),
                            master_items=__import__('app.business', fromlist=['item_names']).item_names(),
                            **(form_cat or _form_catalog(None)),
@@ -629,7 +642,53 @@ def edit_template(template_id):
         flash('That template no longer exists.', 'warning')
         return redirect(url_for('projects.manage_templates'))
     start = QT.start_from_template(tpl)
-    return render_new_form(start, template_edit=tpl, title=f'Edit template: {tpl["name"]}')
+    from . import photo_pages
+    return render_new_form(start, template_edit=tpl, title=f'Edit template: {tpl["name"]}',
+                           template_media=photo_pages.enabled())
+
+
+@projects_bp.route('/templates/<template_id>/media', methods=['POST'])
+@login_required
+@admin_required
+def template_media(template_id):
+    """A template's cover photo, package name and gallery (Edit lines → Cover & gallery)."""
+    from . import item_images, photo_pages as PP, quote_templates as QT
+    tpl = QT.get(template_id)
+    if not tpl or not PP.enabled():
+        abort(404)
+    do = request.form.get('do', '')
+    gallery = [i for i in (tpl.get('photo_pages') or [])]
+    try:
+        if do == 'cover':
+            f = request.files.get('photo')
+            if f and f.filename:
+                QT.set_media(template_id, cover_photo=item_images.save_upload(f.read(), max_side=PP.PAGE_SIDE).id)
+            if 'package' in request.form:
+                QT.set_media(template_id, package=request.form.get('package'))
+        elif do == 'cover_remove':
+            QT.set_media(template_id, cover_photo=None)
+        elif do == 'add':
+            raws = [f.read() for f in request.files.getlist('photos') if f and f.filename]
+            if len(gallery) + len(raws) > PP.MAX_PAGES:
+                raise item_images.ImageError(f'Up to {PP.MAX_PAGES} gallery photos.')
+            QT.set_media(template_id, photo_pages=gallery + [item_images.save_upload(r, max_side=PP.PAGE_SIDE).id for r in raws])
+        elif do.startswith(('up:', 'down:', 'remove:')):
+            act, img = do.split(':', 1)
+            if img.isdigit() and int(img) in gallery:
+                i = gallery.index(int(img))
+                if act == 'remove':
+                    gallery.pop(i)
+                else:
+                    j = max(0, min(len(gallery) - 1, i + (-1 if act == 'up' else 1)))
+                    gallery[i], gallery[j] = gallery[j], gallery[i]
+                QT.set_media(template_id, photo_pages=gallery)
+    except (item_images.ImageError, ValueError) as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash('Template saved: quotations made from it from now on get this cover and gallery.', 'success')
+    return redirect(url_for('projects.edit_template', template_id=template_id) + '#templateMedia')
 
 
 @projects_bp.route('/templates/<template_id>/save', methods=['POST'])
@@ -647,6 +706,37 @@ def save_template(template_id):
     db.session.commit()
     flash(f'Template "{QT.get(template_id)["name"]}" saved. New quotations from it start with these lines.', 'success')
     return redirect(url_for('projects.manage_templates'))
+
+
+@projects_bp.route('/projects/<int:project_id>/ask-rates', methods=['POST'])
+@login_required
+def ask_rates(project_id):
+    """An employee who can't see rates asks the admin for this quotation's (app/rate_access.py): an email from
+    QuoteRoom and a notification; the admin approves on the Users page."""
+    from . import rate_access, mailer
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+        abort(403)
+    if rate_access.can_see(current_user, project.id):
+        return redirect(url_for('projects.view_project', project_id=project.id))
+    already = rate_access.pending_for(project.id, current_user.id)
+    rate_access.ask(project, current_user)
+    if not already:
+        who = current_user.full_name or current_user.username
+        db.session.add(Notification(title=f'{who} asks to see rates – {project.customer_name}',
+                                    message=f'{who} asked to see the rates and line amounts on {project.customer_name}\'s '
+                                            f'quotation (#{project.id}). Approve or decline it on the Users page.',
+                                    project_id=project.id))
+        db.session.commit()
+        to = rate_access.admin_email()
+        link = url_for('admin.users', _external=True) + '#rate-requests'
+        mailer.send(to, f'{who} asks to see the rates on {project.customer_name}\'s quotation',
+                    f'Hello,\n\n{who} asked to see the rates and line amounts on {project.customer_name}\'s quotation '
+                    f'(#{project.id}) in {get_brand()["name"]}.\n\nApprove or decline it here (sign in as admin):\n{link}\n\n'
+                    f'Approving shows {who} the rates on this one quotation only.\n\nQuoteRoom')
+    db.session.commit()
+    flash('Asked your admin. You\'ll see the rates on this quotation once they approve.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id))
 
 
 @projects_bp.route('/projects/<int:project_id>')
@@ -718,7 +808,9 @@ def view_project(project_id):
     latest_rev = q2c['history'][0][0] if q2c['history'] else None
     q2c['changed_after_invoice'] = bool(invoice and latest_rev and latest_rev.created_at > invoice.created_at)
     from . import layout as _layout
+    from . import rate_access as _ra
     return render_template('projects/view.html',
+                           rates_asked=bool(not current_user.is_admin and _ra.pending_for(project.id, current_user.id)),
                            project=project, single_pdf=_layout.single_pdf(),
                            rooms=rooms,
                            item_summary=item_summary,
@@ -742,7 +834,10 @@ def view_project(project_id):
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            material_list_on=__import__('app.material_list', fromlist=['available']).available(),
                            ai_check_on=__import__('app.ai_tools', fromlist=['available']).available('check'),
-                           company=_company_picker(project),
+                           company=_company_picker(project), pdf_pick=_pdf_pick(project),
+                           pages=__import__('app.photo_pages', fromlist=['for_project']).for_project(project.id)
+                           if __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
+                           cover=_cover_info(project),
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -1021,6 +1116,8 @@ def delete_project(project_id):
     material_list.delete_for(project)
     from . import profiles
     profiles.forget_project(project.id)
+    __import__('app.pdf_choices', fromlist=['forget']).forget(project_id)
+    __import__('app.photo_pages', fromlist=['forget']).forget(project_id)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')
@@ -1222,6 +1319,9 @@ def download_pdf(project_id):
     payments_list = Payment.query.filter_by(project_id=project_id).all()
     total_paid = sum(p.amount for p in payments_list)
     make = generate_customer_pdf if layout.single_pdf() else generate_pdf      # priced by item: one quotation PDF
+    from . import rate_access
+    if not rate_access.can_see(current_user, project.id):
+        make = generate_customer_pdf                       # (the full one has every rate)
     pdf_buffer = make(project, payment_settings=pay_settings, total_paid=total_paid)
     from .pdf_utils import pdf_filename
     filename = pdf_filename(project)
@@ -1230,6 +1330,114 @@ def download_pdf(project_id):
     as_attachment = request.args.get('download') == '1'
     return send_file(pdf_buffer, as_attachment=as_attachment,
                      download_name=filename, mimetype='application/pdf')
+
+
+@projects_bp.route('/projects/<int:project_id>/pages', methods=['POST'])
+@login_required
+def add_photo_pages(project_id):
+    """Upload full-page pictures for the front of this quotation's PDF (app/photo_pages.py)."""
+    from . import access, item_images, photo_pages
+    project = Project.query.get_or_404(project_id)
+    if not photo_pages.enabled():
+        abort(404)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    raws = [f.read() for f in request.files.getlist('pages') if f and f.filename]
+    try:
+        ids = photo_pages.add(project.id, raws)
+    except item_images.ImageError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash(f'Added {len(raws)} photo page{"s" if len(raws) != 1 else ""} ({len(ids)} in all).', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
+
+
+@projects_bp.route('/projects/<int:project_id>/cover', methods=['POST'])
+@login_required
+def quote_cover(project_id):
+    """The designed cover page: its photo (upload / remove) and the package name."""
+    from . import access, item_images, photo_pages
+    project = Project.query.get_or_404(project_id)
+    if not photo_pages.enabled():
+        abort(404)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    try:
+        f = request.files.get('photo')
+        if f and f.filename:
+            photo_pages.set_cover_photo(project.id, item_images.save_upload(f.read(), max_side=photo_pages.PAGE_SIDE).id)
+        if request.form.get('remove'):
+            photo_pages.set_cover_photo(project.id, None)
+        if 'package' in request.form:
+            photo_pages.set_package(project.id, request.form.get('package'))
+        if 'print_seen' in request.form:              # "Print the cover" / "Print the gallery"
+            photo_pages.set_printing(project.id, request.form.get('print_cover') == '1',
+                                     request.form.get('print_gallery') == '1')
+    except item_images.ImageError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash('Cover page saved.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
+
+
+@projects_bp.route('/projects/<int:project_id>/pages/<int:image_id>', methods=['POST'])
+@login_required
+def photo_page(project_id, image_id):
+    """Move a photo page earlier / later, or remove it from the quotation."""
+    from . import access, photo_pages
+    project = Project.query.get_or_404(project_id)
+    if not photo_pages.enabled():
+        abort(404)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    do = request.form.get('do')
+    if do == 'remove':
+        photo_pages.remove(project.id, image_id)
+    elif do in ('up', 'down'):
+        photo_pages.move(project.id, image_id, -1 if do == 'up' else 1)
+    db.session.commit()
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
+
+
+@projects_bp.route('/projects/<int:project_id>/pdf/choose', methods=['POST'])
+@login_required
+def choose_pdf(project_id):
+    """The tick-boxes before the Quotation PDF (app/pdf_choices.py): kept for this quotation, then its PDF."""
+    from . import pdf_choices
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and project.created_by != current_user.id:
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            abort(403)
+    if pdf_choices.enabled():
+        pdf_choices.save(project.id, request.form)
+        db.session.commit()
+    if request.form.get('then') == 'link':                # changed for the customer's link: back to it
+        flash('Saved. Your customer\'s link (and PDF) show these now.', 'success')
+        return redirect(url_for('projects.view_project', project_id=project.id) + '#approval')
+    return redirect(url_for('projects.download_customer_pdf', project_id=project.id))
+
+
+def _cover_info(project):
+    """{'photo', 'package', 'slogan', 'tagline'} for the cover controls (with photo pages on), else None."""
+    from . import photo_pages
+    if not photo_pages.enabled():
+        return None
+    return {'photo': photo_pages.cover_photo(project.id), 'package': photo_pages.package(project.id),
+            'printing': photo_pages.printing(project.id), **photo_pages.texts()}
+
+
+def _pdf_pick(project):
+    """The tick-boxes for the Quotation PDF button (the BOQ table, with the feature on), else None."""
+    from . import layout, pdf_choices
+    if not pdf_choices.enabled() or layout.initial_layout() != layout.LAYOUT_BOQ:
+        return None
+    from . import item_images
+    skip = set() if item_images.enabled() else {'photos'}
+    return {'fields': [f for f in pdf_choices.FIELDS if f[0] not in skip], 'chosen': pdf_choices.for_project(project.id)}
 
 
 @projects_bp.route('/projects/<int:project_id>/pdf/customer')
@@ -1296,6 +1504,8 @@ def whatsapp_share(project_id):
     from . import layout as _layout_wa
     _show_rate = _layout_wa.show_rate()        # some firms show quantities and amounts only
     _per_room = _layout_wa.room_totals_only()  # or an amount per room only
+    if not __import__('app.rate_access', fromlist=['can_see']).can_see(current_user, project.id):
+        _per_room = True                       # an employee who can't see rates: room totals, no rates or line amounts
     _per_room_secs = _layout_wa.boq_rows(billing.quotation_snapshot(project, rooms)) if _per_room else []
     for _r_i, room in enumerate(rooms):
         lines.append(f"\n🏠 *{room.name}*")

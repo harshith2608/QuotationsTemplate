@@ -1,5 +1,6 @@
 """Formatted text for the presentation pages (Settings → Quotation PDFs → About us / Next steps), typed in a rich text
-editor (Quill, in the browser): headings, bold / italic / underline, font colour, alignment, bullet and numbered lists.
+editor (Quill, in the browser): headings, bold / italic / underline, font colour, alignment, bullet and numbered lists,
+and tables (Table menu: a size picked from a grid, rows and columns added or deleted; cells hold text).
 
 Stored as HTML, cleaned here first (clean): only those tags, the editor's alignment / indent classes and a colour are
 kept; anything else (scripts, links, images, other styles) is dropped. Plain text saved before (or from a price list
@@ -13,7 +14,10 @@ from html.parser import HTMLParser
 
 BLOCK = {'p', 'h1', 'h2', 'h3', 'li'}
 INLINE = {'strong': 'b', 'b': 'b', 'em': 'i', 'i': 'i', 'u': 'u', 's': 'strike'}
-ALLOWED = BLOCK | set(INLINE) | {'br', 'ul', 'ol', 'span'}
+TABLE = {'table', 'tbody', 'tr', 'td'}
+ALLOWED = BLOCK | set(INLINE) | TABLE | {'br', 'ul', 'ol', 'span'}
+ROW_RE = re.compile(r'^[\w-]{1,40}$')          # a cell's data-row (the editor groups a row's cells by it)
+MAX_COLS = 12
 DROP_WITH_CONTENT = {'script', 'style', 'head', 'title', 'iframe', 'object', 'noscript', 'template'}
 CLASS_RE = re.compile(r'^ql-(align-(center|right|justify)|indent-[1-8])$')
 COLOR_RE = re.compile(r'(?:^|;)\s*color\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))', re.I)
@@ -59,6 +63,8 @@ class _Cleaner(HTMLParser):
             keep.append(f'style="color: {_hex(m.group(1))}"')
         if tag == 'li' and a.get('data-list') in ('bullet', 'ordered'):
             keep.append(f'data-list="{a["data-list"]}"')
+        if tag == 'td' and ROW_RE.match(a.get('data-row') or ''):
+            keep.append(f'data-row="{a["data-row"]}"')
         if tag == 'br':
             self.out.append('<br>')
             return
@@ -120,11 +126,12 @@ def from_plain(text, numbered=False):
 
 
 class _Blocks(HTMLParser):
-    """Clean HTML → [{'kind': p/h1/h2/h3/li, 'align', 'indent', 'list': bullet/ordered/None, 'markup'}]."""
+    """Clean HTML → [{'kind': p/h1/h2/h3/li, 'align', 'indent', 'list': bullet/ordered/None, 'markup'}], and for a
+    table {'kind': 'table', 'rows': [[cell markup, …], …]} (rows padded to the same number of cells)."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.blocks, self.cur, self.lists, self.inline = [], None, [], []
+        self.blocks, self.cur, self.lists, self.inline, self.table = [], None, [], [], None
 
     def _open(self, kind, a):
         classes = (a.get('class') or '').split()
@@ -138,12 +145,40 @@ class _Blocks(HTMLParser):
     def _close(self):
         if self.cur is not None:
             self.cur['markup'] = self.cur['markup'].strip()
-            self.blocks.append(self.cur)
+            if self.table is not None:                         # text in a table goes into its cell
+                if not self.table['rows']:
+                    self.table['rows'].append([])
+                row = self.table['rows'][-1]
+                if self.cur['kind'] == 'td' or not row:
+                    row.append('' if self.cur['markup'] == '<br/>' else self.cur['markup'])
+                elif self.cur['markup']:                       # (a paragraph inside a pasted cell)
+                    row[-1] = row[-1] + '<br/>' + self.cur['markup'] if row[-1] else self.cur['markup']
+            else:
+                self.blocks.append(self.cur)
             self.cur = None
+
+    def _end_table(self):
+        self._close()
+        t, self.table = self.table, None
+        rows = [r[:MAX_COLS] for r in (t['rows'] if t else []) if r]
+        if rows and any(c.strip() for r in rows for c in r):
+            width = max(len(r) for r in rows)
+            t['rows'] = [r + [''] * (width - len(r)) for r in rows]
+            self.blocks.append(t)
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        if tag in ('ul', 'ol'):
+        if tag == 'table':
+            self._close()
+            if self.table is None:
+                self.table = {'kind': 'table', 'rows': [], 'align': 'left', 'indent': 0, 'list': None, 'markup': ''}
+        elif tag == 'tr' and self.table is not None:
+            self._close()
+            self.table['rows'].append([])
+        elif tag == 'td' and self.table is not None:
+            self._close()
+            self._open('td', a)
+        elif tag in ('ul', 'ol'):
             self._close()
             self.lists.append('bullet' if tag == 'ul' else 'ordered')
         elif tag in BLOCK:
@@ -166,7 +201,11 @@ class _Blocks(HTMLParser):
             self.inline.append(opened)
 
     def handle_endtag(self, tag):
-        if tag in ('ul', 'ol'):
+        if tag == 'table' and self.table is not None:
+            self._end_table()
+        elif tag in ('td', 'tr') and self.table is not None:
+            self._close()
+        elif tag in ('ul', 'ol'):
             self._close()
             if self.lists:
                 self.lists.pop()
@@ -189,5 +228,5 @@ def blocks(html):
     p = _Blocks()
     p.feed(clean(html))
     p.close()
-    p._close()
+    p._end_table() if p.table is not None else p._close()
     return p.blocks

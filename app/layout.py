@@ -97,12 +97,15 @@ def single_pdf():
     return boq.enabled()
 
 
-def boq_rows(snapshot):
+def boq_rows(snapshot, show=None):
     """Sections A, B, C… (the rooms), each with numbered lines: {'letter', 'name', 'description', 'lines': [{'no',
     'title', 'description', 'qty', 'unit', 'rate', 'amount', 'tbc'}]} (tbc: "Price to follow"). Measured items show their area, rate per area and
     size; fittings their quantity and price; BOQ lines exactly as typed. Amounts come from the snapshot.
-    A measured line says its material and size first, then what the business typed about it."""
+    A measured line says its material and size first, then what the business typed about it.
+    show: what to print (app/pdf_choices.py: description, material, size…); None: everything."""
     from . import boq, units
+    show = show or {}
+    on = lambda k: show.get(k, True)
     out = []
     for r_i, room in enumerate(snapshot.get('rooms', [])):
         letter = chr(ord('A') + r_i) if r_i < 26 else str(r_i + 1)
@@ -116,8 +119,9 @@ def boq_rows(snapshot):
                 mat = line_material(it['material'])
                 if mat.partition(' · ')[0].strip().lower() == (it['name'] or '').strip().lower():
                     mat = mat.partition(' · ')[2]      # the item is named after its material: not said twice
-                detail = ' · '.join(x for x in (mat, size) if x)
-                lines.append({'no': n, 'title': it['name'], 'description': '\n'.join(x for x in (detail, desc) if x),
+                detail = ' · '.join(x for x in (mat if on('material') else '', size if on('size') else '') if x)
+                lines.append({'no': n, 'title': it['name'],
+                              'description': '\n'.join(x for x in (detail, desc if on('description') else '') if x),
                               'image_id': it.get('image_id'),
                               'qty': units.area_value(it['area']), 'unit': units.area_label(),
                               'rate': units.rate_value(it['rate']), 'amount': it['amount']})
@@ -125,7 +129,8 @@ def boq_rows(snapshot):
                 unit = it.get('unit') or 'nos'
                 lump = unit == boq.LUMP_SUM
                 size = boq.size_text(it)
-                desc = '\n'.join(x for x in (desc, f'Size: {size}' if size else '') if x)
+                desc = '\n'.join(x for x in (desc if on('description') else '',
+                                              f'Size: {size}' if size and on('size') else '') if x)
                 from .finishes import label
                 lines.append({'no': n, 'title': label(it['name'], it.get('finish')), 'description': desc, 'qty': it['quantity'],
                               'image_id': it.get('image_id'),
@@ -302,3 +307,42 @@ def section_editor_html(raw):
     """What the rich text editor opens with: the saved HTML, or plain text as the numbered list the PDF prints."""
     from . import richtext
     return richtext.clean(raw) if richtext.is_html(raw) else richtext.from_plain(raw, numbered=True)
+
+
+# ── How long a quotation is valid (Settings → Quotation PDFs → Validity) ──
+VALID_KEY = 'quote_valid_days'
+VALID_MAX = 3650
+
+
+def valid_days():
+    """Days a quotation is valid from its date; None when left empty (then no "Valid until" on the PDFs)."""
+    from .models import AppSetting
+    try:
+        n = int((AppSetting.get(VALID_KEY, '') or '').strip())
+    except ValueError:
+        return None
+    return n if 0 < n <= VALID_MAX else None
+
+
+def set_valid_days(raw):
+    """From the Settings box: a number of days, or empty (off). Returns an error message or None."""
+    from .models import AppSetting
+    raw = (raw or '').strip()
+    if not raw:
+        AppSetting.set(VALID_KEY, '')
+        return None
+    try:
+        n = int(float(raw))
+    except ValueError:
+        return 'Valid for: type a number of days, or leave it empty.'
+    if not 0 < n <= VALID_MAX:
+        return f'Valid for: between 1 and {VALID_MAX} days, or leave it empty.'
+    AppSetting.set(VALID_KEY, str(n))
+    return None
+
+
+def valid_until(dated):
+    """The date a quotation dated `dated` (UTC datetime) is valid until, in India time; None when not set."""
+    from datetime import timedelta
+    n = valid_days()
+    return (dated + timedelta(hours=5, minutes=30, days=n)) if (n and dated) else None

@@ -41,7 +41,7 @@
       </ol>
     </nav>
     <h4 class="mb-0 fw-bold ki-page-title">
-      <i class="bi bi-file-earmark-plus me-2 text-primary"></i>{{ title }}
+      <i class="bi bi-file-earmark-plus me-2 text-primary"></i>{{ title }}{% include '_rates_peek.html' %}
     </h4>
   </div>
   {% if not project and templates and not template_edit %}
@@ -144,11 +144,67 @@
   {% for i in master_items %}<option value="{{ i }}">{% endfor %}
 </datalist>
 
+{% if template_edit and template_media %}
+{# The template's cover & gallery: its own small forms, outside the quotation form below #}
+{% set tm_url = url_for('projects.template_media', template_id=template_edit.id) %}
+<div class="card shadow-sm border-0 mb-3" id="templateMedia">
+  <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-images me-2"></i>Cover &amp; gallery <span class="small fw-normal opacity-75">({{ (template_edit.photo_pages or [])|length + (1 if template_edit.cover_photo else 0) }} photos)</span></span>
+    <small class="fw-normal" style="opacity:.8">for quotations made from this template</small>
+  </div>
+  <div class="card-body py-2">
+    <div class="fw-semibold small mb-1"><i class="bi bi-journal-richtext me-1"></i>Cover page</div>
+    <div class="d-flex flex-wrap gap-3 align-items-start mb-3 pb-3 border-bottom">
+      {% if template_edit.cover_photo %}<img src="{{ url_for('projects.item_image', image_id=template_edit.cover_photo) }}" alt="Cover photo" style="width:96px;height:96px;object-fit:cover" class="rounded border">{% endif %}
+      <form method="post" action="{{ tm_url }}" enctype="multipart/form-data" class="flex-grow-1" style="min-width:240px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="do" value="cover">
+        <label class="small text-muted mb-1" for="tmPackage">Package name (top right of the cover)</label>
+        <input class="form-control form-control-sm mb-2" id="tmPackage" name="package" maxlength="60" value="{{ template_edit.package or template_edit.name }}">
+        <label class="small text-muted mb-1" for="tmCover">{{ 'Change the cover photo' if template_edit.cover_photo else 'Cover photo (the big picture on the cover)' }}</label>
+        <input class="form-control form-control-sm mb-2" type="file" id="tmCover" name="photo" accept="image/jpeg,image/png,image/webp">
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit">Save</button>
+          {% if template_edit.cover_photo %}<button class="btn btn-sm btn-link text-danger" type="submit" name="do" value="cover_remove">Remove the cover</button>{% endif %}
+        </div>
+      </form>
+    </div>
+    <div class="fw-semibold small mb-1"><i class="bi bi-images me-1"></i>Gallery</div>
+    {% if template_edit.photo_pages %}
+    <form method="post" action="{{ tm_url }}" class="d-flex flex-wrap gap-2 mb-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for g in template_edit.photo_pages %}
+      <div class="border rounded p-1 text-center" style="width:104px">
+        <img src="{{ url_for('projects.item_image', image_id=g) }}" alt="Gallery photo {{ loop.index }}" loading="lazy" style="width:96px;height:96px;object-fit:cover" class="rounded">
+        <div class="d-flex justify-content-between mt-1">
+          <button class="btn btn-sm btn-link p-0" name="do" value="up:{{ g }}" title="Earlier" {{ 'disabled' if loop.first }}><i class="bi bi-arrow-left"></i></button>
+          <span class="small text-muted">{{ loop.index }}</span>
+          <button class="btn btn-sm btn-link p-0" name="do" value="down:{{ g }}" title="Later" {{ 'disabled' if loop.last }}><i class="bi bi-arrow-right"></i></button>
+          <button class="btn btn-sm btn-link p-0 text-danger" name="do" value="remove:{{ g }}" title="Remove"
+                  onclick="return confirm('Remove this photo from the template\'s gallery?')"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>
+      {% endfor %}
+    </form>
+    {% endif %}
+    <form method="post" action="{{ tm_url }}" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="do" value="add">
+      <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple class="form-control form-control-sm" style="max-width:320px" required>
+      <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit"><i class="bi bi-plus-lg me-1"></i>Add photos</button>
+    </form>
+    <div class="form-text">Saved straight into the template. Quotations already made from it keep their own.</div>
+  </div>
+</div>
+{% endif %}
 <form id="projectForm" method="POST"
       action="{{ url_for('projects.save_template', template_id=template_edit.id) if template_edit else url_for('projects.edit_project', project_id=project.id) if project else url_for('projects.create_project') }}"
       novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="rooms_data" id="rooms_data_field">
+  {% if start and start.photo_pages and not template_edit %}<input type="hidden" name="photo_pages" value="{{ start.photo_pages|join(',') }}">{% endif %}
+  {% if start and start.cover_photo and not template_edit %}<input type="hidden" name="cover_photo" value="{{ start.cover_photo }}">{% endif %}
+  {% if start and start.package and not template_edit %}<input type="hidden" name="package" value="{{ start.package }}">{% endif %}
   <input type="hidden" name="draft_id" id="draft_id_field"
          value="{{ project.id if project and project.status == 'draft' else '' }}">
   <input type="hidden" name="discount_type"  id="discount_type_field"
@@ -261,7 +317,7 @@
               <input class="form-check-input" type="radio" name="plywood" value="{{ opt.name }}" id="{{ opt_id }}"
                      {{ 'checked' if opt.name == ply.selected }} onchange="onQuotationPlywood()">
               <span>{{ opt.name }}</span>
-              <span class="ms-auto small text-muted">{% if opt.name == ply.default %}your rates{% elif opt.delta %}{{ '%+g'|format((opt.delta|rate)|round(2)) }} &#8377;{{ units.rate_label() }}{% else %}same price{% endif %}</span>
+              <span class="ms-auto small text-muted ki-unit-rate">{% if opt.name == ply.default %}your rates{% elif opt.delta %}{{ '%+g'|format((opt.delta|rate)|round(2)) }} &#8377;{{ units.rate_label() }}{% else %}same price{% endif %}</span>
             </label>
             {% endif %}{% endfor %}
           </div>
@@ -357,7 +413,7 @@
       </div>
 
       <!-- Rates Reference -->
-      <div class="card shadow-sm border-0 mt-3 {{ 'd-none' if boq_form.by_item }}" id="rates-card">
+      <div class="card shadow-sm border-0 mt-3 ki-unit-rate {{ 'd-none' if boq_form.by_item or no_rates }}" id="rates-card">
         {% set shown_rates = [] %}{% for c in material_combos if '(hidden)' not in c.label %}{% set _ = shown_rates.append(c) %}{% endfor %}
         <button type="button" class="card-header ki-card-header py-2 border-0 w-100 text-start d-flex align-items-center collapsed"
                 data-bs-toggle="collapse" data-bs-target="#ratesList" aria-expanded="false" aria-controls="ratesList">
@@ -442,7 +498,7 @@
                 {% for u in boq_form.units %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
               </select>
             </div>
-            <div class="col-5" id="modal_boq_rate_col">
+            <div class="col-5 ki-unit-rate-cell" id="modal_boq_rate_col">
               <label class="form-label fw-medium small mb-1" for="modal_boq_rate" id="modal_boq_rate_label">Rate</label>
               <div class="input-group">
                 <span class="input-group-text">&#8377;</span>
@@ -590,6 +646,7 @@
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
     materialDescs: {{ material_descs|tojson }},
+    noRates:     {{ (no_rates or false)|tojson }},            // an employee who can't see rates: rates and line amounts hidden
     templateEdit: {{ (template_edit is defined and template_edit is not none)|tojson }},   // editing a template: no customer; lines without a size stay             // {material: description} filled in when picked (Admin → Rates)
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
     itemImages:  {{ (item_images or false)|tojson }},

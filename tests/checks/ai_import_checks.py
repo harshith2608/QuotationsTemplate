@@ -52,6 +52,16 @@ def fake_read(body):
 
 
 AI.read = fake_read
+COLUMNS = None                       # what the AI says about a rate list's columns (None: not asked / no answer)
+asked = []
+
+
+def fake_columns(sheets):
+    asked.append(AI._preview(sheets))
+    return (COLUMNS, {'in': 600, 'out': 60}) if COLUMNS is not None else (None, None)
+
+
+AI._ask_columns = fake_columns
 
 # ── Off (default) ──
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
@@ -261,6 +271,122 @@ with app.app_context():
 n = len(calls)
 r = upload(QUOTE, 'again.pdf')
 ok('limit reached: refused before anything is read', 'used all your quotation imports' in r.text and len(calls) == n)
+
+# A clean rate table (a product master): read straight from the sheet, no AI, even with the AI limit used up
+import openpyxl, html as _h
+book = openpyxl.Workbook(); sh = book.active
+sh.append(['Product master'])                           # a title row above the headings
+sh.append(['productCategory', 'productName', 'description', 'unit', 'length', 'height', 'rate', 'total', 'agencyPrice'])
+sh.append(['CARPENTRY', 'AC PELMET', 'BASE frame : MR ply\nDecorative : paint finish', 'SQ FEET', 10, 2, 750, 15000, 10500])
+sh.append(['CARPENTRY', 'AC PELMET - Clone', 'BASE frame : MR ply\nDecorative : paint finish', 'SQ FEET', 10, 2, 750, 15000, 10500])
+sh.append(['TV UNIT', 'TV UNIT - PREMIUM', 'Laminate 1mm', 'SQ FEET', 8, 4, 1850, 59200, 1300])
+sh.append(['LOOSE ITEMS', 'BENCH', 'Wooden legs', 'R.FEET', 4, 1, 3500, 14000, 2450])
+sh.append(['CHAIR', 'ARM CHAIR', 'Fabric as per selection', 'NOS', 1, 1, 18500, 18500, 12950])
+sh.append(['CLEANING SERVICE', 'Deep cleaning', '', 'NOS', 1, 1, 6000, 6000, 4000])
+buf = io.BytesIO(); book.save(buf); master = buf.getvalue()
+quote_book = openpyxl.Workbook(); q = quote_book.active
+q.append(['Item', 'Qty', 'Rate', 'Amount'])
+for i in range(8):
+    q.append([f'Item {i}', 2, 100, 200])
+qbuf = io.BytesIO(); quote_book.save(qbuf)
+ok('a sheet with quantities is a quotation: left to the AI', AI.rate_table(qbuf.getvalue()) is None)
+n = len(calls)
+r = upload(master, 'ProductMaster.xlsx')
+t = r.text
+ok('a product master: read as it is, without the AI (and not counted against the limit)', len(calls) == n
+   and 'used all your quotation imports' not in t and 'value="AC Pelmet"' in t and 'AC Pelmet - Clone' not in t
+   and 'value="TV Unit - Premium"' in t and 'value="10500"' not in t and 'value="750"' in t)
+ok('…its descriptions with their line breaks, units in the app\'s words, its categories as sections',
+   'BASE frame : MR ply\nDecorative : paint finish</textarea>' in _h.unescape(t)
+   and 'value="rft"' in t and 'value="Loose Items"' in t and 'value="Tv Unit"' not in t)
+
+# Headings the app doesn't know: the AI says which column is which (from the first rows), then every row is read here
+odd = openpyxl.Workbook(); o = odd.active
+o.append(['Aarambh Interior – price list 2026'])
+o.append([])
+o.append(['S.No', 'Particular of work', 'Specs', 'Measure', 'Percentage', 'Charges to client (₹)', 'Our cost'])
+o.append([None, 'KITCHEN'])                                           # a section row
+o.append([1, 'Base cabinets', 'BWP ply, 1mm laminate', 'Sq.ft', 18, 1450, 900])
+o.append([2, 'Loft units', 'BWP ply', 'Sq.ft', 18, 1250, 800])
+o.append([3, 'Tall unit', '', 'Nos', 18, 32000, 21000])
+o.append([None, 'BEDROOM'])
+o.append([4, 'Wardrobe', 'Sliding, 1mm laminate', 'Sq.ft', 18, 1650, 1100])
+o.append([5, 'Bed with storage', 'Hydraulic', 'Nos', 18, 45000, 30000])
+o.append([6, 'Study table', '', 'R.ft', 18, 2200, 1500])
+obuf = io.BytesIO(); odd.save(obuf); odd_raw = obuf.getvalue()
+ok('…without the AI: headings it doesn\'t know are left to the full reading', AI.rate_table(odd_raw) is None)
+ok('…the AI is shown only the first rows, with row numbers and column letters', asked
+   and '3: A=S.No | B=Particular of work' in asked[-1] and 'F=Charges to client (₹)' in asked[-1])
+COLUMNS = AI.ColumnMap(kind='rate_list', sheet=1, heading_row=3, name='B', rate='F', unit='D', description='C', group='')
+tb = AI.rate_table(odd_raw)
+got = {l['name']: l for sec in (tb or {}).get('sections', []) for l in sec['lines']}
+ok('with the AI\'s columns: every row read exactly (selling rate, not the cost; units; descriptions)',
+   tb and len(got) == 6 and got['Base cabinets']['rate'] == 1450 and got['Tall unit']['rate'] == 32000
+   and got['Base cabinets']['unit'] == 'sqft' and got['Study table']['unit'] == 'rft'
+   and got['Wardrobe']['description'] == 'Sliding, 1mm laminate')
+ok('…rows with only a name are its sections (Kitchen, Bedroom)', tb and [sec['name'] for sec in tb['sections']]
+   == ['Kitchen', 'Bedroom'] and len(tb['sections'][0]['lines']) == 3)
+ok('…the page says which column was used for what', tb and tb['columns_by'] == 'ai'
+   and 'Item name ← Particular of work (B)' in tb['columns'] and 'Rate ← Charges to client (₹) (F)' in tb['columns'])
+n = len(calls)
+rr = upload(odd_raw, 'Aarambh rates.xlsx')
+ok('…uploaded: the review page with the columns read, no full AI reading, not counted', len(calls) == n
+   and 'Columns read' in rr.text and 'picked out by AI' in rr.text and 'value="Base cabinets"' in rr.text)
+COLUMNS = AI.ColumnMap(kind='quotation', sheet=1, heading_row=3, name='B', rate='F', unit='D', description='C', group='')
+ok('the AI says "quotation" but the sheet has no quantity column: read as a rate list anyway',
+   (AI.rate_table(odd_raw) or {}).get('columns_by') == 'ai')
+COLUMNS = AI.ColumnMap(kind='quotation', sheet=1, heading_row=1, name='A', rate='C', unit='', description='', group='')
+ok('the AI says it is a quotation and it has a Qty column: the full reading takes it', AI.rate_table(qbuf.getvalue()) is None)
+COLUMNS = AI.ColumnMap(kind='rate_list', sheet=1, heading_row=3, name='B', rate='Q', unit='', description='', group='')
+ok('a column with no rates in it: back to the headings (so the full reading here)', AI.rate_table(odd_raw) is None)
+COLUMNS = None
+pct = openpyxl.Workbook(); pc = pct.active
+pc.append(['Item', 'Percentage', 'Area (sqft)', 'Rate'])
+for i in range(6):
+    pc.append([f'Item {i}', 18, 120, 1000 + i])
+pbuf = io.BytesIO(); pct.save(pbuf)
+pt = AI.rate_table(pbuf.getvalue())
+ok('by headings: "Percentage" isn\'t the unit, "Area (sqft)" isn\'t the section', pt and
+   pt['sections'][0]['name'] == 'Items' and pt['sections'][0]['lines'][0]['unit'] == 'nos'
+   and 'Unit' not in pt['columns'])
+
+from html.parser import HTMLParser
+
+
+class _Form(HTMLParser):                   # what the browser sends: inputs (ticked boxes), textareas, selected options
+    def __init__(self):
+        super().__init__(convert_charrefs=True); self.data, self.area, self.sel = {}, None, None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == 'input' and a.get('name') and (a.get('type') != 'checkbox' or 'checked' in a):
+            self.data[a['name']] = a.get('value') or ''
+        elif tag == 'textarea':
+            self.area = a.get('name'); self.data[self.area] = ''
+        elif tag == 'select':
+            self.sel = a.get('name')
+        elif tag == 'option' and self.sel and 'selected' in a:
+            self.data[self.sel] = a.get('value', '')
+
+    def handle_data(self, d):
+        if self.area:
+            self.data[self.area] += d
+
+    def handle_endtag(self, tag):
+        if tag == 'textarea':
+            self.area = None
+        elif tag == 'select':
+            self.sel = None
+
+
+_fp = _Form(); _fp.feed(t); form = _fp.data
+r = admin.post('/admin/import/set-up', data=form)
+with app.app_context():
+    lines = {b.name: b for b in BoqItem.query.all()}
+    ok('…set up: every item at its own rate, in its section, the description kept line by line',
+       lines['AC Pelmet'].rate == 750 and lines['AC Pelmet'].unit == 'sqft' and lines['Bench'].unit == 'rft'
+       and lines['Arm Chair'].rate == 18500 and lines['TV Unit - Premium'].category == 'TV Unit'
+       and lines['AC Pelmet'].description == 'BASE frame : MR ply\nDecorative : paint finish')
 
 # The demo never offers it
 os.environ['DEMO_MODE'] = '1'

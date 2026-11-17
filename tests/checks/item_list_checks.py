@@ -282,3 +282,210 @@ ok('…printed on the PDF: the formatted section and the plain one', 'Payment as
 page = c.get('/admin/settings?tab=documents').text
 ok('…the settings page opens them in editors (plain text as a numbered list)', 'data-for="sec_payment_terms"' in page
    and 'data-for="sec_terms_conditions"' in page and '&lt;li data-list=&#34;ordered&#34;&gt;Plain note one' in page)
+
+# Choose what the PDF shows (app/pdf_choices.py): off unless switched on; tick-boxes before the PDF; kept per quotation
+from app import pdf_choices as PC
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'boq', 'boq_rate_shown': '1',
+                                'boq_room_totals': '0', 'boq_board_shown': '1'})
+view = c.get(f'/projects/{pid}').text
+ok('PDF choices off (an existing business): Quotation PDF opens straight away, no tick-boxes',
+   'id="pdfPickModal"' not in view and f'/projects/{pid}/pdf/customer' in view)
+with app.app_context():
+    PC.set_enabled(True); db.session.commit()
+view = c.get(f'/projects/{pid}').text
+ok('…switched on: the button opens the tick-boxes, ticked as the business prints today', 'id="pdfPickModal"' in view
+   and 'data-bs-target="#pdfPickModal"' in view and 'id="pp_rate" checked' in view and 'id="pp_amount" checked' in view
+   and 'id="pp_description" checked' in view)
+full_before = pdftext(f'/projects/{pid}/pdf/customer')
+r = c.post(f'/projects/{pid}/pdf/choose', data={'description': '1', 'room_total': '1'})   # no qty, rate, amount, material
+after = pdftext(f'/projects/{pid}/pdf/customer')
+with app.app_context():
+    chosen = PC.for_project(pid)
+ok('…a choice: kept for the quotation, then its PDF', r.status_code == 302 and r.headers['Location'].endswith(f'/projects/{pid}/pdf/customer')
+   and chosen['description'] and not chosen['qty'] and not chosen['rate'] and not chosen['amount'])
+ok('…the PDF shows only that: no Qty, Rate or line amounts; the room total and the description stay',
+   'Qty' in full_before and 'Qty' not in after and ' Rate ' not in after and inr(tv_amount) not in after
+   and 'Glass door in the side' in after and inr(room_total) in after)
+with app.app_context():
+    sh2 = QuoteShare.query.filter_by(project_id=pid, active=True).first()
+if sh2:
+    pub2 = app.test_client().get(f'/q/{sh2.token}').text
+    ok('…the customer\'s link the same', inr(tv_amount) not in pub2 and 'Glass door in the side' in pub2)
+c.post(f'/projects/{pid}/pdf/choose', data={})                                  # everything unticked
+bare = c.get(f'/projects/{pid}/pdf/customer')
+ok('…everything unticked: still a PDF (item names and totals)', bare.status_code == 200 and bare.data[:4] == b'%PDF'
+   and 'TV Unit' in pdftext(f'/projects/{pid}/pdf/customer'))
+with app.app_context():
+    PC.set_enabled(False); db.session.commit()
+ok('…switched off again: back to the business\'s settings', 'Qty' in pdftext(f'/projects/{pid}/pdf/customer'))
+
+# Photo pages (app/photo_pages.py): full-page pictures at the front of the PDF and link; copied with templates
+from app import item_images as IMG, photo_pages as PP
+from PIL import Image as _Img
+def _page_png(colour):
+    b = io.BytesIO(); _Img.new('RGB', (1414, 2000), colour).save(b, 'PNG'); return b.getvalue()
+ok('cover & gallery: off unless switched on (its own switch, not Item photos or PDF choices)',
+   'id="photoPages"' not in c.get(f'/projects/{pid}').text)
+with app.app_context():
+    PP.set_enabled(True); PC.set_enabled(True); db.session.commit()
+ok('…switched on: the card on the quotation', 'id="photoPages"' in c.get(f'/projects/{pid}').text)
+pages_before = len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages)
+r = c.post(f'/projects/{pid}/pages', data={'pages': [(io.BytesIO(_page_png('teal')), 'cover.png'),
+                                                     (io.BytesIO(_page_png('white')), 'about.png')]},
+           content_type='multipart/form-data')
+with app.app_context():
+    ids = PP.for_project(pid)
+    big = db.session.get(__import__('app.models', fromlist=['ItemImage']).ItemImage, ids[0])
+ok('…two pages added, stored at print size (not the 900 px of line photos)', len(ids) == 2 and big.height > 1500)
+pdf_pages = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages
+ok('…the PDF: the photos together on one gallery page in front, then the quotation', len(pdf_pages) == pages_before + 1
+   and not (pdf_pages[0].extract_text() or '').strip() and 'TV Unit' in (pdf_pages[1].extract_text() or ''))
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1'})          # gallery unticked
+ok('…unticked "Print the gallery" on the quotation: left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == pages_before)
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1', 'print_gallery': '1'})
+with app.app_context():
+    sh3 = QuoteShare.query.filter_by(project_id=pid, active=True).first()
+if sh3:
+    pub3 = app.test_client().get(f'/q/{sh3.token}').text
+    ok('…the customer\'s link shows them, and serves only this quotation\'s pictures',
+       f'/q/{sh3.token}/photo/{ids[0]}' in pub3 and app.test_client().get(f'/q/{sh3.token}/photo/{ids[0]}').status_code == 200
+       and app.test_client().get(f'/q/{sh3.token}/photo/999999').status_code == 404)
+c.post(f'/projects/{pid}/pages/{ids[1]}', data={'do': 'up'})
+with app.app_context():
+    ok('…moved earlier', PP.for_project(pid) == [ids[1], ids[0]])
+r = c.post(f'/projects/{pid}/template', data={'name': 'With pages'})
+with app.app_context():
+    from app import quote_templates as QT2
+    tpl = next(t for t in QT2._load() if t['name'] == 'With pages')
+ok('save as template: its photo pages copied (by id)', tpl.get('photo_pages') == [ids[1], ids[0]])
+form = c.get(f'/projects/new?template={tpl["id"]}').text
+ok('…a new quotation from it carries them', f'name="photo_pages" value="{ids[1]},{ids[0]}"' in form)
+c.post('/projects/new', data={'customer_name': 'From Tpl', 'mobile': '9000000333', 'discount_type': 'none',
+                              'discount_value': '0', 'photo_pages': f'{ids[1]},{ids[0]}',
+                              'rooms_data': json.dumps([{'name': 'Hall', 'items': [{'name': 'Shelf', 'length': 3, 'width': 1,
+                                                                                    'wood_type': wood, 'work_type': work}]}])})
+with app.app_context():
+    newp = Project.query.order_by(Project.id.desc()).first()
+    ok('…saved with the same photo pages', PP.for_project(newp.id) == [ids[1], ids[0]])
+c.post(f'/projects/{pid}/pages/{ids[0]}', data={'do': 'remove'})
+with app.app_context():
+    ok('…removing one from a quotation leaves the template and the other quotation as they were',
+       PP.for_project(pid) == [ids[1]] and PP.for_project(newp.id) == [ids[1], ids[0]])
+
+# The designed cover page: slogan / tagline in Settings, package name from the template, the cover photo copied
+c.post('/admin/settings', data={'section': 'documents', 'cover_slogan': 'Luxury crafted for modern living',
+                                'cover_tagline': 'Your dream home, professionally managed'})
+with app.app_context():
+    ok('cover: slogan and tagline saved in Settings → Quotation PDFs', PP.texts() == {
+        'slogan': 'Luxury crafted for modern living', 'tagline': 'Your dream home, professionally managed'})
+ok('…the settings card is there', 'id="cover-page"' in c.get('/admin/settings?tab=documents').text)
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1'})          # (the gallery off: just the cover)
+before_cover = len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages)
+c.post(f'/projects/{pid}/cover', data={'photo': (io.BytesIO(_page_png('olive')), 'door.png'), 'package': 'DIY Package'},
+       content_type='multipart/form-data')
+cov_pdf = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data))
+first = re.sub(r'\s+', ' ', cov_pdf.pages[0].extract_text() or '')
+ok('…with a cover photo: the cover is the first page (name, slogan, tagline, package name)',
+   len(cov_pdf.pages) == before_cover + 1 and 'LUXURY CRAFTED FOR MODERN LIVING' in first
+   and 'Your dream home, professionally managed' in first and 'DIY PACKAGE' in first)
+with app.app_context():
+    _p = db.session.get(Project, pid)
+    _who, _by = _p.customer_name, _p.creator.display_name
+ok('…and who it\'s for, who prepared it and its date (no Valid until: Validity empty)', 'PREPARED FOR' in first
+   and _who in first and 'PREPARED BY' in first and _by in first and 'DATE' in first and 'VALID UNTIL' not in first)
+c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': '30'})
+with app.app_context():
+    from app import layout as _lay
+    _until = _lay.valid_until(db.session.get(Project, pid).created_at).strftime('%d %B %Y')
+_pdf = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data))
+first = re.sub(r'\s+', ' ', _pdf.pages[0].extract_text() or '')
+_rest = re.sub(r'\s+', ' ', _pdf.pages[1].extract_text() or '')
+ok('Validity 30 days (Settings → Quotation PDFs): Valid until on the cover and next to the date',
+   'VALID UNTIL' in first and _until in first and f'Valid until: {_until}' in _rest)
+ok('…the setting is shown', 'name="quote_valid_days"' in c.get('/admin/settings?tab=documents').text
+   and 'value="30"' in c.get('/admin/settings?tab=documents').text)
+c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': 'abc'})
+with app.app_context():
+    ok('…a value that isn\'t a number is refused (30 kept)', _lay.valid_days() == 30)
+c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': ''})
+with app.app_context():
+    ok('…emptied: off', _lay.valid_days() is None)
+ok('…and gone from the PDF', 'Valid until' not in ' '.join(x.extract_text() for x in
+   PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages))
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1'})
+ok('…unticked "Print the cover": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == before_cover
+   and 'LUXURY' not in (PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages[0].extract_text() or ''))
+c.post(f'/projects/{pid}/cover', data={'print_seen': '1', 'print_cover': '1', 'print_gallery': '1'})
+with app.app_context():
+    cover_id = PP.cover_photo(pid)
+c.post(f'/projects/{pid}/template', data={'name': 'Premium Package'})
+with app.app_context():
+    tpl2 = next(t for t in QT2._load() if t['name'] == 'Premium Package')
+ok('…Save as template copies the cover photo', tpl2.get('cover_photo') == cover_id)
+form2 = c.get(f'/projects/new?template={tpl2["id"]}').text
+ok('…a quotation from it: the same cover photo, the package named after the template',
+   f'name="cover_photo" value="{cover_id}"' in form2 and 'name="package" value="Premium Package"' in form2)
+c.post('/projects/new', data={'customer_name': 'Cover Copy', 'mobile': '9000000222', 'discount_type': 'none',
+                              'discount_value': '0', 'cover_photo': str(cover_id), 'package': 'Premium Package',
+                              'rooms_data': json.dumps([{'name': 'Hall', 'items': [{'name': 'Shelf', 'length': 3, 'width': 1,
+                                                                                    'wood_type': wood, 'work_type': work}]}])})
+with app.app_context():
+    p3 = Project.query.order_by(Project.id.desc()).first()
+    ok('…saved with them', PP.cover_photo(p3.id) == cover_id and PP.package(p3.id) == 'Premium Package')
+
+# The approval link: the same "what should it show" window before creating it, and to change it after
+with app.app_context():
+    PC.set_enabled(True); db.session.commit()
+page3 = c.get(f'/projects/{p3.id}').text
+ok('approval link: "Create approval link" opens the same window (pointed at creating the link)',
+   f'data-pick-action="/projects/{p3.id}/share"' in page3 and 'data-pick-mode="create"' in page3)
+r = c.post(f'/projects/{p3.id}/share', data={'pick': '1', 'description': '1', 'room_total': '1'})
+with app.app_context():
+    sh4 = QuoteShare.query.filter_by(project_id=p3.id, active=True).first()
+    ch4 = PC.for_project(p3.id)
+ok('…created with the choice (no rates or line amounts)', sh4 is not None and not ch4['rate'] and not ch4['amount']
+   and ch4['description'] and r.headers['Location'].endswith('#approval'))
+page3 = c.get(f'/projects/{p3.id}').text
+ok('…then "What the link shows" changes it (same window, saving back to the link)', 'data-pick-mode="link"' in page3
+   and 'What the link shows' in page3)
+r = c.post(f'/projects/{p3.id}/pdf/choose', data={'then': 'link', **{k: '1' for k in PC.KEYS}})
+with app.app_context():
+    ch5 = PC.for_project(p3.id)
+ok('…saved for the link: back to the link (not a PDF), now with rates and amounts', r.headers['Location'].endswith('#approval')
+   and ch5['rate'] and ch5['amount'])
+pub4 = app.test_client().get(f'/q/{sh4.token}').text
+ok('…and the customer\'s link follows it', 'Shelf' in pub4)
+
+# A template's cover & gallery can be changed on its Edit lines page
+with app.app_context():
+    tid9 = QT2.put('Bare Package', [{'name': 'Hall', 'items': [{'name': 'Shelf', 'wood_type': wood, 'work_type': work, 'pending': True}]}])
+    db.session.commit()
+tp = c.get(f'/templates/{tid9}/edit').text
+ok('template editing: a Cover & gallery card (outside the lines form)', 'id="templateMedia"' in tp
+   and tp.index('id="templateMedia"') < tp.index('id="projectForm"') and 'value="Bare Package"' in tp)
+c.post(f'/templates/{tid9}/media', data={'do': 'cover', 'package': 'Premium DIY', 'photo': (io.BytesIO(_page_png('teal')), 'c.png')},
+       content_type='multipart/form-data')
+c.post(f'/templates/{tid9}/media', data={'do': 'add', 'photos': [(io.BytesIO(_page_png('gray')), 'a.png'),
+                                                                  (io.BytesIO(_page_png('white')), 'b.png')]},
+       content_type='multipart/form-data')
+with app.app_context():
+    t9 = QT2.get(tid9)
+ok('…cover photo, package name and two gallery photos saved into the template', t9.get('cover_photo')
+   and t9.get('package') == 'Premium DIY' and len(t9.get('photo_pages') or []) == 2)
+g1, g2 = t9['photo_pages']
+c.post(f'/templates/{tid9}/media', data={'do': f'down:{g1}'})
+with app.app_context():
+    ok('…reordered', QT2.get(tid9)['photo_pages'] == [g2, g1])
+nf = c.get(f'/projects/new?template={tid9}').text
+ok('…a new quotation from it: its cover photo, package name and gallery', f'name="cover_photo" value="{t9["cover_photo"]}"' in nf
+   and 'name="package" value="Premium DIY"' in nf and f'name="photo_pages" value="{g2},{g1}"' in nf)
+c.post(f'/templates/{tid9}/media', data={'do': f'remove:{g2}'})
+c.post(f'/templates/{tid9}/media', data={'do': 'cover_remove'})
+with app.app_context():
+    t9b = QT2.get(tid9)
+ok('…a photo and the cover removed from the template', t9b['photo_pages'] == [g1] and not t9b.get('cover_photo'))
+r = c.post(f'/templates/{tid9}/save', data={'rooms_data': json.dumps([{'name': 'Hall', 'items': [
+    {'name': 'Shelf', 'wood_type': wood, 'work_type': work, 'pending': True, 'count': 1}]}])})
+with app.app_context():
+    ok('…saving its lines keeps its gallery and package', QT2.get(tid9)['photo_pages'] == [g1]
+       and QT2.get(tid9)['package'] == 'Premium DIY')

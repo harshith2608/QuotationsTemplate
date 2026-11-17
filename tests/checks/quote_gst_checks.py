@@ -62,8 +62,8 @@ with app.app_context():
 ok('the revision keeps GST (rate, amount, grand total)', snap.get('gst_rate') == 18 and snap.get('gst') == gst
    and snap.get('payable') == round(total + gst, 2))
 q = app.test_client().get(f'/q/{tok}').text
-ok("customer's link: GST and the grand total, accepting for the total with GST", 'GST @ 18%' in q
-   and q.count(money(total + gst)) >= 2 and '(incl. GST)' in q)
+ok("customer's link: GST and the grand total, at the end (after the items, not before them)", 'GST @ 18%' in q
+   and money(total + gst) in q and q.index(money(total + gst)) > q.index('GST @ 18%') and '(incl. GST)' in q)
 with app.app_context():
     p = db.session.get(Project, pid)
     paid = billing.paid_total(p)
