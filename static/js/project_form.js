@@ -1090,8 +1090,10 @@ function modalCalcBoq() {
 
 // ─── Add from my lines: tick several saved BOQ lines, add them to a room at once ──
 let _pickRoom = null;
+const _picked = new Set();                 // what's ticked in this window (kept while searching, cleared on opening)
 function openBoqPicker(rk) {
   _pickRoom = rk;
+  _picked.clear();                         // a fresh start for each room: nothing ticked from last time
   const search = document.getElementById('boqPickSearch');
   if (search) search.value = '';
   renderBoqPicker();
@@ -1102,7 +1104,6 @@ function renderBoqPicker() {
   const list = document.getElementById('boqPickList');
   if (!list) return;
   const q = (document.getElementById('boqPickSearch')?.value || '').trim().toLowerCase();
-  const ticked = new Set(Array.from(list.querySelectorAll('input:checked')).map(c => c.value));
   const inRoom = new Set(Object.values(rooms[_pickRoom]?.items || {}).map(i => (i.name || '').toLowerCase()));
   const groups = {};
   BOQ_SAVED.forEach((b, i) => {
@@ -1121,7 +1122,7 @@ function renderBoqPicker() {
       ${groups[g].map(([b, i]) => `
         <label class="ki-pick-row d-flex gap-2 align-items-start py-1 border-bottom" for="bp_${i}">
           <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="bp_${i}" value="${i}"
-                 ${ticked.has(String(i)) ? 'checked' : ''} onchange="countBoqPicks()">
+                 ${_picked.has(String(i)) ? 'checked' : ''} onchange="countBoqPicks(this)">
           <span class="flex-grow-1" style="min-width:0">
             <span class="fw-semibold small">${escHtml(b.name)}</span>
             ${inRoom.has(b.name.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : ''}
@@ -1135,16 +1136,17 @@ function renderBoqPicker() {
 function pickGroup(btn) {
   const boxes = btn.closest('.ki-pick-group').querySelectorAll('input[type=checkbox]');
   const all = Array.from(boxes).every(b => b.checked);
-  boxes.forEach(b => { b.checked = !all; });
+  boxes.forEach(b => { b.checked = !all; all ? _picked.delete(b.value) : _picked.add(b.value); });
   countBoqPicks();
 }
-function countBoqPicks() {
-  const n = document.querySelectorAll('#boqPickList input:checked').length;
+function countBoqPicks(box) {
+  if (box) box.checked ? _picked.add(box.value) : _picked.delete(box.value);
+  const n = _picked.size;
   const btn = document.getElementById('boqPickAdd');
   if (btn) { btn.disabled = !n; btn.textContent = n ? `Add ${n} line${n > 1 ? 's' : ''}` : 'Add lines'; }
 }
 function addBoqPicks() {
-  const picks = Array.from(document.querySelectorAll('#boqPickList input:checked')).map(c => BOQ_SAVED[+c.value]);
+  const picks = Array.from(_picked).sort((a, b) => a - b).map(i => BOQ_SAVED[+i]).filter(Boolean);   // (hidden by a search too)
   picks.forEach(b => {
     const lump = b.unit === 'lump sum';
     _insertBoqRow(_pickRoom, b.name, lump ? 1 : 0, b.unit, b.rate || '', b.description, false, 0, 0, 1, !lump);
