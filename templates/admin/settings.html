@@ -652,6 +652,20 @@
       {% if not pricing.item_ready %}<div class="form-text text-danger mt-2">Pricing by item needs the latest update of your app.</div>{% endif %}
     </div>
   </div>
+  <div class="card shadow-sm border-0 mb-3" id="hide-rates">
+    <div class="card-header ki-card-header"><i class="bi bi-eye-slash me-2"></i>Rates on screen</div>
+    <div class="card-body">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" name="hide_rates_on_screen" value="1" id="hide_rates_on_screen"
+               {{ 'checked' if pricing.hide_on_screen }}>
+        <label class="form-check-label fw-semibold" for="hide_rates_on_screen">Hide rates while making quotations</label>
+      </div>
+      <div class="form-text">For quoting in front of your customer: the rates (per {{ units.area_label() }}, per No., per
+        running ft…) aren't shown on the quotation form or the quotation page, for everyone including admins. Amounts
+        and totals still show, and the PDF, link and WhatsApp are as before. A <strong>Show rates</strong> button on
+        the page shows them when you need them.</div>
+    </div>
+  </div>
   <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
 </form>
 {% endif %}

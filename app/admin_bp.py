@@ -1202,8 +1202,12 @@ def settings():
                 errors.append('Choose how you price your work.')
             elif mode == boq.ITEM and not boq.ready():
                 errors.append('Pricing by item needs the latest update of your app. Please contact support.')
-            else:
+            elif mode != boq.pricing_mode():                 # (saved unchanged: the PDF layout stays as chosen)
                 boq.set_pricing(mode)
+            else:
+                __import__('app.setup_guide', fromlist=['mark']).mark('pricing')
+            from . import rate_access
+            AppSetting.set(rate_access.SCREEN_KEY, '1' if request.form.get('hide_rates_on_screen') == '1' else '0')
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1245,7 +1249,9 @@ def settings():
     support_links = {key: branding.support_message_url(what, current_user, request.host_url)
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     from . import layout, boq
-    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready()} if tab == 'pricing' else None
+    pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready(),
+               'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen()} \
+        if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,

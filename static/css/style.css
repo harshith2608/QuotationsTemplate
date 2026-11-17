@@ -764,3 +764,11 @@ body > main { flex: 1 0 auto; }
 .ki-table-grid span { width: 1.35rem; height: 1.1rem; border: 1px solid #ced4da; border-radius: 2px; cursor: pointer; background: #fff; }
 .ki-table-grid span.on { background: rgba(var(--ki-primary-rgb, 13, 110, 253), .35); border-color: var(--ki-primary, #0d6efd); }
 .ki-table-actions .btn { font-size: .78rem; }
+
+/* Settings → Pricing → Hide rates while making quotations (app/rate_access.py): only the rates, for everyone;
+   Show rates (ki-rates-peek) shows them on this page */
+.ki-hide-unit-rates .ki-unit-rate { display: none !important; }
+.ki-hide-unit-rates .ki-unit-rate-cell > * { visibility: hidden !important; }
+.ki-rates-peek-btn .ki-when-shown { display: none; }
+body:not(.ki-hide-unit-rates) .ki-rates-peek-btn .ki-when-hidden { display: none; }
+body:not(.ki-hide-unit-rates) .ki-rates-peek-btn .ki-when-shown { display: inline; }

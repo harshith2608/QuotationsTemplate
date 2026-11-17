@@ -41,7 +41,7 @@
       </ol>
     </nav>
     <h4 class="mb-0 fw-bold ki-page-title">
-      <i class="bi bi-file-earmark-plus me-2 text-primary"></i>{{ title }}
+      <i class="bi bi-file-earmark-plus me-2 text-primary"></i>{{ title }}{% include '_rates_peek.html' %}
     </h4>
   </div>
   {% if not project and templates and not template_edit %}
@@ -317,7 +317,7 @@
               <input class="form-check-input" type="radio" name="plywood" value="{{ opt.name }}" id="{{ opt_id }}"
                      {{ 'checked' if opt.name == ply.selected }} onchange="onQuotationPlywood()">
               <span>{{ opt.name }}</span>
-              <span class="ms-auto small text-muted">{% if opt.name == ply.default %}your rates{% elif opt.delta %}{{ '%+g'|format((opt.delta|rate)|round(2)) }} &#8377;{{ units.rate_label() }}{% else %}same price{% endif %}</span>
+              <span class="ms-auto small text-muted ki-unit-rate">{% if opt.name == ply.default %}your rates{% elif opt.delta %}{{ '%+g'|format((opt.delta|rate)|round(2)) }} &#8377;{{ units.rate_label() }}{% else %}same price{% endif %}</span>
             </label>
             {% endif %}{% endfor %}
           </div>
@@ -413,7 +413,7 @@
       </div>
 
       <!-- Rates Reference -->
-      <div class="card shadow-sm border-0 mt-3 {{ 'd-none' if boq_form.by_item or no_rates }}" id="rates-card">
+      <div class="card shadow-sm border-0 mt-3 ki-unit-rate {{ 'd-none' if boq_form.by_item or no_rates }}" id="rates-card">
         {% set shown_rates = [] %}{% for c in material_combos if '(hidden)' not in c.label %}{% set _ = shown_rates.append(c) %}{% endfor %}
         <button type="button" class="card-header ki-card-header py-2 border-0 w-100 text-start d-flex align-items-center collapsed"
                 data-bs-toggle="collapse" data-bs-target="#ratesList" aria-expanded="false" aria-controls="ratesList">
@@ -498,7 +498,7 @@
                 {% for u in boq_form.units %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
               </select>
             </div>
-            <div class="col-5" id="modal_boq_rate_col">
+            <div class="col-5 ki-unit-rate-cell" id="modal_boq_rate_col">
               <label class="form-label fw-medium small mb-1" for="modal_boq_rate" id="modal_boq_rate_label">Rate</label>
               <div class="input-group">
                 <span class="input-group-text">&#8377;</span>

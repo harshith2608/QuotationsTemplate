@@ -17,7 +17,7 @@
       <i class="bi bi-file-earmark-text me-2 text-primary"></i>
       {{ project.customer_name }}
       {% if q2c.history and q2c.history[0][0].number > 1 %}<a href="#revisions" class="badge bg-light text-dark border align-middle small text-decoration-none">Rev {{ q2c.history[0][0].number }}</a>{% endif %}
-      <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>
+      <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>{% include '_rates_peek.html' %}
     </h4>
     {% if company %}
     <form method="post" action="{{ url_for('projects.set_company', project_id=project.id) }}" class="d-flex align-items-center gap-2 mt-2" id="companyPicker">
@@ -371,7 +371,7 @@
           <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
             <div>
               <span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }} d-block mb-1">{{ row.label }}</span>
-              <span class="text-muted small">{{ row.area|area }}<span class="ki-rate"> &times; &#8377;{{ (row.rate|rate)|inr(0) }}{{ units.rate_label() }}</span></span>
+              <span class="text-muted small">{{ row.area|area }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (row.rate|rate)|inr(0) }}{{ units.rate_label() }}</span></span>
             </div>
             <span class="fw-semibold ms-3 text-nowrap ki-rate">&#8377;{{ (row.subtotal)|inr }}</span>
           </div>
@@ -415,7 +415,7 @@
             <tr>
               <th>Material &amp; Work</th>
               <th class="text-end">Area ({{ units.area_label() }})</th>
-              <th class="text-end ki-rate">Rate (&#8377;{{ units.rate_label() }})</th>
+              <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;{{ units.rate_label() }})</th>
               <th class="text-end ki-rate">Amount (&#8377;)</th>
             </tr>
           </thead>
@@ -424,7 +424,7 @@
             <tr>
               <td><span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }}">{{ row.label }}</span></td>
               <td class="text-end">{{ (units.area_value(row.area))|inr }}</td>
-              <td class="text-end ki-rate">{{ (row.rate|rate)|inr(0) }}</td>
+              <td class="text-end ki-rate ki-unit-rate">{{ (row.rate|rate)|inr(0) }}</td>
               <td class="text-end fw-semibold ki-rate">{{ (row.subtotal)|inr }}</td>
             </tr>
             {% endfor %}
@@ -530,7 +530,7 @@
           <table class="table table-sm table-bordered align-middle mb-0">
             <thead class="table-light">
               <tr><th>Item</th><th class="text-center">Qty</th><th class="text-center">Unit</th>
-                  <th class="text-end ki-rate">Rate (&#8377;)</th><th class="text-end ki-rate">Amount (&#8377;)</th></tr>
+                  <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;)</th><th class="text-end ki-rate">Amount (&#8377;)</th></tr>
             </thead>
             <tbody>
               {% for item in room.item_list %}
@@ -540,7 +540,7 @@
                   {% if item.is_boq and item.length %}<div class="small text-muted fw-normal">Size: {{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }} Nos.{% endif %}</div>{% endif %}</td>
                 <td class="text-center text-nowrap">{{ '%g' % item.quantity if item.quantity else '—' }}</td>
                 <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
-                <td class="text-end text-nowrap ki-rate">{% if item.price_to_follow %}—{% else %}{{ (item.unit_price or 0)|inr(0) }}{% endif %}</td>
+                <td class="text-end text-nowrap ki-rate ki-unit-rate">{% if item.price_to_follow %}—{% else %}{{ (item.unit_price or 0)|inr(0) }}{% endif %}</td>
                 <td class="text-end fw-semibold text-success text-nowrap ki-rate">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
               </tr>
               {% endfor %}
@@ -578,9 +578,9 @@
                 <td class="text-center">
                   {% if item.is_boq %}<span class="badge ki-badge-boq">{{ 'Lump sum' if item.unit_text == 'LS' else 'BOQ' }}</span>
                   {% if item.length %}<div class="small text-muted mt-1">{{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }}{% endif %}</div>{% endif %}
-                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %}<span class="ki-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span>{% endif %}{% else %}<span class="ki-rate">Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}</span>{% endif %}</div>
+                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span>{% endif %}{% else %}<span class="ki-rate ki-unit-rate">Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}</span>{% endif %}</div>
                   {% else %}<span class="badge ki-badge-fitting">Fitting</span>
-                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }}<span class="ki-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span></div>{% endif %}
+                  <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span></div>{% endif %}
                 </td>
                 <td class="text-end fw-semibold text-success ki-rate">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>

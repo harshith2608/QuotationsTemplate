@@ -354,10 +354,13 @@ function updateRoomHeader(rk, hasMeasured, hasPriced) {
   if (!th('c1')) return;
   if (!th('c1').dataset.measured) ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => { th(c).dataset.measured = th(c).textContent; });
   const m = c => th(c).dataset.measured;
-  const priced = { c1: 'Qty', c2: 'Unit', c3: NO_RATES ? '' : 'Rate (₹)', c4: 'Type', c5: NO_RATES ? '' : 'Amount' };
+  const RATE = '<span class="ki-unit-rate">Rate (₹)</span>';      // (hidden with Hide rates while making quotations)
+  const priced = { c1: 'Qty', c2: 'Unit', c3: NO_RATES ? '' : RATE, c4: 'Type', c5: NO_RATES ? '' : 'Amount' };
   if (!hasMeasured && !hasPriced && CATALOG.byItem) hasPriced = true;   // empty, priced by item: its lines' columns
   ['c1', 'c2', 'c3', 'c4', 'c5'].forEach(c => {
-    th(c).textContent = hasPriced && !hasMeasured ? priced[c] : hasPriced ? `${m(c)} / ${priced[c]}` : m(c);
+    const label = priced[c] === RATE ? priced[c] : escHtml(priced[c]);
+    th(c).innerHTML = hasPriced && !hasMeasured ? label
+      : hasPriced ? `${escHtml(m(c))} <span class="${priced[c] === RATE ? 'ki-unit-rate' : ''}">/ ${label}</span>` : escHtml(m(c));
   });
   const was = card.classList.contains('ki-priced-only');
   card.classList.toggle('ki-priced-only', hasPriced && !hasMeasured);   // no Type column, more room for name and rate
@@ -1129,7 +1132,7 @@ function renderBoqPicker() {
             ${inRoom.has(b.name.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : ''}
             ${b.description ? `<span class="d-block small text-muted text-truncate">${escHtml(b.description.split('\n')[0])}</span>` : ''}
           </span>
-          <span class="small text-nowrap text-muted">${b.rate ? '₹' + Number(b.rate).toLocaleString('en-IN') : '—'} / ${escHtml(b.unit)}</span>
+          <span class="small text-nowrap text-muted"><span class="ki-unit-rate">${b.rate ? '₹' + Number(b.rate).toLocaleString('en-IN') : '—'} / </span>${escHtml(b.unit)}</span>
         </label>`).join('')}
     </div>`).join('') : '<p class="text-muted small my-3">No saved lines match.</p>';
   countBoqPicks();
@@ -1194,7 +1197,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       <select class="form-select form-select-sm" id="item_unit_${ik}" title="Unit" ${BOQ ? '' : 'disabled'}
               onchange="syncLumpSum(this, document.getElementById('item_qty_${ik}')); onBoqField('${rk}','${ik}')">${unitOptions(unit || 'nos')}</select>
     </td>
-    <td data-label="Rate" class="ki-rate-cell">
+    <td data-label="Rate" class="ki-rate-cell ki-unit-rate-cell">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"
@@ -1327,7 +1330,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
              value="${qty}" oninput="onFixedField('${rk}','${ik}')" title="Quantity">
     </td>
     <td class="small text-muted text-center" data-label="Unit" id="item_unit_${ik}">${escHtml((_findPrice(name) || {}).unit || 'nos')}</td>
-    <td data-label="Rate" class="ki-rate-cell">
+    <td data-label="Rate" class="ki-rate-cell ki-unit-rate-cell">
       <div class="input-group input-group-sm">
         <span class="input-group-text px-1 small text-muted">₹</span>
         <input type="number" class="form-control text-end px-1" id="item_price_${ik}" min="0" step="any"

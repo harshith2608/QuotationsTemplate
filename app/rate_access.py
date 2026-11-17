@@ -106,6 +106,20 @@ def decide(req_id, approve, admin):
     return req
 
 
+SCREEN_KEY = 'hide_rates_on_screen'
+
+
+def hidden_on_screen():
+    """Settings → Pricing: rates (per sqft, per No., per rft…) hidden on screen while making a quotation, for everyone
+    (admins too: e.g. quoting in front of the customer). Only the rates: line amounts and totals stay; the PDF, link
+    and WhatsApp are as before. A Show rates button on the page shows them until it's left."""
+    from .models import AppSetting
+    try:
+        return AppSetting.get(SCREEN_KEY, '') == '1'
+    except Exception:
+        return False
+
+
 def admin_email():
     """Where requests go: the admin email in Settings (else the company email)."""
     from .models import AppSetting
