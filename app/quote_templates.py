@@ -43,14 +43,16 @@ def get(template_id):
 def start_from_project(project):
     """What a new quotation copies from `project`: {'rooms_json', 'discount_type', 'discount_value', 'plywood'}."""
     from .projects import _build_rooms_json
+    from . import photo_pages
     return {'rooms_json': _build_rooms_json(project), 'discount_type': project.discount_type or 'none',
-            'discount_value': project.discount_value or 0, 'plywood_thickness': project.plywood_thickness or ''}
+            'discount_value': project.discount_value or 0, 'plywood_thickness': project.plywood_thickness or '',
+            'photo_pages': photo_pages.for_project(project.id)}
 
 
 def start_from_template(template):
     return {'rooms_json': json.dumps(template.get('rooms') or []), 'discount_type': template.get('discount_type') or 'none',
             'discount_value': template.get('discount_value') or 0, 'plywood_thickness': template.get('plywood_thickness') or '',
-            'plywood': template.get('plywood')}
+            'plywood': template.get('plywood'), 'photo_pages': template.get('photo_pages') or []}
 
 
 def save(name, project):
@@ -67,6 +69,7 @@ def save(name, project):
     templates.append({'id': tid, 'name': name, 'rooms': json.loads(start['rooms_json']),
                       'discount_type': start['discount_type'], 'discount_value': start['discount_value'],
                       'plywood_thickness': start['plywood_thickness'], 'plywood': plywood.project_plywood(project),
+                      'photo_pages': start.get('photo_pages') or [],          # its cover / About us / gallery pages
                       'saved_at': datetime.utcnow().isoformat(timespec='seconds')})
     _store(templates)
     return tid

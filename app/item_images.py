@@ -69,14 +69,15 @@ def set_enabled(on):
     AppSetting.set(KEY, '1' if on else '')
 
 
-def save_upload(raw):
-    """Check and store an uploaded photo. Returns the new ItemImage. Raises ImageError."""
+def save_upload(raw, max_side=MAX_SIDE):
+    """Check and store an uploaded photo (max_side: its long side at most, px; photo pages are larger). Returns the new
+    ItemImage. Raises ImageError."""
     from PIL import Image, ImageOps, UnidentifiedImageError
     from .models import ItemImage
     if not raw:
         raise ImageError('Choose a photo.')
     if len(raw) > MAX_UPLOAD_BYTES:
-        raise ImageError('The photo must be 8 MB or smaller.')
+        raise ImageError('The photo must be 8 MB or smaller.')   # (a designed A4 page as a JPG is usually 1-4 MB)
     try:
         img = Image.open(io.BytesIO(raw))
         if img.format not in ('PNG', 'JPEG', 'WEBP', 'MPO'):
@@ -94,9 +95,9 @@ def save_upload(raw):
         img = bg
     else:
         img = img.convert('RGB')
-    img.thumbnail((MAX_SIDE, MAX_SIDE))
+    img.thumbnail((max_side, max_side))
     out = io.BytesIO()
-    img.save(out, format='JPEG', quality=82, optimize=True, progressive=True)
+    img.save(out, format='JPEG', quality=82 if max_side <= MAX_SIDE else 85, optimize=True, progressive=True)
     row = ItemImage(data=out.getvalue(), mime='image/jpeg', width=img.width, height=img.height)
     db.session.add(row)
     db.session.flush()

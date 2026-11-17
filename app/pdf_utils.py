@@ -1158,7 +1158,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         elements += _closing_page(page_width, palette, styles)
     _build(doc, elements)
     buffer.seek(0)
-    return buffer
+    from . import photo_pages                    # its own full-page pictures in front (cover, About us, gallery)
+    return photo_pages.with_pages(project, buffer)
 
 
 def generate_invoice_pdf(invoice, data, total_paid=0.0):

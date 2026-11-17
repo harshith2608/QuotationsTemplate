@@ -69,6 +69,13 @@
     </div>
   </div>
 
+  {% if pages %}
+  <div class="q-card p-2">
+    {% for pid_ in pages %}<img src="{{ url_for('share.photo', token=share.token, image_id=pid_) }}" alt="Page {{ loop.index }}"
+         loading="lazy" class="d-block w-100 rounded {{ 'mt-2' if not loop.first }}">{% endfor %}
+  </div>
+  {% endif %}
+
   {% if share.detail == 'full' %}
   <div class="q-card">
     <div class="fw-semibold mb-2">Room by room</div>

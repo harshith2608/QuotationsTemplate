@@ -318,3 +318,55 @@ ok('…everything unticked: still a PDF (item names and totals)', bare.status_co
 with app.app_context():
     PC.set_enabled(False); db.session.commit()
 ok('…switched off again: back to the business\'s settings', 'Qty' in pdftext(f'/projects/{pid}/pdf/customer'))
+
+# Photo pages (app/photo_pages.py): full-page pictures at the front of the PDF and link; copied with templates
+from app import item_images as IMG, photo_pages as PP
+from PIL import Image as _Img
+def _page_png(colour):
+    b = io.BytesIO(); _Img.new('RGB', (1414, 2000), colour).save(b, 'PNG'); return b.getvalue()
+with app.app_context():
+    IMG.set_enabled(True); PC.set_enabled(True); db.session.commit()
+ok('photo pages: the card on the quotation (with Item photos on)', 'id="photoPages"' in c.get(f'/projects/{pid}').text)
+pages_before = len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages)
+r = c.post(f'/projects/{pid}/pages', data={'pages': [(io.BytesIO(_page_png('teal')), 'cover.png'),
+                                                     (io.BytesIO(_page_png('white')), 'about.png')]},
+           content_type='multipart/form-data')
+with app.app_context():
+    ids = PP.for_project(pid)
+    big = db.session.get(__import__('app.models', fromlist=['ItemImage']).ItemImage, ids[0])
+ok('…two pages added, stored at print size (not the 900 px of line photos)', len(ids) == 2 and big.height > 1500)
+c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS})
+pdf_pages = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages
+ok('…the PDF: the two pictures in front, each a whole page, then the quotation', len(pdf_pages) == pages_before + 2
+   and not (pdf_pages[0].extract_text() or '').strip() and 'TV Unit' in (pdf_pages[2].extract_text() or ''))
+c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS if k != 'photo_pages'})
+ok('…unticked "Photo pages at the front": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == pages_before)
+c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in PC.KEYS})
+with app.app_context():
+    sh3 = QuoteShare.query.filter_by(project_id=pid, active=True).first()
+if sh3:
+    pub3 = app.test_client().get(f'/q/{sh3.token}').text
+    ok('…the customer\'s link shows them, and serves only this quotation\'s pictures',
+       f'/q/{sh3.token}/photo/{ids[0]}' in pub3 and app.test_client().get(f'/q/{sh3.token}/photo/{ids[0]}').status_code == 200
+       and app.test_client().get(f'/q/{sh3.token}/photo/999999').status_code == 404)
+c.post(f'/projects/{pid}/pages/{ids[1]}', data={'do': 'up'})
+with app.app_context():
+    ok('…moved earlier', PP.for_project(pid) == [ids[1], ids[0]])
+r = c.post(f'/projects/{pid}/template', data={'name': 'With pages'})
+with app.app_context():
+    from app import quote_templates as QT2
+    tpl = next(t for t in QT2._load() if t['name'] == 'With pages')
+ok('save as template: its photo pages copied (by id)', tpl.get('photo_pages') == [ids[1], ids[0]])
+form = c.get(f'/projects/new?template={tpl["id"]}').text
+ok('…a new quotation from it carries them', f'name="photo_pages" value="{ids[1]},{ids[0]}"' in form)
+c.post('/projects/new', data={'customer_name': 'From Tpl', 'mobile': '9000000333', 'discount_type': 'none',
+                              'discount_value': '0', 'photo_pages': f'{ids[1]},{ids[0]}',
+                              'rooms_data': json.dumps([{'name': 'Hall', 'items': [{'name': 'Shelf', 'length': 3, 'width': 1,
+                                                                                    'wood_type': wood, 'work_type': work}]}])})
+with app.app_context():
+    newp = Project.query.order_by(Project.id.desc()).first()
+    ok('…saved with the same photo pages', PP.for_project(newp.id) == [ids[1], ids[0]])
+c.post(f'/projects/{pid}/pages/{ids[0]}', data={'do': 'remove'})
+with app.app_context():
+    ok('…removing one from a quotation leaves the template and the other quotation as they were',
+       PP.for_project(pid) == [ids[1]] and PP.for_project(newp.id) == [ids[1], ids[0]])

@@ -519,6 +519,12 @@ def create_project():
         project.grand_total = grand_total
         project.status = 'complete'
         _ensure_creator_access(project, current_user)
+        from . import photo_pages                            # a template's / duplicated quotation's photo pages
+        if request.form.get('photo_pages') and photo_pages.enabled():
+            from . import item_images
+            wanted = [v for v in request.form.get('photo_pages').split(',') if v.strip().isdigit()]
+            have = item_images.valid_ids(wanted)
+            photo_pages.set_for_project(project.id, [int(v) for v in wanted if int(v) in have])
         db.session.commit()
         billing.record_revision(project, current_user)       # R1
         db.session.commit()
@@ -743,6 +749,8 @@ def view_project(project_id):
                            material_list_on=__import__('app.material_list', fromlist=['available']).available(),
                            ai_check_on=__import__('app.ai_tools', fromlist=['available']).available('check'),
                            company=_company_picker(project), pdf_pick=_pdf_pick(project),
+                           pages=__import__('app.photo_pages', fromlist=['for_project']).for_project(project.id)
+                           if __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -1022,6 +1030,7 @@ def delete_project(project_id):
     from . import profiles
     profiles.forget_project(project.id)
     __import__('app.pdf_choices', fromlist=['forget']).forget(project_id)
+    __import__('app.photo_pages', fromlist=['forget']).forget(project_id)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')
@@ -1233,6 +1242,47 @@ def download_pdf(project_id):
                      download_name=filename, mimetype='application/pdf')
 
 
+@projects_bp.route('/projects/<int:project_id>/pages', methods=['POST'])
+@login_required
+def add_photo_pages(project_id):
+    """Upload full-page pictures for the front of this quotation's PDF (app/photo_pages.py)."""
+    from . import access, item_images, photo_pages
+    project = Project.query.get_or_404(project_id)
+    if not photo_pages.enabled():
+        abort(404)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    raws = [f.read() for f in request.files.getlist('pages') if f and f.filename]
+    try:
+        ids = photo_pages.add(project.id, raws)
+    except item_images.ImageError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash(f'Added {len(raws)} photo page{"s" if len(raws) != 1 else ""} ({len(ids)} in all).', 'success')
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
+
+
+@projects_bp.route('/projects/<int:project_id>/pages/<int:image_id>', methods=['POST'])
+@login_required
+def photo_page(project_id, image_id):
+    """Move a photo page earlier / later, or remove it from the quotation."""
+    from . import access, photo_pages
+    project = Project.query.get_or_404(project_id)
+    if not photo_pages.enabled():
+        abort(404)
+    if not access.can_edit(project, current_user):
+        abort(403)
+    do = request.form.get('do')
+    if do == 'remove':
+        photo_pages.remove(project.id, image_id)
+    elif do in ('up', 'down'):
+        photo_pages.move(project.id, image_id, -1 if do == 'up' else 1)
+    db.session.commit()
+    return redirect(url_for('projects.view_project', project_id=project.id) + '#photoPages')
+
+
 @projects_bp.route('/projects/<int:project_id>/pdf/choose', methods=['POST'])
 @login_required
 def choose_pdf(project_id):
@@ -1253,7 +1303,11 @@ def _pdf_pick(project):
     from . import layout, pdf_choices
     if not pdf_choices.enabled() or layout.initial_layout() != layout.LAYOUT_BOQ:
         return None
-    return {'fields': pdf_choices.FIELDS, 'chosen': pdf_choices.for_project(project.id)}
+    from . import item_images, photo_pages
+    skip = set() if item_images.enabled() else {'photos'}
+    if not (photo_pages.enabled() and photo_pages.for_project(project.id)):
+        skip.add('photo_pages')
+    return {'fields': [f for f in pdf_choices.FIELDS if f[0] not in skip], 'chosen': pdf_choices.for_project(project.id)}
 
 
 @projects_bp.route('/projects/<int:project_id>/pdf/customer')

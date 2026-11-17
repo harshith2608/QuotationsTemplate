@@ -109,6 +109,48 @@
   </div>
 </div>
 
+{% if pages is not none %}
+<!-- Photo pages (app/photo_pages.py): full-page pictures at the front of this quotation's PDF and link -->
+<div class="card shadow-sm border-0 mb-3" id="photoPages">
+  <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-images me-2"></i>Photo pages <span class="small fw-normal opacity-75">({{ pages|length }})</span></span>
+    <small class="fw-normal" style="opacity:.8">at the front of the PDF</small>
+  </div>
+  <div class="card-body py-2">
+    <p class="small text-muted mb-2">Your own full-page pictures before the quotation: a cover, About us, photos of your
+      work. Each prints as one A4 page; portrait A4 pictures fill it. Saving as a template copies them.</p>
+    {% if pages %}
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      {% for pid_ in pages %}
+      <div class="border rounded p-1 text-center" style="width:104px">
+        <a href="{{ url_for('projects.item_image', image_id=pid_) }}" target="_blank" rel="noopener">
+          <img src="{{ url_for('projects.item_image', image_id=pid_) }}" alt="Photo page {{ loop.index }}" loading="lazy" style="width:96px;height:132px;object-fit:cover" class="rounded"></a>
+        {% if can_edit %}
+        <form method="post" action="{{ url_for('projects.photo_page', project_id=project.id, image_id=pid_) }}" class="d-flex justify-content-between mt-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-link p-0" name="do" value="up" title="Earlier" {{ 'disabled' if loop.first }}><i class="bi bi-arrow-left"></i></button>
+          <span class="small text-muted">{{ loop.index }}</span>
+          <button class="btn btn-sm btn-link p-0" name="do" value="down" title="Later" {{ 'disabled' if loop.last }}><i class="bi bi-arrow-right"></i></button>
+          <button class="btn btn-sm btn-link p-0 text-danger" name="do" value="remove" title="Remove"
+                  onclick="return confirm('Remove this photo page from the quotation?')"><i class="bi bi-x-lg"></i></button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('projects.add_photo_pages', project_id=project.id) }}" enctype="multipart/form-data"
+          class="d-flex flex-wrap align-items-center gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="pages" accept="image/jpeg,image/png,image/webp" multiple class="form-control form-control-sm" style="max-width:320px" required>
+      <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit"><i class="bi bi-plus-lg me-1"></i>Add pages</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 <!-- Project Stage -->
 {% set off_path = project.stage not in catalog.STAGE_PATH %}
 {% set ns = namespace(anchor=project.stage) %}

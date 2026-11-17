@@ -163,7 +163,9 @@ def view(token):
     boq_sections = layout.boq_rows(snap, show) if chosen == layout.LAYOUT_BOQ else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
                                     pay=pay, paid=billing.paid_total(project), room_rows=rows, boq_sections=boq_sections,
-                                    show_rate=show['rate'], per_room=not show['amount'], show=show))
+                                    show_rate=show['rate'], per_room=not show['amount'], show=show,
+                                    pages=__import__('app.photo_pages', fromlist=['for_project']).for_project(project.id)
+                                    if show.get('photo_pages', True) and __import__('app.photo_pages', fromlist=['enabled']).enabled() else []))
 
 
 @share_bp.route('/q/<token>/pdf')
@@ -188,8 +190,10 @@ def photo(token, image_id):
     from . import item_images
     from .models import Item, ItemImage, Room
     from sqlalchemy.orm import undefer
-    if not item_images.ready() or not db.session.query(Item.id).join(Room, Item.room_id == Room.id).filter(
-            Room.project_id == project.id, Item.image_id == image_id).first():
+    from . import photo_pages
+    on_a_line = item_images.ready() and db.session.query(Item.id).join(Room, Item.room_id == Room.id).filter(
+        Room.project_id == project.id, Item.image_id == image_id).first()
+    if not on_a_line and image_id not in photo_pages.for_project(project.id):     # or one of its photo pages
         abort(404)
     row = ItemImage.query.options(undefer(ItemImage.data)).filter_by(id=image_id).first_or_404()
     resp = make_response(row.data)

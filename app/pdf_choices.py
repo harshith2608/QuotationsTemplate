@@ -11,7 +11,7 @@ import json
 SWITCH_KEY = 'pdf_choices'
 FIELDS = [('description', 'Description'), ('material', 'Material'), ('size', 'Size (length × width)'),
           ('qty', 'Quantity & unit (area)'), ('rate', 'Rate'), ('amount', 'Amount on each line'),
-          ('room_total', 'Room total'), ('photos', 'Photos')]
+          ('room_total', 'Room total'), ('photos', 'Photos on lines'), ('photo_pages', 'Photo pages at the front')]
 KEYS = [k for k, _ in FIELDS]
 
 
@@ -34,7 +34,8 @@ def defaults():
     from . import layout
     per_room = layout.room_totals_only()
     return {'description': True, 'material': True, 'size': True, 'qty': True,
-            'rate': layout.show_rate() and not per_room, 'amount': not per_room, 'room_total': True, 'photos': True}
+            'rate': layout.show_rate() and not per_room, 'amount': not per_room, 'room_total': True, 'photos': True,
+            'photo_pages': True}
 
 
 def for_project(project_id):
