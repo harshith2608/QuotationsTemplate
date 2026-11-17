@@ -50,11 +50,6 @@
       <div class="text-end small q-muted">{% if status.current_revision and status.current_revision > 1 %}Rev {{ status.current_revision }}<br>{% endif %}
         {{ project.created_at|ist_time('%d %b %Y') }}</div>
     </div>
-    <hr>
-    <div class="d-flex justify-content-between align-items-end">
-      <div class="q-muted">Total{% if snap.gst %} (incl. GST){% endif %}</div>
-      <div class="q-total">&#8377;{{ (snap.payable or snap.total)|inr }}</div>
-    </div>
     {% set l = status.latest %}
     {% if l and status.latest_is_current and l.kind == 'accepted' %}
       <div class="alert alert-success mt-3 mb-0"><i class="bi bi-check-circle-fill me-1"></i>Accepted by {{ l.name }} on {{ l.created_at|ist_time('%d %b %Y') }}. Thank you!</div>
@@ -161,9 +156,9 @@
       {% if snap.gst %}
       <tr><td>Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.total)|inr }}</td></tr>
       <tr><td>GST @ {{ '%g' % snap.gst_rate }}%</td><td class="text-end text-nowrap">&#8377;{{ (snap.gst)|inr }}</td></tr>
-      <tr class="fw-bold"><td>Grand total (incl. GST)</td><td class="text-end text-nowrap">&#8377;{{ (snap.payable)|inr }}</td></tr>
+      <tr class="fw-bold"><td class="align-middle">Grand total (incl. GST)</td><td class="text-end text-nowrap q-total">&#8377;{{ (snap.payable)|inr }}</td></tr>
       {% else %}
-      <tr class="fw-bold"><td>Total</td><td class="text-end text-nowrap">&#8377;{{ (snap.total)|inr }}</td></tr>
+      <tr class="fw-bold"><td class="align-middle">Total</td><td class="text-end text-nowrap q-total">&#8377;{{ (snap.total)|inr }}</td></tr>
       {% endif %}
       {% if paid %}<tr class="text-success"><td>Paid</td><td class="text-end text-nowrap">&#8377;{{ (paid)|inr }}</td></tr>{% endif %}
       </tbody>

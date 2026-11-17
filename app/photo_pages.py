@@ -9,7 +9,8 @@ The designed cover page (first, when the quotation has a cover photo): the logo 
 (Settings → Quotation PDFs → Cover page), the package name (the template it was started from, e.g. "DIY Package";
 editable per quotation) and the quotation's cover photo. It takes the place of the presentation title page.
 
-For businesses with Item photos on (console → Features). Stored like line photos (item_images, never changed) but at
+For businesses with Item photos or "Choose what the PDF shows" on (console → Features; the latter is on for new trials
+and customers). Stored like line photos (item_images, never changed) but at
 print size (PAGE_SIDE). The list per quotation is one app_settings row: quote_pages_<project> = JSON [image ids].
 """
 import io
@@ -142,8 +143,9 @@ def _key(project_id):
 
 
 def enabled():
-    from . import item_images
-    return item_images.enabled()
+    """With Item photos on, or Choose what the PDF shows (on for new trials and customers)."""
+    from . import item_images, pdf_choices
+    return item_images.ready() and (item_images.enabled() or pdf_choices.enabled())
 
 
 def for_project(project_id):
