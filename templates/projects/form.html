@@ -144,6 +144,59 @@
   {% for i in master_items %}<option value="{{ i }}">{% endfor %}
 </datalist>
 
+{% if template_edit and template_media %}
+{# The template's cover & gallery: its own small forms, outside the quotation form below #}
+{% set tm_url = url_for('projects.template_media', template_id=template_edit.id) %}
+<div class="card shadow-sm border-0 mb-3" id="templateMedia">
+  <div class="card-header ki-card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-images me-2"></i>Cover &amp; gallery <span class="small fw-normal opacity-75">({{ (template_edit.photo_pages or [])|length + (1 if template_edit.cover_photo else 0) }} photos)</span></span>
+    <small class="fw-normal" style="opacity:.8">for quotations made from this template</small>
+  </div>
+  <div class="card-body py-2">
+    <div class="fw-semibold small mb-1"><i class="bi bi-journal-richtext me-1"></i>Cover page</div>
+    <div class="d-flex flex-wrap gap-3 align-items-start mb-3 pb-3 border-bottom">
+      {% if template_edit.cover_photo %}<img src="{{ url_for('projects.item_image', image_id=template_edit.cover_photo) }}" alt="Cover photo" style="width:96px;height:96px;object-fit:cover" class="rounded border">{% endif %}
+      <form method="post" action="{{ tm_url }}" enctype="multipart/form-data" class="flex-grow-1" style="min-width:240px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="do" value="cover">
+        <label class="small text-muted mb-1" for="tmPackage">Package name (top right of the cover)</label>
+        <input class="form-control form-control-sm mb-2" id="tmPackage" name="package" maxlength="60" value="{{ template_edit.package or template_edit.name }}">
+        <label class="small text-muted mb-1" for="tmCover">{{ 'Change the cover photo' if template_edit.cover_photo else 'Cover photo (the big picture on the cover)' }}</label>
+        <input class="form-control form-control-sm mb-2" type="file" id="tmCover" name="photo" accept="image/jpeg,image/png,image/webp">
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit">Save</button>
+          {% if template_edit.cover_photo %}<button class="btn btn-sm btn-link text-danger" type="submit" name="do" value="cover_remove">Remove the cover</button>{% endif %}
+        </div>
+      </form>
+    </div>
+    <div class="fw-semibold small mb-1"><i class="bi bi-images me-1"></i>Gallery</div>
+    {% if template_edit.photo_pages %}
+    <form method="post" action="{{ tm_url }}" class="d-flex flex-wrap gap-2 mb-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for g in template_edit.photo_pages %}
+      <div class="border rounded p-1 text-center" style="width:104px">
+        <img src="{{ url_for('projects.item_image', image_id=g) }}" alt="Gallery photo {{ loop.index }}" loading="lazy" style="width:96px;height:96px;object-fit:cover" class="rounded">
+        <div class="d-flex justify-content-between mt-1">
+          <button class="btn btn-sm btn-link p-0" name="do" value="up:{{ g }}" title="Earlier" {{ 'disabled' if loop.first }}><i class="bi bi-arrow-left"></i></button>
+          <span class="small text-muted">{{ loop.index }}</span>
+          <button class="btn btn-sm btn-link p-0" name="do" value="down:{{ g }}" title="Later" {{ 'disabled' if loop.last }}><i class="bi bi-arrow-right"></i></button>
+          <button class="btn btn-sm btn-link p-0 text-danger" name="do" value="remove:{{ g }}" title="Remove"
+                  onclick="return confirm('Remove this photo from the template\'s gallery?')"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>
+      {% endfor %}
+    </form>
+    {% endif %}
+    <form method="post" action="{{ tm_url }}" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="do" value="add">
+      <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple class="form-control form-control-sm" style="max-width:320px" required>
+      <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit"><i class="bi bi-plus-lg me-1"></i>Add photos</button>
+    </form>
+    <div class="form-text">Saved straight into the template. Quotations already made from it keep their own.</div>
+  </div>
+</div>
+{% endif %}
 <form id="projectForm" method="POST"
       action="{{ url_for('projects.save_template', template_id=template_edit.id) if template_edit else url_for('projects.edit_project', project_id=project.id) if project else url_for('projects.create_project') }}"
       novalidate>

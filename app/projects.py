@@ -571,14 +571,14 @@ def create_project():
 
 
 def render_new_form(start=None, started_from=None, form_data=None, form_cat=None, ai_draft=None, template_edit=None,
-                    title='New Quotation'):
+                    title='New Quotation', template_media=False):
     """The new quotation form, filled in from `start` (a quotation, template or AI draft: rooms_json, discount,
     plywood) when given. ai_draft: what the AI says to check (app/ai_tools.py)."""
     from . import ai_tools, quote_templates as QT
     from .demo import demo_enabled
     form_data = form_data or {}
     return render_template('projects/form.html',
-                           title=title, template_edit=template_edit,
+                           title=title, template_edit=template_edit, template_media=template_media,
                            master_rooms=__import__('app.business', fromlist=['room_names']).room_names(),
                            master_items=__import__('app.business', fromlist=['item_names']).item_names(),
                            **(form_cat or _form_catalog(None)),
@@ -642,7 +642,53 @@ def edit_template(template_id):
         flash('That template no longer exists.', 'warning')
         return redirect(url_for('projects.manage_templates'))
     start = QT.start_from_template(tpl)
-    return render_new_form(start, template_edit=tpl, title=f'Edit template: {tpl["name"]}')
+    from . import photo_pages
+    return render_new_form(start, template_edit=tpl, title=f'Edit template: {tpl["name"]}',
+                           template_media=photo_pages.enabled())
+
+
+@projects_bp.route('/templates/<template_id>/media', methods=['POST'])
+@login_required
+@admin_required
+def template_media(template_id):
+    """A template's cover photo, package name and gallery (Edit lines → Cover & gallery)."""
+    from . import item_images, photo_pages as PP, quote_templates as QT
+    tpl = QT.get(template_id)
+    if not tpl or not PP.enabled():
+        abort(404)
+    do = request.form.get('do', '')
+    gallery = [i for i in (tpl.get('photo_pages') or [])]
+    try:
+        if do == 'cover':
+            f = request.files.get('photo')
+            if f and f.filename:
+                QT.set_media(template_id, cover_photo=item_images.save_upload(f.read(), max_side=PP.PAGE_SIDE).id)
+            if 'package' in request.form:
+                QT.set_media(template_id, package=request.form.get('package'))
+        elif do == 'cover_remove':
+            QT.set_media(template_id, cover_photo=None)
+        elif do == 'add':
+            raws = [f.read() for f in request.files.getlist('photos') if f and f.filename]
+            if len(gallery) + len(raws) > PP.MAX_PAGES:
+                raise item_images.ImageError(f'Up to {PP.MAX_PAGES} gallery photos.')
+            QT.set_media(template_id, photo_pages=gallery + [item_images.save_upload(r, max_side=PP.PAGE_SIDE).id for r in raws])
+        elif do.startswith(('up:', 'down:', 'remove:')):
+            act, img = do.split(':', 1)
+            if img.isdigit() and int(img) in gallery:
+                i = gallery.index(int(img))
+                if act == 'remove':
+                    gallery.pop(i)
+                else:
+                    j = max(0, min(len(gallery) - 1, i + (-1 if act == 'up' else 1)))
+                    gallery[i], gallery[j] = gallery[j], gallery[i]
+                QT.set_media(template_id, photo_pages=gallery)
+    except (item_images.ImageError, ValueError) as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    else:
+        db.session.commit()
+        flash('Template saved: quotations made from it from now on get this cover and gallery.', 'success')
+    return redirect(url_for('projects.edit_template', template_id=template_id) + '#templateMedia')
 
 
 @projects_bp.route('/templates/<template_id>/save', methods=['POST'])

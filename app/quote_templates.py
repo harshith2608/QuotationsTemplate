@@ -54,7 +54,8 @@ def start_from_template(template):
     return {'rooms_json': json.dumps(template.get('rooms') or []), 'discount_type': template.get('discount_type') or 'none',
             'discount_value': template.get('discount_value') or 0, 'plywood_thickness': template.get('plywood_thickness') or '',
             'plywood': template.get('plywood'), 'photo_pages': template.get('photo_pages') or [],
-            'cover_photo': template.get('cover_photo'), 'package': template.get('name') or ''}   # the package: its name
+            'cover_photo': template.get('cover_photo'),
+            'package': template.get('package') or template.get('name') or ''}   # the package: its own, else its name
 
 
 def save(name, project):
@@ -133,5 +134,22 @@ def update(template_id, rooms, discount_type='none', discount_value=0, plywood=N
              discount_value=max(float(discount_value or 0), 0), saved_at=datetime.utcnow().isoformat(timespec='seconds'))
     if plywood is not None:
         t['plywood'] = plywood or None
+    _store(templates)
+    return t
+
+
+def set_media(template_id, cover_photo=..., photo_pages=..., package=...):
+    """Change a template's cover photo, gallery (image ids) or package name (Edit lines → Cover & gallery). Quotations
+    already made from it don't change."""
+    templates = _load()
+    t = next((t for t in templates if t['id'] == template_id), None)
+    if not t:
+        raise ValueError('That template no longer exists.')
+    if cover_photo is not ...:
+        t['cover_photo'] = int(cover_photo) if cover_photo else None
+    if photo_pages is not ...:
+        t['photo_pages'] = [int(i) for i in photo_pages][:12]
+    if package is not ...:
+        t['package'] = ' '.join((package or '').split())[:60]
     _store(templates)
     return t

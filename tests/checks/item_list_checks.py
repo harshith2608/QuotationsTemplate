@@ -431,3 +431,37 @@ ok('…saved for the link: back to the link (not a PDF), now with rates and amou
    and ch5['rate'] and ch5['amount'])
 pub4 = app.test_client().get(f'/q/{sh4.token}').text
 ok('…and the customer\'s link follows it', 'Shelf' in pub4)
+
+# A template's cover & gallery can be changed on its Edit lines page
+with app.app_context():
+    tid9 = QT2.put('Bare Package', [{'name': 'Hall', 'items': [{'name': 'Shelf', 'wood_type': wood, 'work_type': work, 'pending': True}]}])
+    db.session.commit()
+tp = c.get(f'/templates/{tid9}/edit').text
+ok('template editing: a Cover & gallery card (outside the lines form)', 'id="templateMedia"' in tp
+   and tp.index('id="templateMedia"') < tp.index('id="projectForm"') and 'value="Bare Package"' in tp)
+c.post(f'/templates/{tid9}/media', data={'do': 'cover', 'package': 'Premium DIY', 'photo': (io.BytesIO(_page_png('teal')), 'c.png')},
+       content_type='multipart/form-data')
+c.post(f'/templates/{tid9}/media', data={'do': 'add', 'photos': [(io.BytesIO(_page_png('gray')), 'a.png'),
+                                                                  (io.BytesIO(_page_png('white')), 'b.png')]},
+       content_type='multipart/form-data')
+with app.app_context():
+    t9 = QT2.get(tid9)
+ok('…cover photo, package name and two gallery photos saved into the template', t9.get('cover_photo')
+   and t9.get('package') == 'Premium DIY' and len(t9.get('photo_pages') or []) == 2)
+g1, g2 = t9['photo_pages']
+c.post(f'/templates/{tid9}/media', data={'do': f'down:{g1}'})
+with app.app_context():
+    ok('…reordered', QT2.get(tid9)['photo_pages'] == [g2, g1])
+nf = c.get(f'/projects/new?template={tid9}').text
+ok('…a new quotation from it: its cover photo, package name and gallery', f'name="cover_photo" value="{t9["cover_photo"]}"' in nf
+   and 'name="package" value="Premium DIY"' in nf and f'name="photo_pages" value="{g2},{g1}"' in nf)
+c.post(f'/templates/{tid9}/media', data={'do': f'remove:{g2}'})
+c.post(f'/templates/{tid9}/media', data={'do': 'cover_remove'})
+with app.app_context():
+    t9b = QT2.get(tid9)
+ok('…a photo and the cover removed from the template', t9b['photo_pages'] == [g1] and not t9b.get('cover_photo'))
+r = c.post(f'/templates/{tid9}/save', data={'rooms_data': json.dumps([{'name': 'Hall', 'items': [
+    {'name': 'Shelf', 'wood_type': wood, 'work_type': work, 'pending': True, 'count': 1}]}])})
+with app.app_context():
+    ok('…saving its lines keeps its gallery and package', QT2.get(tid9)['photo_pages'] == [g1]
+       and QT2.get(tid9)['package'] == 'Premium DIY')
