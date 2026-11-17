@@ -1350,6 +1350,29 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     return out
 
 
+def _rich_table(rows, body, dark, compact):
+    """A table typed in the rich text editor: the page's width shared by its columns (each sized to its longest
+    text), a grid, the first row in bold on a light band (its heading row)."""
+    from . import richtext
+    width = A4[0] - 3 * cm - 12                   # (the frame's own padding: lines up with the rules above)
+    cell = ParagraphStyle('RtTd', parent=body, spaceAfter=0, leftIndent=0, firstLineIndent=0)
+    head = ParagraphStyle('RtTh', parent=cell, fontName=_F.b, textColor=dark)
+    cols = len(rows[0])
+    longest = [max(min(len(richtext.plain_text(r[i]).strip()), 40) for r in rows) + 4 for i in range(cols)]
+    widths = [width * n / sum(longest) for n in longest]
+    data = [[Paragraph(c or '&nbsp;', head if i == 0 and len(rows) > 1 else cell) for c in r] for i, r in enumerate(rows)]
+    pad = 3 if compact else 5
+    style = [('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+             ('TOPPADDING', (0, 0), (-1, -1), pad), ('BOTTOMPADDING', (0, 0), (-1, -1), pad),
+             ('LEFTPADDING', (0, 0), (-1, -1), pad + 1), ('RIGHTPADDING', (0, 0), (-1, -1), pad + 1)]
+    if len(rows) > 1:
+        style.append(('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f3f5')))
+    t = Table(data, colWidths=widths, repeatRows=1 if len(rows) > 2 else 0, hAlign='LEFT', spaceBefore=3,
+              spaceAfter=8 if compact else 10)
+    t.setStyle(TableStyle(style))
+    return t
+
+
 def _rich_flowables(html, dark, styles, compact=False):
     """Text from the rich text editor (app/richtext.py) as PDF paragraphs: headings, alignment, colours, lists.
     compact: the quotation's sections (Material Specifications, Terms…), at their small size."""
@@ -1361,6 +1384,10 @@ def _rich_flowables(html, dark, styles, compact=False):
     out, counters = [], {}
     for b in richtext.blocks(html):
         al = align.get(b['align'], TA_LEFT)
+        if b['kind'] == 'table':
+            counters.clear()
+            out.append(_rich_table(b['rows'], body, dark, compact))
+            continue
         if b['kind'] in heads:
             size, after = heads[b['kind']]
             st = ParagraphStyle(f'Rt{b["kind"]}', parent=body, fontName=_F.b, fontSize=size, leading=size * 1.3,

@@ -854,11 +854,97 @@
   if (!window.Quill) return;
   const toolbar = [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline'], [{ color: [] }],
                    [{ align: [] }], [{ list: 'ordered' }, { list: 'bullet' }], ['clean']];
+  // Table menu on each toolbar: pick a size from the grid (rows × columns), then add or delete rows and columns
+  // where the cursor is (app/richtext.py keeps the table; the PDF prints it with a grid, first row as its heading).
+  const GRID_ROWS = 8, GRID_COLS = 8;
+  function tableMenu(q) {
+    const table = q.getModule('table');
+    const bar = q.getModule('toolbar').container;
+    const wrap = document.createElement('span');
+    wrap.className = 'ql-formats dropdown ki-table-menu';
+    wrap.innerHTML = `
+      <button type="button" class="ki-table-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+              title="Table" aria-label="Table"><i class="bi bi-table"></i><span class="ms-1 small">Table</span></button>
+      <div class="dropdown-menu p-2 shadow-sm">
+        <div class="small fw-semibold mb-1">Insert a table <span class="text-muted fw-normal" data-size>(pick its size)</span></div>
+        <div class="ki-table-grid" data-grid></div>
+        <div class="d-flex align-items-center gap-1 mt-2 small">
+          <input type="number" min="1" max="50" value="3" class="form-control form-control-sm" style="width:4.2rem" data-rows aria-label="Rows">
+          <span>×</span>
+          <input type="number" min="1" max="12" value="3" class="form-control form-control-sm" style="width:4.2rem" data-cols aria-label="Columns">
+          <button type="button" class="btn btn-sm btn-primary ki-btn-primary" data-insert>Insert</button>
+        </div>
+        <div class="text-muted small mt-1">rows × columns</div>
+        <hr class="my-2">
+        <div class="small fw-semibold mb-1">Where the cursor is <span class="text-muted fw-normal" data-hint></span></div>
+        <div class="d-grid gap-1 ki-table-actions">
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" data-act="insertRowAbove"><i class="bi bi-arrow-bar-up"></i> Row above</button>
+            <button type="button" class="btn btn-outline-secondary" data-act="insertRowBelow"><i class="bi bi-arrow-bar-down"></i> Row below</button>
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" data-act="insertColumnLeft"><i class="bi bi-arrow-bar-left"></i> Column left</button>
+            <button type="button" class="btn btn-outline-secondary" data-act="insertColumnRight"><i class="bi bi-arrow-bar-right"></i> Column right</button>
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-danger" data-act="deleteRow"><i class="bi bi-dash-square"></i> Delete row</button>
+            <button type="button" class="btn btn-outline-danger" data-act="deleteColumn"><i class="bi bi-dash-square"></i> Delete column</button>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-act="deleteTable"><i class="bi bi-trash"></i> Delete table</button>
+        </div>
+      </div>`;
+    bar.appendChild(wrap);
+    const grid = wrap.querySelector('[data-grid]'), size = wrap.querySelector('[data-size]');
+    const rowsIn = wrap.querySelector('[data-rows]'), colsIn = wrap.querySelector('[data-cols]');
+    for (let r = 1; r <= GRID_ROWS; r++) for (let c = 1; c <= GRID_COLS; c++) {
+      const cell = document.createElement('span');
+      cell.dataset.r = r; cell.dataset.c = c;
+      grid.appendChild(cell);
+    }
+    const mark = (r, c) => {
+      grid.querySelectorAll('span').forEach(s => s.classList.toggle('on', +s.dataset.r <= r && +s.dataset.c <= c));
+      size.textContent = r && c ? `${r} × ${c}` : '(pick its size)';
+    };
+    let range = null;                       // where the cursor was before the menu took the focus
+    const remember = () => { range = q.getSelection() || range; };
+    q.on('selection-change', r => { if (r) range = r; });
+    const inTable = () => { if (!range) return false; q.setSelection(range, 'silent'); return !!table.getTable(range)[0]; };
+    const insert = (r, c) => {
+      r = Math.max(1, Math.min(50, r | 0)); c = Math.max(1, Math.min(12, c | 0));
+      q.focus();
+      if (range) q.setSelection(range, 'silent'); else q.setSelection(q.getLength() - 1, 0, 'silent');
+      if (table.getTable()[0]) return;      // (not a table inside a table)
+      table.insertTable(r, c);
+      bootstrap.Dropdown.getOrCreateInstance(wrap.querySelector('.ki-table-btn')).hide();
+    };
+    grid.addEventListener('mouseover', e => { const s = e.target.closest('span'); if (s) mark(+s.dataset.r, +s.dataset.c); });
+    grid.addEventListener('mouseleave', () => mark(0, 0));
+    grid.addEventListener('click', e => { const s = e.target.closest('span'); if (s) insert(+s.dataset.r, +s.dataset.c); });
+    wrap.querySelector('[data-insert]').addEventListener('click', () => insert(+rowsIn.value, +colsIn.value));
+    wrap.querySelector('.ki-table-btn').addEventListener('mousedown', remember);
+    wrap.addEventListener('show.bs.dropdown', () => {
+      remember();
+      const yes = inTable();
+      wrap.querySelectorAll('[data-act]').forEach(b => b.disabled = !yes);
+      wrap.querySelector('[data-hint]').textContent = yes ? '' : '(click in a table first)';
+    });
+    wrap.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+      q.focus();
+      if (range) q.setSelection(range, 'silent');
+      if (!table.getTable()[0]) return;
+      table[b.dataset.act]();
+      range = q.getSelection();
+      if (b.dataset.act === 'deleteTable' || !table.getTable()[0])
+        wrap.querySelectorAll('[data-act]').forEach(x => x.disabled = true);
+    }));
+  }
+
   document.querySelectorAll('.ki-rich').forEach(div => {
     const box = document.getElementById(div.dataset.for);
     if (!box) return;
-    const q = new Quill(div, { theme: 'snow', placeholder: div.dataset.placeholder || '', modules: { toolbar } });
+    const q = new Quill(div, { theme: 'snow', placeholder: div.dataset.placeholder || '', modules: { toolbar, table: true } });
     if (box.value.trim()) q.clipboard.dangerouslyPasteHTML(box.value);
+    tableMenu(q);
     box.classList.add('d-none');
     box._quill = q;                         // (the Insert buttons type into it)
     const sync = () => { box.value = q.getText().trim() ? q.root.innerHTML : ''; };
