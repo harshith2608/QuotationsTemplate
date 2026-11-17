@@ -326,8 +326,9 @@ class ColumnMap(BaseModel):
 COLUMNS_PROMPT = """These are the first rows of each sheet of an Excel file a business (interiors, furniture, kitchens,
 windows…) uploaded to set up its rates. Each row: its number, then its non-empty cells by column letter.
 Say which sheet and which columns hold its items and their rates:
-- kind: "rate_list" when it lists items with their selling rates (no job's quantities filled in); "quotation" when it is
-  a quotation for one job (quantities and amounts filled in for that job); "other" when it is neither.
+- kind: "rate_list" when it lists items with their selling rates (a product master or price list: sample sizes,
+  length / height or total columns don't change that); "quotation" only when it is a quotation made for one job (a
+  quantity column filled in for that job, often with the customer or site named); "other" when it is neither.
 - sheet: the sheet's number. heading_row: the row number of the column headings (0 if there are none).
 - name: the column with each item's name. rate: the selling rate per unit the customer is charged (not a cost, agency,
   purchase, vendor or labour price, not a total or amount). unit: the column with the rate's unit (sqft, nos, rft,
@@ -367,6 +368,16 @@ def _ask_columns(sheets):
     if r.stop_reason in ('refusal', 'max_tokens') or r.parsed_output is None:
         return None, None
     return r.parsed_output, {'in': r.usage.input_tokens, 'out': r.usage.output_tokens}
+
+
+def _has_quantities(sheets, found):
+    """A Qty / Quantity / Nos column in the headings the AI pointed at."""
+    if not 1 <= found.sheet <= len(sheets):
+        return True
+    rows = sheets[found.sheet - 1][1]
+    at = found.heading_row - 1
+    heads = [_heading(v) for v in (rows[at] if 0 <= at < len(rows) else ()) or ()]
+    return any(h in TABLE_QTY for h in heads) if heads else True
 
 
 def _by_headings(rows):
@@ -446,8 +457,10 @@ def rate_table(raw, ask=True):
     if ask:
         found, used = _ask_columns(sheets)
         if found is not None:
-            if found.kind == 'quotation':
+            if found.kind == 'quotation' and _has_quantities(sheets, found):
                 return None                   # a job's quotation: the AI reads it all, with its totals
+            if found.kind == 'quotation':     # (no quantity column: a product master with sizes, read as a rate list)
+                found = found.model_copy(update={'kind': 'rate_list'})
             if found.kind == 'rate_list' and 1 <= found.sheet <= len(sheets):
                 title, rows = sheets[found.sheet - 1]
                 cols = {k: _index(getattr(found, k)) for k, _ in FIELDS}

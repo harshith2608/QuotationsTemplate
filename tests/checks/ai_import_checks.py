@@ -332,8 +332,11 @@ n = len(calls)
 rr = upload(odd_raw, 'Aarambh rates.xlsx')
 ok('…uploaded: the review page with the columns read, no full AI reading, not counted', len(calls) == n
    and 'Columns read' in rr.text and 'picked out by AI' in rr.text and 'value="Base cabinets"' in rr.text)
+COLUMNS = AI.ColumnMap(kind='quotation', sheet=1, heading_row=3, name='B', rate='F', unit='D', description='C', group='')
+ok('the AI says "quotation" but the sheet has no quantity column: read as a rate list anyway',
+   (AI.rate_table(odd_raw) or {}).get('columns_by') == 'ai')
 COLUMNS = AI.ColumnMap(kind='quotation', sheet=1, heading_row=1, name='A', rate='C', unit='', description='', group='')
-ok('the AI says it is a quotation: the full reading takes it', AI.rate_table(odd_raw) is None)
+ok('the AI says it is a quotation and it has a Qty column: the full reading takes it', AI.rate_table(qbuf.getvalue()) is None)
 COLUMNS = AI.ColumnMap(kind='rate_list', sheet=1, heading_row=3, name='B', rate='Q', unit='', description='', group='')
 ok('a column with no rates in it: back to the headings (so the full reading here)', AI.rate_table(odd_raw) is None)
 COLUMNS = None
