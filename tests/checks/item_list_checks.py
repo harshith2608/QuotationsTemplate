@@ -282,3 +282,39 @@ ok('…printed on the PDF: the formatted section and the plain one', 'Payment as
 page = c.get('/admin/settings?tab=documents').text
 ok('…the settings page opens them in editors (plain text as a numbered list)', 'data-for="sec_payment_terms"' in page
    and 'data-for="sec_terms_conditions"' in page and '&lt;li data-list=&#34;ordered&#34;&gt;Plain note one' in page)
+
+# Choose what the PDF shows (app/pdf_choices.py): off unless switched on; tick-boxes before the PDF; kept per quotation
+from app import pdf_choices as PC
+c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'boq', 'boq_rate_shown': '1',
+                                'boq_room_totals': '0', 'boq_board_shown': '1'})
+view = c.get(f'/projects/{pid}').text
+ok('PDF choices off (an existing business): Quotation PDF opens straight away, no tick-boxes',
+   'id="pdfPickModal"' not in view and f'/projects/{pid}/pdf/customer' in view)
+with app.app_context():
+    PC.set_enabled(True); db.session.commit()
+view = c.get(f'/projects/{pid}').text
+ok('…switched on: the button opens the tick-boxes, ticked as the business prints today', 'id="pdfPickModal"' in view
+   and 'data-bs-target="#pdfPickModal"' in view and 'id="pp_rate" checked' in view and 'id="pp_amount" checked' in view
+   and 'id="pp_description" checked' in view)
+full_before = pdftext(f'/projects/{pid}/pdf/customer')
+r = c.post(f'/projects/{pid}/pdf/choose', data={'description': '1', 'room_total': '1'})   # no qty, rate, amount, material
+after = pdftext(f'/projects/{pid}/pdf/customer')
+with app.app_context():
+    chosen = PC.for_project(pid)
+ok('…a choice: kept for the quotation, then its PDF', r.status_code == 302 and r.headers['Location'].endswith(f'/projects/{pid}/pdf/customer')
+   and chosen['description'] and not chosen['qty'] and not chosen['rate'] and not chosen['amount'])
+ok('…the PDF shows only that: no Qty, Rate or line amounts; the room total and the description stay',
+   'Qty' in full_before and 'Qty' not in after and ' Rate ' not in after and inr(tv_amount) not in after
+   and 'Glass door in the side' in after and inr(room_total) in after)
+with app.app_context():
+    sh2 = QuoteShare.query.filter_by(project_id=pid, active=True).first()
+if sh2:
+    pub2 = app.test_client().get(f'/q/{sh2.token}').text
+    ok('…the customer\'s link the same', inr(tv_amount) not in pub2 and 'Glass door in the side' in pub2)
+c.post(f'/projects/{pid}/pdf/choose', data={})                                  # everything unticked
+bare = c.get(f'/projects/{pid}/pdf/customer')
+ok('…everything unticked: still a PDF (item names and totals)', bare.status_code == 200 and bare.data[:4] == b'%PDF'
+   and 'TV Unit' in pdftext(f'/projects/{pid}/pdf/customer'))
+with app.app_context():
+    PC.set_enabled(False); db.session.commit()
+ok('…switched off again: back to the business\'s settings', 'Qty' in pdftext(f'/projects/{pid}/pdf/customer'))

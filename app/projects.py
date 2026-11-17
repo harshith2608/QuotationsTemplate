@@ -742,7 +742,7 @@ def view_project(project_id):
                            can_edit=__import__('app.access', fromlist=['can_edit']).can_edit(project, current_user),
                            material_list_on=__import__('app.material_list', fromlist=['available']).available(),
                            ai_check_on=__import__('app.ai_tools', fromlist=['available']).available('check'),
-                           company=_company_picker(project),
+                           company=_company_picker(project), pdf_pick=_pdf_pick(project),
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -1021,6 +1021,7 @@ def delete_project(project_id):
     material_list.delete_for(project)
     from . import profiles
     profiles.forget_project(project.id)
+    __import__('app.pdf_choices', fromlist=['forget']).forget(project_id)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')
@@ -1230,6 +1231,29 @@ def download_pdf(project_id):
     as_attachment = request.args.get('download') == '1'
     return send_file(pdf_buffer, as_attachment=as_attachment,
                      download_name=filename, mimetype='application/pdf')
+
+
+@projects_bp.route('/projects/<int:project_id>/pdf/choose', methods=['POST'])
+@login_required
+def choose_pdf(project_id):
+    """The tick-boxes before the Quotation PDF (app/pdf_choices.py): kept for this quotation, then its PDF."""
+    from . import pdf_choices
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and project.created_by != current_user.id:
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            abort(403)
+    if pdf_choices.enabled():
+        pdf_choices.save(project.id, request.form)
+        db.session.commit()
+    return redirect(url_for('projects.download_customer_pdf', project_id=project.id))
+
+
+def _pdf_pick(project):
+    """The tick-boxes for the Quotation PDF button (the BOQ table, with the feature on), else None."""
+    from . import layout, pdf_choices
+    if not pdf_choices.enabled() or layout.initial_layout() != layout.LAYOUT_BOQ:
+        return None
+    return {'fields': pdf_choices.FIELDS, 'chosen': pdf_choices.for_project(project.id)}
 
 
 @projects_bp.route('/projects/<int:project_id>/pdf/customer')

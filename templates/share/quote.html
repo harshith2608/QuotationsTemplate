@@ -109,16 +109,16 @@
     <div class="fw-semibold mb-2">Bill of quantities</div>
     {% for sec in boq_sections %}
     <div class="fw-bold mt-3 mb-1 d-flex justify-content-between rounded px-2 py-1" style="background:var(--p);color:var(--on-p)"><span>{{ sec.letter }}. {{ sec.name }}</span>
-      {% if sec.total %}<span class="text-nowrap">&#8377;{{ (sec.total)|inr }}</span>{% endif %}</div>
+      {% if sec.total and (show is not defined or show.room_total) %}<span class="text-nowrap">&#8377;{{ (sec.total)|inr }}</span>{% endif %}</div>
     {% if sec.description %}<div class="small q-muted" style="white-space:pre-line">{{ sec.description }}</div>{% endif %}
     <div class="table-responsive"><table class="table table-sm small mb-0">
       <tbody>
       {% for ln in sec.lines %}
         <tr>
           <td class="text-muted" style="width:2em">{{ ln.no }}</td>
-          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
-            {% if ln.qty %}<div class="q-muted">{{ ((ln.qty)|inr).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ (ln.rate)|inr(0) }}{% endif %}</div>
-            {% elif ln.rate %}<div class="q-muted">Rate &#8377;{{ (ln.rate)|inr(0) }} per {{ ln.unit }}</div>{% endif %}</td>
+          <td>{{ ln.title }}{% if ln.description %}<div class="q-muted" style="white-space:pre-line">{{ ln.description }}</div>{% endif %}{% if ln.image_id and (show is not defined or show.photos) %}<a href="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" target="_blank" rel="noopener"><img src="{{ url_for('share.photo', token=share.token, image_id=ln.image_id) }}" alt="Photo" loading="lazy" style="display:block;max-width:96px;max-height:96px;border-radius:6px;margin-top:4px"></a>{% endif %}
+            {% if ln.qty and (show is not defined or show.qty) %}<div class="q-muted">{{ ((ln.qty)|inr).rstrip('0').rstrip('.') }} {{ ln.unit }}{% if ln.rate and show_rate %} × &#8377;{{ (ln.rate)|inr(0) }}{% endif %}</div>
+            {% elif ln.rate and show_rate %}<div class="q-muted">Rate &#8377;{{ (ln.rate)|inr(0) }} per {{ ln.unit }}</div>{% endif %}</td>
           <td class="text-end text-nowrap">{% if ln.tbc %}price to follow{% elif per_room %}{% elif ln.amount %}&#8377;{{ (ln.amount)|inr }}{% elif ln.rate %}rate only{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}

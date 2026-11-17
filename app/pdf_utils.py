@@ -348,15 +348,19 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     snap = snap or billing.quotation_snapshot(project)
     small = ParagraphStyle('BQ', parent=styles['Normal'], fontSize=8, leading=10)
     title = ParagraphStyle('BQT', parent=small, fontName=_F.b)
-    sections = layout.boq_rows(snap)
+    from . import pdf_choices
+    show = pdf_choices.for_project(project.id)   # what this quotation's PDF shows (the business's settings by default)
+    sections = layout.boq_rows(snap, show)
     from . import item_images
-    photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines'])
+    photos = item_images.data_for(ln.get('image_id') for sec in sections for ln in sec['lines']) if show['photos'] else {}
     grid = colors.HexColor('#bdbdbd')
-    per_room = layout.room_totals_only()       # some firms show an amount per room only (Settings → Quotation PDFs)
-    rate_col = layout.show_rate() and not per_room     # or quantities and amounts, no rates
-    # columns: Sr. No., Description, [Photo only when some line has one], Qty, Unit, [Rate], Amount
-    heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + ['Qty', 'Unit'] + (['Rate'] if rate_col else []) \
-        + ['Amount (Rs.)']
+    per_room = not show['amount']              # an amount per room only (or none at all)
+    rate_col = show['rate']
+    qty_cols = show['qty']
+    amount_col = show['amount'] or show['room_total']
+    # columns: Sr. No., Description, [Photo only when some line has one], [Qty, Unit], [Rate], [Amount]
+    heads = ['Sr. No.', 'Description'] + (['Photo'] if photos else []) + (['Qty', 'Unit'] if qty_cols else []) \
+        + (['Rate'] if rate_col else []) + (['Amount (Rs.)'] if amount_col else [])
     fixed = {'Sr. No.': 0.07, 'Photo': 0.15, 'Qty': 0.09, 'Unit': 0.09, 'Rate': 0.11, 'Amount (Rs.)': 0.15}
     widths = [fixed.get(h, 0) for h in heads]
     widths[1] = 1 - sum(widths)                # the description takes what's left
@@ -365,10 +369,13 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     last = len(heads) - 1
     cmds = [('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG), ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, 0), _F.b), ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (last - 1, -1), 'CENTER'),
-            ('ALIGN', (last, 0), (last, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, grid)]
+    if last >= 3:                              # (with only the description chosen there are no number columns)
+        cmds.append(('ALIGN', (2, 0), (last - 1, -1), 'CENTER'))
+    if last >= 2:
+        cmds.append(('ALIGN', (last, 0), (last, -1), 'RIGHT' if amount_col else 'CENTER'))
     from . import pdf_look
     bw = pdf_look.colours() == pdf_look.BW
     for sec in sections:
@@ -381,11 +388,12 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
         if sec['description']:
             head += f'<br/><font size="7.5" color="{on}">{escape(sec["description"]).replace(chr(10), "<br/>")}</font>'
         # the section's total on its heading, in the Amount column (as on a firm's own BOQ sheet)
-        data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))] + [''] * (last - 2)
-                    + [_money(sec['total']) if sec['total'] else ''])
+        total_txt = _money(sec['total']) if sec['total'] and show['room_total'] else ''
+        data.append([sec['letter'], Paragraph(head, ParagraphStyle('BQH', parent=title, leading=13))]
+                    + ([''] * (last - 2) + [total_txt] if amount_col else [''] * (last - 1)))
         if bw:
             cmds.append(('LINEABOVE', (0, k), (-1, k), 1.5, BRAND_DARK))
-        cmds += [('BACKGROUND', (0, k), (-1, k), bar), ('SPAN', (1, k), (-2, k)),
+        cmds += [('BACKGROUND', (0, k), (-1, k), bar), ('SPAN', (1, k), (-2 if amount_col else -1, k)),
                  ('FONTNAME', (0, k), (0, k), _F.b), ('FONTNAME', (-1, k), (-1, k), _F.b),
                  ('FONTSIZE', (0, k), (0, k), 12), ('FONTSIZE', (-1, k), (-1, k), 10),
                  ('TEXTCOLOR', (0, k), (-1, k), ink), ('TOPPADDING', (0, k), (-1, k), 7),
@@ -401,8 +409,8 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
                 amount = f"Rate {_money(ln['rate'], 0)}"
             data.append([str(ln['no']), Paragraph(text, small)]
                         + ([item_images.pdf_image(photos.get(ln.get('image_id')), 2.6, 2.6) or ''] if photos else [])
-                        + [f'{inr(ln["qty"])}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']]
-                        + ([_money(ln['rate'], 0) if ln['rate'] else ''] if rate_col else []) + [amount])
+                        + ([f'{inr(ln["qty"])}'.rstrip('0').rstrip('.') if ln['qty'] else '—', ln['unit']] if qty_cols else [])
+                        + ([_money(ln['rate'], 0) if ln['rate'] else ''] if rate_col else []) + ([amount] if amount_col else []))
     table = Table(data, colWidths=cw, repeatRows=1)
     table.setStyle(TableStyle(cmds))
     return [table] + _totals_elements(snap, page_width, palette)

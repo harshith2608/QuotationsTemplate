@@ -66,7 +66,12 @@
       <button type="submit" class="btn btn-outline-secondary btn-sm fw-semibold"><i class="bi bi-bookmark-plus me-1"></i>Save as template</button>
     </form>
     {% endif %}
-    {% if single_pdf %}
+    {% if single_pdf and pdf_pick %}
+    <!-- Priced by item, choosing what it shows: the tick-boxes first (#pdfPickModal), then the PDF -->
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#pdfPickModal">
+      <i class="bi bi-file-earmark-text me-1"></i>Quotation PDF
+    </button>
+    {% elif single_pdf %}
     <!-- Priced by item: one quotation PDF (the BOQ, every line with its rate and amount) -->
     <a href="{{ url_for('projects.download_customer_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
        class="btn btn-primary btn-sm fw-semibold">
@@ -78,11 +83,17 @@
        class="btn btn-primary btn-sm fw-semibold">
       <i class="bi bi-file-earmark-text me-1"></i>Full Quotation
     </a>
-    <!-- Initial Quotation: summary PDF without measurements. Opens to view -->
+    <!-- Initial Quotation: summary PDF without measurements. Opens to view (choosing what it shows first, when on) -->
+    {% if pdf_pick %}
+    <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#pdfPickModal">
+      <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
+    </button>
+    {% else %}
     <a href="{{ url_for('projects.download_customer_pdf', project_id=project.id) }}" target="_blank" rel="noopener"
        class="btn btn-outline-primary btn-sm fw-semibold">
       <i class="bi bi-file-earmark-person me-1"></i>Initial Quotation
     </a>
+    {% endif %}
     {% endif %}
     {% if q2c.email_ready and project.status != 'draft' %}
     <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#emailQuoteModal">
@@ -1040,6 +1051,39 @@
         </form>
       </div>
     </div>
+  </div>
+</div>
+{% endif %}
+{% if pdf_pick %}
+<!-- Choose what the Quotation PDF shows (app/pdf_choices.py): kept for this quotation (its link and emailed PDF too) -->
+<div class="modal fade" id="pdfPickModal" tabindex="-1" aria-labelledby="pdfPickLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('projects.choose_pdf', project_id=project.id) }}" target="_blank"
+          onsubmit="setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('pdfPickModal'))?.hide(), 100)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header ki-modal-header">
+        <h6 class="modal-title fw-bold mb-0" id="pdfPickLabel"><i class="bi bi-file-earmark-text me-2"></i>What should the PDF show?</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">The item name is always shown. Your choice is kept for this quotation: its link
+          and the emailed PDF show the same.</p>
+        <div class="row g-2">
+          {% for key, label in pdf_pick.fields %}
+          <div class="col-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="{{ key }}" value="1" id="pp_{{ key }}" {{ 'checked' if pdf_pick.chosen[key] }}>
+              <label class="form-check-label small" for="pp_{{ key }}">{{ label }}</label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer pt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold"><i class="bi bi-box-arrow-up-right me-1"></i>Open PDF</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endif %}

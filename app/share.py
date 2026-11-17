@@ -158,11 +158,12 @@ def view(token):
     from . import layout
     chosen = layout.initial_layout() if share.detail != 'full' or layout.single_pdf() else None
     rows = layout.room_rows(snap) if chosen == layout.LAYOUT_ROOMS else None
-    boq_sections = layout.boq_rows(snap) if chosen == layout.LAYOUT_BOQ else None
+    from . import pdf_choices
+    show = pdf_choices.for_project(project.id)       # what this quotation shows (as its PDF)
+    boq_sections = layout.boq_rows(snap, show) if chosen == layout.LAYOUT_BOQ else None
     return _private(render_template('share/quote.html', share=share, project=project, snap=snap, status=status,
                                     pay=pay, paid=billing.paid_total(project), room_rows=rows, boq_sections=boq_sections,
-                                    show_rate=layout.show_rate() and not layout.room_totals_only(),
-                                    per_room=layout.room_totals_only()))
+                                    show_rate=show['rate'], per_room=not show['amount'], show=show))
 
 
 @share_bp.route('/q/<token>/pdf')
