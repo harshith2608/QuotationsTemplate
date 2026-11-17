@@ -99,6 +99,45 @@ def gallery_shown(project):
     return enabled() and printing(project.id)['gallery']
 
 
+def details(project):
+    """[(label, value)] for the cover: who it's for, who made it, its date and (Settings → Quotation PDFs → Validity)
+    how long it's valid; Valid until left out when that's empty."""
+    from datetime import timedelta
+    from . import layout
+    dated = project.created_at
+    rows = [('Prepared for', project.customer_name or ''),
+            ('Prepared by', project.creator.display_name if project.creator else ''),
+            ('Date', (dated + timedelta(hours=5, minutes=30)).strftime('%d %B %Y') if dated else '')]
+    until = layout.valid_until(dated)
+    if until:
+        rows.append(('Valid until', until.strftime('%d %B %Y')))
+    return [(k, v) for k, v in rows if v]
+
+
+def _draw_details(c, project, dark, x, bottom, width, top):
+    """The quotation's details in the grey panel, from its bottom up (above them: the package name)."""
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph
+    from html import escape
+    from .pdf_utils import _F
+    label = ParagraphStyle('CvDL', fontName=_F.b, fontSize=7.5, leading=9, textColor=colors.HexColor('#78909c'))
+    value = ParagraphStyle('CvDV', fontName=_F.b, fontSize=11, leading=14, textColor=dark)
+    first = ParagraphStyle('CvDF', parent=value, fontSize=14, leading=17)
+    blocks = []
+    for i, (k, v) in enumerate(details(project)):
+        lp, vp = Paragraph(escape(k.upper()), label), Paragraph(escape(v), first if i == 0 else value)
+        _, lh = lp.wrap(width, 50)
+        _, vh = vp.wrap(width, 80)
+        blocks.append((lp, lh, vp, vh))
+    y = bottom + sum(lh + vh + 2 + 10 for _, lh, _, vh in blocks) - 10
+    y = min(y, top)
+    c.setStrokeColor(dark); c.setLineWidth(2); c.line(x, y + 8, x + 28, y + 8)
+    for lp, lh, vp, vh in blocks:
+        lp.drawOn(c, x, y - lh); y -= lh + 2
+        vp.drawOn(c, x, y - vh); y -= vh + 10
+
+
 def _draw_cover(c, project, photo):
     """The cover, laid out like a designed brochure page: a band in the brand colour down the left; the logo, firm
     name, slogan and tagline on white; the package name on a grey panel at the top right; the photo below."""
@@ -147,6 +186,7 @@ def _draw_cover(c, project, photo):
         lx = pw - 42 - tw
         c.drawString(lx, ph - 82, label)
         c.setLineWidth(1.2); c.setStrokeColor(colors.HexColor('#111111')); c.line(lx, ph - 85, lx + tw, ph - 85)
+    _draw_details(c, project, dark, pw * 0.58 + 26, ph * 0.62 + 24, pw * 0.42 - 26 - 42, ph - 110)
     # the photo: filling a rounded frame (cropped to fit), the lower part of the page
     bx, by, bw, bh = band + 45, 46, pw - band - 45 - 52, ph * 0.56
     img = ImageReader(io.BytesIO(photo))

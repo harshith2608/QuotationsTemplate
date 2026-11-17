@@ -475,13 +475,29 @@
     </div>
   </div>
   {% endif %}
+  <div class="card shadow-sm border-0 mb-3" id="validity">
+    <div class="card-header ki-card-header"><i class="bi bi-calendar-check me-2"></i>Validity</div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <label class="small fw-semibold" for="quote_valid_days">A quotation is valid for</label>
+        <div class="input-group input-group-sm" style="width:9rem">
+          <input type="number" class="form-control" id="quote_valid_days" name="quote_valid_days" min="1" max="3650" step="1"
+                 value="{{ valid_days or '' }}" placeholder="e.g. 30">
+          <span class="input-group-text">days</span>
+        </div>
+        <button type="submit" name="back_to" value="validity" class="btn btn-sm btn-primary ki-btn-primary ms-auto"><i class="bi bi-check-circle me-1"></i>Save</button>
+      </div>
+      <div class="form-text">From the quotation's date: the PDFs show <strong>Valid until</strong> (e.g. dated 1 March,
+        30 days: valid until 31 March), on the cover page and next to the date. Leave it empty and it isn't shown.</div>
+    </div>
+  </div>
   {% if cover_texts %}
   <div class="card shadow-sm border-0 mb-3" id="cover-page">
     <div class="card-header ki-card-header"><i class="bi bi-journal-richtext me-2"></i>Cover page</div>
     <div class="card-body">
       <p class="small text-muted mb-3">The first page of a quotation that has a cover photo (added on the quotation, and
         copied with templates): your logo and name, this slogan and tagline, the package name (the template it was made
-        from, e.g. "DIY Package") and the photo.</p>
+        from, e.g. "DIY Package"), who it's for, who prepared it, its date and how long it's valid, and the photo.</p>
       <div class="row g-2">
         <div class="col-md-6"><label class="form-label small fw-semibold mb-1" for="cover_slogan">Slogan</label>
           <input class="form-control" id="cover_slogan" name="cover_slogan" maxlength="120" value="{{ cover_texts.slogan }}" placeholder="e.g. Luxury crafted for modern living"></div>

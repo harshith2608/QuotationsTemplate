@@ -388,6 +388,30 @@ first = re.sub(r'\s+', ' ', cov_pdf.pages[0].extract_text() or '')
 ok('…with a cover photo: the cover is the first page (name, slogan, tagline, package name)',
    len(cov_pdf.pages) == before_cover + 1 and 'LUXURY CRAFTED FOR MODERN LIVING' in first
    and 'Your dream home, professionally managed' in first and 'DIY PACKAGE' in first)
+with app.app_context():
+    _p = db.session.get(Project, pid)
+    _who, _by = _p.customer_name, _p.creator.display_name
+ok('…and who it\'s for, who prepared it and its date (no Valid until: Validity empty)', 'PREPARED FOR' in first
+   and _who in first and 'PREPARED BY' in first and _by in first and 'DATE' in first and 'VALID UNTIL' not in first)
+c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': '30'})
+with app.app_context():
+    from app import layout as _lay
+    _until = _lay.valid_until(db.session.get(Project, pid).created_at).strftime('%d %B %Y')
+_pdf = PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data))
+first = re.sub(r'\s+', ' ', _pdf.pages[0].extract_text() or '')
+_rest = re.sub(r'\s+', ' ', _pdf.pages[1].extract_text() or '')
+ok('Validity 30 days (Settings → Quotation PDFs): Valid until on the cover and next to the date',
+   'VALID UNTIL' in first and _until in first and f'Valid until: {_until}' in _rest)
+ok('…the setting is shown', 'name="quote_valid_days"' in c.get('/admin/settings?tab=documents').text
+   and 'value="30"' in c.get('/admin/settings?tab=documents').text)
+c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': 'abc'})
+with app.app_context():
+    ok('…a value that isn\'t a number is refused (30 kept)', _lay.valid_days() == 30)
+c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': ''})
+with app.app_context():
+    ok('…emptied: off', _lay.valid_days() is None)
+ok('…and gone from the PDF', 'Valid until' not in ' '.join(x.extract_text() for x in
+   PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages))
 c.post(f'/projects/{pid}/cover', data={'print_seen': '1'})
 ok('…unticked "Print the cover": left out', len(PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages) == before_cover
    and 'LUXURY' not in (PdfReader(io.BytesIO(c.get(f'/projects/{pid}/pdf/customer').data)).pages[0].extract_text() or ''))

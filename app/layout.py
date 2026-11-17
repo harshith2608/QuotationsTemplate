@@ -307,3 +307,42 @@ def section_editor_html(raw):
     """What the rich text editor opens with: the saved HTML, or plain text as the numbered list the PDF prints."""
     from . import richtext
     return richtext.clean(raw) if richtext.is_html(raw) else richtext.from_plain(raw, numbered=True)
+
+
+# ── How long a quotation is valid (Settings → Quotation PDFs → Validity) ──
+VALID_KEY = 'quote_valid_days'
+VALID_MAX = 3650
+
+
+def valid_days():
+    """Days a quotation is valid from its date; None when left empty (then no "Valid until" on the PDFs)."""
+    from .models import AppSetting
+    try:
+        n = int((AppSetting.get(VALID_KEY, '') or '').strip())
+    except ValueError:
+        return None
+    return n if 0 < n <= VALID_MAX else None
+
+
+def set_valid_days(raw):
+    """From the Settings box: a number of days, or empty (off). Returns an error message or None."""
+    from .models import AppSetting
+    raw = (raw or '').strip()
+    if not raw:
+        AppSetting.set(VALID_KEY, '')
+        return None
+    try:
+        n = int(float(raw))
+    except ValueError:
+        return 'Valid for: type a number of days, or leave it empty.'
+    if not 0 < n <= VALID_MAX:
+        return f'Valid for: between 1 and {VALID_MAX} days, or leave it empty.'
+    AppSetting.set(VALID_KEY, str(n))
+    return None
+
+
+def valid_until(dated):
+    """The date a quotation dated `dated` (UTC datetime) is valid until, in India time; None when not set."""
+    from datetime import timedelta
+    n = valid_days()
+    return (dated + timedelta(hours=5, minutes=30, days=n)) if (n and dated) else None
