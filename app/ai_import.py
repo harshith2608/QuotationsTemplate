@@ -235,8 +235,10 @@ def _excel_text(raw):
     return body[:MAX_TEXT]
 
 
-# ── 1b. A clean rate table (a product master): read directly, no AI ───────────
-# Its columns, by their headings (lower case, letters only); the first heading found of each list wins.
+# ── 1b. A clean rate table (a product master): the rows read directly ─────────
+# Which column is which: the AI looks at the headings and a few rows (_ask_columns: a small, quick request, not counted
+# against the limit), then every row is read here, exactly as written. Without the AI (no key, or it fails), by the
+# headings: lower case, letters only; the first heading found of each list wins.
 TABLE_NAME = ('productname', 'itemname', 'item', 'name', 'product', 'particulars', 'particular', 'itemdescription',
               'workname', 'work')
 TABLE_RATE = ('rate', 'sellingrate', 'sellingprice', 'unitrate', 'unitprice', 'rateperunit', 'price', 'mrp', 'rates',
@@ -244,12 +246,16 @@ TABLE_RATE = ('rate', 'sellingrate', 'sellingprice', 'unitrate', 'unitprice', 'r
 TABLE_UNIT = ('unit', 'uom', 'units', 'per')
 TABLE_DESC = ('description', 'details', 'specification', 'specifications', 'desc', 'remarks', 'itemdetails')
 TABLE_GROUP = ('productcategory', 'category', 'section', 'group', 'room', 'area', 'head', 'itemcategory')
+EXACT_ONLY = {'per', 'area', 'head', 'name', 'item', 'work'}      # "Percentage", "Area (sqft)", "Headcount": not these
 TABLE_QTY = ('qty', 'quantity', 'nos', 'noof', 'count')          # a quotation, not a rate list: left to the AI
 TABLE_COST = ('agency', 'cost', 'purchase', 'buying', 'vendor', 'labour', 'total', 'amount')   # never the selling rate
 TABLE_MIN_ROWS = 5
+PREVIEW_ROWS, PREVIEW_CELL, PREVIEW_MAX = 25, 60, 14000
 ACRONYMS = {'Ac': 'AC', 'Tv': 'TV', 'Pop': 'POP', 'Mdf': 'MDF', 'Led': 'LED', 'Pvc': 'PVC', 'Wpc': 'WPC', 'Mr': 'MR',
             'Hdhmr': 'HDHMR', 'Upvc': 'uPVC', 'Bwp': 'BWP', 'Bwr': 'BWR', 'Cnc': 'CNC', 'Ms': 'MS', 'Ss': 'SS', 'Gi': 'GI',
             'Pu': 'PU', '3d': '3D', '2d': '2D', 'Bhk': 'BHK', 'Rcc': 'RCC'}
+FIELDS = (('name', 'Item name'), ('rate', 'Rate'), ('unit', 'Unit'), ('description', 'Description'),
+          ('group', 'Section'))
 
 
 def _heading(value):
@@ -262,6 +268,8 @@ def _pick(heads, wanted, avoid=()):
             if h == w and not any(a in h for a in avoid):
                 return i
     for w in wanted:                          # "Rate (Rs.)", "Product Name *"
+        if w in EXACT_ONLY:
+            continue
         for i, h in enumerate(heads):
             if h.startswith(w) and not any(a in h for a in avoid):
                 return i
@@ -276,52 +284,192 @@ def _caps_name(value):
     return v
 
 
-def rate_table(raw):
-    """A product master / rate list Excel (a heading row with an item name and a rate, no quantities) read as it is:
-    the review data (see tidy), or None when it isn't one (then the AI reads the file). Exact, instant, no AI."""
+def _letter(i):
+    out, i = '', i + 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        out = chr(65 + r) + out
+    return out
+
+
+def _index(letter):
+    letter = re.sub(r'[^A-Z]', '', str(letter or '').upper())
+    if not letter or len(letter) > 2:
+        return None
+    n = 0
+    for ch in letter:
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def _sheets(raw):
+    """[(title, rows)] of the first sheets, or None when it isn't an Excel file that opens."""
     from openpyxl import load_workbook
-    from . import boq
     try:
         book = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        return [(sh.title, [r for r in sh.iter_rows(values_only=True, max_row=5000)]) for sh in book.worksheets[:5]]
     except Exception:
         return None
-    for sheet in book.worksheets[:5]:
-        rows = [r for r in sheet.iter_rows(values_only=True, max_row=5000)]
-        for h_at, row in enumerate(rows[:15]):
-            heads = [_heading(v) for v in row]
-            name_i, rate_i = _pick(heads, TABLE_NAME), _pick(heads, TABLE_RATE, TABLE_COST)
-            if name_i is None or rate_i is None or name_i == rate_i:
-                continue
-            if any(h in TABLE_QTY for h in heads):
-                return None                   # quantities: a quotation (the AI reads it, with its totals)
-            unit_i, desc_i, group_i = _pick(heads, TABLE_UNIT), _pick(heads, TABLE_DESC), _pick(heads, TABLE_GROUP)
-            if desc_i == name_i:
-                desc_i = None
-            groups, seen, names = {}, set(), Counter()
-            for r in rows[h_at + 1:]:
-                cell = lambda i: r[i] if i is not None and i < len(r) else None
-                name, rate = _caps_name(cell(name_i)), _num(cell(rate_i))
-                if not name or rate is None or rate < 0:
-                    continue
-                desc = boq.clean_description(cell(desc_i)) if desc_i is not None else ''
-                unit = boq.clean_unit(cell(unit_i)) if unit_i is not None and cell(unit_i) else 'nos'
-                base = re.sub(r'\s*[-–(]\s*(clone|copy)\)?\s*$', '', name, flags=re.I)
-                key = (base.lower(), rate, desc, unit)
-                if key in seen:
-                    continue                  # an identical copy ("AC PELMET - Clone")
-                seen.add(key)
-                names[base.lower()] += 1
-                shown = base if names[base.lower()] == 1 else f'{base} ({names[base.lower()]})'
-                group = _caps_name(cell(group_i)) if group_i is not None and cell(group_i) else 'Items'
-                groups.setdefault(group.lower(), {'name': group[:100], 'lines': []})['lines'].append(
-                    {'name': shown[:100], 'description': desc, 'unit': unit, 'quantity': None, 'rate': rate,
-                     'amount': None, 'material': '', 'work': '', 'no_amount': False})
+
+
+class ColumnMap(BaseModel):
+    kind: Literal['rate_list', 'quotation', 'other']
+    sheet: int
+    heading_row: int
+    name: str
+    rate: str
+    unit: str
+    description: str
+    group: str
+
+
+COLUMNS_PROMPT = """These are the first rows of each sheet of an Excel file a business (interiors, furniture, kitchens,
+windows…) uploaded to set up its rates. Each row: its number, then its non-empty cells by column letter.
+Say which sheet and which columns hold its items and their rates:
+- kind: "rate_list" when it lists items with their selling rates (no job's quantities filled in); "quotation" when it is
+  a quotation for one job (quantities and amounts filled in for that job); "other" when it is neither.
+- sheet: the sheet's number. heading_row: the row number of the column headings (0 if there are none).
+- name: the column with each item's name. rate: the selling rate per unit the customer is charged (not a cost, agency,
+  purchase, vendor or labour price, not a total or amount). unit: the column with the rate's unit (sqft, nos, rft,
+  running ft, LS…). description: the specification or description text. group: the category, room or section of each
+  item, in its own column ("" when sections are rows with just a heading, like KITCHEN, in the name column). Each a
+  column letter, or "" when the file has no such column; never the same letter for two of them.
+Only map a column whose cells hold that kind of value."""
+
+
+def _preview(sheets):
+    out = []
+    for n, (title, rows) in enumerate(sheets, 1):
+        lines = []
+        for r_at, row in enumerate(rows[:PREVIEW_ROWS], 1):
+            cells = [f'{_letter(i)}={_cell(v)[:PREVIEW_CELL]}' for i, v in enumerate(row or ()) if _cell(v)]
+            if cells:
+                lines.append(f'{r_at}: ' + ' | '.join(cells))
+        if lines:
+            out.append(f'Sheet {n} "{title}":\n' + '\n'.join(lines))
+    return '\n\n'.join(out)[:PREVIEW_MAX]
+
+
+def _ask_columns(sheets):
+    """The AI's reading of which column is which → (ColumnMap, usage), or (None, None) when it can't be asked."""
+    if not api_key():
+        return None, None
+    body = _preview(sheets)
+    if not body:
+        return None, None
+    import anthropic
+    try:
+        client = anthropic.Anthropic(api_key=api_key(), timeout=25, max_retries=1)
+        r = client.messages.parse(model=MODEL, max_tokens=400, output_format=ColumnMap,
+                                  messages=[{'role': 'user', 'content': f'{COLUMNS_PROMPT}\n\n<sheets>\n{body}\n</sheets>'}])
+    except Exception:
+        return None, None
+    if r.stop_reason in ('refusal', 'max_tokens') or r.parsed_output is None:
+        return None, None
+    return r.parsed_output, {'in': r.usage.input_tokens, 'out': r.usage.output_tokens}
+
+
+def _by_headings(rows):
+    """{'heading_row': i, field: column index…} from the headings, 'quotation' for a sheet with quantities, or None."""
+    for h_at, row in enumerate(rows[:15]):
+        heads = [_heading(v) for v in row or ()]
+        name_i, rate_i = _pick(heads, TABLE_NAME), _pick(heads, TABLE_RATE, TABLE_COST)
+        if name_i is None or rate_i is None or name_i == rate_i:
+            continue
+        if any(h in TABLE_QTY for h in heads):
+            return 'quotation'
+        return {'heading_row': h_at, 'name': name_i, 'rate': rate_i, 'unit': _pick(heads, TABLE_UNIT),
+                'description': _pick(heads, TABLE_DESC), 'group': _pick(heads, TABLE_GROUP)}
+    return None
+
+
+def _read_rows(rows, cols):
+    """Every item row under the headings, exactly as written: {group: {'name', 'lines'}}. With no section column,
+    a row with only a name (KITCHEN, BEDROOM 1…) starts a section."""
+    from . import boq
+    name_i, rate_i, unit_i, desc_i, group_i = (cols.get(k) for k in ('name', 'rate', 'unit', 'description', 'group'))
+    if desc_i == name_i:
+        desc_i = None
+    groups, seen, names, current = {}, set(), Counter(), 'Items'
+    for r in rows[cols['heading_row'] + 1:]:
+        r = r or ()
+        cell = lambda i: r[i] if i is not None and i < len(r) else None
+        name, rate = _caps_name(cell(name_i)), _num(cell(rate_i))
+        if name and rate is None and group_i is None and not any(_cell(v) for i, v in enumerate(r) if i != name_i):
+            current = name                    # a section heading row
+            continue
+        if not name or rate is None or rate < 0:
+            continue
+        desc = boq.clean_description(cell(desc_i)) if desc_i is not None else ''
+        unit = boq.clean_unit(cell(unit_i)) if unit_i is not None and cell(unit_i) else 'nos'
+        base = re.sub(r'\s*[-–(]\s*(clone|copy)\)?\s*$', '', name, flags=re.I)
+        key = (base.lower(), rate, desc, unit)
+        if key in seen:
+            continue                          # an identical copy ("AC PELMET - Clone")
+        seen.add(key)
+        names[base.lower()] += 1
+        shown = base if names[base.lower()] == 1 else f'{base} ({names[base.lower()]})'
+        group = _caps_name(cell(group_i)) if group_i is not None and cell(group_i) else current
+        groups.setdefault(group.lower(), {'name': group[:100], 'lines': []})['lines'].append(
+            {'name': shown[:100], 'description': desc, 'unit': unit, 'quantity': None, 'rate': rate,
+             'amount': None, 'material': '', 'work': '', 'no_amount': False})
+    return groups
+
+
+def _columns_note(title, rows, cols):
+    """'Item name ← Product Name (B) · Rate ← Selling Price (F) · …' for the review page."""
+    heads = rows[cols['heading_row']] if 0 <= cols['heading_row'] < len(rows) else ()
+    parts = []
+    for key, label in FIELDS:
+        i = cols.get(key)
+        if i is None:
+            continue
+        head = _cell(heads[i]) if heads and i < len(heads) else ''
+        parts.append(f'{label} ← {head or "column"} ({_letter(i)})')
+    return f'Sheet "{title}": ' + ' · '.join(parts)
+
+
+def _table_data(groups, note, how):
+    return {'rate_list': True, 'pricing': 'item', 'table': True, 'columns': note, 'columns_by': how,
+            'pricing_reason': 'Read straight from your sheet: every item, rate and description as you wrote them.',
+            'job_title': 'My rates', 'sections': list(groups.values()), 'charges': [], 'subtotal': None,
+            'discount': 0, 'gst_percent': None, 'grand_total': None, 'payment_terms': '', 'notes': ''}
+
+
+def rate_table(raw, ask=True):
+    """A product master / rate list Excel (items with rates, no quantities) read row by row: the review data (see tidy),
+    or None when it isn't one (then the AI reads the whole file). Which column is which: the AI's look at the headings
+    and first rows (ask), else the headings themselves. data['usage']: the AI's tokens, when it was asked."""
+    sheets = _sheets(raw)
+    if not sheets:
+        return None
+    if ask:
+        found, used = _ask_columns(sheets)
+        if found is not None:
+            if found.kind == 'quotation':
+                return None                   # a job's quotation: the AI reads it all, with its totals
+            if found.kind == 'rate_list' and 1 <= found.sheet <= len(sheets):
+                title, rows = sheets[found.sheet - 1]
+                cols = {k: _index(getattr(found, k)) for k, _ in FIELDS}
+                cols['heading_row'] = max(found.heading_row - 1, -1)       # (-1: no headings, items from row 1)
+                for k in ('unit', 'description', 'group'):                  # (a column used twice: not this one)
+                    if cols[k] is not None and cols[k] in (cols['name'], cols['rate']):
+                        cols[k] = None
+                if cols['name'] is not None and cols['rate'] is not None and cols['name'] != cols['rate']:
+                    groups = _read_rows(rows, cols)
+                    if sum(len(g['lines']) for g in groups.values()) >= TABLE_MIN_ROWS:
+                        data = _table_data(groups, _columns_note(title, rows, cols), 'ai')
+                        data['usage'] = used
+                        return data
+    for title, rows in sheets:                # without the AI: by the headings
+        cols = _by_headings(rows)
+        if cols == 'quotation':
+            return None
+        if cols:
+            groups = _read_rows(rows, cols)
             if sum(len(g['lines']) for g in groups.values()) < TABLE_MIN_ROWS:
                 return None
-            return {'rate_list': True, 'pricing': 'item', 'table': True,
-                    'pricing_reason': 'Read straight from your sheet: every item, rate and description as you wrote them.',
-                    'job_title': 'My rates', 'sections': list(groups.values()), 'charges': [], 'subtotal': None,
-                    'discount': 0, 'gst_percent': None, 'grand_total': None, 'payment_terms': '', 'notes': ''}
+            return _table_data(groups, _columns_note(title, rows, cols), 'headings')
     return None
 
 
@@ -412,9 +560,11 @@ def read_upload(filename, raw):
     """The whole of steps 1–2 for an upload, within the limit: the review data (see tidy). Raises ImportProblem."""
     name = (filename or '').lower()
     if raw and len(raw) <= MAX_BYTES and (name.endswith('.xlsx') or name.endswith('.xlsm')):
-        table = rate_table(raw)              # a clean rate list: read as it is (exact, instant, not counted)
+        table = rate_table(raw)              # a rate list: its rows read as they are (exact, quick, not counted)
         if table:
-            _log('excel', True, sum(len(s['lines']) for s in table['sections']), note='rate table, read directly')
+            used = table.pop('usage', None) or {}
+            _log('excel', True, sum(len(s['lines']) for s in table['sections']), used.get('in'), used.get('out'),
+                 note='rate table: columns by the AI' if table.get('columns_by') == 'ai' else 'rate table, by its headings')
             return table
     if left()[0] <= 0:
         raise ImportProblem(f'You\'ve used all your quotation imports ({left()[1]}). Message us on WhatsApp if you '

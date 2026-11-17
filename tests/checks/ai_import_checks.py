@@ -52,6 +52,16 @@ def fake_read(body):
 
 
 AI.read = fake_read
+COLUMNS = None                       # what the AI says about a rate list's columns (None: not asked / no answer)
+asked = []
+
+
+def fake_columns(sheets):
+    asked.append(AI._preview(sheets))
+    return (COLUMNS, {'in': 600, 'out': 60}) if COLUMNS is not None else (None, None)
+
+
+AI._ask_columns = fake_columns
 
 # ── Off (default) ──
 app = create_app('development'); app.config['WTF_CSRF_ENABLED'] = False
@@ -289,6 +299,54 @@ ok('a product master: read as it is, without the AI (and not counted against the
 ok('…its descriptions with their line breaks, units in the app\'s words, its categories as sections',
    'BASE frame : MR ply\nDecorative : paint finish</textarea>' in _h.unescape(t)
    and 'value="rft"' in t and 'value="Loose Items"' in t and 'value="Tv Unit"' not in t)
+
+# Headings the app doesn't know: the AI says which column is which (from the first rows), then every row is read here
+odd = openpyxl.Workbook(); o = odd.active
+o.append(['Aarambh Interior – price list 2026'])
+o.append([])
+o.append(['S.No', 'Particular of work', 'Specs', 'Measure', 'Percentage', 'Charges to client (₹)', 'Our cost'])
+o.append([None, 'KITCHEN'])                                           # a section row
+o.append([1, 'Base cabinets', 'BWP ply, 1mm laminate', 'Sq.ft', 18, 1450, 900])
+o.append([2, 'Loft units', 'BWP ply', 'Sq.ft', 18, 1250, 800])
+o.append([3, 'Tall unit', '', 'Nos', 18, 32000, 21000])
+o.append([None, 'BEDROOM'])
+o.append([4, 'Wardrobe', 'Sliding, 1mm laminate', 'Sq.ft', 18, 1650, 1100])
+o.append([5, 'Bed with storage', 'Hydraulic', 'Nos', 18, 45000, 30000])
+o.append([6, 'Study table', '', 'R.ft', 18, 2200, 1500])
+obuf = io.BytesIO(); odd.save(obuf); odd_raw = obuf.getvalue()
+ok('…without the AI: headings it doesn\'t know are left to the full reading', AI.rate_table(odd_raw) is None)
+ok('…the AI is shown only the first rows, with row numbers and column letters', asked
+   and '3: A=S.No | B=Particular of work' in asked[-1] and 'F=Charges to client (₹)' in asked[-1])
+COLUMNS = AI.ColumnMap(kind='rate_list', sheet=1, heading_row=3, name='B', rate='F', unit='D', description='C', group='')
+tb = AI.rate_table(odd_raw)
+got = {l['name']: l for sec in (tb or {}).get('sections', []) for l in sec['lines']}
+ok('with the AI\'s columns: every row read exactly (selling rate, not the cost; units; descriptions)',
+   tb and len(got) == 6 and got['Base cabinets']['rate'] == 1450 and got['Tall unit']['rate'] == 32000
+   and got['Base cabinets']['unit'] == 'sqft' and got['Study table']['unit'] == 'rft'
+   and got['Wardrobe']['description'] == 'Sliding, 1mm laminate')
+ok('…rows with only a name are its sections (Kitchen, Bedroom)', tb and [sec['name'] for sec in tb['sections']]
+   == ['Kitchen', 'Bedroom'] and len(tb['sections'][0]['lines']) == 3)
+ok('…the page says which column was used for what', tb and tb['columns_by'] == 'ai'
+   and 'Item name ← Particular of work (B)' in tb['columns'] and 'Rate ← Charges to client (₹) (F)' in tb['columns'])
+n = len(calls)
+rr = upload(odd_raw, 'Aarambh rates.xlsx')
+ok('…uploaded: the review page with the columns read, no full AI reading, not counted', len(calls) == n
+   and 'Columns read' in rr.text and 'picked out by AI' in rr.text and 'value="Base cabinets"' in rr.text)
+COLUMNS = AI.ColumnMap(kind='quotation', sheet=1, heading_row=1, name='A', rate='C', unit='', description='', group='')
+ok('the AI says it is a quotation: the full reading takes it', AI.rate_table(odd_raw) is None)
+COLUMNS = AI.ColumnMap(kind='rate_list', sheet=1, heading_row=3, name='B', rate='Q', unit='', description='', group='')
+ok('a column with no rates in it: back to the headings (so the full reading here)', AI.rate_table(odd_raw) is None)
+COLUMNS = None
+pct = openpyxl.Workbook(); pc = pct.active
+pc.append(['Item', 'Percentage', 'Area (sqft)', 'Rate'])
+for i in range(6):
+    pc.append([f'Item {i}', 18, 120, 1000 + i])
+pbuf = io.BytesIO(); pct.save(pbuf)
+pt = AI.rate_table(pbuf.getvalue())
+ok('by headings: "Percentage" isn\'t the unit, "Area (sqft)" isn\'t the section', pt and
+   pt['sections'][0]['name'] == 'Items' and pt['sections'][0]['lines'][0]['unit'] == 'nos'
+   and 'Unit' not in pt['columns'])
+
 from html.parser import HTMLParser
 
 
