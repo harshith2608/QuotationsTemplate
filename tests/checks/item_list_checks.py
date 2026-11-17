@@ -431,34 +431,3 @@ ok('…saved for the link: back to the link (not a PDF), now with rates and amou
    and ch5['rate'] and ch5['amount'])
 pub4 = app.test_client().get(f'/q/{sh4.token}').text
 ok('…and the customer\'s link follows it', 'Shelf' in pub4)
-
-# Defaults for quotations without their own cover / gallery (Settings → Cover & gallery): from scratch too
-ok('defaults page: there with Cover & gallery on', c.get('/admin/cover-photos').status_code == 200)
-c.post('/admin/cover-photos', data={'do': 'cover', 'photo': (io.BytesIO(_page_png('navy')), 'cover.png')},
-       content_type='multipart/form-data')
-c.post('/admin/cover-photos', data={'do': 'add', 'photos': [(io.BytesIO(_page_png('gray')), 'a.png'),
-                                                            (io.BytesIO(_page_png('silver')), 'b.png')]},
-       content_type='multipart/form-data')
-with app.app_context():
-    dcov, dgal = PP.default_cover(), PP.default_gallery()
-ok('…a default cover photo and a gallery of two saved', dcov and len(dgal) == 2)
-c.post('/projects/new', data={'customer_name': 'From Scratch', 'mobile': '9000000111', 'discount_type': 'none',
-                              'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Hall', 'items': [
-                                  {'name': 'Shelf', 'length': 3, 'width': 1, 'wood_type': wood, 'work_type': work}]}])})
-with app.app_context():
-    scratch = Project.query.order_by(Project.id.desc()).first()
-    ok('…a quotation from scratch has none of its own', PP.cover_photo(scratch.id) is None and PP.for_project(scratch.id) == [])
-sp_pdf = PdfReader(io.BytesIO(c.get(f'/projects/{scratch.id}/pdf/customer').data)).pages
-ok('…yet its PDF opens with the cover and the default gallery', 'LUXURY CRAFTED' in (sp_pdf[0].extract_text() or '')
-   and not (sp_pdf[1].extract_text() or '').strip() and 'Shelf' in ' '.join(p.extract_text() or '' for p in sp_pdf[2:]))
-ok('…its page says it uses the defaults', 'your default' in c.get(f'/projects/{scratch.id}').text
-   and 'Using your default gallery (2 photos)' in c.get(f'/projects/{scratch.id}').text)
-c.post(f'/projects/{scratch.id}/share', data={})
-with app.app_context():
-    sh5 = QuoteShare.query.filter_by(project_id=scratch.id, active=True).first()
-ok('…its link shows (and serves) the default gallery', sh5 and f'/q/{sh5.token}/photo/{dgal[0]}' in app.test_client().get(f'/q/{sh5.token}').text
-   and app.test_client().get(f'/q/{sh5.token}/photo/{dgal[0]}').status_code == 200)
-c.post(f'/projects/{scratch.id}/pages', data={'pages': [(io.BytesIO(_page_png('red')), 'own.png')]}, content_type='multipart/form-data')
-with app.app_context():
-    ok('…its own gallery replaces the default for it', len(PP.effective_gallery(scratch.id)) == 1
-       and PP.effective_gallery(scratch.id)[0] not in dgal and PP.default_gallery() == dgal)

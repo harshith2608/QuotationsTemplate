@@ -1345,8 +1345,7 @@ def _cover_info(project):
     if not photo_pages.enabled():
         return None
     return {'photo': photo_pages.cover_photo(project.id), 'package': photo_pages.package(project.id),
-            'printing': photo_pages.printing(project.id), 'default_photo': photo_pages.default_cover(),
-            'default_gallery': photo_pages.default_gallery(), **photo_pages.texts()}
+            'printing': photo_pages.printing(project.id), **photo_pages.texts()}
 
 
 def _pdf_pick(project):

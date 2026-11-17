@@ -120,9 +120,7 @@
     {% if cover %}
     <div class="fw-semibold small mb-1"><i class="bi bi-journal-richtext me-1"></i>Cover page</div>
     <div class="d-flex flex-wrap gap-3 align-items-start mb-3 pb-3 border-bottom">
-      {% if cover.photo or cover.default_photo %}<div class="text-center small text-muted">
-        <img src="{{ url_for('projects.item_image', image_id=cover.photo or cover.default_photo) }}" alt="Cover photo" style="width:96px;height:96px;object-fit:cover" class="rounded border d-block">
-        {% if not cover.photo %}your default{% endif %}</div>{% endif %}
+      {% if cover.photo %}<img src="{{ url_for('projects.item_image', image_id=cover.photo) }}" alt="Cover photo" style="width:96px;height:96px;object-fit:cover" class="rounded border">{% endif %}
       <form method="post" action="{{ url_for('projects.quote_cover', project_id=project.id) }}" enctype="multipart/form-data" class="flex-grow-1" style="min-width:240px">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="small text-muted mb-1" for="coverPackage">Package name (top right of the cover)</label>
@@ -135,26 +133,21 @@
           <div class="form-check"><input class="form-check-input" type="checkbox" name="print_gallery" value="1" id="printGallery" {{ 'checked' if cover.printing.gallery }}>
             <label class="form-check-label small" for="printGallery">Print the gallery</label></div>
         </div>
-        <label class="small text-muted mb-1" for="coverPhoto">{{ 'Change the cover photo' if cover.photo else ('A cover photo for this quotation only (instead of your default)' if cover.default_photo else 'Cover photo (the big picture on the cover)') }}</label>
+        <label class="small text-muted mb-1" for="coverPhoto">{{ 'Change the cover photo' if cover.photo else 'Cover photo (the big picture on the cover)' }}</label>
         <input class="form-control form-control-sm mb-2" type="file" id="coverPhoto" name="photo" accept="image/jpeg,image/png,image/webp">
         <div class="d-flex gap-2">
           <button class="btn btn-sm btn-outline-primary fw-semibold" type="submit">Save</button>
-          {% if cover.photo %}<button class="btn btn-sm btn-link text-danger" type="submit" name="remove" value="1">{{ 'Use my default photo' if cover.default_photo else 'Remove the cover' }}</button>{% endif %}
+          {% if cover.photo %}<button class="btn btn-sm btn-link text-danger" type="submit" name="remove" value="1">Remove the cover</button>{% endif %}
         </div>
         {% endif %}
         <div class="form-text">With a cover photo, the PDF opens with your cover: logo, name, {{ ('"' ~ cover.slogan ~ '"') if cover.slogan else 'slogan' }}, tagline
-          and this package name. Slogan and tagline: <a href="{{ url_for('admin.settings', tab='documents') }}#cover-page">Settings → Quotation PDFs</a>;
-          {% if current_user.is_admin %}<a href="{{ url_for('admin.cover_photos') }}">your default cover photo &amp; gallery</a>{% else %}your default cover photo &amp; gallery (set by your admin){% endif %}.</div>
+          and this package name. Slogan and tagline: <a href="{{ url_for('admin.settings', tab='documents') }}#cover-page">Settings → Quotation PDFs</a>.</div>
       </form>
     </div>
     {% endif %}
     <div class="fw-semibold small mb-1"><i class="bi bi-images me-1"></i>Gallery</div>
     <p class="small text-muted mb-2">Photos of your work, printed together after the cover: 2 or 3 to a row, sized by their
       shape (nothing cut off), a few rows to a page. Saving as a template copies them, and the cover.</p>
-    {% if not pages and cover and cover.default_gallery %}
-    <p class="small mb-2"><i class="bi bi-check2-circle text-success me-1"></i>Using your default gallery ({{ cover.default_gallery|length }} photo{{ 's' if cover.default_gallery|length != 1 }}).
-      Adding photos here gives this quotation its own instead.</p>
-    {% endif %}
     {% if pages %}
     <div class="d-flex flex-wrap gap-2 mb-2">
       {% for pid_ in pages %}

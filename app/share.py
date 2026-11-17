@@ -147,7 +147,7 @@ def _private(resp):
 
 def _gallery(project):
     from . import photo_pages
-    return photo_pages.effective_gallery(project.id) if photo_pages.gallery_shown(project) else []
+    return photo_pages.for_project(project.id) if photo_pages.gallery_shown(project) else []
 
 
 @share_bp.route('/q/<token>')
@@ -200,7 +200,7 @@ def photo(token, image_id):
     from . import photo_pages
     on_a_line = item_images.ready() and db.session.query(Item.id).join(Room, Item.room_id == Room.id).filter(
         Room.project_id == project.id, Item.image_id == image_id).first()
-    if not on_a_line and image_id not in photo_pages.effective_gallery(project.id):   # or one of its gallery photos
+    if not on_a_line and image_id not in photo_pages.for_project(project.id):     # or one of its photo pages
         abort(404)
     row = ItemImage.query.options(undefer(ItemImage.data)).filter_by(id=image_id).first_or_404()
     resp = make_response(row.data)
