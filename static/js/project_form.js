@@ -1181,8 +1181,8 @@ function pickerLumpSums() {
 }
 function pickerItemNames() {
   if (!materialsAreItems()) return masterItems;
-  const builtIn = new Set((CATALOG.defaultItems || []).map(n => n.toLowerCase()));
-  return masterItems.filter(n => !builtIn.has(n.toLowerCase()));        // only names the firm added itself
+  const skip = new Set((CATALOG.defaultItems || []).concat(materialNames()).map(n => n.toLowerCase()));
+  return masterItems.filter(n => !skip.has(n.toLowerCase()));   // only names the firm typed itself (not its materials)
 }
 let _itemPickRoom = null;
 const _itemPicked = new Set();             // 'i:<name>' (an item) or 'f:<index>' (a fitting), kept while searching
