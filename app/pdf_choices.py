@@ -29,9 +29,21 @@ def set_enabled(on):
     AppSetting.set(SWITCH_KEY, '1' if on else '')
 
 
+LAST_KEY = 'pdf_choices_last'          # the business's last choice: where a new quotation's tick-boxes start
+
+
 def defaults():
-    """Before a quotation has its own choice: what the business's settings print today."""
+    """Before a quotation has its own choice: the last one made in this business (with the feature on), else what
+    the business's settings (Settings → Quotation PDFs, before the tick-boxes) printed."""
     from . import layout
+    from .models import AppSetting
+    if enabled():
+        try:
+            last = json.loads(AppSetting.get(LAST_KEY, '') or '{}')
+        except ValueError:
+            last = {}
+        if isinstance(last, dict) and last:
+            return {k: bool(last.get(k, True)) for k in KEYS}
     per_room = layout.room_totals_only()
     return {'description': True, 'material': True, 'size': True, 'qty': True,
             'rate': layout.show_rate() and not per_room, 'amount': not per_room, 'room_total': True, 'photos': True,
@@ -65,6 +77,7 @@ def save(project_id, form):
     from .models import AppSetting
     chosen = {k: form.get(k) == '1' for k in KEYS}
     AppSetting.set(_key(project_id), json.dumps(chosen))
+    AppSetting.set(LAST_KEY, json.dumps(chosen))       # (the next new quotation starts from this)
     return chosen
 
 
