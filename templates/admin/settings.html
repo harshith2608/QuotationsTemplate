@@ -391,6 +391,11 @@
   <div class="card shadow-sm border-0 mb-3" id="pdfLayout">
     <div class="card-header ki-card-header"><i class="bi bi-layout-text-window me-2"></i>{{ 'Your quotation PDF' if single_pdf else 'Initial Quotation' }} (what your customer gets)</div>
     <div class="card-body">
+      {% if choosing_pdf %}
+      <p class="small mb-2">One quotation PDF: every item on its own numbered line, in sections A, B, C (your rooms). On
+        each quotation, the <strong>Quotation PDF</strong> button asks what it shows (description, material, size,
+        quantity, rate, amount on each line, room total, photos); these settings are what it starts with.</p>
+      {% else %}
       {% for key, label in layouts.items() %}
       <div class="form-check mb-1">
         <input class="form-check-input" type="radio" name="initial_layout" id="il_{{ key }}" value="{{ key }}" {{ 'checked' if initial_layout == key }}>
@@ -401,8 +406,9 @@
         room's fittings as a "Hardware" row.{% if 'boq' in layouts %} BOQ: sections A, B, C (your rooms), every item on its own numbered line with its photo,
         description, quantity, unit, rate and amount, like a turnkey bill of quantities.{% endif %}
         {% if single_pdf %}Pricing by item, you have this one quotation PDF.{% else %}Your Full Quotation (every rate and amount) doesn't change.{% endif %}</div>
+      {% endif %}
       {% if 'boq' in layouts %}
-      <div class="small fw-semibold mt-3">With the BOQ layout</div>
+      <div class="small fw-semibold mt-3">{{ 'What it shows to start with' if choosing_pdf else 'With the BOQ layout' }}</div>
       <div class="form-check mt-1">
         <input type="hidden" name="boq_room_totals" value="0">
         <input class="form-check-input" type="checkbox" name="boq_room_totals" id="boq_room_totals" value="1" {{ 'checked' if room_totals }}>

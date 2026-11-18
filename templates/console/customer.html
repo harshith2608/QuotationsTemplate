@@ -186,15 +186,17 @@
     <input type="hidden" name="on" value="{{ '0' if boq.photo_pages else '1' }}">
     <button class="btn" type="submit">{{ 'Turn off' if boq.photo_pages else 'Turn on' }}</button>
   </form>
-  {% if boq.on %}<div style="border-top:1px solid var(--line);padding-top:12px"><strong>Choose what the PDF shows</strong> · <span class="badge {{ 'b-active' if boq.pdf_choices else 'b-other' }}">{{ 'on' if boq.pdf_choices else 'off' }}</span></div>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Choose what the PDF shows</strong> · <span class="badge {{ 'b-active' if boq.pdf_choices else 'b-other' }}">{{ 'on' if boq.pdf_choices else 'off' }}</span></div>
   <p class="muted small" style="margin:0">Tapping Quotation PDF first opens tick-boxes: description, material, size,
     quantity, rate, amount on each line, room total, photos. The PDF, the customer's link and the emailed PDF show only
-    those; the choice is kept for that quotation. On for new trials and customers.</p>
+    those; the choice is kept for that quotation. Pricing by material too: one Quotation PDF (the item table, its
+    sizes, rates and amounts among the tick-boxes) instead of Full and Initial Quotation. On for new trials and
+    customers.</p>
   <form method="post" action="{{ url_for('console.customer_pdf_choices', slug=row.slug) }}" class="row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="on" value="{{ '0' if boq.pdf_choices else '1' }}">
     <button class="btn" type="submit">{{ 'Turn off' if boq.pdf_choices else 'Turn on' }}</button>
-  </form>{% endif %}
+  </form>
   {% if boq.on %}<div style="border-top:1px solid var(--line);padding-top:12px"><strong>Rate column</strong> · <span class="badge {{ 'b-active' if boq.show_rate else 'b-other' }}">{{ 'shown' if boq.show_rate else 'hidden' }}</span></div>
   <p class="muted small" style="margin:0">Whether their customer sees each line's rate (PDF, link, WhatsApp), or only the
     quantity, unit and amount. They can also change it in Settings → Quotation PDFs.</p>

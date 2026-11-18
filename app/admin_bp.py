@@ -1264,7 +1264,7 @@ def settings():
                            cover_texts=__import__('app.photo_pages', fromlist=['texts']).texts()
                            if tab == 'documents' and __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            show_board=layout.show_board() if tab == 'documents' else True,
-                           single_pdf=layout.single_pdf(),
+                           single_pdf=layout.single_pdf(), choosing_pdf=layout.choosing(),
                            show_work_types=AppSetting.get('customer_work_types') == '1',
                            pdf_look=pdf_look.choices() if tab == 'documents' else None,
                            preview_pid=db.session.query(db.func.max(Project.id)).scalar() if tab == 'documents' else None,
