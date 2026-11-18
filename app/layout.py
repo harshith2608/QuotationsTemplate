@@ -73,8 +73,17 @@ def description_options():
     return out[:100]
 
 
+def choosing():
+    """The business chooses what each quotation's PDF shows (console: Choose what the PDF shows, app/pdf_choices.py):
+    one Quotation PDF, the item table shaped by its tick-boxes, priced by item or by material."""
+    from . import boq, pdf_choices
+    return pdf_choices.enabled() and boq.ready()
+
+
 def initial_layout():
     from .models import AppSetting
+    if choosing():
+        return LAYOUT_BOQ                      # (its columns chosen per quotation)
     value = AppSetting.get(LAYOUT_KEY, '')
     if value == LAYOUT_BOQ:                    # (pricing by material too: every item on its own line)
         from . import boq
@@ -91,10 +100,11 @@ def layouts():
 
 def single_pdf():
     """A business that prices by item has one quotation PDF (its Initial Quotation, the BOQ): the Full Quotation would
-    show the same lines, rates and amounts. Every "full" request (Full Quotation, email attachment, customer link)
+    show the same lines, rates and amounts. So does one that chooses what the PDF shows (by material too): sizes,
+    rates and amounts are its tick-boxes. Every "full" request (Full Quotation, email attachment, customer link)
     gives that one."""
     from . import boq
-    return boq.enabled()
+    return boq.enabled() or choosing()         # (by material too, when choosing what the PDF shows)
 
 
 def boq_rows(snapshot, show=None):
