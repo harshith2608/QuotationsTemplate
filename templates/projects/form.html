@@ -607,6 +607,36 @@
     </div>
   </div>
 </div>
+<!-- Tick several (priced by material): items and fittings added to a room at once -->
+<div class="modal fade" id="itemPickModal" tabindex="-1" aria-labelledby="itemPickLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header ki-card-header py-2">
+        <h6 class="modal-title fw-bold mb-0" id="itemPickLabel"><i class="bi bi-list-check me-2"></i>Tick several items</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <div class="row g-2 align-items-end mb-1">
+          <div class="col-sm-6">
+            <label class="form-label small fw-semibold mb-1" for="itemPickCombo">Material &amp; work for these items</label>
+            <select class="form-select form-select-sm" id="itemPickCombo"></select>
+          </div>
+          <div class="col-sm-6">
+            <input type="search" class="form-control form-control-sm" id="itemPickSearch" placeholder="Search…" oninput="renderItemPicker()">
+          </div>
+        </div>
+        <div class="small text-muted">Tick what goes in this room. Items come in with this material (change any of them in
+          the table) and you type each size; fittings come in with quantity 1 at your price.</div>
+        <div id="itemPickList"></div>
+      </div>
+      <div class="modal-footer pt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary ki-btn-primary" id="itemPickAdd" onclick="addItemPicks()" disabled>Add items</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% if boq_form.enabled %}
 <!-- Add from my lines: tick several saved BOQ lines and add them to a room at once -->
 <div class="modal fade" id="boqPickModal" tabindex="-1" aria-labelledby="boqPickLabel" aria-hidden="true">

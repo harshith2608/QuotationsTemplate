@@ -81,3 +81,8 @@ ok('rates page shows price list', 'Fittings &amp; Accessories Price List' in c.g
 d = c.get('/admin/dashboard').text
 labels = json.loads(re.search(r'labels: (\[.*?\]),\n\s*datasets: \[\{\n\s*data: ', d, re.S).group(1)) if re.search(r'labels: (\[.*?\]),\n\s*datasets: \[\{\n\s*data: ', d, re.S) else None
 ok(f'dashboard material chart has no blank label {labels}', labels is not None and '' not in labels)
+
+# Priced by material: "Tick several" (items and fittings added to a room at once) on the quotation form
+_new = c.get('/projects/new').text
+ok('new quotation: the Tick several window is there (items with a material, fittings at their price)',
+   'id="itemPickModal"' in _new and 'Material &amp; work for these items' in _new and 'id="master-items-list"' in _new)

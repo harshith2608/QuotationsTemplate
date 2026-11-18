@@ -860,9 +860,13 @@ function addRoom(presetName) {
           <i class="bi bi-list-check me-1"></i>Add from my lines</button>` : ''}
         ${CATALOG.byItem ? '' : `<button type="button" class="btn btn-sm btn-link text-muted" onclick="addItem('${rk}')"
                 title="An item measured by material (Admin → Rates), or a fitting from your price list">Other item…</button>`}
-      </div>` : `<button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
-        <i class="bi bi-plus me-1"></i>Add Item
-      </button>`}
+      </div>` : `<div class="d-flex flex-wrap align-items-center gap-1">
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
+          <i class="bi bi-plus me-1"></i>Add Item</button>
+        ${masterItems.length || priceList.length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
+                title="Tick several items (and fittings) and add them at once; then type each size">
+          <i class="bi bi-list-check me-1"></i>Tick several</button>` : ''}
+      </div>`}
     </div>
   `;
   container.appendChild(div);
@@ -1157,6 +1161,77 @@ function addBoqPicks() {
   });
   bootstrap.Modal.getInstance(document.getElementById('boqPickModal'))?.hide();
   const first = document.querySelector(`#room_card_${_pickRoom} tr.ki-needs-qty input[id^="item_qty_"]`);
+  if (first) { first.scrollIntoView({ block: 'center' }); setTimeout(() => first.focus(), 300); }
+}
+
+// ─── Tick several (priced by material): items and fittings added to a room at once ──
+// Items come in with the material picked at the top and no size yet (highlighted until it's typed; removed on saving
+// if left empty, after asking); fittings with quantity 1 and their price.
+let _itemPickRoom = null;
+const _itemPicked = new Set();             // 'i:<name>' (an item) or 'f:<index>' (a fitting), kept while searching
+function openItemPicker(rk) {
+  _itemPickRoom = rk;
+  _itemPicked.clear();
+  const search = document.getElementById('itemPickSearch'); if (search) search.value = '';
+  const combo = document.getElementById('itemPickCombo');
+  if (combo) { const [w, k] = splitCombo(DEFAULT_COMBO); combo.innerHTML = buildComboOptions(w, k); combo.value = DEFAULT_COMBO; }
+  renderItemPicker();
+  new bootstrap.Modal(document.getElementById('itemPickModal')).show();
+  setTimeout(() => search?.focus(), 350);
+}
+function renderItemPicker() {
+  const list = document.getElementById('itemPickList');
+  if (!list) return;
+  const q = (document.getElementById('itemPickSearch')?.value || '').trim().toLowerCase();
+  const inRoom = new Set(Object.values(rooms[_itemPickRoom]?.items || {}).map(i => (i.name || '').toLowerCase()));
+  const tag = n => inRoom.has(n.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : '';
+  const row = (key, label, right) => `
+        <label class="ki-pick-row d-flex gap-2 align-items-start py-1 border-bottom" for="ip_${escHtml(key)}">
+          <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="ip_${escHtml(key)}" value="${escHtml(key)}"
+                 ${_itemPicked.has(key) ? 'checked' : ''} onchange="countItemPicks(this)">
+          <span class="flex-grow-1 small fw-semibold" style="min-width:0">${label}</span>${right || ''}
+        </label>`;
+  const items = masterItems.filter(n => !q || n.toLowerCase().includes(q));
+  const fits = priceList.map((p, i) => [p, i]).filter(([p]) => !q || p.name.toLowerCase().includes(q));
+  const group = (title, hint, rows) => rows.length ? `
+    <div class="ki-pick-group">
+      <div class="d-flex align-items-center justify-content-between mt-2 mb-1">
+        <span class="small fw-bold text-uppercase text-muted">${title} <span class="fw-normal text-lowercase">${hint}</span></span>
+        <button type="button" class="btn btn-link btn-sm p-0" onclick="pickItemGroup(this)">Tick all</button>
+      </div>${rows.join('')}
+    </div>` : '';
+  list.innerHTML = (group('Items', '(you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
+    + group('Fittings &amp; accessories', '(quantity 1, at your price)', fits.map(([p, i]) => row('f:' + i, escHtml(p.name) + tag(p.name),
+        `<span class="small text-nowrap text-muted ki-unit-rate">₹${Number(p.price || 0).toLocaleString('en-IN')}${p.unit ? ' / ' + escHtml(p.unit) : ''}</span>`))))
+    || '<p class="text-muted small my-3">Nothing matches.</p>';
+  countItemPicks();
+}
+function pickItemGroup(btn) {
+  const boxes = btn.closest('.ki-pick-group').querySelectorAll('input[type=checkbox]');
+  const all = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => { b.checked = !all; all ? _itemPicked.delete(b.value) : _itemPicked.add(b.value); });
+  countItemPicks();
+}
+function countItemPicks(box) {
+  if (box) box.checked ? _itemPicked.add(box.value) : _itemPicked.delete(box.value);
+  const n = _itemPicked.size;
+  const btn = document.getElementById('itemPickAdd');
+  if (btn) { btn.disabled = !n; btn.textContent = n ? `Add ${n} item${n > 1 ? 's' : ''}` : 'Add items'; }
+}
+function addItemPicks() {
+  const rk = _itemPickRoom;
+  const [wood, work] = splitCombo(document.getElementById('itemPickCombo')?.value || DEFAULT_COMBO);
+  const keys = Array.from(_itemPicked);
+  masterItems.filter(n => keys.includes('i:' + n)).forEach(n => {          // in the list's order
+    const ik = _insertItemRow(rk, n, '', '', '', '', wood, work, '', 1, '');
+    if (ik) markPending(rk, ik, true);
+  });
+  priceList.forEach((p, i) => {
+    if (keys.includes('f:' + i)) _insertFixedRow(rk, p.name, 1, p.price || 0, p.description || '');
+  });
+  bootstrap.Modal.getInstance(document.getElementById('itemPickModal'))?.hide();
+  if (typeof recalcAll === 'function') recalcAll();
+  const first = document.querySelector(`#room_card_${rk} tr.ki-needs-qty input`);
   if (first) { first.scrollIntoView({ block: 'center' }); setTimeout(() => first.focus(), 300); }
 }
 
