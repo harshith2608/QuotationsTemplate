@@ -16,7 +16,8 @@
     <h4 class="mb-0 fw-bold ki-page-title">
       <i class="bi bi-file-earmark-text me-2 text-primary"></i>
       {{ project.customer_name }}
-      {% if q2c.history and q2c.history[0][0].number > 1 %}<a href="#revisions" class="badge bg-light text-dark border align-middle small text-decoration-none">Rev {{ q2c.history[0][0].number }}</a>{% endif %}
+      {% if quote_no %}<a href="#revisions" class="badge bg-light text-dark border align-middle small text-decoration-none font-monospace" title="Quotation number / latest revision">{{ quote_no }}</a>
+      {% elif q2c.history and q2c.history[0][0].number > 1 %}<a href="#revisions" class="badge bg-light text-dark border align-middle small text-decoration-none">Rev {{ q2c.history[0][0].number }}</a>{% endif %}
       <span class="ms-1 align-middle">{{ stage_menu(project, request.path, can_change_stage) }}</span>{% include '_rates_peek.html' %}
     </h4>
     {% if company %}

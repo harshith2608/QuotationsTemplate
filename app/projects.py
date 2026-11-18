@@ -367,11 +367,14 @@ def list_projects():
         # (creator is auto-added to ProjectAccess on save; admin can revoke it)
         accessible_ids = db.session.query(ProjectAccess.project_id).filter_by(user_id=current_user.id)
         query = Project.query.filter(Project.id.in_(accessible_ids))
+    from . import quote_numbers
+    numbers = quote_numbers.known()           # 2026111801… (numbered below when one on the page has none yet)
     if search:
-        # Names and mobiles are encrypted, so match them in Python after decrypting
+        # Names and mobiles are encrypted, so match them in Python after decrypting; or a quotation number
         needle = search.lower()
         rows = query.with_entities(Project.id, Project.customer_name, Project.mobile).all()
-        ids = [r.id for r in rows if needle in (r.customer_name or '').lower() or needle in (r.mobile or '')]
+        ids = [r.id for r in rows if needle in (r.customer_name or '').lower() or needle in (r.mobile or '')
+               or needle.split('/')[0] in (numbers.get(r.id) or '-')]
         query = query.filter(Project.id.in_(ids))
     # Stage counts for the filter pills (drafts are unfinished forms, so they have no real stage)
     stage_counts = dict(
@@ -413,7 +416,12 @@ def list_projects():
         from . import setup_guide
         st = setup_guide.status()
         setup = st if st['show_card'] else None
-    return render_template('projects/list.html', projects=projects, search=search, setup=setup,
+    if any(p.status != 'draft' and p.id not in numbers for p in projects.items):
+        numbers = quote_numbers.assign()
+    revs = quote_numbers.revisions([p.id for p in projects.items if p.status != 'draft'])
+    quote_nos = {p.id: quote_numbers.label(numbers.get(p.id), revs.get(p.id)) for p in projects.items
+                 if p.status != 'draft' and numbers.get(p.id)}
+    return render_template('projects/list.html', projects=projects, search=search, setup=setup, quote_nos=quote_nos,
                            stage=stage, stage_counts=stage_counts, all_count=all_count,
                            title='Quotations', employees=employees,
                            employees_json=employees_json,
@@ -809,7 +817,9 @@ def view_project(project_id):
     q2c['changed_after_invoice'] = bool(invoice and latest_rev and latest_rev.created_at > invoice.created_at)
     from . import layout as _layout
     from . import rate_access as _ra
-    return render_template('projects/view.html',
+    from . import quote_numbers as _qn
+    quote_no = _qn.label(_qn.assign().get(project.id), q2c['history'][0][0].number if q2c['history'] else None)
+    return render_template('projects/view.html', quote_no=quote_no,
                            rates_asked=bool(not current_user.is_admin and _ra.pending_for(project.id, current_user.id)),
                            project=project, single_pdf=_layout.single_pdf(),
                            rooms=rooms,
