@@ -37,6 +37,23 @@ picked = text(f'/projects/{pid}/pdf/customer')
 ok('…and the PDF follows them: no sizes, no Rate column', 'Bill of Quantities' in picked and ' × ' not in picked
    and 'Rate' not in picked)
 ok('…the Full Quotation link gives the same one PDF', 'Rate' not in text(f'/projects/{pid}/pdf'))
+s = c.get('/admin/settings?tab=documents').text
+ok('Settings: One amount per room and the Rate column are left out (chosen on each quotation); plywood and Box Work '
+   'stay', 'name="boq_room_totals"' not in s and 'name="boq_rate_shown"' not in s and 'name="boq_board_shown"' in s
+   and 'name="customer_work_types"' in s)
+import urllib.parse
+wa = urllib.parse.unquote(c.get(f'/projects/{pid}/whatsapp').headers.get('Location', ''))
+ok('WhatsApp follows the quotation\'s ticks (no amount on each line: an amount per room)', '*Amount: Rs.' in wa
+   and 'Material Summary' not in wa)
+with app.app_context():
+    other = Project.query.filter(Project.status != 'draft', Project.id != pid).first().id
+    start = pdf_choices.for_project(other)
+ok('a quotation not chosen yet starts from the last choice made', not start['size'] and not start['rate']
+   and start['room_total'] and start['description'])
+c.post(f'/projects/{pid}/pdf/choose', data={k: '1' for k in pdf_choices.KEYS})
+wa = urllib.parse.unquote(c.get(f'/projects/{pid}/whatsapp').headers.get('Location', ''))
+ok('…everything ticked: WhatsApp has each line\'s amount again', '*Amount: Rs.' not in wa)
 with app.app_context():
     pdf_choices.set_enabled(False); db.session.commit()
+ok('switched off: Settings shows them again', 'name="boq_room_totals"' in c.get('/admin/settings?tab=documents').text)
 ok('switched off again: both PDFs back', 'Full Quotation' in c.get(f'/projects/{pid}').text)

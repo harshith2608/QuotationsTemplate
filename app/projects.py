@@ -1514,6 +1514,9 @@ def whatsapp_share(project_id):
     from . import layout as _layout_wa
     _show_rate = _layout_wa.show_rate()        # some firms show quantities and amounts only
     _per_room = _layout_wa.room_totals_only()  # or an amount per room only
+    if _layout_wa.choosing():                  # the quotation's own tick-boxes (What should the PDF show?)
+        _shown = __import__('app.pdf_choices', fromlist=['for_project']).for_project(project.id)
+        _show_rate, _per_room = _shown['rate'], not _shown['amount']
     if not __import__('app.rate_access', fromlist=['can_see']).can_see(current_user, project.id):
         _per_room = True                       # an employee who can't see rates: room totals, no rates or line amounts
     _per_room_secs = _layout_wa.boq_rows(billing.quotation_snapshot(project, rooms)) if _per_room else []
