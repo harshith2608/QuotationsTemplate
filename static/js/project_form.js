@@ -863,7 +863,7 @@ function addRoom(presetName) {
       </div>` : `<div class="d-flex flex-wrap align-items-center gap-1">
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
           <i class="bi bi-plus me-1"></i>Add Item</button>
-        ${pickerItemNames().length || priceList.length || materialsAreItems() ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
+        ${pickerItemNames().length || priceList.length || materialsAreItems() || pickerLumpSums().length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
                 title="Tick several items (and fittings) and add them at once; then type each size">
           <i class="bi bi-list-check me-1"></i>Tick several</button>` : ''}
       </div>`}
@@ -1175,6 +1175,10 @@ function materialsAreItems() {
   const mats = materialNames();
   return mats.length >= 3 && mats.filter(n => ITEM_WORDS.test(n)).length * 2 >= mats.length;
 }
+// Saved lump sums (3D design, debris removal…): [line, index in BOQ_SAVED]; priced by item they're in Add from my lines
+function pickerLumpSums() {
+  return CATALOG.boq ? [] : BOQ_SAVED.map((b, i) => [b, i]).filter(([b]) => b.unit === 'lump sum');
+}
 function pickerItemNames() {
   if (!materialsAreItems()) return masterItems;
   const builtIn = new Set((CATALOG.defaultItems || []).map(n => n.toLowerCase()));
@@ -1210,6 +1214,7 @@ function renderItemPicker() {
   const items = pickerItemNames().filter(n => !q || n.toLowerCase().includes(q));
   const mats = asItems ? materialNames().filter(n => !q || n.toLowerCase().includes(q)) : [];
   const fits = priceList.map((p, i) => [p, i]).filter(([p]) => !q || p.name.toLowerCase().includes(q));
+  const lumps = pickerLumpSums().filter(([b]) => !q || `${b.name} ${b.description || ''}`.toLowerCase().includes(q));
   const group = (title, hint, rows) => rows.length ? `
     <div class="ki-pick-group">
       <div class="d-flex align-items-center justify-content-between mt-2 mb-1">
@@ -1220,7 +1225,10 @@ function renderItemPicker() {
   list.innerHTML = (group('Your items', '(each at its own rate; you type the size)', mats.map(n => row('m:' + n, escHtml(n) + tag(n))))
     + group(asItems ? 'Other items' : 'Items', '(in the material above; you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
     + group('Fittings &amp; accessories', '(quantity 1, at your price)', fits.map(([p, i]) => row('f:' + i, escHtml(p.name) + tag(p.name),
-        `<span class="small text-nowrap text-muted ki-unit-rate">₹${Number(p.price || 0).toLocaleString('en-IN')}${p.unit ? ' / ' + escHtml(p.unit) : ''}</span>`))))
+        `<span class="small text-nowrap text-muted ki-unit-rate">₹${Number(p.price || 0).toLocaleString('en-IN')}${p.unit ? ' / ' + escHtml(p.unit) : ''}</span>`)))
+    + group('Lump sums', '(one amount each)', lumps.map(([b, i]) => row('l:' + i, escHtml(b.name) + tag(b.name)
+        + (b.description ? `<span class="d-block small text-muted fw-normal text-truncate">${escHtml(b.description.split('\n')[0])}</span>` : ''),
+        `<span class="small text-nowrap text-muted">₹${Number(b.rate || 0).toLocaleString('en-IN')}</span>`))))
     || '<p class="text-muted small my-3">Nothing matches.</p>';
   countItemPicks();
 }
@@ -1251,6 +1259,9 @@ function addItemPicks() {
   });
   priceList.forEach((p, i) => {
     if (keys.includes('f:' + i)) _insertFixedRow(rk, p.name, 1, p.price || 0, p.description || '');
+  });
+  pickerLumpSums().forEach(([b, i]) => {
+    if (keys.includes('l:' + i)) _insertBoqRow(rk, b.name, 1, 'lump sum', b.rate || 0, b.description || '', false, 0, 0, 1, false);
   });
   bootstrap.Modal.getInstance(document.getElementById('itemPickModal'))?.hide();
   if (typeof recalcAll === 'function') recalcAll();
