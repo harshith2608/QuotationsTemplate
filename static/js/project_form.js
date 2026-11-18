@@ -863,7 +863,7 @@ function addRoom(presetName) {
       </div>` : `<div class="d-flex flex-wrap align-items-center gap-1">
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
           <i class="bi bi-plus me-1"></i>Add Item</button>
-        ${masterItems.length || priceList.length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
+        ${masterItems.length || priceList.length || materialNames().length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
                 title="Tick several items (and fittings) and add them at once; then type each size">
           <i class="bi bi-list-check me-1"></i>Tick several</button>` : ''}
       </div>`}
@@ -1192,6 +1192,7 @@ function renderItemPicker() {
           <span class="flex-grow-1 small fw-semibold" style="min-width:0">${label}</span>${right || ''}
         </label>`;
   const items = masterItems.filter(n => !q || n.toLowerCase().includes(q));
+  const mats = materialNames().filter(n => !q || n.toLowerCase().includes(q));
   const fits = priceList.map((p, i) => [p, i]).filter(([p]) => !q || p.name.toLowerCase().includes(q));
   const group = (title, hint, rows) => rows.length ? `
     <div class="ki-pick-group">
@@ -1200,7 +1201,8 @@ function renderItemPicker() {
         <button type="button" class="btn btn-link btn-sm p-0" onclick="pickItemGroup(this)">Tick all</button>
       </div>${rows.join('')}
     </div>` : '';
-  list.innerHTML = (group('Items', '(you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
+  list.innerHTML = (group('Items', '(in the material above; you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
+    + group('Your materials as items', '(each at its own rate; you type the size)', mats.map(n => row('m:' + n, escHtml(n) + tag(n))))
     + group('Fittings &amp; accessories', '(quantity 1, at your price)', fits.map(([p, i]) => row('f:' + i, escHtml(p.name) + tag(p.name),
         `<span class="small text-nowrap text-muted ki-unit-rate">₹${Number(p.price || 0).toLocaleString('en-IN')}${p.unit ? ' / ' + escHtml(p.unit) : ''}</span>`))))
     || '<p class="text-muted small my-3">Nothing matches.</p>';
@@ -1224,6 +1226,11 @@ function addItemPicks() {
   const keys = Array.from(_itemPicked);
   masterItems.filter(n => keys.includes('i:' + n)).forEach(n => {          // in the list's order
     const ik = _insertItemRow(rk, n, '', '', '', '', wood, work, '', 1, '');
+    if (ik) markPending(rk, ik, true);
+  });
+  materialNames().filter(n => keys.includes('m:' + n)).forEach(n => {    // named after the material, at its rate
+    const [w, k] = splitCombo(comboForName(n) || `${n}|`);
+    const ik = _insertItemRow(rk, n, '', '', '', '', w, k, '', 1, MATERIAL_DESCS[n] || '');
     if (ik) markPending(rk, ik, true);
   });
   priceList.forEach((p, i) => {
