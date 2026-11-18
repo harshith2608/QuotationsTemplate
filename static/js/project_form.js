@@ -863,7 +863,7 @@ function addRoom(presetName) {
       </div>` : `<div class="d-flex flex-wrap align-items-center gap-1">
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
           <i class="bi bi-plus me-1"></i>Add Item</button>
-        ${masterItems.length || priceList.length || materialNames().length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
+        ${pickerItemNames().length || priceList.length || materialsAreItems() ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
                 title="Tick several items (and fittings) and add them at once; then type each size">
           <i class="bi bi-list-check me-1"></i>Tick several</button>` : ''}
       </div>`}
@@ -1167,6 +1167,19 @@ function addBoqPicks() {
 // ─── Tick several (priced by material): items and fittings added to a room at once ──
 // Items come in with the material picked at the top and no size yet (highlighted until it's typed; removed on saving
 // if left empty, after asking); fittings with quantity 1 and their price.
+// A firm whose materials are its items (SP: "Kitchen Laminate Finish - Base Unit"): most material names hold an item
+// word. Then Tick several lists those first and leaves out the built-in item names (Wardrobe, TV Unit…) it doesn't use;
+// a firm with plain materials (Laminate, Acrylic…) gets the item names and no materials group.
+const ITEM_WORDS = /\b(unit|units|cabinet|cabinets|wardrobe|loft|panel+ing|shutters?|table|bed|ceiling|kitchen|door|rack|counter|storage|vanity|crockery|pooja|partition|headboard|dresser|dressing|cot|sofa|tv|console|shelf|shelves|box|drawer|drawers|island)\b/i;
+function materialsAreItems() {
+  const mats = materialNames();
+  return mats.length >= 3 && mats.filter(n => ITEM_WORDS.test(n)).length * 2 >= mats.length;
+}
+function pickerItemNames() {
+  if (!materialsAreItems()) return masterItems;
+  const builtIn = new Set((CATALOG.defaultItems || []).map(n => n.toLowerCase()));
+  return masterItems.filter(n => !builtIn.has(n.toLowerCase()));        // only names the firm added itself
+}
 let _itemPickRoom = null;
 const _itemPicked = new Set();             // 'i:<name>' (an item) or 'f:<index>' (a fitting), kept while searching
 function openItemPicker(rk) {
@@ -1175,6 +1188,8 @@ function openItemPicker(rk) {
   const search = document.getElementById('itemPickSearch'); if (search) search.value = '';
   const combo = document.getElementById('itemPickCombo');
   if (combo) { const [w, k] = splitCombo(DEFAULT_COMBO); combo.innerHTML = buildComboOptions(w, k); combo.value = DEFAULT_COMBO; }
+  // (the material box is for the plain item names: hidden when there are none to pick)
+  document.getElementById('itemPickComboWrap')?.classList.toggle('d-none', !pickerItemNames().length);
   renderItemPicker();
   new bootstrap.Modal(document.getElementById('itemPickModal')).show();
   setTimeout(() => search?.focus(), 350);
@@ -1191,8 +1206,9 @@ function renderItemPicker() {
                  ${_itemPicked.has(key) ? 'checked' : ''} onchange="countItemPicks(this)">
           <span class="flex-grow-1 small fw-semibold" style="min-width:0">${label}</span>${right || ''}
         </label>`;
-  const items = masterItems.filter(n => !q || n.toLowerCase().includes(q));
-  const mats = materialNames().filter(n => !q || n.toLowerCase().includes(q));
+  const asItems = materialsAreItems();
+  const items = pickerItemNames().filter(n => !q || n.toLowerCase().includes(q));
+  const mats = asItems ? materialNames().filter(n => !q || n.toLowerCase().includes(q)) : [];
   const fits = priceList.map((p, i) => [p, i]).filter(([p]) => !q || p.name.toLowerCase().includes(q));
   const group = (title, hint, rows) => rows.length ? `
     <div class="ki-pick-group">
@@ -1201,8 +1217,8 @@ function renderItemPicker() {
         <button type="button" class="btn btn-link btn-sm p-0" onclick="pickItemGroup(this)">Tick all</button>
       </div>${rows.join('')}
     </div>` : '';
-  list.innerHTML = (group('Items', '(in the material above; you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
-    + group('Your materials as items', '(each at its own rate; you type the size)', mats.map(n => row('m:' + n, escHtml(n) + tag(n))))
+  list.innerHTML = (group('Your items', '(each at its own rate; you type the size)', mats.map(n => row('m:' + n, escHtml(n) + tag(n))))
+    + group(asItems ? 'Other items' : 'Items', '(in the material above; you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
     + group('Fittings &amp; accessories', '(quantity 1, at your price)', fits.map(([p, i]) => row('f:' + i, escHtml(p.name) + tag(p.name),
         `<span class="small text-nowrap text-muted ki-unit-rate">₹${Number(p.price || 0).toLocaleString('en-IN')}${p.unit ? ' / ' + escHtml(p.unit) : ''}</span>`))))
     || '<p class="text-muted small my-3">Nothing matches.</p>';
@@ -1224,7 +1240,7 @@ function addItemPicks() {
   const rk = _itemPickRoom;
   const [wood, work] = splitCombo(document.getElementById('itemPickCombo')?.value || DEFAULT_COMBO);
   const keys = Array.from(_itemPicked);
-  masterItems.filter(n => keys.includes('i:' + n)).forEach(n => {          // in the list's order
+  pickerItemNames().filter(n => keys.includes('i:' + n)).forEach(n => {    // in the list's order
     const ik = _insertItemRow(rk, n, '', '', '', '', wood, work, '', 1, '');
     if (ik) markPending(rk, ik, true);
   });

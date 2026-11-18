@@ -617,7 +617,7 @@
       </div>
       <div class="modal-body pt-2">
         <div class="row g-2 align-items-end mb-1">
-          <div class="col-sm-6">
+          <div class="col-sm-6" id="itemPickComboWrap">
             <label class="form-label small fw-semibold mb-1" for="itemPickCombo">Material &amp; work for these items</label>
             <select class="form-select form-select-sm" id="itemPickCombo"></select>
           </div>
@@ -625,9 +625,8 @@
             <input type="search" class="form-control form-control-sm" id="itemPickSearch" placeholder="Search…" oninput="renderItemPicker()">
           </div>
         </div>
-        <div class="small text-muted">Tick what goes in this room. Items come in with the material chosen here, your
-          materials as items with their own rate (change either in the table); you type each size. Fittings come in with
-          quantity 1 at your price.</div>
+        <div class="small text-muted">Tick what goes in this room, then type each size in the table. Fittings come in
+          with quantity 1 at your price.</div>
         <div id="itemPickList"></div>
       </div>
       <div class="modal-footer pt-2">
@@ -677,6 +676,7 @@
     byItem:      {{ boq_form.by_item|tojson }},              // priced by item: BOQ lines only (no measured items, fittings)
     boqSaved:    {{ boq_form.saved|tojson }},
     materialDescs: {{ material_descs|tojson }},
+    defaultItems: {{ catalog.DEFAULT_ITEMS|tojson }},          // the built-in item names (Tick several: hidden when materials are the items)
     noRates:     {{ (no_rates or false)|tojson }},            // an employee who can't see rates: rates and line amounts hidden
     templateEdit: {{ (template_edit is defined and template_edit is not none)|tojson }},   // editing a template: no customer; lines without a size stay             // {material: description} filled in when picked (Admin → Rates)
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
