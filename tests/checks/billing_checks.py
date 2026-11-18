@@ -49,7 +49,7 @@ edit(rooms2, ('fixed', '1000'))
 with app.app_context():
     ok('saving without changes adds no revision', QuoteRevision.query.filter_by(project_id=pid).count() == 2)
 t = c.get(f'/projects/{pid}').text
-ok('quotation page: Rev 2 badge and revision list with changes', 'Rev 2</a>' in t and 'id="revisions"' in t
+ok('quotation page: Rev 2 badge and revision list with changes', ('Rev 2</a>' in t or '/Rev2</a>' in t) and 'id="revisions"' in t
    and 'TV Unit changed from 10 ft × 5 ft' in t and 'added Shoe Rack' in t)
 t = c.get(f'/projects/{pid}/revisions/1').text
 ok('revision 1 still shows the old version', '10 ft × 5 ft' in t and '12 ft' not in t and 'older version' in t)

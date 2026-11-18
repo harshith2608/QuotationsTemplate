@@ -40,7 +40,7 @@
 <form method="GET" action="{{ url_for('projects.list_projects') }}" class="mb-3">
   <div class="input-group">
     <span class="input-group-text"><i class="bi bi-search"></i></span>
-    <input type="text" name="q" class="form-control" placeholder="Search by customer name or mobile…"
+    <input type="text" name="q" class="form-control" placeholder="Search by customer name, mobile or quotation no.…"
            value="{{ search }}">
     {% if stage %}<input type="hidden" name="stage" value="{{ stage }}">{% endif %}
     <button class="btn btn-outline-secondary" type="submit">Search</button>
@@ -72,7 +72,7 @@
     <table class="table table-hover table-striped align-middle mb-0">
       <thead class="ki-table-head">
         <tr>
-          <th class="ps-3">#</th>
+          <th class="ps-3">Quotation No.</th>
           <th>Customer</th>
           <th>Mobile</th>
           {% if current_user.is_admin %}<th>Employee</th>{% endif %}
@@ -85,7 +85,7 @@
       <tbody>
         {% for project in projects.items %}
         <tr>
-          <td class="ps-3 text-muted small">{{ project.id }}</td>
+          <td class="ps-3 small text-nowrap">{% if quote_nos.get(project.id) %}<span class="font-monospace">{{ quote_nos[project.id] }}</span>{% else %}<span class="text-muted">Draft</span>{% endif %}</td>
           <td>
             <a href="{{ url_for('projects.view_project', project_id=project.id) }}"
                class="fw-semibold text-decoration-none ki-link">
@@ -167,6 +167,7 @@
               {{ project.customer_name }}
             </a>
           </h6>
+          {% if quote_nos.get(project.id) %}<div class="small font-monospace text-muted mb-1">{{ quote_nos[project.id] }}</div>{% endif %}
           <small class="text-muted">
             <i class="bi bi-telephone me-1"></i>{{ project.mobile }}
           </small>

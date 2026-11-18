@@ -860,9 +860,13 @@ function addRoom(presetName) {
           <i class="bi bi-list-check me-1"></i>Add from my lines</button>` : ''}
         ${CATALOG.byItem ? '' : `<button type="button" class="btn btn-sm btn-link text-muted" onclick="addItem('${rk}')"
                 title="An item measured by material (Admin → Rates), or a fitting from your price list">Other item…</button>`}
-      </div>` : `<button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
-        <i class="bi bi-plus me-1"></i>Add Item
-      </button>`}
+      </div>` : `<div class="d-flex flex-wrap align-items-center gap-1">
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem('${rk}')">
+          <i class="bi bi-plus me-1"></i>Add Item</button>
+        ${pickerItemNames().length || priceList.length || materialsAreItems() || pickerLumpSums().length ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openItemPicker('${rk}')"
+                title="Tick several items (and fittings) and add them at once; then type each size">
+          <i class="bi bi-list-check me-1"></i>Tick several</button>` : ''}
+      </div>`}
     </div>
   `;
   container.appendChild(div);
@@ -1157,6 +1161,111 @@ function addBoqPicks() {
   });
   bootstrap.Modal.getInstance(document.getElementById('boqPickModal'))?.hide();
   const first = document.querySelector(`#room_card_${_pickRoom} tr.ki-needs-qty input[id^="item_qty_"]`);
+  if (first) { first.scrollIntoView({ block: 'center' }); setTimeout(() => first.focus(), 300); }
+}
+
+// ─── Tick several (priced by material): items and fittings added to a room at once ──
+// Items come in with the material picked at the top and no size yet (highlighted until it's typed; removed on saving
+// if left empty, after asking); fittings with quantity 1 and their price.
+// A firm whose materials are its items (SP: "Kitchen Laminate Finish - Base Unit"): most material names hold an item
+// word. Then Tick several lists those first and leaves out the built-in item names (Wardrobe, TV Unit…) it doesn't use;
+// a firm with plain materials (Laminate, Acrylic…) gets the item names and no materials group.
+const ITEM_WORDS = /\b(unit|units|cabinet|cabinets|wardrobe|loft|panel+ing|shutters?|table|bed|ceiling|kitchen|door|rack|counter|storage|vanity|crockery|pooja|partition|headboard|dresser|dressing|cot|sofa|tv|console|shelf|shelves|box|drawer|drawers|island)\b/i;
+function materialsAreItems() {
+  const mats = materialNames();
+  return mats.length >= 3 && mats.filter(n => ITEM_WORDS.test(n)).length * 2 >= mats.length;
+}
+// Saved lump sums (3D design, debris removal…): [line, index in BOQ_SAVED]; priced by item they're in Add from my lines
+function pickerLumpSums() {
+  return CATALOG.boq ? [] : BOQ_SAVED.map((b, i) => [b, i]).filter(([b]) => b.unit === 'lump sum');
+}
+function pickerItemNames() {
+  if (!materialsAreItems()) return masterItems;
+  const skip = new Set((CATALOG.defaultItems || []).concat(materialNames()).map(n => n.toLowerCase()));
+  return masterItems.filter(n => !skip.has(n.toLowerCase()));   // only names the firm typed itself (not its materials)
+}
+let _itemPickRoom = null;
+const _itemPicked = new Set();             // 'i:<name>' (an item) or 'f:<index>' (a fitting), kept while searching
+function openItemPicker(rk) {
+  _itemPickRoom = rk;
+  _itemPicked.clear();
+  const search = document.getElementById('itemPickSearch'); if (search) search.value = '';
+  const combo = document.getElementById('itemPickCombo');
+  if (combo) { const [w, k] = splitCombo(DEFAULT_COMBO); combo.innerHTML = buildComboOptions(w, k); combo.value = DEFAULT_COMBO; }
+  // (the material box is for the plain item names: hidden when there are none to pick)
+  document.getElementById('itemPickComboWrap')?.classList.toggle('d-none', !pickerItemNames().length);
+  renderItemPicker();
+  new bootstrap.Modal(document.getElementById('itemPickModal')).show();
+  setTimeout(() => search?.focus(), 350);
+}
+function renderItemPicker() {
+  const list = document.getElementById('itemPickList');
+  if (!list) return;
+  const q = (document.getElementById('itemPickSearch')?.value || '').trim().toLowerCase();
+  const inRoom = new Set(Object.values(rooms[_itemPickRoom]?.items || {}).map(i => (i.name || '').toLowerCase()));
+  const tag = n => inRoom.has(n.toLowerCase()) ? '<span class="badge bg-light text-muted border ms-1">in this room</span>' : '';
+  const row = (key, label, right) => `
+        <label class="ki-pick-row d-flex gap-2 align-items-start py-1 border-bottom" for="ip_${escHtml(key)}">
+          <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="ip_${escHtml(key)}" value="${escHtml(key)}"
+                 ${_itemPicked.has(key) ? 'checked' : ''} onchange="countItemPicks(this)">
+          <span class="flex-grow-1 small fw-semibold" style="min-width:0">${label}</span>${right || ''}
+        </label>`;
+  const asItems = materialsAreItems();
+  const items = pickerItemNames().filter(n => !q || n.toLowerCase().includes(q));
+  const mats = asItems ? materialNames().filter(n => !q || n.toLowerCase().includes(q)) : [];
+  const fits = priceList.map((p, i) => [p, i]).filter(([p]) => !q || p.name.toLowerCase().includes(q));
+  const lumps = pickerLumpSums().filter(([b]) => !q || `${b.name} ${b.description || ''}`.toLowerCase().includes(q));
+  const group = (title, hint, rows) => rows.length ? `
+    <div class="ki-pick-group">
+      <div class="d-flex align-items-center justify-content-between mt-2 mb-1">
+        <span class="small fw-bold text-uppercase text-muted">${title} <span class="fw-normal text-lowercase">${hint}</span></span>
+        <button type="button" class="btn btn-link btn-sm p-0" onclick="pickItemGroup(this)">Tick all</button>
+      </div>${rows.join('')}
+    </div>` : '';
+  list.innerHTML = (group('Your items', '(each at its own rate; you type the size)', mats.map(n => row('m:' + n, escHtml(n) + tag(n))))
+    + group(asItems ? 'Other items' : 'Items', '(in the material above; you type the size)', items.map(n => row('i:' + n, escHtml(n) + tag(n))))
+    + group('Fittings &amp; accessories', '(quantity 1, at your price)', fits.map(([p, i]) => row('f:' + i, escHtml(p.name) + tag(p.name),
+        `<span class="small text-nowrap text-muted ki-unit-rate">₹${Number(p.price || 0).toLocaleString('en-IN')}${p.unit ? ' / ' + escHtml(p.unit) : ''}</span>`)))
+    + group('Lump sums', '(one amount each)', lumps.map(([b, i]) => row('l:' + i, escHtml(b.name) + tag(b.name)
+        + (b.description ? `<span class="d-block small text-muted fw-normal text-truncate">${escHtml(b.description.split('\n')[0])}</span>` : ''),
+        `<span class="small text-nowrap text-muted">₹${Number(b.rate || 0).toLocaleString('en-IN')}</span>`))))
+    || '<p class="text-muted small my-3">Nothing matches.</p>';
+  countItemPicks();
+}
+function pickItemGroup(btn) {
+  const boxes = btn.closest('.ki-pick-group').querySelectorAll('input[type=checkbox]');
+  const all = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => { b.checked = !all; all ? _itemPicked.delete(b.value) : _itemPicked.add(b.value); });
+  countItemPicks();
+}
+function countItemPicks(box) {
+  if (box) box.checked ? _itemPicked.add(box.value) : _itemPicked.delete(box.value);
+  const n = _itemPicked.size;
+  const btn = document.getElementById('itemPickAdd');
+  if (btn) { btn.disabled = !n; btn.textContent = n ? `Add ${n} item${n > 1 ? 's' : ''}` : 'Add items'; }
+}
+function addItemPicks() {
+  const rk = _itemPickRoom;
+  const [wood, work] = splitCombo(document.getElementById('itemPickCombo')?.value || DEFAULT_COMBO);
+  const keys = Array.from(_itemPicked);
+  pickerItemNames().filter(n => keys.includes('i:' + n)).forEach(n => {    // in the list's order
+    const ik = _insertItemRow(rk, n, '', '', '', '', wood, work, '', 1, '');
+    if (ik) markPending(rk, ik, true);
+  });
+  materialNames().filter(n => keys.includes('m:' + n)).forEach(n => {    // named after the material, at its rate
+    const [w, k] = splitCombo(comboForName(n) || `${n}|`);
+    const ik = _insertItemRow(rk, n, '', '', '', '', w, k, '', 1, MATERIAL_DESCS[n] || '');
+    if (ik) markPending(rk, ik, true);
+  });
+  priceList.forEach((p, i) => {
+    if (keys.includes('f:' + i)) _insertFixedRow(rk, p.name, 1, p.price || 0, p.description || '');
+  });
+  pickerLumpSums().forEach(([b, i]) => {
+    if (keys.includes('l:' + i)) _insertBoqRow(rk, b.name, 1, 'lump sum', b.rate || 0, b.description || '', false, 0, 0, 1, false);
+  });
+  bootstrap.Modal.getInstance(document.getElementById('itemPickModal'))?.hide();
+  if (typeof recalcAll === 'function') recalcAll();
+  const first = document.querySelector(`#room_card_${rk} tr.ki-needs-qty input`);
   if (first) { first.scrollIntoView({ block: 'center' }); setTimeout(() => first.focus(), 300); }
 }
 
