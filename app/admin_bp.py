@@ -270,7 +270,37 @@ def rate_request(req_id):
         db.session.commit()
         flash(f'{who} can now see the rates on {what}.' if approve else f'Declined: {who} won\'t see the rates on {what}.',
               'success')
-    return redirect(url_for('admin.users'))
+    return redirect(_back_to(url_for('admin.users')))
+
+
+def _back_to(default):
+    nxt = request.form.get('next', '')
+    return nxt if nxt.startswith('/') and not nxt.startswith('//') else default
+
+
+@admin_bp.route('/approvals/<int:project_id>', methods=['POST'])
+def quote_approval(project_id):
+    """Approve, reject or ask for changes on an employee's quotation (app/approvals.py): from the notification or
+    the quotation."""
+    from . import approvals
+    project = Project.query.get_or_404(project_id)
+    action = request.form.get('action')
+    note = request.form.get('note', '')
+    if action == 'changes' and not note.strip():
+        flash('Write what should change, then tap Make changes.', 'warning')
+        return redirect(_back_to(url_for('admin.notifications')))
+    s = approvals.decide(project.id, action, current_user, note)
+    if s is None:
+        flash('That quotation isn\'t waiting for approval (already answered?).', 'info')
+    else:
+        db.session.commit()
+        user = db.session.get(User, s.get('user_id') or 0)
+        who = (user.full_name or user.username) if user else 'the employee'
+        flash({'approved': f'Approved. {who} can now send and download {project.customer_name}\'s quotation.',
+               'rejected': f'Rejected. {who} sees it on the quotation.',
+               'changes': f'Changes asked. {who} sees your note on the quotation; it comes back to you once saved.'}
+              [s['status']], 'success')
+    return redirect(_back_to(url_for('admin.notifications')))
 
 
 @admin_bp.route('/users/new', methods=['POST'])
@@ -1295,12 +1325,14 @@ def reports():
 
 @admin_bp.route('/notifications')
 def notifications():
+    from . import approvals
     all_notifs = Notification.query.order_by(Notification.created_at.desc()).all()
+    acts = approvals.actions(all_notifs)
     # Mark all as read when page is opened
     Notification.query.filter_by(is_read=False).update({'is_read': True})
     db.session.commit()
-    return render_template('admin/notifications.html',
-                           title='Notifications', notifications=all_notifs)
+    return render_template('admin/notifications.html', title='Notifications', notifications=all_notifs,
+                           acts=acts, labels=approvals.LABELS, badges=approvals.BADGES)
 
 
 @admin_bp.route('/notifications/clear', methods=['POST'])

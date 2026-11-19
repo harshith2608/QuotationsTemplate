@@ -534,6 +534,7 @@ def boq_status(slug):
                     show_rate=layout.show_rate(), cover=presentation.console_status(), costs=item_costs.console_status(),
                     profiles=__import__('app.profiles', fromlist=['console_status']).console_status(),
                     pdf_choices=__import__('app.pdf_choices', fromlist=['enabled']).enabled(),
+                    approvals=__import__('app.approvals', fromlist=['enabled']).enabled(),
                     photo_pages=__import__('app.photo_pages', fromlist=['console_status']).console_status()['on'])
 
 
@@ -550,6 +551,14 @@ def set_photo_pages(slug, on):
     from . import photo_pages
     with open_customer(slug):
         photo_pages.set_enabled(on)
+        db.session.commit()
+
+
+def set_quote_approvals(slug, on):
+    """Quotation approvals (an employee's quotation waits for an admin before it's sent) on or off, for a customer."""
+    from . import approvals
+    with open_customer(slug):
+        approvals.set_enabled(on)
         db.session.commit()
 
 

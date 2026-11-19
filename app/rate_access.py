@@ -3,7 +3,7 @@
 An employee (any user who isn't an admin) doesn't see rates or line amounts unless their admin ticked "Can see rates"
 for them. They still see sizes, quantities, areas and totals, and can make and send quotations: the PDF, link and
 WhatsApp they send leave rates and line amounts out. When a customer asks for them, the employee taps "Ask admin for
-rates" on the quotation: the admin gets an email (from QuoteRoom, hello@quote-room.co.in) and a notification, opens
+rates" on the quotation: the admin gets an email (from QuoteRoom, hello@quote-room.co.in) and a notification (Approve / Decline on it), opens
 the request and approves it; that employee then sees that one quotation's rates and line amounts (screen, PDF, link,
 WhatsApp). Kept in app_settings (no database update):
   user_rates         JSON {user_id: true}: employees allowed to see rates everywhere

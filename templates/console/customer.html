@@ -186,6 +186,15 @@
     <input type="hidden" name="on" value="{{ '0' if boq.photo_pages else '1' }}">
     <button class="btn" type="submit">{{ 'Turn off' if boq.photo_pages else 'Turn on' }}</button>
   </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Quotation approvals</strong> · <span class="badge {{ 'b-active' if boq.approvals else 'b-other' }}">{{ 'on' if boq.approvals else 'off' }}</span></div>
+  <p class="muted small" style="margin:0">A quotation an employee makes or changes waits for an admin before it can be
+    sent or downloaded (PDFs, the customer's link, WhatsApp, email). The admin gets a notification with Approve, Reject
+    and Make changes on it, and the same buttons on the quotation. Admins' own quotations don't wait. Off by default.</p>
+  <form method="post" action="{{ url_for('console.customer_approvals', slug=row.slug) }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="on" value="{{ '0' if boq.approvals else '1' }}">
+    <button class="btn" type="submit">{{ 'Turn off' if boq.approvals else 'Turn on' }}</button>
+  </form>
   <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Choose what the PDF shows</strong> · <span class="badge {{ 'b-active' if boq.pdf_choices else 'b-other' }}">{{ 'on' if boq.pdf_choices else 'off' }}</span></div>
   <p class="muted small" style="margin:0">Tapping Quotation PDF first opens tick-boxes: description, material, size,
     quantity, rate, amount on each line, room total, photos. The PDF, the customer's link and the emailed PDF show only

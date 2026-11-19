@@ -85,7 +85,7 @@
       <tbody>
         {% for project in projects.items %}
         <tr>
-          <td class="ps-3 small text-nowrap">{% if quote_nos.get(project.id) %}<span class="font-monospace">{{ quote_nos[project.id] }}</span>{% else %}<span class="text-muted">Draft</span>{% endif %}</td>
+          <td class="ps-3 small text-nowrap">{% if quote_nos.get(project.id) %}<span class="font-monospace">{{ quote_nos[project.id] }}</span>{% else %}<span class="text-muted">Draft</span>{% endif %}{% set ap = approval_of.get(project.id) %}{% if ap and ap != 'approved' %} <br><span class="badge {{ approval_badges.get(ap, 'bg-secondary') }}">{{ approval_labels.get(ap, ap) }}</span>{% endif %}</td>
           <td>
             <a href="{{ url_for('projects.view_project', project_id=project.id) }}"
                class="fw-semibold text-decoration-none ki-link">
@@ -167,7 +167,7 @@
               {{ project.customer_name }}
             </a>
           </h6>
-          {% if quote_nos.get(project.id) %}<div class="small font-monospace text-muted mb-1">{{ quote_nos[project.id] }}</div>{% endif %}
+          {% if quote_nos.get(project.id) %}<div class="small font-monospace text-muted mb-1">{{ quote_nos[project.id] }}</div>{% endif %}{% set ap = approval_of.get(project.id) %}{% if ap and ap != 'approved' %}<div class="mb-1"><span class="badge {{ approval_badges.get(ap, 'bg-secondary') }}">{{ approval_labels.get(ap, ap) }}</span></div>{% endif %}
           <small class="text-muted">
             <i class="bi bi-telephone me-1"></i>{{ project.mobile }}
           </small>
