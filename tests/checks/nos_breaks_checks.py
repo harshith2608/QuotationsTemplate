@@ -51,6 +51,19 @@ wa = c.get(f'/projects/{pid}/whatsapp').headers.get('Location', '')
 from urllib.parse import unquote
 ok('WhatsApp: 900 at Rs.150, the same amount', 'False Ceiling: 900 ' in unquote(wa) and ('Rs.150' in unquote(wa) or 'Rs.1,35,000' in unquote(wa))
    and '1125' not in unquote(wa))
+rooms = [{'name': 'Hall', 'items': [
+    {'type': 'boq', 'name': 'Skirting', 'unit': 'rft', 'quantity': 0, 'unit_price': 100, 'length': 10, 'width': 0, 'count': 2},
+    {'type': 'boq', 'name': 'Handles', 'unit': 'nos', 'quantity': 6, 'unit_price': 250},
+    {'type': 'boq', 'name': 'Debris removal', 'unit': 'lump sum', 'quantity': 1, 'unit_price': 5000}]}]
+c.post('/projects/new', data={'customer_name': 'Other Units', 'mobile': '9000000445', 'rooms_data': json.dumps(rooms),
+                              'discount_type': 'none', 'discount_value': '0'})
+with app.app_context():
+    p = Project.query.order_by(Project.id.desc()).first()
+    its = {i.name: i for i in p.rooms_with_items()[0].item_list}
+    ok('other units unchanged with it on: rft counts pieces (10 × 2 = 20 rft at ₹100), Nos and lump sum as typed',
+       its['Skirting'].quantity == 20 and its['Skirting'].shown_quantity == 20 and its['Skirting'].shown_rate == 100
+       and its['Skirting'].boq_count == 2 and its['Handles'].shown_quantity == 6 and its['Handles'].shown_rate == 250
+       and its['Debris removal'].shown_rate == 5000 and p.grand_total == 2000 + 1500 + 5000)
 pid2, qty2, total2 = quote('Nos Whole', 2)
 ok('whole No\'s on: still the same amount (900 × 120 × 2)', total2 == 216000)
 c.post('/admin/settings', data={'section': 'pricing', 'pricing_mode': 'item', 'nos_on_rate_shown': '1'})
