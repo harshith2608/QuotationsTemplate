@@ -1215,6 +1215,11 @@ def settings():
                 err = layout.set_valid_days(request.form.get('quote_valid_days'))
                 if err:
                     errors.append(err)
+            if 'quote_number_format' in request.form:   # Quotation numbers: the business's own format
+                from . import quote_numbers
+                err = quote_numbers.set_format(request.form.get('quote_number_format'), request.form.get('quote_number_start'))
+                if err:
+                    errors.append(err)
             if 'cover_slogan' in request.form:      # the designed cover page (app/photo_pages.py)
                 from . import photo_pages
                 photo_pages.save_texts(request.form.get('cover_slogan'), request.form.get('cover_tagline'))
@@ -1291,6 +1296,7 @@ def settings():
                            show_rate=layout.show_rate() if tab == 'documents' else True,
                            room_totals=layout.room_totals_only() if tab == 'documents' else False,
                            valid_days=layout.valid_days() if tab == 'documents' else None,
+                           numbering=_numbering() if tab == 'documents' else None,
                            cover_texts=__import__('app.photo_pages', fromlist=['texts']).texts()
                            if tab == 'documents' and __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            show_board=layout.show_board() if tab == 'documents' else True,
@@ -1321,6 +1327,12 @@ def reports():
     """Sales, collections, invoices and estimated profit by financial year, with a projection (admins only)."""
     from . import reports as R
     return render_template('admin/reports.html', title='Reports', r=R.build())
+
+
+def _numbering():
+    from . import quote_numbers as QN
+    return {'format': QN.fmt(), 'start': QN.start(), 'presets': QN.PRESETS, 'preview': QN.preview(),
+            'resets': QN.resets(QN.fmt())}
 
 
 @admin_bp.route('/notifications')

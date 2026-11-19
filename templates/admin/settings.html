@@ -485,6 +485,55 @@
     </div>
   </div>
   {% endif %}
+  {% if numbering %}
+  <div class="card shadow-sm border-0 mb-3" id="numbering">
+    <div class="card-header ki-card-header"><i class="bi bi-123 me-2"></i>Quotation numbers</div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Ready formats">
+        {% for pat, name in numbering.presets %}
+        <button type="button" class="btn btn-sm btn-outline-secondary ki-num-preset" data-pat="{{ pat }}">{{ name }} <span class="font-monospace small text-muted">{{ pat }}</span></button>
+        {% endfor %}
+      </div>
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-7"><label class="form-label small fw-semibold mb-1" for="quote_number_format">Format</label>
+          <input class="form-control font-monospace" id="quote_number_format" name="quote_number_format" maxlength="40" value="{{ numbering.format }}"></div>
+        <div class="col-sm-3"><label class="form-label small fw-semibold mb-1" for="quote_number_start">Start the count from</label>
+          <input type="number" class="form-control" id="quote_number_start" name="quote_number_start" min="1" step="1" value="{{ numbering.start }}"></div>
+        <div class="col-sm-2 text-sm-end"><button type="submit" name="back_to" value="numbering" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
+      </div>
+      <div class="small mt-2">Next numbers: <span class="font-monospace fw-semibold" id="numPreview">{{ numbering.preview|join(', ') }}</span>
+        <span class="text-muted" id="numResets">{% if numbering.resets %}(the count starts again each {{ numbering.resets }}){% else %}(one running count){% endif %}</span></div>
+      <div class="form-text">Parts: <code>{YYYY}</code> <code>{YY}</code> <code>{MM}</code> <code>{DD}</code> the date it was made,
+        <code>{FY}</code> the financial year (2026-27) or <code>{FY2}</code> (26-27), and the count once: <code>{N}</code>,
+        <code>{NN}</code>, <code>{NNN}</code> or <code>{NNNN}</code> (that many digits at least). Add your own letters, e.g.
+        <code>SPI-{FY2}-{NNN}</code>. The count starts again each day with {DD}, each month with {MM}, each financial year with
+        {FY}, each year with {YYYY}; otherwise it keeps running from the number you start it at (e.g. to carry on your
+        paper series). Shown on the Quotations page and each quotation's page, with its latest revision (/Rev2).
+        Changing the format numbers all your quotations again, in the order they were made.</div>
+    </div>
+  </div>
+  <script>
+  (() => {
+    const f = document.getElementById('quote_number_format'), st = document.getElementById('quote_number_start');
+    const out = document.getElementById('numPreview'), rs = document.getElementById('numResets');
+    const tok = /\{(YYYY|YY|MM|DD|FY2|FY|N{1,6})\}/g;
+    function show() {
+      const p = f.value.trim() || '{YYYY}{MM}{DD}{NN}', d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1;
+      const fy0 = m >= 4 ? y : y - 1, fy = fy0 + '-' + String(fy0 + 1).slice(2), pad = (n, w) => String(n).padStart(w, '0');
+      const has = t => p.includes('{' + t + '}');
+      const every = has('DD') ? 'day' : has('MM') ? 'month' : (has('FY') || has('FY2')) ? 'financial year' : (has('YYYY') || has('YY')) ? 'year' : '';
+      const n0 = every ? 1 : Math.max(parseInt(st.value, 10) || 1, 1);
+      const counters = (p.match(/\{N{1,6}\}/g) || []).length;
+      const one = n => p.replace(tok, (_, t) => /^N+$/.test(t) ? pad(n, t.length)
+        : ({YYYY: y, YY: String(y).slice(2), MM: pad(m, 2), DD: pad(d.getDate(), 2), FY: fy, FY2: fy.slice(2)})[t]);
+      out.textContent = counters === 1 ? one(n0) + ', ' + one(n0 + 1) : 'add the count once: {NNN}';
+      rs.textContent = counters === 1 ? (every ? '(the count starts again each ' + every + ')' : '(one running count)') : '';
+    }
+    document.querySelectorAll('.ki-num-preset').forEach(b => b.addEventListener('click', () => { f.value = b.dataset.pat; show(); }));
+    f.addEventListener('input', show); st.addEventListener('input', show);
+  })();
+  </script>
+  {% endif %}
   <div class="card shadow-sm border-0 mb-3" id="validity">
     <div class="card-header ki-card-header"><i class="bi bi-calendar-check me-2"></i>Validity</div>
     <div class="card-body">
