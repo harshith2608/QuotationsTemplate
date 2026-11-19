@@ -1215,6 +1215,8 @@ def settings():
                 err = layout.set_valid_days(request.form.get('quote_valid_days'))
                 if err:
                     errors.append(err)
+            if 'page_breaks_shown' in request.form:     # which sections start on a new page in the PDF
+                layout.set_page_breaks(request.form.getlist('page_break'))
             if 'quote_number_format' in request.form:   # Quotation numbers: the business's own format
                 from . import quote_numbers
                 err = quote_numbers.set_format(request.form.get('quote_number_format'), request.form.get('quote_number_start'))
@@ -1247,6 +1249,8 @@ def settings():
                 __import__('app.setup_guide', fromlist=['mark']).mark('pricing')
             from . import rate_access
             AppSetting.set(rate_access.SCREEN_KEY, '1' if request.form.get('hide_rates_on_screen') == '1' else '0')
+            if 'nos_on_rate_shown' in request.form:     # No's on area lines: pieces, or a factor on the rate
+                AppSetting.set(boq.NOS_RATE_KEY, '1' if request.form.get('nos_on_rate') == '1' else '')
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1289,7 +1293,8 @@ def settings():
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     from . import layout, boq
     pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready(),
-               'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen()} \
+               'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen(),
+               'nos_on_rate': boq.nos_on_rate()} \
         if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
@@ -1297,6 +1302,7 @@ def settings():
                            room_totals=layout.room_totals_only() if tab == 'documents' else False,
                            valid_days=layout.valid_days() if tab == 'documents' else None,
                            numbering=_numbering() if tab == 'documents' else None,
+                           page_breaks=layout.page_breaks() if tab == 'documents' else None,
                            cover_texts=__import__('app.photo_pages', fromlist=['texts']).texts()
                            if tab == 'documents' and __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            show_board=layout.show_board() if tab == 'documents' else True,

@@ -574,9 +574,9 @@
               <tr>
                 <td class="fw-medium">{{ item.display_name }}{% if item.note %}<div class="small text-muted fw-normal ki-item-note">{{ item.note }}</div>{% endif %}{% if item.photo_id %}<a href="{{ url_for('projects.item_image', image_id=item.photo_id) }}" target="_blank" rel="noopener"><img class="ki-line-photo" src="{{ url_for('projects.item_image', image_id=item.photo_id) }}" alt="Photo of {{ item.name }}" loading="lazy"></a>{% endif %}
                   {% if item.is_boq and item.length %}<div class="small text-muted fw-normal">Size: {{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }} Nos.{% endif %}</div>{% endif %}</td>
-                <td class="text-center text-nowrap">{{ '%g' % item.quantity if item.quantity else '—' }}</td>
+                <td class="text-center text-nowrap">{{ '%g' % item.shown_quantity if item.quantity else '—' }}</td>
                 <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
-                <td class="text-end text-nowrap ki-rate ki-unit-rate">{% if item.price_to_follow %}—{% else %}{{ (item.unit_price or 0)|inr(0) }}{% endif %}</td>
+                <td class="text-end text-nowrap ki-rate ki-unit-rate">{% if item.price_to_follow %}—{% else %}{{ (item.shown_rate if item.is_boq else (item.unit_price or 0))|inr(0) }}{% endif %}</td>
                 <td class="text-end fw-semibold text-success text-nowrap ki-rate">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
               </tr>
               {% endfor %}
@@ -614,7 +614,7 @@
                 <td class="text-center">
                   {% if item.is_boq %}<span class="badge ki-badge-boq">{{ 'Lump sum' if item.unit_text == 'LS' else 'BOQ' }}</span>
                   {% if item.length %}<div class="small text-muted mt-1">{{ item.length|ft_in }}{% if item.width %} &times; {{ item.width|ft_in }}{% endif %}{% if item.boq_count > 1 %} &times; {{ item.boq_count }}{% endif %}</div>{% endif %}
-                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}{% if item.unit_price %}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span>{% endif %}{% else %}<span class="ki-rate ki-unit-rate">Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}</span>{% endif %}</div>
+                  <div class="small text-muted mt-1">{% if item.price_to_follow %}{% if item.quantity %}{{ '%g' % item.quantity }} {{ item.unit_text }}, {% endif %}<span class="text-warning-emphasis fw-semibold">price to follow</span>{% elif item.quantity %}{{ '%g' % item.shown_quantity }} {{ item.unit_text }}{% if item.unit_price %}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.shown_rate)|inr(0) }}</span>{% endif %}{% else %}<span class="ki-rate ki-unit-rate">Rate &#8377;{{ (item.unit_price)|inr(0) }} / {{ item.unit_text }}</span>{% endif %}</div>
                   {% else %}<span class="badge ki-badge-fitting">Fitting</span>
                   <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span></div>{% endif %}
                 </td>

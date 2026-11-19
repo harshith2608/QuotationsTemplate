@@ -68,8 +68,8 @@ def quotation_snapshot(project, rooms=None):
         items = []
         for i in room.item_list:
             if i.is_fixed:
-                row = {'name': i.name, 'type': i.item_type, 'quantity': round(i.quantity or 0, 4),
-                       'unit_price': round(i.unit_price or 0, 2),
+                row = {'name': i.name, 'type': i.item_type, 'quantity': round(i.shown_quantity if i.is_boq else (i.quantity or 0), 4),
+                       'unit_price': round(i.shown_rate if i.is_boq else (i.unit_price or 0), 2),
                        'amount': round((i.quantity or 0) * (i.unit_price or 0), 2)}
                 if i.is_boq:
                     row['unit'] = (i.unit if boq_ready else '') or 'nos'

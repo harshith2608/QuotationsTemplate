@@ -229,8 +229,13 @@ def _section_elements(styles, dark, project=None, rooms=None):
     settings = AppSetting.get_many([k for k, _ in layout.SECTION_KEYS])
     out = []
     values = layout.variables(project, rooms) if project is not None else None
+    breaks = layout.page_breaks()               # chosen in Settings → Quotation PDFs (None: automatic)
+    key_of = {t: k for k, t in layout.SECTION_KEYS + [('terms_conditions', 'Terms & Conditions')]}
     for title, lines, html in layout.sections(settings, terms_text(), values):
-        if not out:
+        if breaks is not None:
+            if key_of.get(title) in breaks:     # this one starts on a new page
+                out.append(PageBreak())
+        elif not out:
             # Less than half a page left after the quotation: the sections start on a new page together, rather
             # than a few points at the bottom of this page and the rest on the next
             out.append(CondPageBreak(SECTIONS_ROOM))
@@ -594,7 +599,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 elif item.is_boq and item.unit_text == 'LS':
                     cells = ['1', 'LS', _money(item.unit_price, 0), _money(amount)]
                 else:
-                    cells = [f'{item.quantity:g}', unit, _money(item.unit_price, 0), _money(amount)]
+                    cells = [f'{item.shown_quantity:g}', unit, _money(item.shown_rate, 0), _money(amount)]
                 rows.append([_name_cell(item, _size_note(item))] + cells)
             rates_only = room_total_cost == 0 and all(not i.quantity for i in items if not i.price_to_follow)
             rows.append(['Rates for reference, not added to the total' if rates_only else 'Section Total', '', '', '',
@@ -619,7 +624,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                     elif item.is_boq and not item.quantity:
                         what = f'Rate only: Rs. {_money(item.unit_price, 0)} / {item.unit_text}'
                     elif item.is_boq:
-                        what = f'{item.quantity:g} {item.unit_text} × Rs. {_money(item.unit_price, 0)}'
+                        what = f'{item.shown_quantity:g} {item.unit_text} × Rs. {_money(item.shown_rate, 0)}'
                     else:
                         what = f'Fitting: {item.quantity:g} × Rs. {_money(item.unit_price, 0)}'
                     sized = item.is_boq and item.length

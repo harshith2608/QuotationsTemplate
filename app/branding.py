@@ -228,7 +228,7 @@ def prefetch_common(extra=()):
                'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'terms_conditions', 'plywood_seeded', 'setup_guide', 'quote_templates',
                layout.LAYOUT_KEY, layout.DESCRIPTIONS_KEY, layout.HIDE_RATE_KEY, layout.ROOM_TOTALS_KEY, layout.HIDE_BOARD_KEY, 'material_descriptions', 'pdf_choices',
                'feature_item_images', 'cover_slogan', 'cover_tagline', 'feature_photo_pages',
-               'user_rates', 'rate_grants', 'hide_rates_on_screen', 'quote_numbers', 'quote_number_format', 'quote_number_start', 'pdf_choices_last', 'quote_approvals', 'quote_approvals_state', boq.KEY, business.KEY, welcome.KEY, 'sample_project_id', 'customer_work_types',
+               'user_rates', 'rate_grants', 'hide_rates_on_screen', 'nos_on_rate', 'pdf_page_breaks', 'quote_numbers', 'quote_number_format', 'quote_number_start', 'pdf_choices_last', 'quote_approvals', 'quote_approvals_state', boq.KEY, business.KEY, welcome.KEY, 'sample_project_id', 'customer_work_types',
                'company_profiles_limit', 'company_profiles']
             + [k for k, _ in layout.SECTION_KEYS] + list(extra))
     return AppSetting.prefetch(keys)

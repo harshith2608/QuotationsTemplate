@@ -270,12 +270,41 @@ class Item(db.Model):
         return self.is_boq and self.unit_price is None
 
     @property
+    def rate_factor(self):
+        """With No's on the rate (Settings → Pricing, app/boq.py nos_on_rate): an area line's No's (e.g. 1.25), else 1."""
+        from . import boq
+        if not (self.is_boq and self.length and self.width and self.quantity) or not boq.ready():
+            return 1
+        unit = self.unit or ''
+        if boq.size_mode(unit) != 'area' or not boq.nos_on_rate():
+            return 1
+        one = boq.quantity_from_size(unit, self.length, self.width, 1)
+        f = round(self.quantity / one, 3) if one else 1
+        return 1 if f <= 0 or abs(f - 1) < 0.0005 else f
+
+    @property
+    def shown_quantity(self):
+        """The quantity as printed: with No's on the rate, the measured area (No's goes into the rate)."""
+        f = self.rate_factor
+        if f == 1:
+            return self.quantity or 0
+        from . import boq
+        return boq.quantity_from_size(self.unit or '', self.length, self.width, 1)
+
+    @property
+    def shown_rate(self):
+        """The rate as printed: with No's on the rate, rate × No's (e.g. 120 × 1.25 = 150)."""
+        return round((self.unit_price or 0) * self.rate_factor, 2)
+
+    @property
     def boq_count(self):
         """No's of a BOQ line measured by size (its quantity / one piece's area or length), else 1."""
         from . import boq
         if not (self.is_boq and self.length):
             return 1
         unit = self.unit if boq.ready() else ''
+        if boq.size_mode(unit) == 'area' and boq.nos_on_rate():
+            return 1                                          # No's is on the rate: not printed
         one = boq.quantity_from_size(unit, self.length, self.width or 0, 1)
         return max(int(round((self.quantity or 0) / one)), 1) if one else 1
 

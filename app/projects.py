@@ -263,7 +263,7 @@ def _save_project_data(project, rooms_data, remember=True):
                     try:
                         l_ = max(float(id_.get('length') or 0), 0.0)
                         w_ = max(float(id_.get('width') or 0), 0.0)
-                        n_ = min(max(int(float(id_.get('count') or 1)), 1), 999)
+                        n_ = boq.clean_count(id_.get('count'), boq.clean_unit(id_.get('unit')))
                     except (ValueError, TypeError):
                         l_, w_, n_ = 0.0, 0.0, 1
                     mode = boq.size_mode(item.unit)
@@ -1128,7 +1128,7 @@ def _build_rooms_json(project, rooms=None, costs=False):
                     **({'image_id': item.image_id} if img_ready and item.image_id else {}),
                     **cost(item),
                     'plywood': plywood.item_plywood(item),
-                    'count': item.boq_count if item.is_boq else item.count,
+                    'count': (item.rate_factor if item.rate_factor != 1 else item.boq_count) if item.is_boq else item.count,
                     **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),
                 }
                 for item in room.item_list
@@ -1608,9 +1608,9 @@ def whatsapp_share(project_id):
                 lines.append(f"  • {item.display_name}: price to follow")
             elif item.is_boq:
                 _size = (_ft_in(item.length) + (f" × {_ft_in(item.width)}" if item.width else '') + ' = ') if item.length else ''
-                lines.append((f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{inr(item.unit_price, 0)}"
+                lines.append((f"  • {item.display_name}: {_size}{item.shown_quantity:g} {item.unit_text} × Rs.{inr(item.shown_rate, 0)}"
                               if _show_rate else
-                              f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} = Rs.{inr(item.quantity * item.unit_price, 0)}")
+                              f"  • {item.display_name}: {_size}{item.shown_quantity:g} {item.unit_text} = Rs.{inr(item.quantity * item.unit_price, 0)}")
                              if item.unit_price and item.quantity else
                              f"  • {item.display_name}: rate Rs.{inr(item.unit_price, 0)} per {item.unit_text}" if item.unit_price
                              else f"  • {item.display_name}")

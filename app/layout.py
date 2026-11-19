@@ -58,6 +58,31 @@ SECTION_KEYS = [('material_specs', 'Material Specifications'), ('payment_terms',
                 ('delivery_terms', 'Delivery Terms'), ('important_notes', 'Important Notes')]
 
 
+BREAKS_KEY = 'pdf_page_breaks'      # JSON [section key, …]: those start on a new page in the PDF; not set: automatic
+BREAK_KEYS = [k for k, _ in SECTION_KEYS] + ['terms_conditions']
+
+
+def page_breaks():
+    """The sections (Settings → Quotation PDFs) that start on a new page, or None: never chosen, so the sections
+    start on a new page together only when less than half a page is left after the quotation."""
+    import json
+    from .models import AppSetting
+    raw = AppSetting.get(BREAKS_KEY, None)
+    if raw is None or raw == '':
+        return None
+    try:
+        keys = json.loads(raw)
+    except ValueError:
+        return None
+    return [k for k in keys if k in BREAK_KEYS] if isinstance(keys, list) else None
+
+
+def set_page_breaks(keys):
+    import json
+    from .models import AppSetting
+    AppSetting.set(BREAKS_KEY, json.dumps([k for k in BREAK_KEYS if k in set(keys or [])]))
+
+
 DESCRIPTIONS_KEY = 'room_descriptions'
 DESCRIPTION_MAX = 500
 

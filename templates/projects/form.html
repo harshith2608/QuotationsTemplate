@@ -677,6 +677,7 @@
     boqSaved:    {{ boq_form.saved|tojson }},
     materialDescs: {{ material_descs|tojson }},
     defaultItems: {{ catalog.DEFAULT_ITEMS|tojson }},          // the built-in item names (Tick several: hidden when materials are the items)
+    nosOnRate:   {{ nos_on_rate|tojson }},          // No's on area lines is a factor on the rate (Settings → Pricing)
     noRates:     {{ (no_rates or false)|tojson }},            // an employee who can't see rates: rates and line amounts hidden
     templateEdit: {{ (template_edit is defined and template_edit is not none)|tojson }},   // editing a template: no customer; lines without a size stay             // {material: description} filled in when picked (Admin → Rates)
     boqFinishes: {{ (boq_form.finishes or none)|tojson }},
