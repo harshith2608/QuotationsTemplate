@@ -7,18 +7,34 @@ from .forms import LoginForm
 auth_bp = Blueprint('auth', __name__)
 
 
-def safe_next(default_endpoint='projects.list_projects'):
+HOME_KEY = 'home_page'           # Settings → Appearance: 'dashboard' = admins land on the Dashboard
+
+
+def home_endpoint(user=None):
+    """Where a signed-in user lands: Quotations, or the Dashboard for admins when the business chose it."""
+    from flask_login import current_user
+    from .models import AppSetting
+    user = user or current_user
+    try:
+        if getattr(user, 'is_admin', False) and AppSetting.get(HOME_KEY, '') == 'dashboard':
+            return 'admin.dashboard'
+    except Exception:
+        pass
+    return 'projects.list_projects'
+
+
+def safe_next(default_endpoint=None):
     """?next= only if it points to a page on this site (blocks open redirects to other domains)."""
     next_page = request.args.get('next', '')
     if not (next_page.startswith('/') and not next_page.startswith('//')) or next_page == '/':
-        return url_for(default_endpoint)
+        return url_for(default_endpoint or home_endpoint())
     return next_page
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('projects.list_projects'))
+        return redirect(url_for(home_endpoint()))
     from .demo import demo_enabled
     if demo_enabled() and request.method == 'GET':
         # Public demo: never show a password form; sign the visitor straight in

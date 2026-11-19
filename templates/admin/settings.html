@@ -178,6 +178,18 @@
     <!-- Controls -->
     <div class="col-12 col-lg-7">
 
+      <div class="card shadow-sm border-0 mb-3" id="home-page">
+        <div class="card-header ki-card-header"><i class="bi bi-house me-2"></i>Home page</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">The page admins see first after signing in (and when tapping your logo).
+            Employees always start on Quotations.</p>
+          {% set home = saved.get('home_page') if saved is mapping else '' %}
+          <div class="d-flex flex-wrap gap-3">
+            <label class="form-check mb-0"><input class="form-check-input" type="radio" name="home_page" value="" {{ 'checked' if home != 'dashboard' }}> Quotations</label>
+            <label class="form-check mb-0"><input class="form-check-input" type="radio" name="home_page" value="dashboard" {{ 'checked' if home == 'dashboard' }}> Dashboard</label>
+          </div>
+        </div>
+      </div>
       <div class="card shadow-sm border-0 mb-3">
         <div class="card-header ki-card-header"><i class="bi bi-stars me-2"></i>Theme Presets</div>
         <div class="card-body">
@@ -485,6 +497,55 @@
     </div>
   </div>
   {% endif %}
+  {% if numbering %}
+  <div class="card shadow-sm border-0 mb-3" id="numbering">
+    <div class="card-header ki-card-header"><i class="bi bi-123 me-2"></i>Quotation numbers</div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Ready formats">
+        {% for pat, name in numbering.presets %}
+        <button type="button" class="btn btn-sm btn-outline-secondary ki-num-preset" data-pat="{{ pat }}">{{ name }} <span class="font-monospace small text-muted">{{ pat }}</span></button>
+        {% endfor %}
+      </div>
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-7"><label class="form-label small fw-semibold mb-1" for="quote_number_format">Format</label>
+          <input class="form-control font-monospace" id="quote_number_format" name="quote_number_format" maxlength="40" value="{{ numbering.format }}"></div>
+        <div class="col-sm-3"><label class="form-label small fw-semibold mb-1" for="quote_number_start">Start the count from</label>
+          <input type="number" class="form-control" id="quote_number_start" name="quote_number_start" min="1" step="1" value="{{ numbering.start }}"></div>
+        <div class="col-sm-2 text-sm-end"><button type="submit" name="back_to" value="numbering" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
+      </div>
+      <div class="small mt-2">Next numbers: <span class="font-monospace fw-semibold" id="numPreview">{{ numbering.preview|join(', ') }}</span>
+        <span class="text-muted" id="numResets">{% if numbering.resets %}(the count starts again each {{ numbering.resets }}){% else %}(one running count){% endif %}</span></div>
+      <div class="form-text">Parts: <code>{YYYY}</code> <code>{YY}</code> <code>{MM}</code> <code>{DD}</code> the date it was made,
+        <code>{FY}</code> the financial year (2026-27) or <code>{FY2}</code> (26-27), and the count once: <code>{N}</code>,
+        <code>{NN}</code>, <code>{NNN}</code> or <code>{NNNN}</code> (that many digits at least). Add your own letters, e.g.
+        <code>SPI-{FY2}-{NNN}</code>. The count starts again each day with {DD}, each month with {MM}, each financial year with
+        {FY}, each year with {YYYY}; otherwise it keeps running from the number you start it at (e.g. to carry on your
+        paper series). Shown on the Quotations page and each quotation's page, with its latest revision (/Rev2).
+        Changing the format numbers all your quotations again, in the order they were made.</div>
+    </div>
+  </div>
+  <script>
+  (() => {
+    const f = document.getElementById('quote_number_format'), st = document.getElementById('quote_number_start');
+    const out = document.getElementById('numPreview'), rs = document.getElementById('numResets');
+    const tok = /\{(YYYY|YY|MM|DD|FY2|FY|N{1,6})\}/g;
+    function show() {
+      const p = f.value.trim() || '{YYYY}{MM}{DD}{NN}', d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1;
+      const fy0 = m >= 4 ? y : y - 1, fy = fy0 + '-' + String(fy0 + 1).slice(2), pad = (n, w) => String(n).padStart(w, '0');
+      const has = t => p.includes('{' + t + '}');
+      const every = has('DD') ? 'day' : has('MM') ? 'month' : (has('FY') || has('FY2')) ? 'financial year' : (has('YYYY') || has('YY')) ? 'year' : '';
+      const n0 = every ? 1 : Math.max(parseInt(st.value, 10) || 1, 1);
+      const counters = (p.match(/\{N{1,6}\}/g) || []).length;
+      const one = n => p.replace(tok, (_, t) => /^N+$/.test(t) ? pad(n, t.length)
+        : ({YYYY: y, YY: String(y).slice(2), MM: pad(m, 2), DD: pad(d.getDate(), 2), FY: fy, FY2: fy.slice(2)})[t]);
+      out.textContent = counters === 1 ? one(n0) + ', ' + one(n0 + 1) : 'add the count once: {NNN}';
+      rs.textContent = counters === 1 ? (every ? '(the count starts again each ' + every + ')' : '(one running count)') : '';
+    }
+    document.querySelectorAll('.ki-num-preset').forEach(b => b.addEventListener('click', () => { f.value = b.dataset.pat; show(); }));
+    f.addEventListener('input', show); st.addEventListener('input', show);
+  })();
+  </script>
+  {% endif %}
   <div class="card shadow-sm border-0 mb-3" id="validity">
     <div class="card-header ki-card-header"><i class="bi bi-calendar-check me-2"></i>Validity</div>
     <div class="card-body">
@@ -539,7 +600,7 @@
       <div class="ki-rich ki-rich-section mb-1" data-for="sec_material_specs"
            data-placeholder="{{ 'e.g. Plywood: Gurjan 18mm BWP…' if biz.interiors else 'e.g. ' ~ biz.item_example ~ ': ' ~ biz.description_example }}"></div>
       <textarea name="material_specs" id="sec_material_specs" class="form-control font-monospace" rows="12" style="font-size:0.82rem; line-height:1.6">{{ saved.material_specs_html }}</textarea>
-      <div class="text-end mt-2"><button type="submit" name="back_to" value="material-specs" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
+      <div class="d-flex align-items-center mt-2"><label class="form-check form-check-inline small mb-0 me-auto"><input class="form-check-input" type="checkbox" name="page_break" value="material_specs" {{ 'checked' if page_breaks and 'material_specs' in page_breaks }}> Start on a new page in the PDF</label><button type="submit" name="back_to" value="material-specs" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   {% for key, title, icon, example in [('payment_terms', 'Payment Terms', 'cash-coin', 'e.g. 10% advance with order confirmation&#10;50% after design finalisation&#10;40% on delivery of materials to site'),
@@ -551,7 +612,7 @@
       <p class="small text-muted mb-3">Bold, colours, headings and lists print as you see them here. Leave blank to leave the section out.</p>
       <div class="ki-rich ki-rich-section mb-1" data-for="sec_{{ key }}" data-placeholder="{{ example|replace('&#10;', '  ·  ') }}"></div>
       <textarea name="{{ key }}" id="sec_{{ key }}" class="form-control font-monospace" rows="5" style="font-size:0.82rem; line-height:1.6">{{ saved[key ~ '_html'] }}</textarea>
-      <div class="text-end mt-2"><button type="submit" name="back_to" value="{{ key }}" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
+      <div class="d-flex align-items-center mt-2"><label class="form-check form-check-inline small mb-0 me-auto"><input class="form-check-input" type="checkbox" name="page_break" value="{{ key }}" {{ 'checked' if page_breaks and key in page_breaks }}> Start on a new page in the PDF</label><button type="submit" name="back_to" value="{{ key }}" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
   {% endfor %}
@@ -561,9 +622,15 @@
       <p class="small text-muted mb-3">Printed at the bottom of every quotation PDF. Bold, colours, headings and lists print as you see them here.</p>
       <div class="ki-rich ki-rich-section mb-1" data-for="sec_terms_conditions" data-placeholder="This is a preliminary estimate…"></div>
       <textarea name="terms_conditions" id="sec_terms_conditions" class="form-control font-monospace" rows="8" style="font-size:0.82rem; line-height:1.6">{{ saved.terms_conditions_html }}</textarea>
-      <div class="text-end mt-2"><button type="submit" name="back_to" value="terms" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
+      <div class="d-flex align-items-center mt-2"><label class="form-check form-check-inline small mb-0 me-auto"><input class="form-check-input" type="checkbox" name="page_break" value="terms_conditions" {{ 'checked' if page_breaks and 'terms_conditions' in page_breaks }}> Start on a new page in the PDF</label><button type="submit" name="back_to" value="terms" class="btn btn-sm btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save</button></div>
     </div>
   </div>
+  <input type="hidden" name="page_breaks_shown" value="" id="pageBreaksShown" disabled>
+  <script>document.querySelectorAll('input[name="page_break"]').forEach(b => b.addEventListener('change', () => {
+    const h = document.getElementById('pageBreaksShown'); h.disabled = false; h.value = '1'; }));</script>
+  <div class="form-text mt-2"><i class="bi bi-file-break me-1"></i>Page breaks: tick <strong>Start on a new page in the PDF</strong>
+    on the sections that should begin on a fresh page; the others follow straight on, with no gap.{% if page_breaks is none %}
+    Until you save these, the sections start on a new page together when less than half a page is left after the quotation.{% endif %}</div>
   <div class="mt-3 mb-5">
     <button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save all</button>
   </div>
@@ -678,6 +745,24 @@
       {% if not pricing.item_ready %}<div class="form-text text-danger mt-2">Pricing by item needs the latest update of your app.</div>{% endif %}
     </div>
   </div>
+  {% if pricing.item_ready %}
+  <div class="card shadow-sm border-0 mb-3" id="nos-rate">
+    <div class="card-header ki-card-header"><i class="bi bi-calculator me-2"></i>No's on {{ units.area_label() }} lines</div>
+    <div class="card-body">
+      <input type="hidden" name="nos_on_rate_shown" value="1">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" name="nos_on_rate" value="1" id="nos_on_rate"
+               {{ 'checked' if pricing.nos_on_rate }}>
+        <label class="form-check-label fw-semibold" for="nos_on_rate">No's multiplies the rate, not the area</label>
+      </div>
+      <div class="form-text">On a line priced per {{ units.area_label() }} with a size: off, No's is how many identical pieces
+        (6 × 7 ft × 2 No's = 84). On, it's a factor on the rate, and can have decimals: 900 {{ units.area_label() }} × 1.25 at
+        ₹120 shows <strong>900 {{ units.area_label() }} at ₹150</strong>; the measurement stays as measured and No's isn't
+        printed on the quotation, PDF, link or WhatsApp. Running lengths (rft) still count pieces. Amounts don't change
+        either way.</div>
+    </div>
+  </div>
+  {% endif %}
   <div class="card shadow-sm border-0 mb-3" id="hide-rates">
     <div class="card-header ki-card-header"><i class="bi bi-eye-slash me-2"></i>Rates on screen</div>
     <div class="card-body">

@@ -270,7 +270,37 @@ def rate_request(req_id):
         db.session.commit()
         flash(f'{who} can now see the rates on {what}.' if approve else f'Declined: {who} won\'t see the rates on {what}.',
               'success')
-    return redirect(url_for('admin.users'))
+    return redirect(_back_to(url_for('admin.users')))
+
+
+def _back_to(default):
+    nxt = request.form.get('next', '')
+    return nxt if nxt.startswith('/') and not nxt.startswith('//') else default
+
+
+@admin_bp.route('/approvals/<int:project_id>', methods=['POST'])
+def quote_approval(project_id):
+    """Approve, reject or ask for changes on an employee's quotation (app/approvals.py): from the notification or
+    the quotation."""
+    from . import approvals
+    project = Project.query.get_or_404(project_id)
+    action = request.form.get('action')
+    note = request.form.get('note', '')
+    if action == 'changes' and not note.strip():
+        flash('Write what should change, then tap Make changes.', 'warning')
+        return redirect(_back_to(url_for('admin.notifications')))
+    s = approvals.decide(project.id, action, current_user, note)
+    if s is None:
+        flash('That quotation isn\'t waiting for approval (already answered?).', 'info')
+    else:
+        db.session.commit()
+        user = db.session.get(User, s.get('user_id') or 0)
+        who = (user.full_name or user.username) if user else 'the employee'
+        flash({'approved': f'Approved. {who} can now send and download {project.customer_name}\'s quotation.',
+               'rejected': f'Rejected. {who} sees it on the quotation.',
+               'changes': f'Changes asked. {who} sees your note on the quotation; it comes back to you once saved.'}
+              [s['status']], 'success')
+    return redirect(_back_to(url_for('admin.notifications')))
 
 
 @admin_bp.route('/users/new', methods=['POST'])
@@ -1143,6 +1173,9 @@ def settings():
                 from .ops import PREFILLED_NAME_KEY
                 AppSetting.set(PREFILLED_NAME_KEY, '')
         elif tab == 'appearance':
+            if 'home_page' in request.form:          # where admins land after signing in
+                from .auth import HOME_KEY
+                AppSetting.set(HOME_KEY, 'dashboard' if request.form.get('home_page') == 'dashboard' else '')
             if request.form.get('reset_theme'):
                 for key in branding.THEME_KEYS:
                     AppSetting.set(branding.FIELDS[key][0], '')
@@ -1185,6 +1218,13 @@ def settings():
                 err = layout.set_valid_days(request.form.get('quote_valid_days'))
                 if err:
                     errors.append(err)
+            if 'page_breaks_shown' in request.form:     # which sections start on a new page in the PDF
+                layout.set_page_breaks(request.form.getlist('page_break'))
+            if 'quote_number_format' in request.form:   # Quotation numbers: the business's own format
+                from . import quote_numbers
+                err = quote_numbers.set_format(request.form.get('quote_number_format'), request.form.get('quote_number_start'))
+                if err:
+                    errors.append(err)
             if 'cover_slogan' in request.form:      # the designed cover page (app/photo_pages.py)
                 from . import photo_pages
                 photo_pages.save_texts(request.form.get('cover_slogan'), request.form.get('cover_tagline'))
@@ -1212,6 +1252,8 @@ def settings():
                 __import__('app.setup_guide', fromlist=['mark']).mark('pricing')
             from . import rate_access
             AppSetting.set(rate_access.SCREEN_KEY, '1' if request.form.get('hide_rates_on_screen') == '1' else '0')
+            if 'nos_on_rate_shown' in request.form:     # No's on area lines: pieces, or a factor on the rate
+                AppSetting.set(boq.NOS_RATE_KEY, '1' if request.form.get('nos_on_rate') == '1' else '')
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1237,7 +1279,7 @@ def settings():
 
     saved_keys = ([branding.FIELDS[k][0] for k in branding.COMPANY_KEYS + branding.THEME_KEYS]
                   + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes',
-                                  'room_descriptions'])
+                                  'room_descriptions', 'home_page'])
     saved = AppSetting.get_many(saved_keys)
     from .pdf_utils import terms_text
     from . import layout as layout_mod
@@ -1254,13 +1296,16 @@ def settings():
                      for key, what in (('name', 'company name'), ('gstin', 'GSTIN'), ('logo', 'logo'))}
     from . import layout, boq
     pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready(),
-               'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen()} \
+               'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen(),
+               'nos_on_rate': boq.nos_on_rate()} \
         if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),
                            show_rate=layout.show_rate() if tab == 'documents' else True,
                            room_totals=layout.room_totals_only() if tab == 'documents' else False,
                            valid_days=layout.valid_days() if tab == 'documents' else None,
+                           numbering=_numbering() if tab == 'documents' else None,
+                           page_breaks=layout.page_breaks() if tab == 'documents' else None,
                            cover_texts=__import__('app.photo_pages', fromlist=['texts']).texts()
                            if tab == 'documents' and __import__('app.photo_pages', fromlist=['enabled']).enabled() else None,
                            show_board=layout.show_board() if tab == 'documents' else True,
@@ -1293,14 +1338,22 @@ def reports():
     return render_template('admin/reports.html', title='Reports', r=R.build())
 
 
+def _numbering():
+    from . import quote_numbers as QN
+    return {'format': QN.fmt(), 'start': QN.start(), 'presets': QN.PRESETS, 'preview': QN.preview(),
+            'resets': QN.resets(QN.fmt())}
+
+
 @admin_bp.route('/notifications')
 def notifications():
+    from . import approvals
     all_notifs = Notification.query.order_by(Notification.created_at.desc()).all()
+    acts = approvals.actions(all_notifs)
     # Mark all as read when page is opened
     Notification.query.filter_by(is_read=False).update({'is_read': True})
     db.session.commit()
-    return render_template('admin/notifications.html',
-                           title='Notifications', notifications=all_notifs)
+    return render_template('admin/notifications.html', title='Notifications', notifications=all_notifs,
+                           acts=acts, labels=approvals.LABELS, badges=approvals.BADGES)
 
 
 @admin_bp.route('/notifications/clear', methods=['POST'])

@@ -1696,6 +1696,17 @@ def trial_photo_pages(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/approvals', methods=['POST'])
+@login_required
+def trial_approvals(slug):
+    _trial_or_404(slug)
+    on = request.form.get('on') == '1'
+    ops.set_quote_approvals(slug, on)
+    audit('trial_approvals', slug, 'on' if on else 'off')
+    flash(f'"Quotation approvals" is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+
+
 @console_bp.route('/trials/<slug>/pdf-choices', methods=['POST'])
 @login_required
 def trial_pdf_choices(slug):
@@ -2186,6 +2197,21 @@ def customer_photo_pages(slug):
     else:
         audit('customer_photo_pages', slug, 'on' if on else 'off')
         flash(f'"Cover & gallery" is now {"on" if on else "off"} for "{slug}".', 'ok')
+    return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/approvals', methods=['POST'])
+@login_required
+def customer_approvals(slug):
+    _customer_or_404(slug)
+    on = request.form.get('on') == '1'
+    try:
+        _customers().set_quote_approvals(slug, on)
+    except Exception as exc:
+        flash(str(exc), 'error')
+    else:
+        audit('customer_approvals', slug, 'on' if on else 'off')
+        flash(f'"Quotation approvals" is now {"on" if on else "off"} for "{slug}".', 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
 
 

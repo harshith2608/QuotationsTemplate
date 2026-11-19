@@ -178,6 +178,10 @@ def quotation_email(project_id):
     if project.status == 'draft':
         flash('Save the quotation first.', 'warning')
         return _back(project)
+    from .projects import approval_gate
+    held = approval_gate(project)
+    if held:
+        return held
     if not billing.email_ready():
         flash('Set up email in Admin → Settings → Email to send quotations by email.', 'warning')
         return _back(project)
@@ -270,6 +274,10 @@ def revision(project_id, number):
     project = _project_or_403(project_id)
     if not billing.ready():
         abort(404)
+    from .projects import approval_gate
+    held = approval_gate(project)
+    if held:
+        return held
     rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
     prev = QuoteRevision.query.filter_by(project_id=project.id, number=number - 1).first()
     snap = json.loads(rev.snapshot)
@@ -293,6 +301,10 @@ def revision_pdf(project_id, number):
     project = _project_or_403(project_id)
     if not billing.ready():
         abort(404)
+    from .projects import approval_gate
+    held = approval_gate(project)
+    if held:
+        return held
     rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
     buf = generate_customer_pdf(project, revision=rev)
     name = ''.join(ch if ch.isalnum() else '_' for ch in (json.loads(rev.snapshot)['customer']['name'] or 'Quotation'))
@@ -334,6 +346,10 @@ def restore_revision(project_id, number):
     project = _project_or_403(project_id)
     if not billing.ready():
         abort(404)
+    from .projects import approval_gate
+    held = approval_gate(project)
+    if held:
+        return held
     rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
     back = redirect(url_for('billing.revision', project_id=project.id, number=number))
     blocker = billing.restore_blocker(project)

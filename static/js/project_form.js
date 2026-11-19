@@ -29,6 +29,7 @@ function comboLabel(wood, work) { return work ? `${wood} – ${work}` : (wood ||
 const DEFAULT_COMBO = CATALOG.defaultWood + '|' + CATALOG.defaultWork;
 // BOQ lines (turned on per business): a line with its own description, quantity, unit and rate; any item can
 // also carry a description
+const NOS_ON_RATE = !!CATALOG.nosOnRate;   // No's on an area line is a factor on the rate (1.25), not pieces
 const NO_RATES = !!CATALOG.noRates;     // an employee who can't see rates (app/rate_access.py): rates hidden
 const BOQ = !!CATALOG.boq;
 // Priced by material: one-off work as a lump sum (a BOQ line with unit "lump sum": Pooja civil works ₹30,000…)
@@ -284,8 +285,12 @@ function unitOptions(selected) {
 // business's size unit (Settings → Units), kept in feet like every size
 const AREA_U = { 'sqft': 1, 'sq m': 0.09290304 }, LEN_U = { 'rft': 1, 'rmt': 0.3048 };
 function sizeMode(unit) { return unit in AREA_U ? 'area' : unit in LEN_U ? 'length' : null; }
+function cleanCount(raw, unit) {
+  if (NOS_ON_RATE && unit in AREA_U) { const f = parseFloat(raw); return f > 0 ? Math.min(Math.round(f * 1000) / 1000, 999) : 1; }
+  return Math.min(Math.max(parseInt(raw, 10) || 1, 1), 999);
+}
 function qtyFromSize(unit, l, w, n) {
-  n = Math.max(parseInt(n, 10) || 1, 1);
+  n = cleanCount(n, unit);
   if (unit in AREA_U) return Math.round(l * w * n * AREA_U[unit] * 100) / 100;
   if (unit in LEN_U) return Math.round(l * n * LEN_U[unit] * 100) / 100;
   return null;
@@ -308,8 +313,9 @@ function sizeStrip(prefix, l, w, n, handler) {
       <span class="small text-muted">Length</span>${sizeInputs(prefix, 'l', L, handler)}
       <span class="ki-size-w d-flex align-items-center gap-2"><span class="small text-muted">× Width</span>${sizeInputs(prefix, 'w', W, handler)}</span>
       <span class="small text-muted">× No's</span>
-      <input type="number" class="form-control form-control-sm text-center px-1" id="${prefix}_cnt" min="1" max="999" step="1"
-             value="${n && n > 1 ? n : 1}" oninput="${handler}" style="width:56px" title="Identical pieces">
+      <input type="number" class="form-control form-control-sm text-center px-1" id="${prefix}_cnt" min="${NOS_ON_RATE ? '0.01' : '1'}" max="999" step="${NOS_ON_RATE ? 'any' : '1'}"
+             value="${n && n !== 1 ? n : 1}" oninput="${handler}" style="width:64px"
+             title="${NOS_ON_RATE ? 'Identical pieces (a factor on the rate on area lines, e.g. 1.25)' : 'Identical pieces'}">
       <span class="small fw-semibold text-primary" id="${prefix}_sizeqty"></span>
       <span class="small text-muted" id="${prefix}_sizehint">or leave empty and type the quantity</span>
     </div>`;
@@ -324,18 +330,25 @@ function applySize(prefix, unit, qtyEl) {
   }
   const val = id => parseFloat(document.getElementById(prefix + id)?.value) || 0;
   const length = ftInToDecimal(val('_lft'), val('_lin')), width = ftInToDecimal(val('_wft'), val('_win'));
-  const count = Math.min(Math.max(parseInt(document.getElementById(prefix + '_cnt')?.value, 10) || 1, 1), 999);
+  const count = cleanCount(document.getElementById(prefix + '_cnt')?.value, unit);
   const sized = !!mode && length > 0 && (mode === 'length' || width > 0);
   const qty = sized ? qtyFromSize(unit, length, width, count) : null;
+  // No's on the rate (area lines): the measured area is shown; No's multiplies the rate (qty keeps it, for the amount)
+  const onRate = NOS_ON_RATE && mode === 'area' && count !== 1;
+  const shown = sized && onRate ? qtyFromSize(unit, length, width, 1) : qty;
   const out = document.getElementById(prefix + '_sizeqty'), hint = document.getElementById(prefix + '_sizehint');
-  if (out) out.textContent = sized ? `= ${qty.toLocaleString('en-IN')} ${unit}` : '';
+  if (out) out.textContent = sized ? `= ${shown.toLocaleString('en-IN')} ${unit}` + (onRate ? `, rate × ${count}` : '') : '';
   if (hint) hint.classList.toggle('d-none', sized);
   if (qtyEl && unit !== 'lump sum') {
-    if (sized) qtyEl.value = qty;
+    if (sized) qtyEl.value = shown;
     qtyEl.readOnly = sized;
     qtyEl.classList.toggle('bg-light', sized);
   }
   return { mode, length: sized ? length : 0, width: sized && mode === 'area' ? width : 0, count: sized ? count : 1, qty };
+}
+// The quantity a BOQ line is priced on: its size's (with No's on the rate, area × No's), else as typed
+function boqQty(size, qtyEl) {
+  return size && size.qty != null ? size.qty : (parseFloat(qtyEl?.value) || 0);
 }
 
 // Lump sum: one amount, so the quantity is 1 and locked
@@ -1379,7 +1392,7 @@ function onBoqField(rk, ik) {
   let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
-  const quantity   = parseFloat(document.getElementById('item_qty_' + ik)?.value) || 0;
+  const quantity   = boqQty(size, document.getElementById('item_qty_' + ik));
   const unit_price = tbc ? 0 : parseFloat(document.getElementById('item_price_' + ik)?.value) || 0;
   rooms[rk].items[ik] = { type: 'boq', name: document.getElementById('item_name_' + ik)?.value.trim() || '',
                           quantity, unit: document.getElementById('item_unit_' + ik)?.value.trim() || 'nos',

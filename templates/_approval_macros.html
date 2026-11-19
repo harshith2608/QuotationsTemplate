@@ -1,0 +1,16 @@
+{# Approve / Reject / Make changes on an employee's quotation (app/approvals.py): on the notification and the quotation #}
+{% macro quote_decision(project_id, next_url, uid) %}
+<form method="POST" action="{{ url_for('admin.quote_approval', project_id=project_id) }}" class="mt-2 ki-approval-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <textarea name="note" rows="2" class="form-control form-control-sm mb-2" maxlength="500" id="apNote{{ uid }}"
+            placeholder="Note for the employee (needed for Make changes)" aria-label="Note for the employee"></textarea>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="submit" name="action" value="approve" class="btn btn-sm btn-success fw-semibold"><i class="bi bi-check-lg me-1"></i>Approve</button>
+    <button type="submit" name="action" value="changes" class="btn btn-sm btn-outline-primary fw-semibold"
+            onclick="const t = document.getElementById('apNote{{ uid }}'); if (!t.value.trim()) { t.focus(); t.classList.add('is-invalid'); return false; }"><i class="bi bi-pencil-square me-1"></i>Make changes</button>
+    <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline-danger fw-semibold"
+            onclick="return confirm('Reject this quotation?')"><i class="bi bi-x-lg me-1"></i>Reject</button>
+  </div>
+</form>
+{% endmacro %}

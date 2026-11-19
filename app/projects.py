@@ -263,7 +263,7 @@ def _save_project_data(project, rooms_data, remember=True):
                     try:
                         l_ = max(float(id_.get('length') or 0), 0.0)
                         w_ = max(float(id_.get('width') or 0), 0.0)
-                        n_ = min(max(int(float(id_.get('count') or 1)), 1), 999)
+                        n_ = boq.clean_count(id_.get('count'), boq.clean_unit(id_.get('unit')))
                     except (ValueError, TypeError):
                         l_, w_, n_ = 0.0, 0.0, 1
                     mode = boq.size_mode(item.unit)
@@ -421,7 +421,10 @@ def list_projects():
     revs = quote_numbers.revisions([p.id for p in projects.items if p.status != 'draft'])
     quote_nos = {p.id: quote_numbers.label(numbers.get(p.id), revs.get(p.id)) for p in projects.items
                  if p.status != 'draft' and numbers.get(p.id)}
+    from . import approvals as _ap
+    approval_of = _ap.states()
     return render_template('projects/list.html', projects=projects, search=search, setup=setup, quote_nos=quote_nos,
+                           approval_of=approval_of, approval_labels=_ap.LABELS, approval_badges=_ap.BADGES,
                            stage=stage, stage_counts=stage_counts, all_count=all_count,
                            title='Quotations', employees=employees,
                            employees_json=employees_json,
@@ -543,6 +546,7 @@ def create_project():
         db.session.commit()
         billing.record_revision(project, current_user)       # R1
         db.session.commit()
+        _send_for_approval(project)
 
         flash('Quotation created successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
@@ -716,11 +720,61 @@ def save_template(template_id):
     return redirect(url_for('projects.manage_templates'))
 
 
+def _approval_info(project):
+    """The quotation's approval for its page (app/approvals.py), or None: status, label, note, who and whether this
+    user is held back from sending it."""
+    from . import approvals
+    s = approvals.state(project.id)
+    if not s:
+        if not approvals.unsent(project):
+            return None
+        s = {'status': 'unsent', 'user_id': project.created_by}
+    who = db.session.get(User, s.get('user_id') or 0)
+    by = db.session.get(User, s.get('by') or 0) if s.get('by') else None
+    return {'status': s['status'], 'label': approvals.LABELS.get(s['status'], s['status']),
+            'badge': approvals.BADGES.get(s['status'], 'bg-secondary'), 'note': s.get('note', ''),
+            'who': (who.full_name or who.username) if who else '', 'by': (by.full_name or by.username) if by else '',
+            'held': approvals.blocks(project)}
+
+
+def _send_for_approval(project):
+    """An employee's quotation, saved: it waits for the admin (app/approvals.py, with approvals on)."""
+    from . import approvals
+    if approvals.submit(project, current_user):
+        db.session.commit()
+        flash('Sent to your admin for approval. You can send or download it once they approve.', 'info')
+
+
+def approval_gate(project):
+    """A redirect back to the quotation while it waits for the admin (for sending / downloading), else None."""
+    from . import approvals
+    if not approvals.blocks(project):
+        return None
+    s = approvals.state(project.id) or {}
+    flash({'changes': 'Your admin asked for changes. Make them and save: it goes back for approval.',
+           'rejected': 'Your admin rejected this quotation. Change it and save to send it for approval again.'}
+          .get(s.get('status'), 'Waiting for your admin\'s approval. You can send or download it once they approve.'
+               if s else 'Send it to your admin for approval first: you can send or download it once they approve.'),
+          'warning')
+    return redirect(url_for('projects.view_project', project_id=project.id))
+
+
+@projects_bp.route('/projects/<int:project_id>/approval/submit', methods=['POST'])
+@login_required
+def submit_for_approval(project_id):
+    """Send for approval again (after changes were asked or it was rejected), without changing it."""
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+        abort(403)
+    _send_for_approval(project)
+    return redirect(url_for('projects.view_project', project_id=project.id))
+
+
 @projects_bp.route('/projects/<int:project_id>/ask-rates', methods=['POST'])
 @login_required
 def ask_rates(project_id):
     """An employee who can't see rates asks the admin for this quotation's (app/rate_access.py): an email from
-    QuoteRoom and a notification; the admin approves on the Users page."""
+    QuoteRoom and a notification with Approve / Decline on it (also on the Users page)."""
     from . import rate_access, mailer
     project = Project.query.get_or_404(project_id)
     if not current_user.is_admin and not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
@@ -731,13 +785,18 @@ def ask_rates(project_id):
     rate_access.ask(project, current_user)
     if not already:
         who = current_user.full_name or current_user.username
-        db.session.add(Notification(title=f'{who} asks to see rates – {project.customer_name}',
-                                    message=f'{who} asked to see the rates and line amounts on {project.customer_name}\'s '
-                                            f'quotation (#{project.id}). Approve or decline it on the Users page.',
-                                    project_id=project.id))
+        req = rate_access.pending_for(project.id, current_user.id)
+        n = Notification(title=f'{who} asks to see rates – {project.customer_name}',
+                         message=f'{who} asked to see the rates and line amounts on {project.customer_name}\'s '
+                                 f'quotation (#{project.id}). Approve or decline it here.',
+                         project_id=project.id)
+        db.session.add(n)
+        db.session.flush()
+        from . import approvals
+        approvals.tag(n.id, f'rates:{req["id"]}')
         db.session.commit()
         to = rate_access.admin_email()
-        link = url_for('admin.users', _external=True) + '#rate-requests'
+        link = url_for('admin.notifications', _external=True)
         mailer.send(to, f'{who} asks to see the rates on {project.customer_name}\'s quotation',
                     f'Hello,\n\n{who} asked to see the rates and line amounts on {project.customer_name}\'s quotation '
                     f'(#{project.id}) in {get_brand()["name"]}.\n\nApprove or decline it here (sign in as admin):\n{link}\n\n'
@@ -819,7 +878,7 @@ def view_project(project_id):
     from . import rate_access as _ra
     from . import quote_numbers as _qn
     quote_no = _qn.label(_qn.assign().get(project.id), q2c['history'][0][0].number if q2c['history'] else None)
-    return render_template('projects/view.html', quote_no=quote_no,
+    return render_template('projects/view.html', quote_no=quote_no, approval=_approval_info(project),
                            rates_asked=bool(not current_user.is_admin and _ra.pending_for(project.id, current_user.id)),
                            project=project, single_pdf=_layout.single_pdf(),
                            rooms=rooms,
@@ -1012,6 +1071,7 @@ def edit_project(project_id):
         db.session.commit()
         if rev and rev.number > 1 and not was_draft:
             flash(f'Saved as revision {rev.number}.', 'info')
+        _send_for_approval(project)
 
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
@@ -1068,7 +1128,7 @@ def _build_rooms_json(project, rooms=None, costs=False):
                     **({'image_id': item.image_id} if img_ready and item.image_id else {}),
                     **cost(item),
                     'plywood': plywood.item_plywood(item),
-                    'count': item.boq_count if item.is_boq else item.count,
+                    'count': (item.rate_factor if item.rate_factor != 1 else item.boq_count) if item.is_boq else item.count,
                     **({'description': item.description or '', 'unit': item.unit or ''} if boq_ready else {}),
                 }
                 for item in room.item_list
@@ -1323,6 +1383,9 @@ def download_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
+    held = approval_gate(project)
+    if held:
+        return held
     from .pdf_utils import generate_customer_pdf, generate_pdf
     from . import layout
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
@@ -1422,6 +1485,9 @@ def choose_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
+    held = approval_gate(project)
+    if held:
+        return held
     if pdf_choices.enabled():
         pdf_choices.save(project.id, request.form)
         db.session.commit()
@@ -1457,6 +1523,9 @@ def download_customer_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
+    held = approval_gate(project)
+    if held:
+        return held
     from .pdf_utils import generate_customer_pdf
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
@@ -1478,6 +1547,9 @@ def whatsapp_share(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
+    held = approval_gate(project)
+    if held:
+        return held
 
     from . import plywood
     item_rates = _get_item_rates()
@@ -1536,9 +1608,9 @@ def whatsapp_share(project_id):
                 lines.append(f"  • {item.display_name}: price to follow")
             elif item.is_boq:
                 _size = (_ft_in(item.length) + (f" × {_ft_in(item.width)}" if item.width else '') + ' = ') if item.length else ''
-                lines.append((f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} × Rs.{inr(item.unit_price, 0)}"
+                lines.append((f"  • {item.display_name}: {_size}{item.shown_quantity:g} {item.unit_text} × Rs.{inr(item.shown_rate, 0)}"
                               if _show_rate else
-                              f"  • {item.display_name}: {_size}{item.quantity:g} {item.unit_text} = Rs.{inr(item.quantity * item.unit_price, 0)}")
+                              f"  • {item.display_name}: {_size}{item.shown_quantity:g} {item.unit_text} = Rs.{inr(item.quantity * item.unit_price, 0)}")
                              if item.unit_price and item.quantity else
                              f"  • {item.display_name}: rate Rs.{inr(item.unit_price, 0)} per {item.unit_text}" if item.unit_price
                              else f"  • {item.display_name}")

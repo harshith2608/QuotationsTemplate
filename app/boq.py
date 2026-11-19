@@ -114,9 +114,34 @@ def size_mode(unit):
     return 'area' if unit in AREA_UNITS else 'length' if unit in LENGTH_UNITS else None
 
 
+NOS_RATE_KEY = 'nos_on_rate'
+
+
+def nos_on_rate():
+    """Settings → Pricing: No's on an area line (sqft, sq m) is a factor on its rate (e.g. 1.25 for extra work), not a
+    number of pieces: the line shows its measured area and the rate × No's, and No's isn't printed. Saved as before
+    (the quantity is length × width × No's), so the amount is the same either way. Running lengths keep counting."""
+    from .models import AppSetting
+    try:
+        return AppSetting.get(NOS_RATE_KEY, '') == '1'
+    except Exception:
+        return False
+
+
+def clean_count(raw, unit=None):
+    """No's as typed: whole pieces (1–999), or with No's on the rate, for an area line, a factor like 1.25."""
+    try:
+        n = float(raw or 1)
+    except (TypeError, ValueError):
+        return 1
+    if unit in AREA_UNITS and nos_on_rate():
+        return min(max(round(n, 3), 0.01), 999) if n > 0 else 1
+    return min(max(int(n), 1), 999)
+
+
 def quantity_from_size(unit, length, width, count=1):
     """The quantity in `unit` for a size in feet, e.g. 14 ft × 12 ft → 168 sqft (15.61 sq m); 12 ft → 12 rft."""
-    count = max(int(count or 1), 1)
+    count = count if isinstance(count, float) and count > 0 else max(int(count or 1), 1)
     if unit in AREA_UNITS:
         return round(length * width * count * AREA_UNITS[unit], 2)
     if unit in LENGTH_UNITS:

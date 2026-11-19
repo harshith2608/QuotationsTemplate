@@ -6,7 +6,7 @@ No login: the long random token is the key. Staff turn the link on and off from 
 import secrets
 from datetime import datetime
 
-from flask import Blueprint, abort, flash, g, make_response, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, flash, g, make_response, redirect, render_template, render_template_string, request, send_file, url_for
 from flask_login import current_user, login_required
 
 from . import billing, db
@@ -71,6 +71,10 @@ def create(project_id):
     project = Project.query.get_or_404(project_id)
     if not _can_view(project):
         abort(403)
+    from .projects import approval_gate
+    held = approval_gate(project)
+    if held:
+        return held
     if not billing.ready():
         flash('Online approval is available after the next database update.', 'warning')
     elif project.status == 'draft':
@@ -159,9 +163,32 @@ def _gallery(project):
     return photo_pages.for_project(project.id) if photo_pages.gallery_shown(project) else []
 
 
+def _on_hold(project):
+    """While the quotation waits for the admin's approval (app/approvals.py): a short page instead of it."""
+    from . import approvals
+    if not approvals.locked(project):
+        return None
+    from .branding import get_brand
+    b = get_brand()
+    html = render_template_string(HOLD_PAGE, name=b['name'], primary=b['primary'], phone=b.get('phone') or '')
+    return _private(make_response(html, 200))
+
+
+HOLD_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Quotation being updated – {{ name }}</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#1f2937;margin:0}
+.b{max-width:480px;margin:12vh auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:28px 20px;text-align:center}
+h1{font-size:1.2rem;color:{{ primary }};margin:0 0 10px}p{margin:0;color:#4b5563;line-height:1.5}</style></head>
+<body><div class="b"><h1>{{ name }}</h1><p>This quotation is being updated. Please check this link again shortly.</p>
+{% if phone %}<p style="margin-top:10px">Questions? Call {{ phone }}.</p>{% endif %}</div></body></html>"""
+
+
 @share_bp.route('/q/<token>')
 def view(token):
     share, project = _share_or_404(token)
+    held = _on_hold(project)
+    if held:
+        return held
     if not current_user.is_authenticated:          # staff checking the link don't count as the customer
         now = datetime.utcnow()
         share.first_viewed_at = share.first_viewed_at or now
@@ -188,6 +215,9 @@ def view(token):
 @share_bp.route('/q/<token>/pdf')
 def pdf(token):
     share, project = _share_or_404(token)
+    held = _on_hold(project)
+    if held:
+        return held
     from .models import AppSetting
     from .pdf_utils import generate_customer_pdf, generate_pdf
     pay = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
@@ -224,6 +254,9 @@ def photo(token, image_id):
 @share_bp.route('/q/<token>/respond', methods=['POST'])
 def respond(token):
     share, project = _share_or_404(token)
+    held = _on_hold(project)
+    if held:
+        return held
     from .models import Notification, QuoteResponse
     kind = request.form.get('kind')
     name = ' '.join((request.form.get('name') or '').split())[:80]

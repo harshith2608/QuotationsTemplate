@@ -255,7 +255,7 @@ def create_app(config_name='default'):
         from .marketing import call_url
         return {'biz': business.profile(), 'help_card': help_card, 'call_url': call_url(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
-                'companies_on': _companies_on(current_user), 'no_rates': g.get('no_rates', False), 'hide_unit_rates': _hide_unit_rates(), 'brand': get_brand(), 'app_brand': g.get('app_brand') or get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
+                'companies_on': _companies_on(current_user), 'no_rates': g.get('no_rates', False), 'hide_unit_rates': _hide_unit_rates(), 'nos_on_rate': __import__('app.boq', fromlist=['nos_on_rate']).nos_on_rate(), 'brand': get_brand(), 'app_brand': g.get('app_brand') or get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
                 'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
 
     def _hide_unit_rates():
