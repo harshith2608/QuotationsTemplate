@@ -139,6 +139,8 @@ def create_app(config_name='default'):
     app.register_blueprint(plan_bp)
     from .welcome_bp import welcome_bp
     app.register_blueprint(welcome_bp)
+    from .help_bp import help_bp
+    app.register_blueprint(help_bp)
     app.before_request(block_demo_writes)
     from .demo import count_demo_use, count_site_visit
     app.after_request(count_demo_use)

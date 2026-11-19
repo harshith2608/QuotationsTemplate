@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Help{% endblock %}
+
+{% block content %}
+<div class="mt-3 mb-3" style="max-width:820px">
+  <h4 class="fw-bold ki-page-title mb-1"><i class="bi bi-question-circle me-2 text-primary"></i>Help</h4>
+  <p class="text-muted small mb-3">Search for what you want to do: you get the steps and a link to the page.</p>
+
+  <form class="d-flex gap-2 mb-2" id="helpForm" onsubmit="return false">
+    <div class="input-group">
+      <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+      <input type="search" class="form-control form-control-lg" id="helpQ" maxlength="300" autocomplete="off" autofocus
+             value="{{ q }}" placeholder="e.g. how do I add a discount?" aria-label="What do you want to do?">
+    </div>
+    {% if can_ask %}
+    <button type="button" class="btn btn-primary ki-btn-primary text-nowrap" id="helpAsk"><i class="bi bi-stars me-1"></i>Ask</button>
+    {% endif %}
+  </form>
+  {% if can_ask %}<div class="form-text mb-3">Results show as you type. Not what you need? Tap <strong>Ask</strong> to ask in your own words (English, Hindi, Telugu…).</div>{% endif %}
+
+  <div id="helpAnswer" class="card border-0 shadow-sm mb-3 d-none">
+    <div class="card-body">
+      <div class="small text-muted mb-1"><i class="bi bi-stars me-1"></i>Answer</div>
+      <div id="helpAnswerBody"></div>
+    </div>
+  </div>
+
+  <div id="helpCount" class="small text-muted mb-2"></div>
+  <div id="helpResults"></div>
+  <div id="helpNone" class="text-muted small d-none">Nothing found for that.{% if can_ask %} Tap <strong>Ask</strong> to ask it in your own words.{% else %} Try other words.{% endif %}</div>
+</div>
+
+<script>
+(() => {
+  const ARTICLES = {{ articles|tojson }};
+  const CSRF = '{{ csrf_token() }}';
+  const SYN = {   // words people use → words in the manual
+    price: 'rate', prices: 'rate', cost: 'rate', quote: 'quotation', quotes: 'quotation', estimate: 'quotation',
+    bill: 'invoice', remove: 'delete', erase: 'delete', staff: 'employee', worker: 'employee', member: 'user',
+    login: 'user', colour: 'color', ply: 'plywood', tax: 'gst', send: 'whatsapp', share: 'whatsapp', number: 'numbering',
+    picture: 'photos', image: 'photos', images: 'photos', money: 'payment', paid: 'payment', pay: 'payment',
+    sqft: 'area', measurement: 'units', mm: 'units', feet: 'units', page: 'pdf', print: 'pdf', download: 'pdf',
+  };
+  const STOP = new Set('a an the to do i how can my in on of for and or is it be with what where when we you me add make get'.split(' '));
+  const stem = w => w.replace(/(ing|ed|es|s)$/,'');
+  const words = t => (t.toLowerCase().match(/[a-z0-9']+/g) || []).filter(w => w.length > 1 && !STOP.has(w));
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const index = ARTICLES.map(a => ({a, title: words(a.title).map(stem), tags: words(a.tags + ' ' + a.summary).map(stem),
+                                   body: words(a.steps.join(' ')).map(stem)}));
+  function score(entry, qs) {
+    let s = 0;
+    for (const q of qs) {
+      const hit = (list, w) => list.some(x => x === q || (q.length > 3 && x.startsWith(q)));
+      if (hit(entry.title)) s += 5; else if (hit(entry.tags)) s += 3; else if (hit(entry.body)) s += 1;
+    }
+    return s;
+  }
+  function card(a, open) {
+    return `<div class="card border-0 shadow-sm mb-2"><div class="card-body py-2">
+      <details ${open ? 'open' : ''}><summary class="fw-semibold" style="cursor:pointer">${esc(a.title)}
+        <span class="small text-muted fw-normal d-block">${esc(a.summary)}</span></summary>
+        <ol class="small mt-2 mb-2">${a.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+        ${a.url ? `<a href="${esc(a.url)}" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right me-1"></i>Open the page</a>` : ''}
+      </details></div></div>`;
+  }
+  const out = document.getElementById('helpResults'), none = document.getElementById('helpNone'),
+        count = document.getElementById('helpCount'), q = document.getElementById('helpQ');
+  function search() {
+    const qs = words(q.value).map(w => stem(SYN[w] || w));
+    if (!qs.length) {
+      count.textContent = 'Everything in the manual:';
+      out.innerHTML = ARTICLES.map(a => card(a, false)).join(''); none.classList.add('d-none'); return;
+    }
+    const found = index.map(e => [score(e, qs), e.a]).filter(x => x[0] > 0).sort((x, y) => y[0] - x[0]).slice(0, 8);
+    count.textContent = '';
+    out.innerHTML = found.map(([, a], i) => card(a, i === 0)).join('');
+    none.classList.toggle('d-none', found.length > 0);
+  }
+  q.addEventListener('input', search);
+  search();
+
+  const askBtn = document.getElementById('helpAsk');
+  if (!askBtn) return;
+  const box = document.getElementById('helpAnswer'), body = document.getElementById('helpAnswerBody');
+  async function ask() {
+    const text = q.value.trim();
+    if (text.length < 3) { q.focus(); return; }
+    askBtn.disabled = true; askBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Asking…';
+    box.classList.remove('d-none'); body.innerHTML = '<span class="text-muted small">Looking it up…</span>';
+    try {
+      const r = await fetch('{{ url_for("help.ask") }}', {method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify({q: text})});
+      const d = await r.json();
+      if (d.error) { body.innerHTML = `<span class="text-danger small">${esc(d.error)}</span>`; return; }
+      body.innerHTML = `<p class="mb-2">${esc(d.intro)}</p>`
+        + (d.steps.length ? `<ol class="mb-2">${d.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : '')
+        + (d.related.length ? `<div class="d-flex flex-wrap gap-2">${d.related.map(a => a.url
+             ? `<a class="btn btn-sm btn-outline-primary" href="${esc(a.url)}"><i class="bi bi-box-arrow-up-right me-1"></i>${esc(a.title)}</a>`
+             : `<span class="badge bg-light text-dark border">${esc(a.title)}</span>`).join('')}</div>` : '')
+        + (d.found ? '' : `<div class="small text-muted mt-2">Still stuck? {% if current_user.is_admin %}<a href="{{ url_for('admin.support') }}">Contact support</a>.{% else %}Ask your admin.{% endif %}</div>`);
+    } catch (e) {
+      body.innerHTML = '<span class="text-danger small">Couldn\'t get an answer just now. Try the search.</span>';
+    } finally {
+      askBtn.disabled = false; askBtn.innerHTML = '<i class="bi bi-stars me-1"></i>Ask';
+    }
+  }
+  askBtn.addEventListener('click', ask);
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+})();
+</script>
+{% endblock %}
