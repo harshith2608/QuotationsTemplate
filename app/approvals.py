@@ -13,8 +13,8 @@ import json
 from datetime import datetime
 
 SWITCH_KEY, STATE_KEY, KINDS_KEY = 'quote_approvals', 'quote_approvals_state', 'notif_kinds'
-LABELS = {'pending': 'Waiting for approval', 'approved': 'Approved', 'changes': 'Changes asked', 'rejected': 'Rejected'}
-BADGES = {'pending': 'bg-warning text-dark', 'approved': 'bg-success', 'changes': 'bg-info text-dark', 'rejected': 'bg-danger'}
+LABELS = {'unsent': 'Not approved yet', 'pending': 'Waiting for approval', 'approved': 'Approved', 'changes': 'Changes asked', 'rejected': 'Rejected'}
+BADGES = {'unsent': 'bg-secondary', 'pending': 'bg-warning text-dark', 'approved': 'bg-success', 'changes': 'bg-info text-dark', 'rejected': 'bg-danger'}
 
 
 def _load(key):
@@ -64,12 +64,23 @@ def locked(project):
     return bool(s) and s.get('status') != 'approved'
 
 
+def unsent(project):
+    """An employee's quotation from before approvals were turned on, never sent for approval: employees can't send or
+    download it until it's approved (its customer's link, already sent, keeps working)."""
+    if not enabled() or project is None or getattr(project, 'status', None) == 'draft' or state(project.id):
+        return False
+    from . import db
+    from .models import User
+    maker = db.session.get(User, project.created_by) if project.created_by else None
+    return maker is not None and not maker.is_admin
+
+
 def blocks(project):
     """For the signed-in user: admins can always open it (to check it before approving)."""
     from flask_login import current_user
     if getattr(current_user, 'is_authenticated', False) and current_user.is_admin:
         return False
-    return locked(project)
+    return locked(project) or unsent(project)
 
 
 def submit(project, user):
@@ -115,6 +126,13 @@ def decide(project_id, action, admin, note=''):
     status = {'approve': 'approved', 'reject': 'rejected', 'changes': 'changes'}.get(action)
     rows = _load(STATE_KEY)
     s = rows.get(str(int(project_id)))
+    if not s and status:                                   # from before approvals: the admin can approve it as it is
+        from . import db
+        from .models import Project
+        project = db.session.get(Project, int(project_id))
+        if project is not None and unsent(project):
+            s = rows[str(project.id)] = {'status': 'pending', 'user_id': project.created_by,
+                                         'at': datetime.utcnow().isoformat(timespec='seconds')}
     if not status or not s or s.get('status') != 'pending':
         return None
     s.update(status=status, by=admin.id, decided=datetime.utcnow().isoformat(timespec='seconds'),

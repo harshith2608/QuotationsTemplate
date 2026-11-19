@@ -726,7 +726,9 @@ def _approval_info(project):
     from . import approvals
     s = approvals.state(project.id)
     if not s:
-        return None
+        if not approvals.unsent(project):
+            return None
+        s = {'status': 'unsent', 'user_id': project.created_by}
     who = db.session.get(User, s.get('user_id') or 0)
     by = db.session.get(User, s.get('by') or 0) if s.get('by') else None
     return {'status': s['status'], 'label': approvals.LABELS.get(s['status'], s['status']),
@@ -751,7 +753,8 @@ def approval_gate(project):
     s = approvals.state(project.id) or {}
     flash({'changes': 'Your admin asked for changes. Make them and save: it goes back for approval.',
            'rejected': 'Your admin rejected this quotation. Change it and save to send it for approval again.'}
-          .get(s.get('status'), 'Waiting for your admin\'s approval. You can send or download it once they approve.'),
+          .get(s.get('status'), 'Waiting for your admin\'s approval. You can send or download it once they approve.'
+               if s else 'Send it to your admin for approval first: you can send or download it once they approve.'),
           'warning')
     return redirect(url_for('projects.view_project', project_id=project.id))
 

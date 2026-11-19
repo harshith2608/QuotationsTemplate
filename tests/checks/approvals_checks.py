@@ -33,8 +33,29 @@ off_id = new_quote(staff, 'Approvals Off')
 ok('off by default: an employee\'s quotation opens as PDF', staff.get(f'/projects/{off_id}/pdf/customer').status_code == 200
    and 'quote-approval' not in staff.get(f'/projects/{off_id}').text)
 
+staff.post(f'/projects/{off_id}/share')
 with app.app_context():
+    old_tok = QuoteShare.query.filter_by(project_id=off_id, active=True).first().token
     approvals.set_enabled(True); db.session.commit()
+
+# made before approvals were on: employees can't send it until it's approved; the link already sent keeps working
+v = staff.get(f'/projects/{off_id}').text
+ok('older employee quotation: locked for the employee, with Send for approval', 'Not approved yet' in v
+   and 'Send for approval' in v and staff.get(f'/projects/{off_id}/pdf/customer').status_code == 302)
+ok('… its customer\'s link still works', 'being updated' not in cust.get(f'/q/{old_tok}').text)
+v = admin.get(f'/projects/{off_id}').text
+ok('… the admin can approve it from the quotation', f'/admin/approvals/{off_id}' in v
+   and admin.get(f'/projects/{off_id}/pdf/customer').status_code == 200)
+admin.post(f'/admin/approvals/{off_id}', data={'action': 'approve'})
+ok('… approved: the employee can download it', staff.get(f'/projects/{off_id}/pdf/customer').status_code == 200)
+with app.app_context():
+    from app.models import AppSetting
+    rows = json.loads(AppSetting.get(approvals.STATE_KEY)); rows.pop(str(off_id)); AppSetting.set(approvals.STATE_KEY, json.dumps(rows))
+    db.session.commit()
+staff.post(f'/projects/{off_id}/approval/submit')
+with app.app_context():
+    ok('… or the employee taps Send for approval (the admin is told)', approvals.state(off_id)['status'] == 'pending'
+       and Notification.query.filter(Notification.project_id == off_id).count() == 1)
 
 pid = new_quote(staff, 'Approvals Test')
 with app.app_context():

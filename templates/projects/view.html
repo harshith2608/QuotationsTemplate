@@ -136,7 +136,9 @@
 <div class="alert {{ 'alert-success' if approval.status == 'approved' else ('alert-warning' if approval.status == 'pending' else ('alert-danger' if approval.status == 'rejected' else 'alert-info')) }} py-2 small" id="quote-approval">
   <div class="d-flex flex-wrap align-items-center gap-2">
     <span class="badge {{ approval.badge }}">{{ approval.label }}</span>
-    {% if approval.status == 'pending' %}
+    {% if approval.status == 'unsent' %}
+      <span>{% if current_user.is_admin %}Made by {{ approval.who or 'an employee' }} before approvals were turned on. They can't send or download it until you approve it.{% else %}Send it to your admin for approval: you can send or download it once they approve.{% endif %}</span>
+    {% elif approval.status == 'pending' %}
       <span>{% if current_user.is_admin %}{{ approval.who or 'An employee' }} sent this quotation for your approval. It can't be sent or downloaded until you approve it.{% else %}Your admin will check it. You can send or download it once they approve.{% endif %}</span>
     {% elif approval.status == 'approved' %}
       <span>{% if approval.by %}Approved by {{ approval.by }}.{% endif %} Changing it sends it for approval again.</span>
@@ -144,13 +146,13 @@
       <span>{% if approval.by %}{{ approval.by }}{% else %}Your admin{% endif %} {{ 'asked for changes' if approval.status == 'changes' else 'rejected it' }}{% if approval.note %}: <strong>“{{ approval.note }}”</strong>{% else %}.{% endif %}</span>
     {% endif %}
   </div>
-  {% if approval.status == 'pending' and current_user.is_admin %}{{ quote_decision(project.id, request.path + '#quote-approval', 'q') }}{% endif %}
-  {% if approval.status in ('changes', 'rejected') and not current_user.is_admin %}
+  {% if approval.status in ('pending', 'unsent') and current_user.is_admin %}{{ quote_decision(project.id, request.path + '#quote-approval', 'q') }}{% endif %}
+  {% if approval.status in ('changes', 'rejected', 'unsent') and not current_user.is_admin %}
   <div class="d-flex flex-wrap gap-2 mt-2">
-    {% if can_edit %}<a href="{{ url_for('projects.edit_project', project_id=project.id) }}" class="btn btn-sm btn-warning fw-semibold"><i class="bi bi-pencil me-1"></i>Make the changes</a>{% endif %}
+    {% if can_edit and approval.status != 'unsent' %}<a href="{{ url_for('projects.edit_project', project_id=project.id) }}" class="btn btn-sm btn-warning fw-semibold"><i class="bi bi-pencil me-1"></i>Make the changes</a>{% endif %}
     <form method="POST" action="{{ url_for('projects.submit_for_approval', project_id=project.id) }}" class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-send me-1"></i>Send for approval again</button>
+      <button type="submit" class="btn btn-sm {{ 'btn-primary' if approval.status == 'unsent' else 'btn-outline-secondary' }}"><i class="bi bi-send me-1"></i>{{ 'Send for approval' if approval.status == 'unsent' else 'Send for approval again' }}</button>
     </form>
   </div>
   {% endif %}
