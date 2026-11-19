@@ -178,6 +178,18 @@
     <!-- Controls -->
     <div class="col-12 col-lg-7">
 
+      <div class="card shadow-sm border-0 mb-3" id="home-page">
+        <div class="card-header ki-card-header"><i class="bi bi-house me-2"></i>Home page</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">The page admins see first after signing in (and when tapping your logo).
+            Employees always start on Quotations.</p>
+          {% set home = saved.get('home_page') if saved is mapping else '' %}
+          <div class="d-flex flex-wrap gap-3">
+            <label class="form-check mb-0"><input class="form-check-input" type="radio" name="home_page" value="" {{ 'checked' if home != 'dashboard' }}> Quotations</label>
+            <label class="form-check mb-0"><input class="form-check-input" type="radio" name="home_page" value="dashboard" {{ 'checked' if home == 'dashboard' }}> Dashboard</label>
+          </div>
+        </div>
+      </div>
       <div class="card shadow-sm border-0 mb-3">
         <div class="card-header ki-card-header"><i class="bi bi-stars me-2"></i>Theme Presets</div>
         <div class="card-body">

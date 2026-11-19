@@ -13,7 +13,8 @@ def index():
     if marketing_enabled():
         return render_landing()
     if current_user.is_authenticated:
-        return redirect(url_for('projects.list_projects'))
+        from .auth import home_endpoint
+        return redirect(url_for(home_endpoint()))
     return current_app.login_manager.unauthorized()
 
 

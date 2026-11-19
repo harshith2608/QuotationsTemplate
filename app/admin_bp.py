@@ -1173,6 +1173,9 @@ def settings():
                 from .ops import PREFILLED_NAME_KEY
                 AppSetting.set(PREFILLED_NAME_KEY, '')
         elif tab == 'appearance':
+            if 'home_page' in request.form:          # where admins land after signing in
+                from .auth import HOME_KEY
+                AppSetting.set(HOME_KEY, 'dashboard' if request.form.get('home_page') == 'dashboard' else '')
             if request.form.get('reset_theme'):
                 for key in branding.THEME_KEYS:
                     AppSetting.set(branding.FIELDS[key][0], '')
@@ -1276,7 +1279,7 @@ def settings():
 
     saved_keys = ([branding.FIELDS[k][0] for k in branding.COMPANY_KEYS + branding.THEME_KEYS]
                   + EMAIL_KEYS + ['material_specs', 'terms_conditions', 'payment_terms', 'delivery_terms', 'important_notes',
-                                  'room_descriptions'])
+                                  'room_descriptions', 'home_page'])
     saved = AppSetting.get_many(saved_keys)
     from .pdf_utils import terms_text
     from . import layout as layout_mod
