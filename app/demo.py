@@ -157,13 +157,21 @@ SEEN_COOKIE = 'qr_seen'
 
 
 def count_site_visit(response):
-    """after_request hook (marketing deployment): count a browser's first visit to the website."""
+    """after_request hook (marketing deployment). The website's pages are kept by the CDN (marketing.cache_public_page),
+    so visits are counted by a script on the page instead: it posts /visit once per browser (see visit())."""
+    return response
+
+
+@demo_bp.route('/visit', methods=['POST'])
+def visit():
+    """A browser's first visit to the website (the page's script, so bots that don't run it aren't counted). Already
+    counted: answered without touching the database, so it stays asleep."""
     from .marketing import marketing_enabled
-    if (request.method == 'GET' and request.endpoint in SITE_PAGES and response.status_code == 200
-            and not request.cookies.get(SEEN_COOKIE) and marketing_enabled() and not _is_bot()):
-        if count('site_visitors'):         # only mark the browser once it has been counted (not before the update)
-            response.set_cookie(SEEN_COOKIE, '1', max_age=2 * 365 * 24 * 3600, httponly=True, samesite='Lax',
-                                secure=request.is_secure)
+    if not marketing_enabled() or request.cookies.get(SEEN_COOKIE) or _is_bot():
+        return '', 204
+    response = current_app.make_response(('', 204))
+    if count('site_visitors'):             # only mark the browser once it has been counted (not before the update)
+        response.set_cookie(SEEN_COOKIE, '1', max_age=2 * 365 * 24 * 3600, samesite='Lax', secure=request.is_secure)
     return response
 
 

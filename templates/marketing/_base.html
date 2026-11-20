@@ -601,6 +601,12 @@ footer nav { display: flex; gap: 1.2rem; }
   }
 })();
 </script>
+<script>
+/* Count this browser's first visit (the page itself is kept by the CDN, so the server can't count it): app/demo.py visit */
+if (!document.cookie.split('; ').some(c => c.startsWith('qr_seen='))) {
+  try { fetch('{{ url_for('demo.visit') }}', {method: 'POST', credentials: 'same-origin', keepalive: true}).catch(() => {}); } catch (e) {}
+}
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -145,6 +145,8 @@ def create_app(config_name='default'):
     from .demo import count_demo_use, count_site_visit
     app.after_request(count_demo_use)
     app.after_request(count_site_visit)
+    from .marketing import cache_public_page
+    app.after_request(cache_public_page)       # (registered last, so it runs first: before any cookie is added)
     from .plan import enforce_read_only
     app.before_request(enforce_read_only)
     from .activity import touch
@@ -162,6 +164,8 @@ def create_app(config_name='default'):
     # Public trial form: no login or session involved; protected by a honeypot and a rate limit instead
     from .marketing import trial_request, trial_request_after
     csrf.exempt(trial_request)
+    from .demo import visit as site_visit
+    csrf.exempt(site_visit)                     # a count only (the page's script)
     csrf.exempt(trial_request_after)            # (its signed link is the check)
 
     @app.template_global()
