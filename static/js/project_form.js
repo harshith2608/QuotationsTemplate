@@ -333,14 +333,16 @@ function applySize(prefix, unit, qtyEl) {
   const count = cleanCount(document.getElementById(prefix + '_cnt')?.value, unit);
   const sized = !!mode && length > 0 && (mode === 'length' || width > 0);
   const qty = sized ? qtyFromSize(unit, length, width, count) : null;
-  // No's on the rate (area lines): the measured area is shown; No's multiplies the rate (qty keeps it, for the amount)
+  // No's on the rate (area lines): here the calculated area (measured × No's, what the amount is on); the PDF, page,
+  // link and WhatsApp show the measured area at the rate × No's
   const onRate = NOS_ON_RATE && mode === 'area' && count !== 1;
-  const shown = sized && onRate ? qtyFromSize(unit, length, width, 1) : qty;
+  const measured = sized && onRate ? qtyFromSize(unit, length, width, 1) : qty;
   const out = document.getElementById(prefix + '_sizeqty'), hint = document.getElementById(prefix + '_sizehint');
-  if (out) out.textContent = sized ? `= ${shown.toLocaleString('en-IN')} ${unit}` + (onRate ? `, rate × ${count}` : '') : '';
+  if (out) out.textContent = sized ? `= ${qty.toLocaleString('en-IN')} ${unit}`
+    + (onRate ? ` (${measured.toLocaleString('en-IN')} × ${count}; the PDF shows ${measured.toLocaleString('en-IN')} ${unit})` : '') : '';
   if (hint) hint.classList.toggle('d-none', sized);
   if (qtyEl && unit !== 'lump sum') {
-    if (sized) qtyEl.value = shown;
+    if (sized) qtyEl.value = qty;
     qtyEl.readOnly = sized;
     qtyEl.classList.toggle('bg-light', sized);
   }
