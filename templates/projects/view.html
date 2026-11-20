@@ -407,7 +407,7 @@
               <span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }} d-block mb-1">{{ row.label }}</span>
               <span class="text-muted small">{{ row.area|area }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (row.rate|rate)|inr(0) }}{{ units.rate_label() }}</span></span>
             </div>
-            <span class="fw-semibold ms-3 text-nowrap ki-rate">&#8377;{{ (row.subtotal)|inr }}</span>
+            <span class="fw-semibold ms-3 text-nowrap ki-rate ki-line-amount">&#8377;{{ (row.subtotal)|inr }}</span>
           </div>
           {% endfor %}
           {% if fixed_total %}
@@ -450,7 +450,7 @@
               <th>Material &amp; Work</th>
               <th class="text-end">Area ({{ units.area_label() }})</th>
               <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;{{ units.rate_label() }})</th>
-              <th class="text-end ki-rate">Amount (&#8377;)</th>
+              <th class="text-end ki-rate ki-line-amount">Amount (&#8377;)</th>
             </tr>
           </thead>
           <tbody>
@@ -459,7 +459,7 @@
               <td><span class="badge ki-badge-material ki-badge-{{ row.wood_type|lower|replace(' ', '-') }}">{{ row.label }}</span></td>
               <td class="text-end">{{ (units.area_value(row.area))|inr }}</td>
               <td class="text-end ki-rate ki-unit-rate">{{ (row.rate|rate)|inr(0) }}</td>
-              <td class="text-end fw-semibold ki-rate">{{ (row.subtotal)|inr }}</td>
+              <td class="text-end fw-semibold ki-rate ki-line-amount">{{ (row.subtotal)|inr }}</td>
             </tr>
             {% endfor %}
             {% if fixed_total %}
@@ -564,7 +564,7 @@
           <table class="table table-sm table-bordered align-middle mb-0">
             <thead class="table-light">
               <tr><th>Item</th><th class="text-center">Qty</th><th class="text-center">Unit</th>
-                  <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;)</th><th class="text-end ki-rate">Amount (&#8377;)</th></tr>
+                  <th class="text-end ki-rate ki-unit-rate">Rate (&#8377;)</th><th class="text-end ki-rate ki-line-amount">Amount (&#8377;)</th></tr>
             </thead>
             <tbody>
               {% for item in room.item_list %}
@@ -575,7 +575,7 @@
                 <td class="text-center text-nowrap">{{ '%g' % item.shown_quantity if item.quantity else '—' }}</td>
                 <td class="text-center text-nowrap">{{ item.unit_text if item.is_boq else 'Nos.' }}</td>
                 <td class="text-end text-nowrap ki-rate ki-unit-rate">{% if item.price_to_follow %}—{% else %}{{ (item.shown_rate if item.is_boq else (item.unit_price or 0))|inr(0) }}{% endif %}</td>
-                <td class="text-end fw-semibold text-success text-nowrap ki-rate">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
+                <td class="text-end fw-semibold text-success text-nowrap ki-rate ki-line-amount">{% if item.price_to_follow %}<span class="text-warning-emphasis small">price to follow</span>{% elif not item.quantity %}<span class="text-muted small fw-normal">rate only</span>{% else %}{{ (amount)|inr }}{% endif %}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -597,7 +597,7 @@
                 <th class="text-center d-none d-md-table-cell">Width</th>
                 <th class="text-center">Area ({{ units.area_label() }})</th>
                 <th class="text-center">Material &amp; Work</th>
-                <th class="text-end ki-rate">Subtotal (&#8377;)</th>
+                <th class="text-end ki-rate ki-line-amount">Subtotal (&#8377;)</th>
               </tr>
             </thead>
             <tbody>
@@ -616,7 +616,7 @@
                   {% else %}<span class="badge ki-badge-fitting">Fitting</span>
                   <div class="small text-muted mt-1 text-nowrap">{{ '%g' % item.quantity }}<span class="ki-rate ki-unit-rate"> &times; &#8377;{{ (item.unit_price)|inr(0) }}</span></div>{% endif %}
                 </td>
-                <td class="text-end fw-semibold text-success ki-rate">&#8377;{{ (item_subtotal)|inr }}</td>
+                <td class="text-end fw-semibold text-success ki-rate ki-line-amount">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>
               {% else %}
               <tr>
@@ -634,7 +634,7 @@
                         style="{% if item.work_type == 'Box Work' %}background:#7c3aed{% endif %}">{{ item.work_type }}</span>
                   {% endif %}
                 </td>
-                <td class="text-end fw-semibold text-success ki-rate">&#8377;{{ (item_subtotal)|inr }}</td>
+                <td class="text-end fw-semibold text-success ki-rate ki-line-amount">&#8377;{{ (item_subtotal)|inr }}</td>
               </tr>
               {% endif %}
               {% endfor %}

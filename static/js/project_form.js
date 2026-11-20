@@ -333,14 +333,16 @@ function applySize(prefix, unit, qtyEl) {
   const count = cleanCount(document.getElementById(prefix + '_cnt')?.value, unit);
   const sized = !!mode && length > 0 && (mode === 'length' || width > 0);
   const qty = sized ? qtyFromSize(unit, length, width, count) : null;
-  // No's on the rate (area lines): the measured area is shown; No's multiplies the rate (qty keeps it, for the amount)
+  // No's on the rate (area lines): here the calculated area (measured × No's, what the amount is on); the PDF, page,
+  // link and WhatsApp show the measured area at the rate × No's
   const onRate = NOS_ON_RATE && mode === 'area' && count !== 1;
-  const shown = sized && onRate ? qtyFromSize(unit, length, width, 1) : qty;
+  const measured = sized && onRate ? qtyFromSize(unit, length, width, 1) : qty;
   const out = document.getElementById(prefix + '_sizeqty'), hint = document.getElementById(prefix + '_sizehint');
-  if (out) out.textContent = sized ? `= ${shown.toLocaleString('en-IN')} ${unit}` + (onRate ? `, rate × ${count}` : '') : '';
+  if (out) out.textContent = sized ? `= ${qty.toLocaleString('en-IN')} ${unit}`
+    + (onRate ? ` (${measured.toLocaleString('en-IN')} × ${count}; the PDF shows ${measured.toLocaleString('en-IN')} ${unit})` : '') : '';
   if (hint) hint.classList.toggle('d-none', sized);
   if (qtyEl && unit !== 'lump sum') {
-    if (sized) qtyEl.value = shown;
+    if (sized) qtyEl.value = qty;
     qtyEl.readOnly = sized;
     qtyEl.classList.toggle('bg-light', sized);
   }
@@ -1327,7 +1329,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
-    <td class="text-center ki-rate-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
+    <td class="text-center ki-rate-cell ki-line-amount-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
         <i class="bi bi-x-lg"></i>
@@ -1460,7 +1462,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-fitting">Fitting</span></td>
-    <td class="text-center ki-rate-cell" data-label="Amount">
+    <td class="text-center ki-rate-cell ki-line-amount-cell" data-label="Amount">
       <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
     </td>
     <td class="text-center">
@@ -1958,7 +1960,7 @@ function renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal) {
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${escHtml(label)}</span>
         </span>
         <span class="text-muted small">${showArea(area)} ${escHtml(UNITS.areaLabel)}</span>
-        <span class="summary-wood-value ki-rate">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+        <span class="summary-wood-value ki-rate ki-line-amount">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
   if (fixedTotal > 0) {
