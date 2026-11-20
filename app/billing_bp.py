@@ -274,10 +274,6 @@ def revision(project_id, number):
     project = _project_or_403(project_id)
     if not billing.ready():
         abort(404)
-    from .projects import approval_gate
-    held = approval_gate(project)
-    if held:
-        return held
     rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
     prev = QuoteRevision.query.filter_by(project_id=project.id, number=number - 1).first()
     snap = json.loads(rev.snapshot)
@@ -301,15 +297,11 @@ def revision_pdf(project_id, number):
     project = _project_or_403(project_id)
     if not billing.ready():
         abort(404)
-    from .projects import approval_gate
-    held = approval_gate(project)
-    if held:
-        return held
     rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
     buf = generate_customer_pdf(project, revision=rev)
     name = ''.join(ch if ch.isalnum() else '_' for ch in (json.loads(rev.snapshot)['customer']['name'] or 'Quotation'))
-    return send_file(buf, mimetype='application/pdf', as_attachment=request.args.get('download') == '1',
-                     download_name=f'Quotation_{name}_Rev{rev.number}.pdf')
+    from .projects import _send_quote_pdf
+    return _send_quote_pdf(project, buf, f'Quotation_{name}_Rev{rev.number}.pdf')
 
 
 @billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/compare')
@@ -346,10 +338,6 @@ def restore_revision(project_id, number):
     project = _project_or_403(project_id)
     if not billing.ready():
         abort(404)
-    from .projects import approval_gate
-    held = approval_gate(project)
-    if held:
-        return held
     rev = QuoteRevision.query.filter_by(project_id=project.id, number=number).first_or_404()
     back = redirect(url_for('billing.revision', project_id=project.id, number=number))
     blocker = billing.restore_blocker(project)
@@ -382,6 +370,8 @@ def restore_revision(project_id, number):
     db.session.commit()
     new = billing.record_revision(project, current_user, restored_from=rev.number)
     db.session.commit()
+    from .projects import _approval_changed
+    _approval_changed(project)
     if new and new.number > latest:
         flash(f'Restored revision {number}: it is now the current quotation, saved as revision {new.number}. '
               'If you shared an approval link, your customer will see this version.', 'success')

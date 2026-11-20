@@ -546,7 +546,7 @@ def create_project():
         db.session.commit()
         billing.record_revision(project, current_user)       # R1
         db.session.commit()
-        _send_for_approval(project)
+        _approval_changed(project)
 
         flash('Quotation created successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
@@ -737,24 +737,43 @@ def _approval_info(project):
             'held': approvals.blocks(project)}
 
 
+def _approval_changed(project):
+    """An employee saved it: it needs approval (again) before it's downloaded or shared (app/approvals.py)."""
+    from . import approvals
+    approvals.changed(project, current_user)
+    db.session.commit()
+
+
 def _send_for_approval(project):
-    """An employee's quotation, saved: it waits for the admin (app/approvals.py, with approvals on)."""
+    """The employee taps Send for approval: it waits for the admin (app/approvals.py, with approvals on)."""
     from . import approvals
     if approvals.submit(project, current_user):
         db.session.commit()
-        flash('Sent to your admin for approval. You can send or download it once they approve.', 'info')
+        flash('Sent to your admin for approval. You can download it and share it with the customer once they approve.', 'info')
+
+
+def _send_quote_pdf(project, buf, filename):
+    """The quotation's PDF: inline to look at (?download=1 to save). Before the admin approves an employee's quotation
+    (app/approvals.py) it opens marked "Draft – not approved" on every page, and can't be downloaded."""
+    from . import approvals
+    if approvals.blocks(project):
+        return send_file(approvals.mark_draft(buf), as_attachment=False, mimetype='application/pdf',
+                         download_name='DRAFT_' + filename)
+    return send_file(buf, as_attachment=request.args.get('download') == '1', download_name=filename,
+                     mimetype='application/pdf')
 
 
 def approval_gate(project):
-    """A redirect back to the quotation while it waits for the admin (for sending / downloading), else None."""
+    """A redirect back to the quotation while it waits for the admin (for sharing it with the customer), else None."""
     from . import approvals
     if not approvals.blocks(project):
         return None
     s = approvals.state(project.id) or {}
-    flash({'changes': 'Your admin asked for changes. Make them and save: it goes back for approval.',
-           'rejected': 'Your admin rejected this quotation. Change it and save to send it for approval again.'}
-          .get(s.get('status'), 'Waiting for your admin\'s approval. You can send or download it once they approve.'
-               if s else 'Send it to your admin for approval first: you can send or download it once they approve.'),
+    flash({'changes': 'Your admin asked for changes. Make them, then tap Send for approval again.',
+           'rejected': 'Your admin rejected this quotation. Change it, then tap Send for approval again.',
+           'pending': 'Waiting for your admin\'s approval. You can download it and share it with the customer once they approve.'}
+          .get(s.get('status'), 'Tap Send for approval first: you can download it and share it with the customer once '
+                                'your admin approves.'),
           'warning')
     return redirect(url_for('projects.view_project', project_id=project.id))
 
@@ -762,7 +781,7 @@ def approval_gate(project):
 @projects_bp.route('/projects/<int:project_id>/approval/submit', methods=['POST'])
 @login_required
 def submit_for_approval(project_id):
-    """Send for approval again (after changes were asked or it was rejected), without changing it."""
+    """Send for approval (when it's ready, or again after changes were asked or it was rejected)."""
     project = Project.query.get_or_404(project_id)
     if not current_user.is_admin and not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
         abort(403)
@@ -1071,7 +1090,7 @@ def edit_project(project_id):
         db.session.commit()
         if rev and rev.number > 1 and not was_draft:
             flash(f'Saved as revision {rev.number}.', 'info')
-        _send_for_approval(project)
+        _approval_changed(project)
 
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
@@ -1383,9 +1402,6 @@ def download_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
-    held = approval_gate(project)
-    if held:
-        return held
     from .pdf_utils import generate_customer_pdf, generate_pdf
     from . import layout
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
@@ -1400,9 +1416,7 @@ def download_pdf(project_id):
     filename = pdf_filename(project)
     # ?download=1  → Content-Disposition: attachment  (force save to device)
     # default      → Content-Disposition: inline      (open in viewer / share sheet)
-    as_attachment = request.args.get('download') == '1'
-    return send_file(pdf_buffer, as_attachment=as_attachment,
-                     download_name=filename, mimetype='application/pdf')
+    return _send_quote_pdf(project, pdf_buffer, filename)
 
 
 @projects_bp.route('/projects/<int:project_id>/pages', methods=['POST'])
@@ -1485,9 +1499,6 @@ def choose_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
-    held = approval_gate(project)
-    if held:
-        return held
     if pdf_choices.enabled():
         pdf_choices.save(project.id, request.form)
         db.session.commit()
@@ -1523,9 +1534,6 @@ def download_customer_pdf(project_id):
     if not current_user.is_admin and project.created_by != current_user.id:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
-    held = approval_gate(project)
-    if held:
-        return held
     from .pdf_utils import generate_customer_pdf
     pay_settings = AppSetting.get_many(['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code'])
     payments_list = Payment.query.filter_by(project_id=project_id).all()
@@ -1533,9 +1541,7 @@ def download_customer_pdf(project_id):
     pdf_buffer = generate_customer_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
     from .pdf_utils import pdf_filename
     filename = pdf_filename(project)
-    as_attachment = request.args.get('download') == '1'
-    return send_file(pdf_buffer, as_attachment=as_attachment,
-                     download_name=filename, mimetype='application/pdf')
+    return _send_quote_pdf(project, pdf_buffer, filename)
 
 
 @projects_bp.route('/projects/<int:project_id>/whatsapp')

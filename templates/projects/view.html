@@ -82,11 +82,7 @@
     </form>
     {% endif %}
     {% endif %}
-    {% if approval and approval.held %}
-    <!-- Waiting for the admin (app/approvals.py): no PDF, email, link or WhatsApp until approved -->
-    <span class="btn btn-outline-secondary btn-sm disabled" title="It can be sent or downloaded once your admin approves it">
-      <i class="bi bi-lock me-1"></i>PDF &amp; sending after approval</span>
-    {% else %}
+    {# Before the admin approves an employee's quotation (app/approvals.py) the PDFs open marked "Draft – not approved" #}
     {% if single_pdf and pdf_pick %}
     <!-- Priced by item, choosing what it shows: the tick-boxes first (#pdfPickModal), then the PDF -->
     <button type="button" class="btn btn-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#pdfPickModal">
@@ -116,12 +112,14 @@
     </a>
     {% endif %}
     {% endif %}
-    {% if q2c.email_ready and project.status != 'draft' %}
+    {% if approval and approval.held %}
+    <span class="btn btn-outline-secondary btn-sm disabled" title="Download and share once your admin approves it">
+      <i class="bi bi-lock me-1"></i>Download &amp; share after approval</span>
+    {% elif q2c.email_ready and project.status != 'draft' %}
     <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#emailQuoteModal">
       <i class="bi bi-envelope me-1"></i>Email
     </button>
     {% endif %}
-    {% endif %}{# approval held #}
     {% if current_user.is_admin %}
     <button type="button" class="btn btn-danger btn-sm fw-semibold"
             data-bs-toggle="modal" data-bs-target="#deleteModal">
@@ -137,11 +135,11 @@
   <div class="d-flex flex-wrap align-items-center gap-2">
     <span class="badge {{ approval.badge }}">{{ approval.label }}</span>
     {% if approval.status == 'unsent' %}
-      <span>{% if current_user.is_admin %}Made by {{ approval.who or 'an employee' }} before approvals were turned on. They can't send or download it until you approve it.{% else %}Send it to your admin for approval: you can send or download it once they approve.{% endif %}</span>
+      <span>{% if current_user.is_admin %}{{ approval.who or 'An employee' }} hasn't sent this for approval yet. They can't download it or share it with the customer until you approve it.{% else %}You can look at the PDF (marked Draft). When it's ready, tap Send for approval: you can download it and share it with the customer once your admin approves.{% endif %}</span>
     {% elif approval.status == 'pending' %}
-      <span>{% if current_user.is_admin %}{{ approval.who or 'An employee' }} sent this quotation for your approval. It can't be sent or downloaded until you approve it.{% else %}Your admin will check it. You can send or download it once they approve.{% endif %}</span>
+      <span>{% if current_user.is_admin %}{{ approval.who or 'An employee' }} sent this quotation for your approval. They can't download it or share it with the customer until you approve it.{% else %}Your admin will check it. You can download it and share it with the customer once they approve.{% endif %}</span>
     {% elif approval.status == 'approved' %}
-      <span>{% if approval.by %}Approved by {{ approval.by }}.{% endif %} Changing it sends it for approval again.</span>
+      <span>{% if approval.by %}Approved by {{ approval.by }}.{% endif %} If an employee changes it, it needs approval again before it's shared.</span>
     {% else %}
       <span>{% if approval.by %}{{ approval.by }}{% else %}Your admin{% endif %} {{ 'asked for changes' if approval.status == 'changes' else 'rejected it' }}{% if approval.note %}: <strong>“{{ approval.note }}”</strong>{% else %}.{% endif %}</span>
     {% endif %}
@@ -921,7 +919,7 @@
   <div class="card-header ki-card-header"><i class="bi bi-hand-thumbs-up me-2"></i>Online approval</div>
   <div class="card-body">
     {% if approval and approval.held %}
-    <p class="small text-muted mb-0"><i class="bi bi-lock me-1"></i>The customer's link, WhatsApp and email open once your admin approves this quotation.</p>
+    <p class="small text-muted mb-0"><i class="bi bi-lock me-1"></i>The customer's link, WhatsApp and email open once your admin approves this quotation.{% if approval.status in ('unsent', 'changes', 'rejected') %} Tap <strong>Send for approval</strong> above when it's ready.{% endif %}</p>
     {% else %}
     {% if sh and sh.latest %}
       {% set l = sh.latest %}
