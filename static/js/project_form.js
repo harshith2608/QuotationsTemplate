@@ -1329,7 +1329,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
-    <td class="text-center ki-rate-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
+    <td class="text-center ki-rate-cell ki-line-amount-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
       <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
         <i class="bi bi-x-lg"></i>
@@ -1462,7 +1462,7 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       </div>
     </td>
     <td class="text-center"><span class="badge ki-badge-fitting">Fitting</span></td>
-    <td class="text-center ki-rate-cell" data-label="Amount">
+    <td class="text-center ki-rate-cell ki-line-amount-cell" data-label="Amount">
       <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
     </td>
     <td class="text-center">
@@ -1960,7 +1960,7 @@ function renderSummary(comboAreas, grandTotal, fixedTotal, boqTotal) {
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${escHtml(label)}</span>
         </span>
         <span class="text-muted small">${showArea(area)} ${escHtml(UNITS.areaLabel)}</span>
-        <span class="summary-wood-value ki-rate">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+        <span class="summary-wood-value ki-rate ki-line-amount">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
   if (fixedTotal > 0) {

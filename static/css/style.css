@@ -769,6 +769,8 @@ body > main { flex: 1 0 auto; }
    Show rates (ki-rates-peek) shows them on this page */
 .ki-hide-unit-rates .ki-unit-rate { display: none !important; }
 .ki-hide-unit-rates .ki-unit-rate-cell > * { visibility: hidden !important; }
+.ki-hide-unit-rates .ki-line-amount { display: none !important; }              /* each line's amount too (totals stay) */
+.ki-hide-unit-rates .ki-line-amount-cell > * { visibility: hidden !important; }
 .ki-rates-peek-btn .ki-when-shown { display: none; }
 body:not(.ki-hide-unit-rates) .ki-rates-peek-btn .ki-when-hidden { display: none; }
 body:not(.ki-hide-unit-rates) .ki-rates-peek-btn .ki-when-shown { display: inline; }

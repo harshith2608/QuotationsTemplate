@@ -92,7 +92,7 @@ ok('off by default: no hiding class', 'ki-hide-unit-rates' not in admin.get(f'/p
 admin.post('/admin/settings', data={'section': 'pricing', 'pricing_mode': mode, 'hide_rates_on_screen': '1'})
 v = admin.get(f'/projects/{pid}').text
 ok('on: the admin\'s quotation page hides the rates, with Show rates', 'ki-hide-unit-rates' in v and 'Show rates' in v
-   and 'ki-unit-rate' in v)
+   and 'ki-unit-rate' in v and 'ki-line-amount' in v)
 ok('... only the rates: amounts are not marked to hide', 'ki-no-rates' not in v)
 e = admin.get(f'/projects/{pid}/edit').text
 ok('the form hides them too (rates list marked)', 'ki-hide-unit-rates' in e and 'ki-unit-rate' in e)
