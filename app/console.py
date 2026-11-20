@@ -2944,20 +2944,29 @@ def _paid_plan(slug):
 
 
 def _go_pay(slug, plan, lead, token, company=''):
-    """Send a business buying on the website to Razorpay for its plan (a payment link, reused if they come back)."""
-    from . import emails, subscription
+    """Razorpay Checkout on the page for a business buying on the website, with the name, WhatsApp number and email
+    from their request filled in (a payment link can't fill them in: Razorpay asks for them again there)."""
+    from . import subscription
+    from .marketing import normalise_phone
+    from .plan import short
     # Every plan, monthly too, is one payment here (a month paid once); autopay is turned on later in the app
+    business = company or lead.get('company_name') or ''
     try:
-        row = subscription.open_link(slug, plan) or subscription.create_payment_link(
-            slug, plan, company or lead.get('company_name') or '', lead.get('phone') or '', lead.get('email') or '',
-            paid_by='website', payer_name=lead.get('name') or '',
-            callback_url=f'{emails.base_url()}{url_for("console.start_paid", t=token)}')
+        row = subscription.create_order(slug, plan, business, paid_by='website', email=lead.get('email') or '',
+                                        payer_name=lead.get('name') or '')
     except subscription.PaymentError as exc:
-        current_app.logger.warning('Website plan payment link failed for %s: %s', slug, exc)
+        current_app.logger.warning('Website plan order failed for %s: %s', slug, exc)
         audit('website_pay_failed', slug, str(exc)[:200])
         return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), new=True,
                                plan=plan, pay_failed=True)
-    return redirect(row['link_url'])
+    phone = normalise_phone(lead.get('phone') or '')
+    checkout = {'key_id': subscription._env('PLATFORM_RAZORPAY_KEY_ID'), 'order_id': row['order_id'],
+                'amount': row['amount_paise'], 'description': f'QuoteRoom: {short(plan)}'[:255],
+                'prefill': {k: v for k, v in (('name', (lead.get('name') or business)[:60]), ('email', lead.get('email') or ''),
+                                              ('contact', '+' + phone if phone else '')) if v}}
+    return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), token=token,
+                           plan=plan, price=row['amount_paise'] // 100,
+                           pay_checkout=checkout)
 
 
 @console_bp.route('/start/pay', methods=['POST'])
@@ -3000,6 +3009,29 @@ def start_subscribed():
     return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), token=token,
                            plan=sub['plan'], price=subscription.prices()[sub['plan']], paid=sub['plan'], just_paid=True,
                            autopay_pending=amount is None)
+
+
+@console_bp.route('/start/checkout-paid', methods=['POST'])
+def start_checkout_paid():
+    """Public: Razorpay Checkout on /start says the plan is paid. A valid signature adds the plan now (the webhook does
+    the same if this never arrives; whichever comes first counts, once)."""
+    from . import signup, subscription
+    token = request.form.get('t', '')
+    lead_id = signup.read_token(token)
+    slug = _signup(lead_id, load_lead(lead_id)) if lead_id else None
+    order_id, payment_id = request.form.get('razorpay_order_id', ''), request.form.get('razorpay_payment_id', '')
+    row = subscription.get_by_order(order_id)
+    if not slug or not row or row['slug'] != slug or not subscription.verify_checkout(
+            order_id, payment_id, request.form.get('razorpay_signature', '')):
+        return render_template('console/start.html', problem='We couldn\'t match this payment to your app. If you were '
+                               'charged, message us on WhatsApp and we\'ll sort it out straight away.', site=_site_url()), 404
+    try:
+        subscription.settle(row, payment_id, 'website')
+    except Exception:
+        current_app.logger.exception('Recording the website payment failed (the webhook will retry)')
+    audit('website_paid', slug, row['plan'])
+    return render_template('console/start.html', ready=slug, base=tenancy.base_domain(), site=_site_url(), token=token,
+                           plan=row['plan'], price=row['amount_paise'] // 100, paid=row['plan'], just_paid=True)
 
 
 @console_bp.route('/start/paid')
