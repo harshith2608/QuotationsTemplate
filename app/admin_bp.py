@@ -1312,6 +1312,8 @@ def settings():
                            single_pdf=layout.single_pdf(), choosing_pdf=layout.choosing(),
                            show_work_types=AppSetting.get('customer_work_types') == '1',
                            pdf_look=pdf_look.choices() if tab == 'documents' else None,
+                           logo_mark=pdf_look.logo_mark() if tab == 'documents' else False,
+                           approvals_on=__import__('app.approvals', fromlist=['enabled']).enabled() if tab == 'documents' else False,
                            preview_pid=db.session.query(db.func.max(Project.id)).scalar() if tab == 'documents' else None,
                            presentation=_presentation_texts() if tab == 'documents' else None,
                            section_variables=layout.VARIABLES,
