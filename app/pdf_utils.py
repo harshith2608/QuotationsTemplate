@@ -82,14 +82,21 @@ def _money(value, dp=2):
     return inr(value, dp)
 
 
-def _build(doc, elements):
+def _build(doc, elements, quote=None):
     """Build the PDF, adding the demo notice and watermark on every page when DEMO_MODE is on, in black & white when the
-    business chose it (app/pdf_look.py)."""
+    business chose it (app/pdf_look.py). A quotation's (`quote`: its project) gets the logo watermark when the business
+    turned it on, unless it's an employee's still waiting for approval (that one is marked Draft instead)."""
     from .demo import demo_enabled, demo_notice_flowable, watermark_canvas_class
     from . import pdf_look
     if demo_enabled():
         elements = [demo_notice_flowable(doc.width)] + list(elements)
-    canvas = pdf_look.canvas_class(watermark_canvas_class() if demo_enabled() else None)
+    base = watermark_canvas_class() if demo_enabled() else None
+    if quote is not None and pdf_look.logo_mark():
+        from . import approvals
+        image = None if approvals.blocks(quote) else pdf_look.logo_mark_image()
+        if image is not None:
+            base = pdf_look.logo_canvas_class(image, base)
+    canvas = pdf_look.canvas_class(base)
     if canvas:
         doc.build(elements, canvasmaker=canvas)
     else:
@@ -850,7 +857,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ] + span_cmds_pay))
             elements.append(pay_table)
 
-    _build(doc, elements)
+    _build(doc, elements, quote=project)
     buffer.seek(0)
     return buffer
 
@@ -1170,7 +1177,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
 
     if closing:
         elements += _closing_page(page_width, palette, styles)
-    _build(doc, elements)
+    _build(doc, elements, quote=project)
     buffer.seek(0)
     from . import photo_pages                    # its own full-page pictures in front (cover, About us, gallery)
     return photo_pages.with_pages(project, buffer)

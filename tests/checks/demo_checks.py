@@ -148,27 +148,51 @@ app2 = make(DEMO_MODE='1')
 ok('no CRON_SECRET → reset disabled', app2.test_client().get('/demo/reset', headers={'Authorization': 'Bearer '}).status_code == 404)
 
 
-# Website visitors (marketing deployment): a browser's first visit counts once; bots and app pages don't
+# Website visitors (marketing deployment): the page's script posts /visit; a browser's first visit counts once, bots
+# don't; the pages themselves are kept by the CDN and don't count (so the database can sleep)
 appm = make(DEMO_MODE='1', MARKETING_SITE='1')
 with appm.app_context():
     DemoStat.query.delete(); db.session.commit()
 b1, b2 = appm.test_client(), appm.test_client()
-r = b1.get('/', headers=UA)
-b1.get('/tutorials', headers=UA); b1.get('/', headers=UA)           # same browser again
-b2.get('/privacy', headers=UA)                                        # another browser, another page
-appm.test_client().get('/', headers={'User-Agent': 'Googlebot/2.1'})  # a bot
-appm.test_client().get('/', headers={'User-Agent': 'facebookexternalhit/1.1'})
+page = b1.get('/', headers=UA)
+ok('the home page has the counting script', '/visit' in page.text and not page.headers.get('Set-Cookie'))
+r = b1.post('/visit', headers=UA)
+b1.get('/tutorials', headers=UA); b1.post('/visit', headers=UA); b1.post('/visit', headers=UA)   # same browser again
+b2.get('/privacy', headers=UA); b2.post('/visit', headers=UA)                                     # another browser
+appm.test_client().post('/visit', headers={'User-Agent': 'Googlebot/2.1'})                         # bots
+appm.test_client().post('/visit', headers={'User-Agent': 'facebookexternalhit/1.1'})
 with appm.app_context():
     st = DemoStat.query.one()
     ok(f'site visitors: 2 browsers counted once each, no bots ({st.site_visitors}); cookie has no ID',
-       st.site_visitors == 2 and 'qr_seen=1' in r.headers.get('Set-Cookie', '') and 'HttpOnly' in r.headers.get('Set-Cookie', ''))
+       st.site_visitors == 2 and r.status_code == 204 and 'qr_seen=1' in r.headers.get('Set-Cookie', ''))
 ok('privacy policy explains the site\'s own counting cookie', 'qr_seen' in b1.get('/privacy', headers=UA).text)
+
+# The database sleeps: public pages are kept by the CDN; unknown addresses and counted browsers don't read it
+from sqlalchemy import event as _event
+_q = [0]
+with appm.app_context():
+    _event.listen(db.engine, 'before_cursor_execute', lambda *a, **k: _q.__setitem__(0, _q[0] + 1))
+fresh = appm.test_client()
+for u in ('/', '/privacy', '/terms', '/free-trial?utm_source=facebook'):
+    cc = fresh.get(u, headers=UA).headers.get('Cache-Control', '')
+    ok(f'{u}: kept by the CDN for an hour', 's-maxage=3600' in cc and 'public' in cc)
+_q[0] = 0
+nf = fresh.get('/wp-login.php', headers=UA)
+ok('a bot\'s unknown address: plain 404, no database, kept by the CDN', nf.status_code == 404 and _q[0] == 0
+   and 's-maxage' in nf.headers.get('Cache-Control', ''))
+_q[0] = 0
+ok('a counted browser\'s /visit doesn\'t touch the database', b1.post('/visit', headers=UA).status_code == 204 and _q[0] == 0)
+signed = appm.test_client()
+with signed.session_transaction() as sess:
+    sess['_user_id'] = '1'; sess['_fresh'] = True
+ok('a signed-in page isn\'t kept by the CDN', 's-maxage' not in signed.get('/', headers=UA).headers.get('Cache-Control', ''))
+ok('app pages aren\'t kept either', 's-maxage' not in fresh.get('/login', headers=UA).headers.get('Cache-Control', ''))
 with appm.app_context():
     db.session.execute(__import__('sqlalchemy').text('ALTER TABLE demo_stats DROP COLUMN site_visitors')); db.session.commit()
 b3 = appm.test_client()
-r = b3.get('/', headers=UA)
-ok('before the update that adds site visitors: site works, no cookie set (counted later)', r.status_code == 200
-   and 'qr_seen' not in r.headers.get('Set-Cookie', ''))
+r = b3.post('/visit', headers=UA)
+ok('before the update that adds site visitors: site works, no cookie set (counted later)',
+   b3.get('/', headers=UA).status_code == 200 and r.status_code == 204 and 'qr_seen' not in r.headers.get('Set-Cookie', ''))
 
 
 # Before the database update adds demo_stats: the demo works, nothing is counted

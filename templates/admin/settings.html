@@ -468,6 +468,14 @@
       </div>
       {% endfor %}
       {% endfor %}
+      <div class="fw-semibold mb-1 mt-3">Watermark</div>
+      <div class="form-check form-switch">
+        <input type="hidden" name="pdf_logo_mark" value="0">
+        <input class="form-check-input" type="checkbox" role="switch" name="pdf_logo_mark" id="pdf_logo_mark" value="1" {{ 'checked' if logo_mark }}>
+        <label class="form-check-label" for="pdf_logo_mark">Your <strong>logo as a watermark</strong>, faint, in the middle of every page</label>
+        <div class="form-text">On your quotation PDFs (not invoices), using the logo from Company.{% if approvals_on %} An
+          employee's quotation gets it once you approve it; before that it shows "Draft – not approved".{% endif %}</div>
+      </div>
       <div class="form-text mt-2">For your quotations, revisions and invoices. Black &amp; white prints and photocopies
         cleanly; your logo and photos stay as they are. Your app keeps its own colours and font.
         {% if preview_pid %}<a href="{{ url_for('projects.download_customer_pdf', project_id=preview_pid) }}" target="_blank" rel="noopener">See a quotation PDF

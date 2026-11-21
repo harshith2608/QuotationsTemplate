@@ -349,6 +349,14 @@ body {
   border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
 }
+/* up / remove / down beside each line in the quotation form */
+.ki-line-actions { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
+.ki-line-actions .ki-move { padding: 0; width: 28px; height: 18px; line-height: 1; font-size: 0.8rem;
+  color: var(--ki-muted, #6c757d); text-decoration: none; }
+.ki-line-actions .ki-move:hover, .ki-line-actions .ki-move:focus { color: var(--ki-primary); }
+.item-table tbody tr.item-row:first-child .ki-move[title="Move up"],
+.item-table tbody tr.item-row:last-child .ki-move[title="Move down"],
+.item-table tbody tr.item-row:has(+ tr.ki-desc-row:last-child) .ki-move[title="Move down"] { visibility: hidden; }
 
 /* ---- Live Summary Panel ---- */
 .summary-panel { top: 66px; }

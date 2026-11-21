@@ -1192,7 +1192,13 @@ function materialsAreItems() {
 }
 // Saved lump sums (3D design, debris removal…): [line, index in BOQ_SAVED]; priced by item they're in Add from my lines
 function pickerLumpSums() {
-  return CATALOG.boq ? [] : BOQ_SAVED.map((b, i) => [b, i]).filter(([b]) => b.unit === 'lump sum');
+  return CATALOG.boq ? [] : BOQ_SAVED.map((b, i) => [b, i]).filter(([b]) => b.unit === 'lump sum')
+    .sort(([a], [b]) => byName(a.name, b.name));
+}
+// Tick several lists everything in A–Z order (and adds the ticked ones in that order)
+const byName = (a, b) => String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base', numeric: true });
+function pickerFittings() {          // [fitting, index in priceList], A–Z
+  return priceList.map((p, i) => [p, i]).sort(([a], [b]) => byName(a.name, b.name));
 }
 function pickerItemNames() {
   if (!materialsAreItems()) return masterItems;
@@ -1226,9 +1232,9 @@ function renderItemPicker() {
           <span class="flex-grow-1 small fw-semibold" style="min-width:0">${label}</span>${right || ''}
         </label>`;
   const asItems = materialsAreItems();
-  const items = pickerItemNames().filter(n => !q || n.toLowerCase().includes(q));
-  const mats = asItems ? materialNames().filter(n => !q || n.toLowerCase().includes(q)) : [];
-  const fits = priceList.map((p, i) => [p, i]).filter(([p]) => !q || p.name.toLowerCase().includes(q));
+  const items = pickerItemNames().filter(n => !q || n.toLowerCase().includes(q)).sort(byName);
+  const mats = asItems ? materialNames().filter(n => !q || n.toLowerCase().includes(q)).sort(byName) : [];
+  const fits = pickerFittings().filter(([p]) => !q || p.name.toLowerCase().includes(q));
   const lumps = pickerLumpSums().filter(([b]) => !q || `${b.name} ${b.description || ''}`.toLowerCase().includes(q));
   const group = (title, hint, rows) => rows.length ? `
     <div class="ki-pick-group">
@@ -1263,16 +1269,16 @@ function addItemPicks() {
   const rk = _itemPickRoom;
   const [wood, work] = splitCombo(document.getElementById('itemPickCombo')?.value || DEFAULT_COMBO);
   const keys = Array.from(_itemPicked);
-  pickerItemNames().filter(n => keys.includes('i:' + n)).forEach(n => {    // in the list's order
+  pickerItemNames().sort(byName).filter(n => keys.includes('i:' + n)).forEach(n => {    // in the list's order (A–Z)
     const ik = _insertItemRow(rk, n, '', '', '', '', wood, work, '', 1, '');
     if (ik) markPending(rk, ik, true);
   });
-  materialNames().filter(n => keys.includes('m:' + n)).forEach(n => {    // named after the material, at its rate
+  materialNames().sort(byName).filter(n => keys.includes('m:' + n)).forEach(n => {    // named after the material, at its rate
     const [w, k] = splitCombo(comboForName(n) || `${n}|`);
     const ik = _insertItemRow(rk, n, '', '', '', '', w, k, '', 1, MATERIAL_DESCS[n] || '');
     if (ik) markPending(rk, ik, true);
   });
-  priceList.forEach((p, i) => {
+  pickerFittings().forEach(([p, i]) => {
     if (keys.includes('f:' + i)) _insertFixedRow(rk, p.name, 1, p.price || 0, p.description || '');
   });
   pickerLumpSums().forEach(([b, i]) => {
@@ -1331,9 +1337,13 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
     <td class="text-center"><span class="badge ki-badge-boq">${BOQ ? 'BOQ' : 'Lump sum'}</span></td>
     <td class="text-center ki-rate-cell ki-line-amount-cell" data-label="Amount"><span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span></td>
     <td class="text-center">
-      <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
-        <i class="bi bi-x-lg"></i>
-      </button>
+      <div class="ki-line-actions">
+        <button type="button" class="btn btn-link ki-move" onclick="moveItem('${rk}','${ik}',-1)" title="Move up" aria-label="Move up"><i class="bi bi-chevron-up"></i></button>
+        <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button type="button" class="btn btn-link ki-move" onclick="moveItem('${rk}','${ik}',1)" title="Move down" aria-label="Move down"><i class="bi bi-chevron-down"></i></button>
+      </div>
     </td>`;
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
@@ -1466,10 +1476,13 @@ function _insertFixedRow(rk, name, quantity, unitPrice, desc) {
       <span class="area-display fw-bold text-primary" id="item_amount_${ik}"></span>
     </td>
     <td class="text-center">
-      <button type="button" class="btn btn-outline-danger btn-remove-item"
-              onclick="removeItem('${rk}','${ik}')" title="Remove">
-        <i class="bi bi-x-lg"></i>
-      </button>
+      <div class="ki-line-actions">
+        <button type="button" class="btn btn-link ki-move" onclick="moveItem('${rk}','${ik}',-1)" title="Move up" aria-label="Move up"><i class="bi bi-chevron-up"></i></button>
+        <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button type="button" class="btn btn-link ki-move" onclick="moveItem('${rk}','${ik}',1)" title="Move down" aria-label="Move down"><i class="bi bi-chevron-down"></i></button>
+      </div>
     </td>`;
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
@@ -1690,10 +1703,13 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
              title="Type the length and width, or the ${UNITS.areaLabel} directly" aria-label="Area in ${UNITS.areaLabel}">
     </td>
     <td class="text-center">
-      <button type="button" class="btn btn-outline-danger btn-remove-item"
-              onclick="removeItem('${rk}','${ik}')" title="Remove">
-        <i class="bi bi-x-lg"></i>
-      </button>
+      <div class="ki-line-actions">
+        <button type="button" class="btn btn-link ki-move" onclick="moveItem('${rk}','${ik}',-1)" title="Move up" aria-label="Move up"><i class="bi bi-chevron-up"></i></button>
+        <button type="button" class="btn btn-outline-danger btn-remove-item" onclick="removeItem('${rk}','${ik}')" title="Remove">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button type="button" class="btn btn-link ki-move" onclick="moveItem('${rk}','${ik}',1)" title="Move down" aria-label="Move down"><i class="bi bi-chevron-down"></i></button>
+      </div>
     </td>
   `;
   tbody.appendChild(tr);
@@ -1723,6 +1739,22 @@ function markPending(rk, ik, on) {
   rooms[rk].items[ik].pending = !!on;
   document.getElementById('item_row_' + ik)?.classList.toggle('ki-needs-qty', !!on);
   document.getElementById('item_descrow_' + ik)?.classList.toggle('ki-needs-qty', !!on);
+}
+
+// Up / down beside each line: the room's lines in the order you want (saved, PDF and link in that order)
+function moveItem(rk, ik, dir) {
+  const items = rooms[rk]?.items;
+  if (!items) return;
+  const keys = Object.keys(items), i = keys.indexOf(ik), j = i + dir;
+  if (i < 0 || j < 0 || j >= keys.length) return;
+  const other = keys[j];
+  [keys[i], keys[j]] = [keys[j], keys[i]];
+  keys.forEach(k => { const v = items[k]; delete items[k]; items[k] = v; });   // the order the lines are saved in
+  const rowsOf = k => [document.getElementById('item_row_' + k), document.getElementById('item_descrow_' + k)].filter(Boolean);
+  const mine = rowsOf(ik), theirs = rowsOf(other);
+  if (!mine.length || !theirs.length) return;
+  if (dir < 0) theirs[0].before(...mine); else theirs[theirs.length - 1].after(...mine);
+  mine[0].querySelector(`.ki-move[title="${dir < 0 ? 'Move up' : 'Move down'}"]`)?.focus();
 }
 
 function removeItem(rk, ik) {

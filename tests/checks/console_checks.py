@@ -527,15 +527,19 @@ ok('a request you already made a trial for by hand: the emailed link opens that 
    'already set up' in r.text and 'rao-made.quote-room.test' in r.text and 'name="password"' not in r.text
    and spares_mid2 == spares_mid)
 
-# ── Buying on the website: /start?plan=1y → the app is made → Razorpay payment link → back to /start/paid → plan added ──
-import hmac as _hm, hashlib as _hs
+# ── Buying on the website: /start?plan=1y → the app is made → Razorpay Checkout on the page (their name, WhatsApp
+# number and email filled in) → /start/checkout-paid → plan added ──
+import hmac as _hm, hashlib as _hs, json as _js
 os.environ.update(PLATFORM_RAZORPAY_KEY_ID='rzp_test_key', PLATFORM_RAZORPAY_KEY_SECRET='rzp-test-secret')
 from app import subscription as _sub
 _calls = []
 def _fake_rzp(method, path, payload=None):
-    _calls.append(payload)
-    return {'id': f'plink_B{len(_calls)}', 'short_url': f'https://rzp.io/l/B{len(_calls)}', 'amount': payload['amount']}
+    _calls.append(dict(payload or {}, _path=path))
+    return {'id': f'order_B{len(_calls)}', 'amount': (payload or {}).get('amount')}
 _real_api, _sub._api = _sub._api, _fake_rzp
+def _checkout(html):
+    """The pay_checkout object the page hands to Razorpay."""
+    return _js.loads(html.split('const c = ', 1)[1].split(';\n', 1)[0]) if 'const c = ' in html else {}
 with crypto.using_key(LEADS_KEY), le.begin() as conn:
     buy_id = conn.execute(Lead.__table__.insert().values(name='Kiran Buyer', phone='919811100031', business_type='other',
                           business_other='Modular kitchens', company_name='Buyer Kitchens', city='Pune',
@@ -549,37 +553,36 @@ ok('buying: any business can set up and pay (the plan and price shown, "Create m
    and 'Create my app and pay' not in anon.get(f'/start?t={btok}&plan=99y').text)
 r = anon.post('/start', data=dict(t=btok, plan='1y', company='Buyer Kitchens', username='kiran', password='kiran-pass-123',
                                   password2='kiran-pass-123', terms='1'))
-cb = (_calls[0] or {}).get('callback_url', '') if _calls else ''
-ok('…"Create my app and pay": the app is made, then straight to Razorpay for ₹5,999 with their details and a way back',
-   r.status_code == 302 and r.headers['Location'] == 'https://rzp.io/l/B1' and _calls[0]['amount'] == 599900
-   and _calls[0]['notes']['slug'] == 'buyer-kitchens' and _calls[0]['customer'].get('email') == 'kiran@buyer.example'
-   and cb.endswith('/start/paid?t=' + btok) and _calls[0]['callback_method'] == 'get')
+co = _checkout(r.text)
+ok('…"Create my app and pay": the app is made, then Razorpay Checkout for ₹5,999 on the page',
+   r.status_code == 200 and 'checkout.razorpay.com' in r.text and _calls[0]['_path'] == '/orders'
+   and _calls[0]['amount'] == 599900 and _calls[0]['notes']['slug'] == 'buyer-kitchens' and co.get('order_id') == 'order_B1')
+ok('…with their name, WhatsApp number and email filled in (not asked again)',
+   co.get('prefill') == {'name': 'Kiran Buyer', 'email': 'kiran@buyer.example', 'contact': '+919811100031'})
 r = anon.get(f'/start?t={btok}&plan=1y')
 r2 = anon.post('/start/pay', data={'t': btok, 'plan': '1y'})
-ok('back on the link without paying: "Pay ₹5,999" (the same payment link, not a new one) or use the trial first',
-   'Pay ₹5,999 securely' in r.text and 'buyer-kitchens.quote-room.test' in r.text and r2.headers['Location'] == 'https://rzp.io/l/B1'
-   and len(_calls) == 1)
-cb_args = dict(razorpay_payment_id='pay_B1', razorpay_payment_link_id='plink_B1', razorpay_payment_link_reference_id='',
-               razorpay_payment_link_status='paid')
-r = anon.get('/start/paid', query_string=dict(cb_args, t=btok, razorpay_signature='forged'))
+ok('back without paying: "Pay ₹5,999" opens the checkout again (filled in), or use the trial first',
+   'Pay ₹5,999 securely' in r.text and 'buyer-kitchens.quote-room.test' in r.text
+   and _checkout(r2.text).get('prefill', {}).get('contact') == '+919811100031')
+pay = dict(t=btok, razorpay_order_id='order_B1', razorpay_payment_id='pay_B1')
+r = anon.post('/start/checkout-paid', data=dict(pay, razorpay_signature='forged'))
 with app.app_context():
-    brow = _sub.get_by_order('plink_B1')
-ok('a forged return from Razorpay is not counted as paid', 'Payment received' not in r.text and brow['status'] == 'created'
-   and 'Payment not completed' in r.text)
-sig = _hm.new(b'rzp-test-secret', 'plink_B1||paid|pay_B1'.encode(), _hs.sha256).hexdigest()
-r = anon.get('/start/paid', query_string=dict(cb_args, t=btok, razorpay_signature=sig))
+    brow = _sub.get_by_order('order_B1')
+ok('a forged payment is not counted', r.status_code == 404 and 'Payment received' not in r.text and brow['status'] == 'created')
+sig = _hm.new(b'rzp-test-secret', b'order_B1|pay_B1', _hs.sha256).hexdigest()
+r = anon.post('/start/checkout-paid', data=dict(pay, razorpay_signature=sig))
 with app.app_context():
-    brow = _sub.get_by_order('plink_B1')
+    brow = _sub.get_by_order('order_B1')
     with tenancy.tenant_context('buyer-kitchens'):
         bst = _pl.load_status(on=_pl.today())
-ok('paid and sent back: "Payment received", the 12-month plan is on their app at once (trial days kept), recorded once',
+ok('paid: "Payment received", the 12-month plan is on their app at once (trial days kept), recorded once',
    'Payment received' in r.text and 'https://buyer-kitchens.quote-room.test/login' in r.text and brow['status'] == 'paid'
-   and brow['source'] == 'callback' and bst.plan == '1y' and bst.ends_on == _pl.add_length(_pl.today() + _td(days=7), '1y'))
-r = anon.get('/start/paid', query_string=dict(cb_args, t=btok, razorpay_signature=sig))
+   and brow['source'] == 'website' and bst.plan == '1y' and bst.ends_on == _pl.add_length(_pl.today() + _td(days=7), '1y'))
+r = anon.post('/start/checkout-paid', data=dict(pay, razorpay_signature=sig))
 with app.app_context():
     with tenancy.tenant_context('buyer-kitchens'):
         bst2 = _pl.load_status(on=_pl.today())
-ok('…opening the page again doesn\'t add the plan twice', 'Payment received' in r.text and bst2.ends_on == bst.ends_on)
+ok('…sending it again doesn\'t add the plan twice', 'Payment received' in r.text and bst2.ends_on == bst.ends_on)
 # One free trial per business: a new request with the same phone or email (another firm name) gets no second app
 with crypto.using_key(LEADS_KEY), le.begin() as conn:
     again_id = conn.execute(Lead.__table__.insert().values(name='Meera S', phone='+91 98111 00022', business_type='interiors',
@@ -625,8 +628,7 @@ ok('…and creating it replaces the old link (no error)', _r3.status_code == 200
    and _fresh_slug and _fresh_slug != 'gone-app')
 r = anon.get(f'/start?t={_su.make_token(again_id)}&plan=1y')
 ok('…buying a plan from the website with it: they pay for the app they already have (not a new trial)',
-   r.status_code == 302 and _calls[-1]['notes']['slug'] == 'shah-studio'
-   and _calls[-1].get('callback_url', '').endswith('/start/paid?t=' + _su.make_token(again_id)))
+   r.status_code == 200 and _calls[-1]['notes']['slug'] == 'shah-studio' and _checkout(r.text).get('order_id'))
 _sub._api = _real_api
 for k in ('PLATFORM_RAZORPAY_KEY_ID', 'PLATFORM_RAZORPAY_KEY_SECRET'):
     os.environ.pop(k, None)

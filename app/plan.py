@@ -236,7 +236,8 @@ ALWAYS_ALLOWED = {'auth.login', 'auth.logout', 'auth.forgot_password', 'auth.res
                   'main.favicon', 'main.brand_logo', 'main.web_manifest', 'main.app_icon',
                   'share.view', 'share.pdf', 'share.respond', 'share.invoice_view', 'share.invoice_pdf',
                   'plan.plan_page', 'plan.order', 'plan.paid', 'plan.thanks', 'plan.receipt',   # paying for a plan
-                  'plan.subscribe', 'plan.subscribed', 'plan.autopay_cancel'}   # the business's customers answering a quotation
+                  'plan.subscribe', 'plan.subscribed', 'plan.autopay_cancel',
+                  'demo.visit'}   # the business's customers answering a quotation
 # Pages that only exist to edit — redirect away from them when read-only
 EDIT_PAGES = {'projects.create_project', 'projects.edit_project'}
 

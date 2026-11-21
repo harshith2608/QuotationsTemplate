@@ -168,6 +168,42 @@ def tutorials():
     return rows
 
 
+# ── Keeping the website's database asleep (Neon bills by the hours it's awake) ─────────────────────────────────
+# The public pages are the same for every visitor, so Vercel's CDN keeps each one for CDN_SECONDS: visitors and bots
+# get the kept copy and the app (and its database) isn't woken. Changes from the console (pricing, tutorials, kinds
+# of business) show within that time. Visits are counted by the page's script (demo.visit), and an unknown address
+# (bots trying /wp-login.php, /.env…) gets a plain 404 that doesn't read the database (not_found_page).
+CDN_SECONDS = 3600
+CDN_PAGES = {'main.index', 'marketing.landing', 'marketing.tutorials_page', 'marketing.privacy', 'marketing.terms',
+             'marketing.free_trial'}
+
+
+def cache_public_page(response):
+    """after_request hook (marketing deployment): let the CDN keep the public pages a signed-out visitor sees."""
+    from flask_login import current_user
+    if (marketing_enabled() and request.method in ('GET', 'HEAD') and request.endpoint in CDN_PAGES
+            and response.status_code == 200 and 'Set-Cookie' not in response.headers
+            and not getattr(current_user, 'is_authenticated', False)):
+        response.headers['Cache-Control'] = f'public, max-age=0, s-maxage={CDN_SECONDS}, stale-while-revalidate=86400'
+    return response
+
+
+NOT_FOUND_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>Page not found</title><style>body{font-family:system-ui,sans-serif;text-align:center;padding:4rem 1rem;
+color:#334155}a{color:#0f766e}</style></head><body><h1>Page not found</h1>
+<p>The page you're looking for doesn't exist.</p><p><a href="/">Go to the home page</a></p></body></html>"""
+
+
+def not_found_page():
+    """An address no page answers, on the website: a plain 404 without the database (and kept by the CDN), else
+    None (the app's own 404 page)."""
+    if not marketing_enabled() or request.endpoint is not None:
+        return None
+    return Response(NOT_FOUND_HTML, status=404, mimetype='text/html',
+                    headers={'Cache-Control': f'public, max-age=0, s-maxage={CDN_SECONDS}'})
+
+
 def render_landing():
     """The landing page. Also served at / on the marketing deployment (see main.index)."""
     ctx = _context()

@@ -178,3 +178,41 @@ with app.app_context():
 edit(staff, pid, 'Approvals Test 4')
 ok('switched off: employees send freely again', staff.get(f'/projects/{pid}/pdf/customer').status_code == 200
    and 'being updated' not in cust.get(f'/q/{tok}').text)
+
+# Logo watermark (Settings → Quotation PDFs): every page of an admin's quotation, an employee's once approved
+from io import BytesIO as _B
+from PIL import Image as _I
+from app import branding, pdf_look
+from app.models import AppSetting
+_png = _B(); _I.new('RGBA', (300, 120), (200, 30, 30, 255)).save(_png, 'PNG')
+with app.app_context():
+    branding.save_logo_png(*branding.process_logo_upload(_png.getvalue()))
+    approvals.set_enabled(True); db.session.commit()
+
+
+def images(client, url):
+    """Images on each page of the PDF (the header logo, photos, the watermark)."""
+    r = client.get(url)
+    return [len(p.images) for p in PdfReader(io.BytesIO(r.data)).pages]
+
+
+mine = new_quote(admin, 'Logo Mark Admin')
+emp = new_quote(staff, 'Logo Mark Staff')
+before_admin, before_staff = images(admin, f'/projects/{mine}/pdf/customer'), images(staff, f'/projects/{emp}/pdf/customer')
+before_full = images(admin, f'/projects/{mine}/pdf')
+admin.post('/admin/settings', data={'section': 'documents', 'pdf_logo_mark': ['0', '1']})
+with app.app_context():
+    ok('logo watermark: the switch saves', pdf_look.logo_mark())
+ok('… shown in Settings → Quotation PDFs', 'id="pdf_logo_mark" value="1" checked' in admin.get('/admin/settings?tab=documents').text)
+on_admin = images(admin, f'/projects/{mine}/pdf/customer')
+ok('… on every page of an admin\'s quotation', len(on_admin) == len(before_admin)
+   and all(a == b + 1 for a, b in zip(on_admin, before_admin)))
+ok('… and their full quotation PDF', all(a == b + 1 for a, b in zip(images(admin, f'/projects/{mine}/pdf'), before_full)))
+ok('… not on an employee\'s draft (waiting for approval)', images(staff, f'/projects/{emp}/pdf/customer') == before_staff)
+staff.post(f'/projects/{emp}/approval/submit')
+admin.post(f'/admin/approvals/{emp}', data={'action': 'approve'})
+ok('… on the employee\'s once approved', all(a == b + 1 for a, b in zip(images(staff, f'/projects/{emp}/pdf/customer'), before_staff)))
+admin.post('/admin/settings', data={'section': 'documents', 'pdf_logo_mark': ['0']})
+ok('… off again: none', images(admin, f'/projects/{mine}/pdf/customer') == before_admin)
+with app.app_context():
+    approvals.set_enabled(False); db.session.commit()
