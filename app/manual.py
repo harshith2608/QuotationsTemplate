@@ -70,7 +70,9 @@ ARTICLES = [
          tags="nos no's factor rate multiply extra work 1.25 decimal sqft area measurement",
          steps=['Open Admin → Settings → Pricing.',
                 'Turn on "No\'s multiplies the rate, not the area" and save.',
-                'On a sqft line, No\'s 1.25 at ₹120 prints as the measured area at ₹150; No\'s isn\'t printed. Running ft, Nos and lump sums don\'t change.']),
+                'On a sqft line, No\'s 1.25 at ₹120 prints as the measured area at ₹150; No\'s isn\'t printed. Running ft, Nos and lump sums don\'t change.',
+                'On the quotation form, the size line shows the calculated area after "=" (measured × No\'s, what the amount is on), '
+                'with the measured area the PDF shows.']),
     dict(id='hide-rates', title='Hide rates while quoting in front of the customer', link='admin.settings', admin=True, tab='pricing',
          summary='Rates and each line\'s amount are hidden on the form and quotation page (for everyone), with a Show rates button.',
          tags='hide rates screen customer watching show rates privacy',
@@ -159,6 +161,21 @@ ARTICLES = [
                 'Turn on Your logo as a watermark to put your logo, faint, in the middle of every page of your quotation PDFs. '
                 'An employee\'s quotation gets it once you approve it.',
                 'Save and open a quotation PDF to see it.']),
+    dict(id='tick-several', title='Add several items to a room at once', link='projects.create_project', needs='tick_several',
+         summary='Tick several lists your items, fittings and lump sums A–Z: tick what goes in the room and add them together.',
+         tags='tick several many multiple items add at once bulk select fittings lump sum list alphabetical',
+         steps=['On the quotation form, tap Tick several under the room.',
+                'Pick the material & work at the top (for the plain item names), or search.',
+                'Tick the items, fittings and lump sums for this room (Tick all ticks a whole group). Everything is listed A–Z.',
+                'Tap Add: they come into the room in that order. Type each item\'s size (highlighted until you do); fittings come in with quantity 1 at your price.',
+                'Move any line with the up and down arrows beside it.']),
+    dict(id='add-my-lines', title='Add several of your saved lines to a room', link='projects.create_project', needs='boq_lines',
+         summary='Add from my lines: tick your saved lines and add them at once, then type each quantity.',
+         tags='add from my lines saved lines several many multiple at once bulk boq select',
+         steps=['On the quotation form, tap Add from my lines under the room.',
+                'Search or tick the lines you need (Tick all ticks a whole group); the group named like the room is on top.',
+                'Tap Add lines, then type each line\'s size or quantity (highlighted until you do).',
+                'Move any line with the up and down arrows beside it.']),
     dict(id='line-order', title='Change the order of lines in a room', link='projects.create_project',
          summary='The arrows beside each line move it up or down.',
          tags='order move up down reorder arrange sort lines items room sequence',
@@ -347,6 +364,12 @@ def flags():
     try:
         from . import material_list
         out['material_list'] = material_list.available()
+    except Exception:
+        pass
+    try:
+        from . import boq
+        lines = boq.enabled()
+        out.update(boq_lines=lines, tick_several=not lines)   # BOQ lines: Add from my lines; else Tick several
     except Exception:
         pass
     return out
