@@ -1254,6 +1254,9 @@ def settings():
             AppSetting.set(rate_access.SCREEN_KEY, '1' if request.form.get('hide_rates_on_screen') == '1' else '0')
             if 'nos_on_rate_shown' in request.form:     # No's on area lines: pieces, or a factor on the rate
                 AppSetting.set(boq.NOS_RATE_KEY, '1' if request.form.get('nos_on_rate') == '1' else '')
+            if 'room_areas_shown' in request.form:      # the Room areas sheet on the quotation form (never printed)
+                from . import room_areas
+                AppSetting.set(room_areas.KEY, '1' if request.form.get('room_areas_on') == '1' else '')
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1297,7 +1300,8 @@ def settings():
     from . import layout, boq
     pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready(),
                'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen(),
-               'nos_on_rate': boq.nos_on_rate()} \
+               'nos_on_rate': boq.nos_on_rate(),
+               'room_areas': __import__('app.room_areas', fromlist=['enabled']).enabled()} \
         if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),

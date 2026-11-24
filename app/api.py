@@ -71,6 +71,9 @@ def save_draft():
     if rooms_data:
         grand_total = _save_project_data(project, rooms_data, remember=False)
         project.grand_total = grand_total
+    from . import room_areas
+    if room_areas.enabled() and 'room_areas' in data:
+        room_areas.save(project.id, data.get('room_areas'))
 
     db.session.commit()
     return jsonify({'draft_id': project.id})
