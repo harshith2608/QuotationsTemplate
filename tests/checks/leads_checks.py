@@ -91,7 +91,7 @@ ok('wrong password refused', c.get('/leads', headers=auth('nope')).status_code =
 r = c.get('/leads', headers=auth('leads-pass-123'))
 ok('right password → list with decrypted details + WhatsApp links', r.status_code == 200 and 'Ravi Kumar' in r.text
    and '+91 98765 43210' in r.text and 'Modular kitchens' in r.text and 'Sharma Interiors' in r.text and 'wa.me/919876543210' in r.text
-   and r.headers.get('Cache-Control') == 'no-store' and 'fbevents' not in r.text and 'cookieBanner' not in r.text)
+   and r.headers.get('Cache-Control') == 'no-store' and 'fbevents' not in r.text and 'adNote' not in r.text)
 r = c.get('/leads.csv', headers=auth('leads-pass-123'))
 ok('CSV download', r.status_code == 200 and r.mimetype == 'text/csv' and 'Ravi Kumar' in r.text and '+919876543210' in r.text
    and 'Sharma Interiors' in r.text)
@@ -112,10 +112,10 @@ with app.app_context():
 
 # Privacy page and cookie notice
 t = c.get('/privacy').text
-ok('privacy page explains the Meta Pixel and consent', 'id="cookies"' in t and 'Meta Pixel' in t and 'only load if you tap' in t
+ok('privacy page explains the Meta Pixel, on by default and how to turn it off', 'id="cookies"' in t and 'Meta Pixel' in t and 'on by default' in t and 'Turn them off' in t
    and '_fbp' in t and 'trial form' in t and '12 months' in t)
 t = c.get('/').text
-ok('cookie notice links to the cookies section', 'href="/privacy#cookies"' in t)
+ok('the footer note links to the cookies section', 'href="/privacy#cookies"' in t)
 
 
 # Right after a deploy, before the database update adds leads.company_name: the form still works

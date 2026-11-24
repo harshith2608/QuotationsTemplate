@@ -75,7 +75,7 @@ def _context():
         contact_email=_env('MARKETING_CONTACT_EMAIL'),
         business_address=_env('MARKETING_ADDRESS'),
         jurisdiction=_env('MARKETING_JURISDICTION'),
-        legal_updated=_env('MARKETING_LEGAL_UPDATED', '26 October 2026'),
+        legal_updated=_env('MARKETING_LEGAL_UPDATED', '24 November 2026'),
         wa_number=wa_number,
         wa_display=_display_number(wa_number),
         meta_pixel_id=re.sub(r'\D', '', _env('META_PIXEL_ID')),
@@ -186,6 +186,24 @@ def cache_public_page(response):
             and not getattr(current_user, 'is_authenticated', False)):
         response.headers['Cache-Control'] = f'public, max-age=0, s-maxage={CDN_SECONDS}, stale-while-revalidate=86400'
     return response
+
+
+def cdn_session_interface():
+    """Flask's cookie session, except that a public page kept by the CDN (cache_public_page) doesn't say "Vary: Cookie":
+    Vercel's CDN never stores a response that does. Flask adds it when saving the session, after the after_request
+    hooks, so it is taken off here. Safe: those pages are only kept when the visitor is signed out and no cookie is
+    set (a signed-in visitor on the website may then see the signed-out landing page; Sign in still opens the app)."""
+    from flask.sessions import SecureCookieSessionInterface
+
+    class CdnSessionInterface(SecureCookieSessionInterface):
+        def save_session(self, app, session, response):
+            super().save_session(app, session, response)
+            if 's-maxage=' in (response.headers.get('Cache-Control') or '') and 'Set-Cookie' not in response.headers:
+                response.vary.discard('Cookie')
+                if not response.vary:
+                    response.headers.pop('Vary', None)
+
+    return CdnSessionInterface()
 
 
 NOT_FOUND_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
