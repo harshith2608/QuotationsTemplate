@@ -101,8 +101,24 @@ def base_rate(rate, name):
     return round(rate / (1 + pct / 100), 2) if pct > -100 else rate
 
 
+def work_hidden(name):
+    """A line named 'Kitchen Base Unit – Box Work' prints as 'Kitchen Base Unit': like a material's work type, Box Work /
+    Frame Work is a word for the firm (two saved lines, two rates), not the customer — unless the business shows work
+    types (Settings → Quotation PDFs). The quotation form keeps the full name."""
+    from .catalog import WORK_TYPES
+    main, dash, work = (name or '').rpartition(' – ')
+    if not dash:
+        main, dash, work = (name or '').rpartition(' - ')
+    if not dash or work.strip() not in WORK_TYPES or not main.strip():
+        return name
+    from .materials import SHOW_WORK_KEY
+    from .models import AppSetting
+    return name if AppSetting.get(SHOW_WORK_KEY) == '1' else main.strip()
+
+
 def label(name, finish):
-    """'Wardrobe (Acrylic finish)', or the name alone when there's no finish."""
+    """'Wardrobe (Acrylic finish)', or the name alone when there's no finish (without a Box / Frame Work ending)."""
+    name = work_hidden(name)
     if not finish:
         return name
     return f"{name} ({finish}{'' if finish.lower().endswith('finish') else ' finish'})"

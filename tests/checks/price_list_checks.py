@@ -362,3 +362,24 @@ with app.app_context():
        [(t['name'], [(r['name'], [i['name'] for i in r['items']]) for r in t['rooms']]) for t in back.get('templates') or []]
        == [(t['name'], [(r['name'], [i['name'] for i in r['items']]) for r in t['rooms']]) for t in out.get('templates') or []]
        or sorted(t['name'] for t in back['templates']) == sorted(t['name'] for t in out['templates']))
+
+# ── A line named "… – Box Work" / "… – Frame Work": two rates for one item; the customer sees the item's name alone ──
+with app.app_context():
+    from app import finishes
+    from app.materials import SHOW_WORK_KEY
+    ok('"Kitchen Base Unit – Box Work" prints as "Kitchen Base Unit" (and with a hyphen; other endings untouched)',
+       finishes.label('Kitchen Base Unit – Box Work', '') == 'Kitchen Base Unit'
+       and finishes.label('Kitchen Base Unit - Frame Work', 'Acrylic') == 'Kitchen Base Unit (Acrylic finish)'
+       and finishes.label('Wall – Paint', '') == 'Wall – Paint' and finishes.label('Box Work', '') == 'Box Work')
+    AppSetting.set(SHOW_WORK_KEY, '1'); db.session.commit()
+    ok('…unless the business shows work types to customers', finishes.label('Kitchen Base Unit – Box Work', '') == 'Kitchen Base Unit – Box Work')
+    AppSetting.set(SHOW_WORK_KEY, ''); db.session.commit()
+c.post('/projects/new', data={'customer_name': 'Box Home', 'mobile': '9000000903', 'discount_type': 'none', 'discount_value': '0',
+                              'rooms_data': json.dumps([{'name': 'Kitchen', 'items': [
+    {'name': 'Kitchen Base Unit – Box Work', 'type': 'boq', 'quantity': 0, 'unit': 'sqft', 'unit_price': 2200, 'length': 10, 'width': 2, 'count': 1}]}])})
+with app.app_context():
+    bid = Project.query.order_by(Project.id.desc()).first().id
+t_ = pdftext(f'/projects/{bid}/pdf/customer')
+ok('the customer PDF prints the item without "Box Work"; the form keeps the full name',
+   'Kitchen Base Unit' in t_ and 'Box Work' not in t_
+   and any(x in c.get(f'/projects/{bid}/edit').text for x in ('Kitchen Base Unit – Box Work', 'Kitchen Base Unit \\u2013 Box Work')))
