@@ -55,9 +55,9 @@ with app.app_context():
 ok('the BOM lists the quotation', f'/projects/{pid}' in c.get(f'/boms/{bid}').text)
 ok('the edit form shows the BOM for reference', f'Carpet Area #{bid}' in c.get(f'/projects/{pid}/edit').text)
 t = pdftext(f'/projects/{pid}/pdf/customer')
-ok('the PDF\'s first page shows the total as Built-up area, not the rooms', 'Built-up area 465.50 sqft' in t and 'Vestibule' not in t)
+ok('the PDF\'s first page shows the total as Carpet area, not the rooms', 'Carpet area 465.50 sqft' in t and 'Vestibule' not in t)
 t = pdftext(f'/projects/{pid}/pdf')
-ok('the full PDF too', 'Built-up area 465.50 sqft' in t)
+ok('the full PDF too', 'Carpet area 465.50 sqft' in t)
 
 dup = c.get(f'/projects/new?from={pid}').text
 ok('a copy of it (premium) stays linked to the BOM', f'name="bom_id" value="{bid}"' in dup)

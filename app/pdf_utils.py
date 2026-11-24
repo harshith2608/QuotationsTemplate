@@ -534,7 +534,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     ]
     built = _built_up_area(project)
     if built:                                      # the BOM's total (app/boms.py), with BOMs on
-        cust_data.append(['Built-up area', built, '', ''])
+        cust_data.append(['Carpet area', built, '', ''])
     if project.address:
         cust_data.append(['Address', Paragraph(project.address, normal_style), '', ''])
     cust_table = Table(cust_data, colWidths=['18%', '32%', '18%', '32%'])
@@ -991,7 +991,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     ]
     built = _built_up_area(project)
     if built:                                      # the BOM's total (app/boms.py), with BOMs on
-        cust_data.append(['Built-up area', built, '', ''])
+        cust_data.append(['Carpet area', built, '', ''])
     if cust['address']:
         cust_data.append(['Address', Paragraph(escape(cust['address']), normal_style), '', ''])
     cust_table = Table(cust_data, colWidths=['18%', '32%', '18%', '32%'])

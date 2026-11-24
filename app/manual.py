@@ -196,7 +196,7 @@ ARTICLES = [
                 'Type the customer\'s name and mobile (email and address are optional).',
                 'Add each area: its name, length and width, in your own unit. Each area and the total are worked out.',
                 'Save. The Carpet Areas page lists every carpet area; open one to edit it or make quotations from it.',
-                'The measurements are for you and your team only. A quotation made from the carpet area shows just the total as Built-up area '
+                'The measurements are for you and your team only. A quotation made from the carpet area shows just the total as Carpet area '
                 'in the customer details on the first page of its PDF.']),
     dict(id='bom-quote', title='Make a quotation from a carpet area (basic and premium)', link='boms.list_boms', needs='boms',
          summary='Create quotation on a carpet area: its customer, and the areas you tick as rooms.',
