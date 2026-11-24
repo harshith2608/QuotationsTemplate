@@ -270,6 +270,54 @@
 
       {% endif %}
 
+      {% set ra = none if template_edit else room_areas_form(project) %}
+      {% if ra is not none %}
+      <!-- Room areas: the home's measurements, for you only (app/room_areas.py) -->
+      <input type="hidden" name="room_areas" id="room_areas_field">
+      <script id="room-areas-data" type="application/json">{{ ra.rows|tojson }}</script>
+      <div class="card shadow-sm border-0 mb-3" id="room-areas-card">
+        <button type="button" class="card-header ki-card-header py-2 border-0 w-100 text-start d-flex align-items-center {{ '' if ra.rows else 'collapsed' }}"
+                data-bs-toggle="collapse" data-bs-target="#roomAreasBody" aria-expanded="{{ 'true' if ra.rows else 'false' }}" aria-controls="roomAreasBody">
+          <i class="bi bi-rulers me-2"></i>Room areas
+          <span class="small fw-normal opacity-75 ms-2">for you, not printed</span>
+          <span class="badge bg-primary ms-auto me-2" id="room-areas-total-badge"></span>
+          <i class="bi bi-chevron-down ki-rates-chev"></i>
+        </button>
+        <div class="collapse {{ 'show' if ra.rows }}" id="roomAreasBody">
+          <div class="card-body p-2 p-md-3">
+            <div class="item-table-wrap">
+              <table class="table table-sm table-bordered mb-2 align-middle" id="room-areas-table">
+                <thead>
+                  <tr>
+                    <th style="min-width:130px">Area</th>
+                    <th style="min-width:122px">Length</th>
+                    <th style="min-width:122px">Width</th>
+                    <th style="min-width:80px" class="text-end">Area (<span class="ra-area-label"></span>)</th>
+                    <th style="width:36px"></th>
+                  </tr>
+                </thead>
+                <tbody id="room-areas-tbody"></tbody>
+                <tfoot>
+                  <tr class="fw-bold">
+                    <td colspan="3" class="text-end">Total</td>
+                    <td class="text-end" id="room-areas-total"></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-1">
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRoomArea()"><i class="bi bi-plus me-1"></i>Add area</button>
+              <button type="button" class="btn btn-sm btn-link text-muted" onclick="roomAreasFromRooms()"
+                      title="Adds a row for each {{ biz.section|lower }} below that isn't in this table yet">Add the {{ biz.sections|lower }} below</button>
+            </div>
+            <div class="form-text">The home's measurements while you quote: length × width of each area and the total.
+              Only on this form, never on the PDF, the customer's link or WhatsApp.</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Rooms Section -->
       <div class="mb-2">
         <h6 class="mb-0 fw-bold text-primary">

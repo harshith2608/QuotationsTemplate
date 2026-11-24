@@ -218,6 +218,9 @@ def create_app(config_name='default'):
         except Exception:
             return False
 
+    from .room_areas import for_form as _room_areas_form
+    app.jinja_env.globals['room_areas_form'] = _room_areas_form   # the quotation form's Room areas sheet
+
     @app.context_processor
     def inject_globals():
         from flask_login import current_user

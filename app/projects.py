@@ -527,6 +527,7 @@ def create_project():
 
         _set_project_plywood(project, request.form)
         grand_total = _save_project_data(project, rooms_data)
+        __import__('app.room_areas', fromlist=['save_from_form']).save_from_form(project.id)   # never printed
         project.grand_total = grand_total
         project.status = 'complete'
         _ensure_creator_access(project, current_user)
@@ -1079,6 +1080,7 @@ def edit_project(project_id):
         project.plywood_thickness = plywood_thickness
         _set_project_plywood(project, request.form)
         grand_total = _save_project_data(project, rooms_data)
+        __import__('app.room_areas', fromlist=['save_from_form']).save_from_form(project.id)   # never printed
         project.grand_total = grand_total
         project.status = 'complete'
         if not was_draft:
@@ -1207,6 +1209,7 @@ def delete_project(project_id):
     profiles.forget_project(project.id)
     __import__('app.pdf_choices', fromlist=['forget']).forget(project_id)
     __import__('app.photo_pages', fromlist=['forget']).forget(project_id)
+    __import__('app.room_areas', fromlist=['forget']).forget(project_id)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')
