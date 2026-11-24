@@ -1,7 +1,8 @@
 """BOMs: a home's room-wise measurements (Foyer 5 × 4.5 = 22.5 sqft, Living room 6 × 5 = 30…, total), taken before
 quoting and saved on their own (BOMs page, New BOM), with the customer's name, mobile and optionally email and address.
 A quotation is made from a BOM (Create quotation): its customer, and a room for each area ticked; one BOM can give
-several quotations (a basic and a premium one). Never printed or shown to the customer.
+several quotations (a basic and a premium one). The measurements are never printed or shown to the customer; only
+the total (Built-up area) is, in the customer details on the quotation PDF's first page (pdf_utils._built_up_area).
 
 Turned on per business in Settings → Pricing (KEY, off by default; the same switch the earlier Room areas table used).
 Staff use BOMs too unless the admin turns that off (STAFF_OFF_KEY). The table is the Bom model (needs the database

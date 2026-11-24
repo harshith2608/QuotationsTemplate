@@ -190,7 +190,8 @@ ARTICLES = [
                 'Type the customer\'s name and mobile (email and address are optional).',
                 'Add each area: its name, length and width, in your own unit. Each area and the total are worked out.',
                 'Save. The BOMs page lists every BOM; open one to edit it or make quotations from it.',
-                'BOMs are for you and your team only: never printed or sent to the customer.']),
+                'The measurements are for you and your team only. A quotation made from the BOM shows just the total as Built-up area '
+                'in the customer details on the first page of its PDF.']),
     dict(id='bom-quote', title='Make a quotation from a BOM (basic and premium)', link='boms.list_boms', needs='boms',
          summary='Create quotation on a BOM: its customer, and the areas you tick as rooms.',
          tags='bom quotation from measurements create quotation basic premium options rooms tick',

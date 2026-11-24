@@ -278,12 +278,12 @@
 
       {% set ref = none if template_edit else (bom_reference(project) if project else from_bom) %}
       {% if ref %}
-      <!-- The BOM this quotation is made from (app/boms.py): for reference, never printed -->
+      <!-- The BOM this quotation is made from (app/boms.py): for reference; only the total prints (Built-up area) -->
       <div class="card shadow-sm border-0 mb-3" id="bom-ref-card">
         <button type="button" class="card-header ki-card-header py-2 border-0 w-100 text-start d-flex align-items-center collapsed"
                 data-bs-toggle="collapse" data-bs-target="#bomRefBody" aria-expanded="false" aria-controls="bomRefBody">
           <i class="bi bi-rulers me-2"></i>{% if ref.bom %}Measurements from BOM #{{ ref.bom.id }}{% else %}Room areas{% endif %}
-          <span class="small fw-normal opacity-75 ms-2">for you, not printed</span>
+          <span class="small fw-normal opacity-75 ms-2">for you; only the total is on the PDF</span>
           <span class="badge bg-primary ms-auto me-2">{{ units.area(ref.total) }}</span>
           <i class="bi bi-chevron-down ki-rates-chev"></i>
         </button>
