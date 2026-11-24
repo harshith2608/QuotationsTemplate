@@ -188,6 +188,24 @@ def cache_public_page(response):
     return response
 
 
+def cdn_session_interface():
+    """Flask's cookie session, except that a public page kept by the CDN (cache_public_page) doesn't say "Vary: Cookie":
+    Vercel's CDN never stores a response that does. Flask adds it when saving the session, after the after_request
+    hooks, so it is taken off here. Safe: those pages are only kept when the visitor is signed out and no cookie is
+    set (a signed-in visitor on the website may then see the signed-out landing page; Sign in still opens the app)."""
+    from flask.sessions import SecureCookieSessionInterface
+
+    class CdnSessionInterface(SecureCookieSessionInterface):
+        def save_session(self, app, session, response):
+            super().save_session(app, session, response)
+            if 's-maxage=' in (response.headers.get('Cache-Control') or '') and 'Set-Cookie' not in response.headers:
+                response.vary.discard('Cookie')
+                if not response.vary:
+                    response.headers.pop('Vary', None)
+
+    return CdnSessionInterface()
+
+
 NOT_FOUND_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
 <title>Page not found</title><style>body{font-family:system-ui,sans-serif;text-align:center;padding:4rem 1rem;

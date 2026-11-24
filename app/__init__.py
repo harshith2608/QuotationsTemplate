@@ -147,6 +147,8 @@ def create_app(config_name='default'):
     app.after_request(count_site_visit)
     from .marketing import cache_public_page
     app.after_request(cache_public_page)       # (registered last, so it runs first: before any cookie is added)
+    from .marketing import cdn_session_interface
+    app.session_interface = cdn_session_interface()   # (no "Vary: Cookie" on those pages: the CDN wouldn't keep them)
     from .plan import enforce_read_only
     app.before_request(enforce_read_only)
     from .activity import touch

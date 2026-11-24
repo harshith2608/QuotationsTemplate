@@ -174,8 +174,12 @@ with appm.app_context():
     _event.listen(db.engine, 'before_cursor_execute', lambda *a, **k: _q.__setitem__(0, _q[0] + 1))
 fresh = appm.test_client()
 for u in ('/', '/privacy', '/terms', '/free-trial?utm_source=facebook'):
-    cc = fresh.get(u, headers=UA).headers.get('Cache-Control', '')
+    r = fresh.get(u, headers=UA)
+    cc = r.headers.get('Cache-Control', '')
     ok(f'{u}: kept by the CDN for an hour', 's-maxage=3600' in cc and 'public' in cc)
+    # Vercel's CDN never stores a response with "Vary: Cookie" (Flask adds it whenever the session is read)
+    ok(f'{u}: no Vary: Cookie (the CDN would refuse it) and no cookie set', 'cookie' not in r.headers.get('Vary', '').lower()
+       and 'Set-Cookie' not in r.headers)
 _q[0] = 0
 nf = fresh.get('/wp-login.php', headers=UA)
 ok('a bot\'s unknown address: plain 404, no database, kept by the CDN', nf.status_code == 404 and _q[0] == 0
@@ -185,7 +189,9 @@ ok('a counted browser\'s /visit doesn\'t touch the database', b1.post('/visit', 
 signed = appm.test_client()
 with signed.session_transaction() as sess:
     sess['_user_id'] = '1'; sess['_fresh'] = True
-ok('a signed-in page isn\'t kept by the CDN', 's-maxage' not in signed.get('/', headers=UA).headers.get('Cache-Control', ''))
+_sr = signed.get('/', headers=UA)
+ok('a signed-in page isn\'t kept by the CDN, and keeps Vary: Cookie', 's-maxage' not in _sr.headers.get('Cache-Control', '')
+   and 'Cookie' in _sr.headers.get('Vary', ''))
 ok('app pages aren\'t kept either', 's-maxage' not in fresh.get('/login', headers=UA).headers.get('Cache-Control', ''))
 with appm.app_context():
     db.session.execute(__import__('sqlalchemy').text('ALTER TABLE demo_stats DROP COLUMN site_visitors')); db.session.commit()
