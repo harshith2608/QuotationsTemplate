@@ -289,17 +289,9 @@ footer nav { display: flex; gap: 1.2rem; }
 .legal .contact { margin-top: .8rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
 .legal .contact p { margin: .2rem 0; }
 
-/* Cookie notice */
-.cookie {
-  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 30;
-  max-width: 640px; margin-inline: auto; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem;
-  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: .92rem;
-}
-.cookie p { flex: 1 1 260px; color: var(--muted); }
-.cookie p a { color: var(--ink); }
-.cookie .actions { display: flex; gap: .5rem; margin-left: auto; }
-.cookie .btn { padding: .5rem 1rem; font-size: .9rem; }
+/* Ad cookies note (footer) */
+.ad-note { flex-basis: 100%; margin: 0; font-size: .82rem; line-height: 1.5; }
+.ad-note a { color: inherit; }
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
 
 /* Free-trial form (pop-up and /free-trial page) */
@@ -385,20 +377,14 @@ footer nav { display: flex; gap: 1.2rem; }
 <footer>
   <div class="wrap">
     <span>© {{ year }} {{ legal_name }}</span>
-    <nav aria-label="Legal">{% if has_tutorials %}<a href="{{ url_for('marketing.tutorials_page') }}">Tutorials</a>{% endif %}<a href="{{ privacy_url }}">Privacy policy</a><a href="{{ terms_url }}">Terms of service</a>{% if tracking %}<button class="linklike" type="button" data-cookie-settings>Cookie settings</button>{% endif %}</nav>
+    <nav aria-label="Legal">{% if has_tutorials %}<a href="{{ url_for('marketing.tutorials_page') }}">Tutorials</a>{% endif %}<a href="{{ privacy_url }}">Privacy policy</a><a href="{{ terms_url }}">Terms of service</a></nav>
+    {% if tracking %}
+    <p class="ad-note" id="adNote">This site uses cookies from Meta and Google to see which of our ads bring people here
+      (<a href="{{ privacy_url }}#cookies">how</a>). <span data-ad-state>They're on.</span>
+      <button class="linklike" type="button" data-ad-toggle>Turn them off</button></p>
+    {% endif %}
   </div>
 </footer>
-
-{% if tracking %}
-<div class="cookie" id="cookieBanner" role="region" aria-label="Cookie notice" hidden>
-  <p>We'd like to use cookies from Meta and Google to see which of our ads bring people here. Nothing loads unless you accept.
-    <a href="{{ privacy_url }}#cookies">Privacy policy</a></p>
-  <div class="actions">
-    <button class="btn btn-ghost" type="button" data-consent="denied">Decline</button>
-    <button class="btn btn-primary" type="button" data-consent="granted">Accept</button>
-  </div>
-</div>
-{% endif %}
 
 {% if not standalone_trial %}
 {% from "marketing/_trial_form.html" import trial_form, trial_done with context %}
@@ -452,16 +438,21 @@ footer nav { display: flex; gap: 1.2rem; }
     try { if (googleConversion && window.gtag && T.gconv) gtag('event', 'conversion', { send_to: T.gconv }); } catch (e) {}
   }
 
-  const banner = document.getElementById('cookieBanner');
-  if (banner) {
-    const choice = store.get();
-    if (choice === 'granted') loadTracking(); else if (choice !== 'denied') banner.hidden = false;
-    banner.querySelectorAll('[data-consent]').forEach(b => b.addEventListener('click', () => {
-      const v = b.dataset.consent; store.set(v); banner.hidden = true;
-      if (v === 'granted') loadTracking();
-      else if (loaded) location.reload();     // withdrawing consent: reload so the tags are gone
-    }));
-    document.querySelectorAll('[data-cookie-settings]').forEach(b => b.addEventListener('click', () => { banner.hidden = false; }));
+  // Ad cookies are on unless this browser turned them off (the note at the bottom of every page)
+  const adsOff = () => store.get() === 'denied';
+  if (!adsOff()) loadTracking();
+  const note = document.getElementById('adNote');
+  if (note) {
+    const state = note.querySelector('[data-ad-state]'), toggle = note.querySelector('[data-ad-toggle]');
+    const show = () => {
+      state.textContent = adsOff() ? 'They\'re off in this browser.' : 'They\'re on.';
+      toggle.textContent = adsOff() ? 'Turn them on' : 'Turn them off';
+    };
+    show();
+    toggle.addEventListener('click', () => {
+      if (adsOff()) { store.set('granted'); loadTracking(); show(); }
+      else { store.set('denied'); if (loaded) location.reload(); else show(); }   // off: reload so the tags are gone
+    });
   }
 
   // WhatsApp buttons (plans, follow-up) count as a contact; plan buttons also as an ad conversion
@@ -581,13 +572,13 @@ footer nav { display: flex; gap: 1.2rem; }
     dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });   // tap outside closes
   }
 
-  // ── /ready: their app was just set up (the set-up page sends them here on the way to it). With ad consent, the
+  // ── /ready: their app was just set up (the set-up page sends them here on the way to it). Unless ad cookies are off, the
   // pixel records CompleteRegistration once per app, so the ads learn who goes on to use the app; then on to it ──
   const ready = document.querySelector('[data-ready-to]');
   if (ready) {
     const to = ready.dataset.readyTo, once = 'qr_registered_' + (ready.dataset.readyApp || '');
     let wait = 0;
-    if (store.get() === 'granted' && T.pixel) {
+    if (!adsOff() && T.pixel) {
       let seen = null;
       try { seen = localStorage.getItem(once); } catch (e) {}
       if (!seen) {
