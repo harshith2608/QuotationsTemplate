@@ -501,6 +501,131 @@ def _apply_boards(boards):
     plywood.clear_cache()
 
 
+def export(label=''):
+    """The business open now as a price list file (call inside its tenant context): the same format Load price list
+    reads, so it can be kept, edited (e.g. moved to pricing by item) and loaded back. How it prices; its materials
+    with their rates, plywood and descriptions (hidden ones too, "shown": false); boards; fittings; saved lines;
+    finishes; templates (their rooms and items by name; sizes, quantities and discounts aren't part of a price list);
+    its notes and payment terms; and how its quotation PDFs look. Read only."""
+    from datetime import datetime
+    from . import boq, finishes as F, layout, materials as M, plywood, quote_templates, quote_gst, tenancy
+    from .models import AppSetting, BoqItem, ItemRate, Material, PlywoodOption, PriceListItem
+    num = lambda v: round(float(v or 0), 2)
+    by_item = boq.enabled()
+    out = {'firm': f"{label or 'Price list'} (exported {datetime.utcnow():%d %b %Y})",
+           'pricing': 'item' if by_item else 'material'}
+
+    ply_ready = plywood.table_ready()
+    descs = M.descriptions()
+    rates = {}
+    for r in ItemRate.query.all():
+        rates.setdefault(r.wood_type, {})[r.work_type or ''] = num(r.rate_per_sqft)
+    from .catalog import WORK_TYPES
+    materials = []
+    for m in Material.query.order_by(Material.sort_order, Material.id).all():
+        mine = rates.get(m.name, {})
+        row = {'name': m.name}
+        if m.uses_work_types:
+            row['rates'] = {w: mine.get(w, 0.0) for w in WORK_TYPES}
+        else:
+            row['rate'] = mine.get('', 0.0)
+        if ply_ready:
+            row['on_plywood'] = bool(m.uses_plywood)
+        if descs.get(m.name):
+            row['description'] = descs[m.name]
+        if not m.active:
+            row['shown'] = False
+        materials.append(row)
+    if materials:
+        out['materials'] = materials
+
+    if ply_ready:
+        boards = []
+        for b in PlywoodOption.query.order_by(PlywoodOption.sort_order, PlywoodOption.id).all():
+            row = {'name': b.name}
+            if b.is_default:
+                row['default'] = True
+            elif num(b.adjustment):
+                row['difference'] = num(b.adjustment)
+            if plywood.details_ready() and b.details:
+                row['details'] = b.details
+            if not b.active and not b.is_default:
+                row['shown'] = False
+            boards.append(row)
+        if boards and not any(b.get('default') for b in boards):
+            boards[0]['default'] = True
+            boards[0].pop('difference', None)
+        if boards:
+            out['boards'] = boards
+
+    fittings = [{'name': f.name, 'price': num(f.price), **({'unit': f.unit} if f.unit else {})}
+                for f in PriceListItem.query.order_by(PriceListItem.name).all()]
+    if fittings:
+        out['fittings'] = fittings
+
+    lines = []
+    if boq._columns_ready(tenancy.current_schema()):
+        in_finish = F.line_ids()
+        for b in BoqItem.query.order_by(BoqItem.category, BoqItem.name).all():
+            row = {'name': b.name, 'unit': b.unit or 'nos', 'rate': num(b.rate)}
+            if b.description:
+                row['description'] = b.description
+            if b.category:
+                row['group'] = b.category
+            if b.id in in_finish:
+                row['finish'] = True
+            lines.append(row)
+        opts = F.all_options()
+        if len(opts) >= 2:
+            out['finishes'] = [{'name': o['name'], **({'extra': o['extra']} if n else {})} for n, o in enumerate(opts)]
+        elif any(l.get('finish') for l in lines):
+            for l in lines:
+                l.pop('finish', None)
+    if lines:
+        out['lines'] = lines
+
+    templates = []
+    for t in quote_templates._load():
+        rooms = []
+        for r in t.get('rooms') or []:
+            items = []
+            for it in r.get('items') or []:
+                name = str(it.get('name') or '').strip()
+                if not name:
+                    continue
+                kind = it.get('type')
+                if kind == 'measured' and it.get('wood_type'):
+                    row = {'name': name, 'material': it['wood_type']}
+                    if it.get('work_type'):
+                        row['work'] = it['work_type']
+                elif kind == 'fixed':
+                    row = {'name': name, 'type': 'fitting'}
+                else:
+                    row = {'name': name}
+                if it.get('description'):
+                    row['description'] = it['description']
+                items.append(row)
+            notes = [d for d in str(r.get('description') or '').split('\n') if d.strip()]
+            rooms.append({'name': r.get('name') or 'Section', 'items': items, **({'description': notes} if notes else {})})
+        templates.append({'name': t['name'], 'rooms': rooms})
+    if templates:
+        out['templates'] = templates
+
+    saved = AppSetting.get_many(list(SETTINGS))
+    settings = {k: v for k, v in saved.items() if v}
+    if settings:
+        out['settings'] = settings
+    options = {'layout': AppSetting.get(layout.LAYOUT_KEY, '') or layout.LAYOUT_ROOMS,
+               'show_rate': AppSetting.get(layout.HIDE_RATE_KEY, '') != '1',
+               'room_totals': AppSetting.get(layout.ROOM_TOTALS_KEY, '') == '1',
+               'show_board': AppSetting.get(layout.HIDE_BOARD_KEY, '') != '1'}
+    if options['layout'] not in layout.LAYOUTS:
+        options.pop('layout')
+    options['gst'] = float(quote_gst.rate()) if quote_gst.enabled() else False
+    out['options'] = options
+    return out
+
+
 def _add_quotations(quotations):
     """Real quotations from the firm's own sheets (e.g. ones already sent to customers), made by their first admin.
     One already loaded (same customer name and address) is skipped, so loading the file again adds nothing twice.
