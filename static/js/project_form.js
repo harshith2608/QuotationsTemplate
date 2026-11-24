@@ -53,23 +53,53 @@ function _findBoq(name) {
   const n = (name || '').trim().toLowerCase();
   return n ? BOQ_SAVED.find(b => b.name.toLowerCase() === n) : null;
 }
-// Finishes (Admin → Rates → Finishes): a line that comes in them gets a Finish choice; another finish's rate is the
-// base finish's rate + its % extra (Laminate ₹1,800 → Acrylic +25% ₹2,250)
-const FINISHES = (CATALOG.boqFinishes && CATALOG.boqFinishes.options && CATALOG.boqFinishes.options.length > 1)
-  ? CATALOG.boqFinishes : null;
-function _finishExtra(name) {
-  const f = FINISHES && FINISHES.options.find(o => o.name.toLowerCase() === (name || '').toLowerCase());
-  return f ? (f.extra || 0) : 0;
+// Item options (Admin → Rates → Item options): sections such as Finish and Board; a line that comes in a section gets
+// a choice from it. The rate is the base options' rate × (1 + the chosen %s) + the chosen ₹ per unit
+// (Laminate ₹1,800 → Acrylic +25% ₹2,250 → on Century Bond +₹400 ₹2,650). A line keeps its non-base choices as
+// "Acrylic|Century Bond" (option names are unique across sections).
+const OPT_SECS = (CATALOG.boqFinishes && CATALOG.boqFinishes.sections) || [];
+const FINISHES = OPT_SECS.length ? CATALOG.boqFinishes : null;
+function _optParts(str) { return String(str || '').split('|').map(s => s.trim()).filter(Boolean); }
+function _optFind(name) {
+  const key = (name || '').toLowerCase();
+  for (let si = 0; si < OPT_SECS.length; si++) {
+    const i = OPT_SECS[si].options.findIndex(o => o.name.toLowerCase() === key);
+    if (i >= 0) return { si, opt: OPT_SECS[si].options[i], base: i === 0 };
+  }
+  return null;
 }
-function finishOptions(selected) {
-  const list = FINISHES ? FINISHES.options.map(o => o.name) : [];
-  if (selected && !list.some(n => n.toLowerCase() === selected.toLowerCase())) list.push(selected);   // renamed since
-  const sel = (selected || (FINISHES ? FINISHES.base : '')).toLowerCase();
-  return list.map(n => {
-    const ex = _finishExtra(n);
-    const tag = ex ? ` (${ex > 0 ? '+' : ''}${ex}%)` : '';
-    return `<option value="${escHtml(n)}" ${n.toLowerCase() === sel ? 'selected' : ''}>${escHtml(n + tag)}</option>`;
-  }).join('');
+function _optExtras(str) {
+  let pct = 0, amt = 0;
+  _optParts(str).forEach(p => { const f = _optFind(p); if (f && !f.base) { pct += f.opt.extra || 0; amt += f.opt.amount || 0; } });
+  return { pct, amt };
+}
+function _optTag(o) {
+  if (o.amount) return ` (${o.amount > 0 ? '+' : '−'}₹${Math.abs(o.amount).toLocaleString('en-IN')})`;
+  return o.extra ? ` (${o.extra > 0 ? '+' : ''}${o.extra}%)` : '';
+}
+function sectionOptions(si, selected) {
+  const sec = OPT_SECS[si];
+  const sel = (selected || sec.base).toLowerCase();
+  return sec.options.map(o => `<option value="${escHtml(o.name)}" ${o.name.toLowerCase() === sel ? 'selected' : ''}>${escHtml(o.name + _optTag(o))}</option>`).join('');
+}
+// The line's choices from its selects (non-base ones only), plus any kept from before (renamed or removed since)
+function _lineChoices(ik, saved) {
+  const wrap = document.getElementById('item_finishwrap_' + ik);
+  if (!wrap) return '';
+  const out = [];
+  let any = false;
+  OPT_SECS.forEach((sec, si) => {
+    const el = document.getElementById(`item_opt_${ik}_${si}`), row = document.getElementById(`item_optrow_${ik}_${si}`);
+    if (!el || !row) return;
+    const chosen = el.value.toLowerCase() !== sec.base.toLowerCase() ? el.value : '';
+    const show = !!((saved && (saved.sections || (saved.finish && si === 0 ? [sec.name] : [])).includes(sec.name)) || chosen);
+    row.classList.toggle('d-none', !show);
+    row.classList.toggle('d-flex', show);
+    if (show) { any = true; if (chosen) out.push(chosen); }
+  });
+  const kept = _optParts(wrap.dataset.kept);
+  wrap.classList.toggle('d-none', !(any || kept.length));
+  return out.concat(kept).join('|');
 }
 // Photos on lines (turned on per business from the console): a small "Photo" button under the item's name; the photo
 // is made smaller in the browser (phone photos are several MB), uploaded at once, and the line keeps its id
@@ -1347,10 +1377,15 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
     </td>`;
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
-  const finishPick = (FINISHES || finish) ? `<div class="ki-finish align-items-center gap-1 mb-1 d-none" id="item_finishwrap_${ik}">
-        <span class="small text-muted">Finish</span>
-        <select class="form-select form-select-sm w-auto" id="item_finish_${ik}" data-prev="${escHtml(finish || (FINISHES ? FINISHES.base : ''))}"
-                onchange="onBoqFinish('${rk}','${ik}')" title="Another finish changes the rate by its % extra">${finishOptions(finish)}</select>
+  const picked = {}, kept = [];
+  _optParts(finish).forEach(p => { const f = _optFind(p); if (f) picked[f.si] = f.opt.name; else kept.push(p); });
+  const finishPick = (FINISHES || finish) ? `<div class="ki-finish mb-1 d-none" id="item_finishwrap_${ik}"
+        data-prev="${escHtml(finish || '')}" data-kept="${escHtml(kept.join('|'))}">
+        ${OPT_SECS.map((sec, si) => `<div class="align-items-center gap-1 mb-1 d-none" id="item_optrow_${ik}_${si}">
+          <span class="small text-muted">${escHtml(sec.name)}</span>
+          <select class="form-select form-select-sm w-auto" id="item_opt_${ik}_${si}" onchange="onBoqFinish('${rk}','${ik}')"
+                  title="Another ${escHtml(sec.name.toLowerCase())} changes the rate by its extra">${sectionOptions(si, picked[si])}</select></div>`).join('')}
+        ${kept.length ? `<div class="small text-muted">${escHtml(kept.join(', '))}</div>` : ''}
       </div>` : '';
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
              finishPick + sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
@@ -1378,8 +1413,11 @@ function onBoqField(rk, ik) {
     const unitEl = document.getElementById('item_unit_' + ik);
     if (unitEl) { unitEl.innerHTML = unitOptions(saved.unit || 'nos'); syncLumpSum(unitEl, document.getElementById('item_qty_' + ik)); }
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
-    const finEl = document.getElementById('item_finish_' + ik);          // a newly picked line starts in the base finish
-    if (finEl && FINISHES) { finEl.innerHTML = finishOptions(''); finEl.dataset.prev = FINISHES.base; }
+    const finWrapNew = document.getElementById('item_finishwrap_' + ik);   // a newly picked line starts on the base options
+    if (finWrapNew) {
+      OPT_SECS.forEach((sec, si) => { const el = document.getElementById(`item_opt_${ik}_${si}`); if (el) el.innerHTML = sectionOptions(si, ''); });
+      finWrapNew.dataset.prev = ''; finWrapNew.dataset.kept = '';
+    }
     // next: the length for a line measured by size, else the quantity (a lump sum: nothing more to type)
     const next = sizeMode(saved.unit) ? document.getElementById(`boq_${ik}_lft`)
                : saved.unit !== 'lump sum' ? document.getElementById('item_qty_' + ik) : null;
@@ -1391,16 +1429,7 @@ function onBoqField(rk, ik) {
     priceEl.placeholder = tbc ? 'to follow' : '';
   }
   const keepDefault = rooms[rk].items[ik].save_default;
-  const finWrap = document.getElementById('item_finishwrap_' + ik), finEl = document.getElementById('item_finish_' + ik);
-  let finish = '';
-  if (finWrap && finEl) {
-    const base = FINISHES ? FINISHES.base.toLowerCase() : '';
-    const chosen = finEl.value.toLowerCase() !== base ? finEl.value : '';
-    const show = !!((saved && saved.finish && FINISHES) || chosen);
-    finWrap.classList.toggle('d-none', !show);
-    finWrap.classList.toggle('d-flex', show);
-    finish = show ? chosen : '';
-  }
+  const finish = _lineChoices(ik, saved);
   let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
@@ -1423,17 +1452,18 @@ function onBoqField(rk, ik) {
   recalcAll();
 }
 
-// Another finish picked: the rate moves from the old finish's % to the new one's (a rate typed by hand moves too)
+// Another option picked: the rate moves from the old choices' extras to the new ones' (a rate typed by hand moves too)
 function onBoqFinish(rk, ik) {
-  const finEl = document.getElementById('item_finish_' + ik), priceEl = document.getElementById('item_price_' + ik);
-  if (!finEl) return;
-  const prev = finEl.dataset.prev || (FINISHES ? FINISHES.base : '');
+  const wrap = document.getElementById('item_finishwrap_' + ik), priceEl = document.getElementById('item_price_' + ik);
+  if (!wrap) return;
+  const saved = _findBoq(document.getElementById('item_name_' + ik)?.value);
+  const prev = _optExtras(wrap.dataset.prev), now = _lineChoices(ik, saved), next = _optExtras(now);
   const rate = parseFloat(priceEl?.value);
-  if (priceEl && rate > 0) {
-    const base = rate / (1 + _finishExtra(prev) / 100);
-    priceEl.value = Math.round(base * (1 + _finishExtra(finEl.value) / 100) * 100) / 100;
+  if (priceEl && rate > 0 && prev.pct > -100) {
+    const base = (rate - prev.amt) / (1 + prev.pct / 100);
+    priceEl.value = Math.max(Math.round((base * (1 + next.pct / 100) + next.amt) * 100) / 100, 0);
   }
-  finEl.dataset.prev = finEl.value;
+  wrap.dataset.prev = now;
   onBoqField(rk, ik);
 }
 

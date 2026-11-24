@@ -194,14 +194,15 @@ def qty_text(quantity):
 # ── Saved BOQ lines (Admin → Rates → BOQ lines) ──────────────────────────────
 
 def saved_lines(lump_only=False):
-    """[{name, description, unit, rate, category, finish?}] for the quotation form, by name (finish: it comes in the
-    business's finishes, app/finishes.py). lump_only: just the lump sums (priced by material)."""
-    from .finishes import line_ids, options
+    """[{name, description, unit, rate, category, finish?, sections?}] for the quotation form, by name (sections: the
+    item options' sections it comes in, app/finishes.py). lump_only: just the lump sums (priced by material)."""
+    from .finishes import line_sections
     from .models import BoqItem
     q = BoqItem.query.filter(BoqItem.unit == LUMP_SUM) if lump_only else BoqItem.query
-    in_finishes = line_ids() if not lump_only and options() else set()     # lines that come in Laminate / Acrylic…
+    in_secs = line_sections() if not lump_only else {}      # the item options' sections each line comes in
     return [{'name': b.name, 'description': b.description or '', 'unit': b.unit or 'nos', 'rate': b.rate or 0,
-             'category': b.category or 'Other', **({'finish': True} if b.id in in_finishes else {})}
+             'category': b.category or 'Other',
+             **({'finish': True, 'sections': in_secs[b.id]} if b.id in in_secs else {})}
             for b in q.order_by(BoqItem.id).all()]             # groups in the order they were added
 
 

@@ -52,7 +52,7 @@
       {% endif %}
       {% for r in room.rows %}
       <tr class="ki-cmp-{{ r.status }}">
-        <td class="fw-medium">{{ (r.new or r.old).name }}{% if r.new and r.new.finish %} <span class="small text-muted">({{ r.new.finish }} finish)</span>{% endif %}
+        <td class="fw-medium">{{ (r.new or r.old).name }}{% if r.new and r.new.finish %} <span class="small text-muted">({{ r.new.finish|replace('|', ', ') }})</span>{% endif %}
           {% if r.status == 'changed' %}<div class="small text-muted">{{ r.changed|sort|join(', ') }} changed</div>{% endif %}</td>
         <td class="small">{% if r.old %}<span class="{{ 'text-decoration-line-through' if r.status == 'removed' }}">{{ r.old_text }}</span>
             <div class="fw-semibold">{{ 'price to follow' if r.old.tbc else money(r.old.amount) }}</div>

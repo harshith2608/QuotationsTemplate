@@ -424,18 +424,21 @@ def _save_boq_lines():
     cats = request.form.getlist('bq_cat') or [''] * len(ids)
     delete_ids = {d for d in request.form.getlist('bq_delete') if d}
     existing = {str(b.id): b for b in BoqItem.query.all()}
-    new_ticks = []                         # each new row's Finishes box: a "0", then a "1" when ticked
-    for v in request.form.getlist('bq_newfin'):
-        if v == '0':
-            new_ticks.append(False)
-        elif v == '1' and new_ticks:
-            new_ticks[-1] = True
-    new_rows, new_ticked = 0, set()
+    sec_names = request.form.getlist('bq_secname')      # the item options' sections shown as tick columns
+    new_ticks = {}                         # each new row's box per section: a "0", then a "1" when ticked
+    for k in range(len(sec_names)):
+        ticks = new_ticks[k] = []
+        for v in request.form.getlist(f'bq_new_{k}'):
+            if v == '0':
+                ticks.append(False)
+            elif v == '1' and ticks:
+                ticks[-1] = True
+    new_rows, new_ticked = 0, {k: set() for k in range(len(sec_names))}
     seen = set()
     for item_id, name, desc, unit, rate, cat in zip(ids, names, descs, units, rates, cats):
-        ticked_new = False
+        ticked_new = []
         if not item_id:
-            ticked_new = new_rows < len(new_ticks) and new_ticks[new_rows]
+            ticked_new = [k for k, t in new_ticks.items() if new_rows < len(t) and t[new_rows]]
             new_rows += 1
         name = ' '.join(name.split())[:100]
         if item_id in delete_ids:
@@ -468,21 +471,35 @@ def _save_boq_lines():
             db.session.add(added)
             if ticked_new:
                 db.session.flush()
-                new_ticked.add(added.id)
-    if not errors and 'bq_finish_on' in request.form:      # the Finish column is shown: which lines come in finishes
+                for k in ticked_new:
+                    new_ticked[k].add(added.id)
+    if not errors and sec_names:            # the item options' columns are shown: which lines come in each section
         from . import finishes
-        ticked = {int(i) for i in request.form.getlist('bq_finish') if i.isdigit() and i not in delete_ids} | new_ticked
-        errors += finishes.save([(o['name'], o['extra']) for o in finishes.all_options()], ticked)
+        ticks = {n: set() | new_ticked[k] for k, n in enumerate(sec_names)}
+        for v in request.form.getlist('bq_opt'):
+            sec, _, i = v.rpartition('|')
+            if sec in ticks and i.isdigit() and i not in delete_ids:
+                ticks[sec].add(int(i))
+        errors += finishes.set_lines(ticks)
     return errors
 
 
 def _save_finishes():
-    """Finishes from Admin → Rates (the base first). Returns error messages."""
+    """Item options from Admin → Rates: sections (Finish, Board…), each with its options (the base first). A section's
+    ticked lines stay with it. Returns error messages."""
     from . import finishes
-    names, extras = request.form.getlist('fin_name'), request.form.getlist('fin_extra')
-    drop = set(request.form.getlist('fin_delete'))
-    opts = [(n, e) for i, (n, e) in enumerate(zip(names, extras)) if str(i) not in drop]
-    return finishes.save(opts, finishes.line_ids())
+    had = finishes.all_sections()
+    drop_secs = set(request.form.getlist('sec_delete'))
+    secs = []
+    for s, name in enumerate(request.form.getlist('sec_name')):
+        if str(s) in drop_secs:
+            continue
+        names, vals = request.form.getlist(f'opt_name_{s}'), request.form.getlist(f'opt_val_{s}')
+        kinds = request.form.getlist(f'opt_kind_{s}')
+        drop = set(request.form.getlist(f'opt_delete_{s}'))
+        opts = [(n, v, k) for i, (n, v, k) in enumerate(zip(names, vals, kinds)) if str(i) not in drop]
+        secs.append({'name': name, 'options': opts, 'lines': had[s]['lines'] if s < len(had) else set()})
+    return finishes.save_sections(secs)
 
 
 @admin_bp.route('/rates', methods=['GET', 'POST'])
@@ -520,7 +537,7 @@ def rates():
                 flash(err, 'danger')
         else:
             db.session.commit()
-            flash('Finishes saved. Tick the items that come in them under "Your items & rates".', 'success')
+            flash('Item options saved. Tick the items that come in each section under "Your items & rates".', 'success')
         return redirect(url_for('admin.rates') + '#finishes')
 
     if request.method == 'POST' and 'price_list_submit' in request.form:
@@ -632,8 +649,8 @@ def _presentation_texts():
 
 def _finish_context():
     from . import finishes
-    return {'finish_options': finishes.all_options(), 'finish_on': bool(finishes.options()),
-            'finish_ids': finishes.line_ids()}
+    return {'option_sections': finishes.all_sections(), 'tick_sections': finishes.sections(),
+            'max_sections': finishes.MAX_SECTIONS}
 
 
 def _boq_lines():

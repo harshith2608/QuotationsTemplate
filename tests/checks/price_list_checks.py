@@ -141,7 +141,7 @@ with app.app_context():
     ok('loaded: the finishes (base first) and which lines come in them', res['finishes'] == 3
        and [o['name'] for o in finishes.options()] == ['Laminate', 'Acrylic', 'Veneer'] and finishes.extra('acrylic') == 25
        and saved['Wardrobe'].get('finish') and not saved['Site Cleaning'].get('finish')
-       and '3 finishes' in price_list.summary_text(res))
+       and '3 item options' in price_list.summary_text(res))
     more = {'finishes': FIN['finishes'], 'lines': [{'name': 'Janitor Unit', 'unit': 'sqft', 'rate': 2350, 'finish': True}]}
     price_list.apply(price_list.parse(json.dumps(more).encode()))
     saved = {b['name']: b for b in boq.saved_lines()}
@@ -177,31 +177,98 @@ ok('the quotation page and WhatsApp text too', 'Wardrobe (Acrylic finish)' in c.
 e = c.get(f'/projects/{fid}/edit').text
 ok('editing brings the finish back', '"finish": "Acrylic"' in e)
 r = c.get('/admin/rates').text
-ok('Admin → Rates: a Finishes card (base rate, % extra) and a Finishes tick per item', 'id="finishes"' in r
-   and 'Base rate' in r and 'name="bq_finish"' in r and 'value="25"' in r)
-c.post('/admin/rates', data={'finish_submit': '1', 'fin_name': ['Laminate', 'Acrylic', 'Veneer', 'Membrane', ''],
-                             'fin_extra': ['0', '30', '40', '25', ''], 'fin_delete': ['2']})
+ok('Admin → Rates: an Item options card (section Finish, base rate, % extra) and a Finish tick per item', 'id="finishes"' in r
+   and 'Item options' in r and 'value="Finish"' in r and 'Base rate' in r and 'name="bq_opt"' in r and 'value="25"' in r)
+c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', ''],
+                             'opt_name_0': ['Laminate', 'Acrylic', 'Veneer', 'Membrane', ''],
+                             'opt_val_0': ['0', '30', '40', '25', ''], 'opt_kind_0': ['pct'] * 5, 'opt_delete_0': ['2'],
+                             'opt_name_1': ['', '', ''], 'opt_val_1': ['0', '', ''], 'opt_kind_1': ['pct'] * 3})
 with app.app_context():
     ok('…they can change the %, add one and remove one', [(o['name'], o['extra']) for o in finishes.options()]
-       == [('Laminate', 0), ('Acrylic', 30), ('Membrane', 25)] and finishes.line_ids())
+       == [('Laminate', 0), ('Acrylic', 30), ('Membrane', 25)] and finishes.line_ids() and len(finishes.all_sections()) == 1)
 with app.app_context():
     wid = str(BoqItem.query.filter_by(name='Wardrobe').first().id)
     rows = [(str(b.id), b.name, b.description or '', b.unit, str(b.rate), b.category or '') for b in BoqItem.query.all()]
-c.post('/admin/rates', data={'boq_submit': '1', 'bq_finish_on': '1', 'bq_id': [x[0] for x in rows], 'bq_name': [x[1] for x in rows],
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_secname': ['Finish'], 'bq_id': [x[0] for x in rows], 'bq_name': [x[1] for x in rows],
                              'bq_desc': [x[2] for x in rows], 'bq_unit': [x[3] for x in rows], 'bq_rate': [x[4] for x in rows],
-                             'bq_cat': [x[5] for x in rows], 'bq_finish': []})
+                             'bq_cat': [x[5] for x in rows], 'bq_opt': []})
 with app.app_context():
     ok('…and untick an item (no Finish choice for it any more)', not finishes.line_ids()
        and not any(b.get('finish') for b in boq.saved_lines()))
-ok('…a new line\'s row has its own Finishes tick', 'name="bq_newfin"' in c.get('/admin/rates').text)
-c.post('/admin/rates', data={'boq_submit': '1', 'bq_finish_on': '1',
+ok('…a new line\'s row has its own Finish tick', 'name="bq_new_0"' in c.get('/admin/rates').text)
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_secname': ['Finish'],
                              'bq_id': [x[0] for x in rows] + ['', '', ''], 'bq_name': [x[1] for x in rows] + ['Study Table', 'Shoe Rack', ''],
                              'bq_desc': [x[2] for x in rows] + ['', '', ''], 'bq_unit': [x[3] for x in rows] + ['sqft'] * 3,
                              'bq_rate': [x[4] for x in rows] + ['1500', '1200', ''], 'bq_cat': [x[5] for x in rows] + [''] * 3,
-                             'bq_finish': [wid], 'bq_newfin': ['0', '0', '1', '0']})
+                             'bq_opt': [f'Finish|{wid}'], 'bq_new_0': ['0', '0', '1', '0']})
 with app.app_context():
     ticked = {BoqItem.query.get(i).name for i in finishes.line_ids()}
     ok(f'…new lines saved with their tick: only the one ticked comes in finishes {ticked}', ticked == {'Wardrobe', 'Shoe Rack'})
+
+# ── Item options in sections: Finish (%), and Board (₹ per unit, a cheaper one takes off) ──
+c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', 'Board'],
+                             'opt_name_0': ['Laminate', 'Acrylic', 'Membrane', '', ''], 'opt_val_0': ['0', '30', '25', '', ''],
+                             'opt_kind_0': ['pct'] * 5,
+                             'opt_name_1': ['16mm 8*4 Century Sainik 710', '16mm 8*4 Century Bond 710', '16mm 8*4 Gurjan'],
+                             'opt_val_1': ['0', '400', '-100'], 'opt_kind_1': ['pct', 'amt', 'amt']})
+r = c.get('/admin/rates').text
+ok('a second section, Board, with ₹ per unit extras: its own tick column', 'value="Board"' in r and 'value="Board|' in r
+   and '₹ per unit' in r and 'name="bq_new_1"' in r)
+c.post('/admin/rates', data={'boq_submit': '1', 'bq_secname': ['Finish', 'Board'], 'bq_id': [x[0] for x in rows],
+                             'bq_name': [x[1] for x in rows], 'bq_desc': [x[2] for x in rows], 'bq_unit': [x[3] for x in rows],
+                             'bq_rate': [x[4] for x in rows], 'bq_cat': [x[5] for x in rows],
+                             'bq_opt': [f'Finish|{wid}', f'Board|{wid}']})
+with app.app_context():
+    w = {b['name']: b for b in boq.saved_lines()}['Wardrobe']
+    ok('the wardrobe comes in both sections', w.get('sections') == ['Finish', 'Board'])
+    ok('the rate: base × (1 + %) + ₹ (1,800 → Acrylic +30% → Bond +400 = 2,740; Gurjan −100 = 1,700)',
+       finishes.rate_for(1800, 'Acrylic|16mm 8*4 Century Bond 710') == 2740 and finishes.rate_for(1800, '16mm 8*4 Gurjan') == 1700
+       and finishes.base_rate(2740, 'Acrylic|16mm 8*4 Century Bond 710') == 1800)
+    ok('one choice kept per section, base ones dropped', finishes.clean('Laminate|16mm 8*4 Century Bond 710|16mm 8*4 Gurjan')
+       == '16mm 8*4 Century Bond 710')
+    ok('printed: a finish says so, a board prints as it is', finishes.label('Wardrobe', 'Acrylic|16mm 8*4 Century Bond 710')
+       == 'Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)')
+    form = finishes.for_form()
+    ok('the form gets both sections with their bases', [s['name'] for s in form['sections']] == ['Finish', 'Board']
+       and form['sections'][1]['base'] == '16mm 8*4 Century Sainik 710')
+c.post('/projects/new', data={'customer_name': 'Board Home', 'mobile': '9000000903', 'discount_type': 'none',
+                              'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Bedroom', 'items': [
+    {'name': 'Wardrobe', 'type': 'boq', 'quantity': 10, 'unit': 'sqft', 'unit_price': 2740,
+     'finish': 'Acrylic|16mm 8*4 Century Bond 710', 'save_default': True}]}])})
+with app.app_context():
+    bp = Project.query.order_by(Project.id.desc()).first()
+    bid = bp.id
+    it = Item.query.join(Item.room).filter(Room.project_id == bid).first()
+    ok('saved with both choices, the right total, and the default saved at the base rate',
+       it.finish == 'Acrylic|16mm 8*4 Century Bond 710' and it.wood_type == it.finish and bp.grand_total == 27400
+       and BoqItem.query.filter_by(name='Wardrobe').first().rate == 1800)
+    long_ = 'A' * 38 + '|' + 'B' * 38
+    class _I: wood_type = work_type = ''
+    x = _I(); finishes.store(x, long_)
+    ok('long choices are kept whole', len(x.wood_type) == 50 and x.work_type.startswith('+') and finishes.stored(x) == long_)
+pdf = pdftext(f'/projects/{bid}/pdf/customer')
+ok('the PDF prints "Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)" at 2,740',
+   'Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)' in pdf and '2,740' in pdf)
+ok('editing brings both choices back', '"finish": "Acrylic|16mm 8*4 Century Bond 710"' in c.get(f'/projects/{bid}/edit').text)
+with app.app_context():
+    out = price_list.export()
+    ok('the price list download has the sections and each line\'s', [s['name'] for s in out.get('choices') or []] == ['Finish', 'Board']
+       and out['choices'][1]['options'][1] == {'name': '16mm 8*4 Century Bond 710', 'amount': 400}
+       and next(l for l in out['lines'] if l['name'] == 'Wardrobe')['choices'] == ['Finish', 'Board'] and 'finishes' not in out)
+    AppSetting.set(finishes.KEY, ''); db.session.commit()
+    res = price_list.apply(price_list.parse(json.dumps(out).encode()), remove_starter=False)
+    ok('…and loads back as it was', [s['name'] for s in finishes.sections()] == ['Finish', 'Board']
+       and finishes.rate_for(1800, '16mm 8*4 Gurjan') == 1700
+       and {b['name']: b for b in boq.saved_lines()}['Wardrobe'].get('sections') == ['Finish', 'Board'])
+    ok('a line naming a section the file doesn\'t have is refused', 'no "choices" section' in
+       bad({'lines': [{'name': 'A', 'choices': ['Hardware']}]}))
+    # A business set up before sections: its one list of finishes reads as a section named Finish, nothing to redo
+    AppSetting.set(finishes.KEY, json.dumps({'options': [{'name': 'Laminate', 'extra': 0}, {'name': 'Acrylic', 'extra': 25}],
+                                             'lines': [int(wid)]})); db.session.commit()
+    ok('a business set up before sections needs nothing: same choice, rate and print',
+       [s['name'] for s in finishes.sections()] == ['Finish'] and finishes.rate_for(1800, 'Acrylic') == 2250
+       and {b['name']: b for b in boq.saved_lines()}['Wardrobe'].get('sections') == ['Finish']
+       and finishes.label('Wardrobe', 'Acrylic') == 'Wardrobe (Acrylic finish)')
     finishes.save([], []); db.session.commit()
     ok('no finishes: nothing changes (no choice offered)', finishes.for_form() is None
        and not any(b.get('finish') for b in boq.saved_lines()))

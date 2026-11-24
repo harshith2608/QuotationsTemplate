@@ -253,10 +253,11 @@ def _save_project_data(project, rooms_data, remember=True):
                 to_follow = kind == 'boq' and bool(id_.get('tbc'))     # "Price to follow": no rate yet
                 if to_follow:
                     unit_price = 0.0
-                finish = finishes.clean(id_.get('finish')) if kind == 'boq' else ''   # Acrylic…: kept in wood_type
+                finish = finishes.clean(id_.get('finish')) if kind == 'boq' else ''   # Acrylic|Century Bond…
                 item = Item(room_id=room.id, name=item_name[:100], item_type=kind,
                             quantity=quantity, unit_price=None if to_follow else unit_price,
-                            length=0, width=0, area=0, wood_type=finish, work_type='')
+                            length=0, width=0, area=0, wood_type='', work_type='')
+                finishes.store(item, finish)                    # kept in wood_type (and work_type when long)
                 if boq_ready and kind == 'boq':
                     item.unit = boq.clean_unit(id_.get('unit'))
                     # A size: the quantity is worked out from it (length × width × No's, or length × No's)

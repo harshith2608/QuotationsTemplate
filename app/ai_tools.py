@@ -358,7 +358,7 @@ def _size(value):
 def to_form(draft, cat):
     """The AI's draft → (the quotation form's rooms at the business's rates, names with no rate, measured items whose
     material wasn't clear)."""
-    from . import boq, materials as M
+    from . import boq, finishes, materials as M
     combos = {(w.lower(), (k or '').lower()): (w, k) for w, k, _ in cat['combos']}
     by_wood = {}
     for w, k, _ in cat['combos']:
@@ -392,10 +392,10 @@ def to_form(draft, cat):
                     qty = count                                     # "a TV unit", "wardrobes in both bedrooms"
                 row['quantity'] = qty if qty is not None else ''
                 fin = _finish(it.material, cat) if (line is None or line.get('finish')) else None
-                if fin and fin['extra']:
+                if fin and (fin['extra'] or fin['amount']):
                     row['finish'] = fin['name']                     # the base finish prints nothing extra
                 if line:
-                    row['unit_price'] = round(line['rate'] * (1 + (fin['extra'] if fin else 0) / 100), 2)
+                    row['unit_price'] = finishes.rate_for(line['rate'], row.get('finish', ''))
                 else:
                     row['tbc'] = True
                     row['check'] = 'price'                          # the step-by-step checklist: type its price
