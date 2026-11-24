@@ -492,6 +492,7 @@ def create_project():
                                               'address': address,
                                               'plywood_thickness': plywood_thickness},
                                    rooms_json=rooms_json,
+                                   from_bom=_from_bom(request.form.get('bom_id', type=int)),
                                    project=None)
 
         # If JS auto-saved a draft, promote it to complete instead of creating new
@@ -527,7 +528,6 @@ def create_project():
 
         _set_project_plywood(project, request.form)
         grand_total = _save_project_data(project, rooms_data)
-        __import__('app.room_areas', fromlist=['save_from_form']).save_from_form(project.id)   # never printed
         project.grand_total = grand_total
         project.status = 'complete'
         _ensure_creator_access(project, current_user)
@@ -544,6 +544,9 @@ def create_project():
                 photo_pages.set_cover_photo(project.id, int(cp))
             if request.form.get('package'):
                 photo_pages.set_package(project.id, request.form.get('package'))
+        bom = _from_bom(request.form.get('bom_id', type=int))
+        if bom:                                              # made from a BOM: shown on it (app/boms.py)
+            __import__('app.boms', fromlist=['link']).link(project.id, bom['bom'].id)
         db.session.commit()
         billing.record_revision(project, current_user)       # R1
         db.session.commit()
@@ -554,7 +557,7 @@ def create_project():
 
     # Start from an earlier quotation (Duplicate) or a template: everything but the customer
     from . import quote_templates as QT
-    start, started_from, form_data = None, None, {}
+    start, started_from, form_data, from_bom, bom_args = None, None, {}, None, ''
     from .demo import demo_enabled, sample_id
     if request.args.get('try') and demo_enabled() and sample_id():
         # Public demo, "Make your own": the sample's first room and a made-up customer, so a visitor only changes a size
@@ -572,6 +575,9 @@ def create_project():
             start = QT.start_from_project(src)
             form_cat = _form_catalog(src)                       # its materials and plywood
             started_from = f'quotation #{src.id} ({src.customer_name})'
+            from . import boms as _boms                         # a copy of a BOM's quotation (premium from basic)
+            src_bom = _boms.linked_bom(src.id) if _boms.can_use(current_user) else None
+            from_bom = _from_bom(src_bom.id) if src_bom else None
     elif request.args.get('template'):
         tpl = QT.get(request.args.get('template'))
         if tpl:
@@ -580,11 +586,42 @@ def create_project():
             if tpl.get('plywood') and _ply.known(tpl['plywood']):
                 form_cat['plywood_form']['selected'] = tpl['plywood']
             started_from = f'the "{tpl["name"]}" template'
-    return render_new_form(start, started_from, form_data, form_cat)
+    if request.args.get('bom', type=int):
+        # Create quotation on a BOM: its customer, and a room for each area ticked (after a template's rooms, if any)
+        from_bom = _from_bom(request.args.get('bom', type=int))
+        if from_bom:
+            from . import boms as _boms
+            bom = from_bom['bom']
+            rooms = _boms.start_rooms(bom, _boms.picked_indexes(request.args.get('areas')))
+            existing = json.loads(start['rooms_json']) if start else []
+            have = {str(r.get('name', '')).lower() for r in existing}
+            merged = existing + [r for r in rooms if r['name'].lower() not in have]
+            start = dict(start or {'discount_type': 'none', 'discount_value': 0, 'plywood_thickness': ''},
+                         rooms_json=json.dumps(merged))
+            form_data = {'customer_name': bom.customer_name, 'mobile': bom.mobile, 'email': bom.email or '',
+                         'address': bom.address or ''}
+            from_bom['rooms'] = len(rooms)
+            from urllib.parse import urlencode
+            bom_args = '&' + urlencode({'bom': bom.id, 'areas': request.args.get('areas', '')})
+    return render_new_form(start, started_from, form_data, form_cat, from_bom=from_bom, bom_args=bom_args)
+
+
+def _from_bom(bom_id):
+    """{'bom', 'rows', 'total'} for a BOM the current user may make quotations from, else None."""
+    if not bom_id:
+        return None
+    from . import boms as _boms
+    if not _boms.can_use(current_user):
+        return None
+    bom = _boms.get(bom_id)
+    if bom is None:
+        return None
+    rows = _boms.areas_of(bom)
+    return {'bom': bom, 'rows': rows, 'total': _boms.total(rows)}
 
 
 def render_new_form(start=None, started_from=None, form_data=None, form_cat=None, ai_draft=None, template_edit=None,
-                    title='New Quotation', template_media=False):
+                    title='New Quotation', template_media=False, from_bom=None, bom_args=''):
     """The new quotation form, filled in from `start` (a quotation, template or AI draft: rooms_json, discount,
     plywood) when given. ai_draft: what the AI says to check (app/ai_tools.py)."""
     from . import ai_tools, quote_templates as QT
@@ -602,7 +639,7 @@ def render_new_form(start=None, started_from=None, form_data=None, form_cat=None
                            start=start, started_from=started_from, templates=QT.all_templates(),
                            chosen_template=request.args.get('template', ''),
                            ai_draft=ai_draft, ai_draft_on=ai_tools.available('draft') or ai_tools.available('photos') or demo_enabled(),
-                           project=None)
+                           from_bom=from_bom, bom_args=bom_args, project=None)
 
 
 @projects_bp.route('/projects/<int:project_id>/template', methods=['POST'])
@@ -1080,7 +1117,6 @@ def edit_project(project_id):
         project.plywood_thickness = plywood_thickness
         _set_project_plywood(project, request.form)
         grand_total = _save_project_data(project, rooms_data)
-        __import__('app.room_areas', fromlist=['save_from_form']).save_from_form(project.id)   # never printed
         project.grand_total = grand_total
         project.status = 'complete'
         if not was_draft:
@@ -1209,7 +1245,7 @@ def delete_project(project_id):
     profiles.forget_project(project.id)
     __import__('app.pdf_choices', fromlist=['forget']).forget(project_id)
     __import__('app.photo_pages', fromlist=['forget']).forget(project_id)
-    __import__('app.room_areas', fromlist=['forget']).forget(project_id)
+    __import__('app.boms', fromlist=['forget_project']).forget_project(project_id)
     db.session.delete(project)
     db.session.commit()
     flash(f'Quotation for {project.customer_name} deleted.', 'success')

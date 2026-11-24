@@ -1254,9 +1254,10 @@ def settings():
             AppSetting.set(rate_access.SCREEN_KEY, '1' if request.form.get('hide_rates_on_screen') == '1' else '0')
             if 'nos_on_rate_shown' in request.form:     # No's on area lines: pieces, or a factor on the rate
                 AppSetting.set(boq.NOS_RATE_KEY, '1' if request.form.get('nos_on_rate') == '1' else '')
-            if 'room_areas_shown' in request.form:      # the Room areas sheet on the quotation form (never printed)
-                from . import room_areas
-                AppSetting.set(room_areas.KEY, '1' if request.form.get('room_areas_on') == '1' else '')
+            if 'boms_shown' in request.form:            # BOMs: room-wise measurements, then quotations from them
+                from . import boms
+                AppSetting.set(boms.KEY, '1' if request.form.get('boms_on') == '1' else '')
+                AppSetting.set(boms.STAFF_OFF_KEY, '' if request.form.get('boms_staff') == '1' else '1')
         elif tab == 'units':
             from . import units
             size, area = request.form.get('size_unit'), request.form.get('area_unit')
@@ -1301,7 +1302,9 @@ def settings():
     pricing = {'mode': boq.pricing_mode(), 'item_ready': boq.ready(),
                'hide_on_screen': __import__('app.rate_access', fromlist=['hidden_on_screen']).hidden_on_screen(),
                'nos_on_rate': boq.nos_on_rate(),
-               'room_areas': __import__('app.room_areas', fromlist=['enabled']).enabled()} \
+               'boms': __import__('app.boms', fromlist=['enabled']).enabled(),
+               'boms_staff': __import__('app.boms', fromlist=['staff_allowed']).staff_allowed(),
+               'boms_ready': __import__('app.boms', fromlist=['ready']).ready()} \
         if tab == 'pricing' else None
     return render_template('admin/settings.html', title='Settings', tab=tab, support_links=support_links, pricing=pricing,
                            initial_layout=layout.initial_layout(), layouts=layout.layouts(),

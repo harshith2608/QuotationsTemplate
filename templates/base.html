@@ -135,6 +135,13 @@
             <i class="bi bi-plus-circle"></i><span>New Quote</span>
           </a>
         </li>
+        {% if boms_for(current_user) %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint and request.endpoint.startswith('boms.') %}active{% endif %}" href="{{ url_for('boms.list_boms') }}">
+            <i class="bi bi-rulers"></i><span>BOMs</span>
+          </a>
+        </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'billing.balances_due' %}active{% endif %}"
              href="{{ url_for('billing.balances_due') }}">

@@ -487,8 +487,7 @@ async function _doSaveDraft() {
         draft_id: draftId || null,
         customer_name: customerName, mobile, email,
         ...(PLY.enabled ? { plywood: quotationPly() } : {}),
-        rooms_data: roomsPayload,
-        ...(document.getElementById('room-areas-tbody') ? { room_areas: roomAreaRows() } : {})
+        rooms_data: roomsPayload
       })
     });
     if (resp.ok) {
@@ -2081,7 +2080,6 @@ function _validateForm() {
     return _validateForm();
   }
   document.getElementById('rooms_data_field').value = JSON.stringify(roomsPayload);
-  syncRoomAreas();
   return true;
 }
 
@@ -2286,101 +2284,3 @@ const aiSteps = (() => {
   return { note, start, open, close, go };
 })();
 
-// ─── Room areas (Settings → Pricing; app/room_areas.py) ───────────────────────
-// The home's measurement sheet: area name, length × width, its area and the total. For the business only: sent with
-// the quotation (hidden field / draft) and never printed. Sizes typed in the business's unit, sent in feet.
-let raCounter = 0;
-
-function addRoomArea(name, lengthFt, widthFt) {
-  const tbody = document.getElementById('room-areas-tbody');
-  if (!tbody) return null;
-  const n = ++raCounter;
-  const tr = document.createElement('tr');
-  tr.id = 'ra_row_' + n;
-  tr.dataset.ra = n;
-  tr.innerHTML = `
-    <td><div class="ki-ac-wrap"><input type="text" class="form-control form-control-sm" id="ra_${n}_name" maxlength="60"
-         placeholder="e.g. Living room" value="${escHtml(name || '')}" oninput="roomAreasChanged()" autocomplete="off"></div></td>
-    <td>${sizeInputs('ra_' + n, 'l', lengthFt ? decimalToFtIn(lengthFt) : null, 'roomAreasChanged()')}</td>
-    <td>${sizeInputs('ra_' + n, 'w', widthFt ? decimalToFtIn(widthFt) : null, 'roomAreasChanged()')}</td>
-    <td class="text-end small fw-semibold" id="ra_${n}_area"></td>
-    <td><button type="button" class="btn btn-sm btn-outline-danger px-1 py-0" onclick="removeRoomArea(${n})" title="Remove">
-        <i class="bi bi-x-lg"></i></button></td>`;
-  tbody.appendChild(tr);
-  applyUnitInputs(tr);
-  const nameIn = document.getElementById(`ra_${n}_name`);
-  if (nameIn && masterRooms.length) initAutocomplete(nameIn, masterRooms);
-  roomAreasChanged(true);
-  return n;
-}
-
-function removeRoomArea(n) {
-  document.getElementById('ra_row_' + n)?.remove();
-  roomAreasChanged();
-}
-
-function _raSize(n, which) {
-  const ft = document.getElementById(`ra_${n}_${which}ft`)?.value;
-  const inch = document.getElementById(`ra_${n}_${which}in`)?.value;
-  const v = ftInToDecimal(ft, inch);
-  return v > 0 && isFinite(v) ? Math.round(v * 1e6) / 1e6 : 0;
-}
-
-// [{name, length, width}] in feet: rows with a name or a size
-function roomAreaRows() {
-  return [...document.querySelectorAll('#room-areas-tbody tr[data-ra]')].map(tr => {
-    const n = tr.dataset.ra;
-    return { name: (document.getElementById(`ra_${n}_name`)?.value || '').trim(), length: _raSize(n, 'l'), width: _raSize(n, 'w') };
-  }).filter(r => r.name || r.length || r.width);
-}
-
-function syncRoomAreas() {
-  const field = document.getElementById('room_areas_field');
-  if (field) field.value = JSON.stringify(roomAreaRows());
-}
-
-function roomAreasChanged(quiet) {
-  let total = 0;
-  document.querySelectorAll('#room-areas-tbody tr[data-ra]').forEach(tr => {
-    const n = tr.dataset.ra;
-    const a = _raSize(n, 'l') * _raSize(n, 'w');
-    total += a;
-    const cell = document.getElementById(`ra_${n}_area`);
-    if (cell) cell.textContent = a ? showArea(a) : '';
-  });
-  const shown = showArea(total) + ' ' + UNITS.areaLabel;
-  const tot = document.getElementById('room-areas-total');
-  if (tot) tot.textContent = shown;
-  const badge = document.getElementById('room-areas-total-badge');
-  if (badge) badge.textContent = total ? shown : '';
-  syncRoomAreas();
-  if (!quiet) scheduleDraftSave();
-}
-
-// A row for each room of the quotation not in the table yet (an empty row is filled first)
-function roomAreasFromRooms() {
-  const have = new Set(roomAreaRows().map(r => r.name.toLowerCase()).filter(Boolean));
-  const names = Object.keys(rooms).map(rk => (document.getElementById('room_name_' + rk)?.value || '').trim())
-    .filter(nm => nm && !have.has(nm.toLowerCase()) && (have.add(nm.toLowerCase()), true));
-  if (!names.length) { showFormAlert(`Every ${BIZ.section.toLowerCase()} below is already in Room areas.`, 'info'); return; }
-  names.forEach(nm => {
-    const empty = [...document.querySelectorAll('#room-areas-tbody tr[data-ra]')].find(tr => {
-      const n = tr.dataset.ra;
-      return !document.getElementById(`ra_${n}_name`)?.value.trim() && !_raSize(n, 'l') && !_raSize(n, 'w');
-    });
-    if (empty) document.getElementById(`ra_${empty.dataset.ra}_name`).value = nm;
-    else addRoomArea(nm);
-  });
-  roomAreasChanged();
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const tbody = document.getElementById('room-areas-tbody');
-  if (!tbody) return;
-  document.querySelectorAll('.ra-area-label').forEach(el => { el.textContent = UNITS.areaLabel; });
-  let saved = [];
-  try { saved = JSON.parse(document.getElementById('room-areas-data')?.textContent || '[]'); } catch (e) { saved = []; }
-  saved.forEach(r => addRoomArea(r.name, r.length, r.width));
-  if (!saved.length) addRoomArea();
-  roomAreasChanged(true);
-});

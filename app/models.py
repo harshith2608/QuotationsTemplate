@@ -903,3 +903,22 @@ def _forget_settings(session, previous_transaction):
     from flask import g, has_app_context
     if has_app_context():
         g.pop('_app_settings', None)
+
+
+class Bom(db.Model):
+    """A BOM: a home's room-wise measurements, taken before quoting (app/boms.py). Its customer is encrypted like a
+    quotation's. areas: JSON [{'name', 'length', 'width'}] (sizes in feet). Quotations made from it are linked in
+    app_settings (boms.LINK_PREFIX + quotation id)."""
+    __tablename__ = 'boms'
+    id            = db.Column(db.Integer, primary_key=True)
+    customer_name = db.Column(EncryptedText, nullable=False)
+    mobile        = db.Column(EncryptedText, nullable=False)
+    email         = db.Column(EncryptedText, nullable=True)
+    address       = db.Column(EncryptedText, nullable=True)
+    areas         = db.Column(db.Text, nullable=False, default='[]')
+    created_by    = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f'<Bom {self.id}>'

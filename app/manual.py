@@ -182,14 +182,28 @@ ARTICLES = [
          steps=['On the quotation form, find the line in its room.',
                 'Tap the up or down arrow beside its remove (×) button to move it.',
                 'Save: the quotation, PDF and customer\'s link show the lines in that order.']),
-    dict(id='room-areas', title='Note the home\'s room areas (length × width)', link='projects.create_project',
-         summary='A table on the quotation form for each area\'s size and the total; never printed.',
-         tags='room areas measurements measure sizes length width sqft sq m total carpet area floor house home sheet',
-         steps=['An admin turns it on once: Settings → Pricing → Room areas.',
-                'On the quotation form, open Room areas (above the rooms) and type each area\'s name, length and width.',
-                'Each area and the total are worked out as you type, in your own unit. "Add the rooms below" adds a row for '
-                'each room of the quotation.',
-                'They\'re saved with the quotation for you and your team; the PDF, customer\'s link and WhatsApp never show them.']),
+    dict(id='new-bom', title='Measure a home first: New BOM', link='boms.list_boms', needs='boms',
+         summary='Room-wise measurements (length × width, area, total), saved on their own before you quote.',
+         tags='bom bill of measurements measurement measure room areas sizes length width sqft sq m total site visit new bom',
+         steps=['Tap BOMs at the top, then New BOM.',
+                'Type the customer\'s name and mobile (email and address are optional).',
+                'Add each area: its name, length and width, in your own unit. Each area and the total are worked out.',
+                'Save. The BOMs page lists every BOM; open one to edit it or make quotations from it.',
+                'BOMs are for you and your team only: never printed or sent to the customer.']),
+    dict(id='bom-quote', title='Make a quotation from a BOM (basic and premium)', link='boms.list_boms', needs='boms',
+         summary='Create quotation on a BOM: its customer, and the areas you tick as rooms.',
+         tags='bom quotation from measurements create quotation basic premium options rooms tick',
+         steps=['Open the BOM and find Create quotation.',
+                'Tick the areas that become rooms (a passage with no work can stay unticked).',
+                'Optionally pick a starting quotation; its rooms and lines come too.',
+                'Tap Create quotation: the customer and rooms are filled in, and the measurements show for reference. Add the items and save.',
+                'Do it again for another option (premium): every quotation made from the BOM is listed on it.']),
+    dict(id='bom-settings', title='Turn BOMs on, and who can use them', link='admin.settings', admin=True, tab='pricing',
+         summary='Settings → Pricing → BOMs; staff use them too unless you turn that off.',
+         tags='bom boms settings staff employees access turn on off measurements',
+         steps=['Open Settings → Pricing → BOMs and turn on BOMs.',
+                'Staff can use BOMs is on by default: everyone sees every BOM and makes quotations from them. Turn it off for admins only.',
+                'Save.']),
     dict(id='photos', title='Add photos to a quotation', link='projects.list_projects', needs='photo_pages',
          summary='A cover photo and gallery pages in the PDF and on the customer\'s link.',
          tags='photos images pictures gallery cover design render',
@@ -372,6 +386,11 @@ def flags():
     try:
         from . import material_list
         out['material_list'] = material_list.available()
+    except Exception:
+        pass
+    try:
+        from . import boms
+        out['boms'] = boms.enabled() and boms.ready()
     except Exception:
         pass
     try:
