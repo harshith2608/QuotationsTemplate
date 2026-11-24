@@ -1,0 +1,117 @@
+{% extends "console/_layout.html" %}
+{% block title %}Usage{% endblock %}
+{% block content %}
+<h1>Usage</h1>
+<p class="muted small">How much each running trial ({{ trials }}) and paying customer ({{ customers }}) uses QuoteRoom, read
+  live from their apps. Tap a column to sort. Quotations count saved ones (not drafts or the untouched sample);
+  7d / 30d are quotations made in the last 7 / 30 days; Confirmed+ have reached Confirmed, Ongoing or Completed.</p>
+
+<div class="row" style="margin-bottom:10px;gap:8px;align-items:center">
+  <input type="search" id="uSearch" placeholder="Search name or company" style="max-width:260px" aria-label="Search">
+  <div class="row" role="group" aria-label="Show" style="gap:4px">
+    <button type="button" class="btn btn-sm btn-primary" data-ukind="">All</button>
+    <button type="button" class="btn btn-sm" data-ukind="trial">Trials</button>
+    <button type="button" class="btn btn-sm" data-ukind="customer">Customers</button>
+  </div>
+</div>
+
+{% set cols = [('users', 'Users'), ('quotations', 'Quotations'), ('quotes_7d', '7d'), ('quotes_30d', '30d'),
+               ('drafts', 'Drafts'), ('won', 'Confirmed+'), ('templates', 'Templates'), ('links', 'Links sent'),
+               ('responses', 'Customer replies'), ('invoices', 'Invoices'), ('payments', 'Payments'),
+               ('saved_lines', 'Saved lines'), ('fittings', 'Fittings'), ('photos', 'Photos'),
+               ('material_lists', 'Material lists')] %}
+<div class="card" style="overflow-x:auto;padding:0">
+  <table id="usageTable" class="small">
+    <thead>
+      <tr>
+        <th data-sort="text" style="cursor:pointer;white-space:nowrap">Firm</th>
+        {% for k, label in cols %}<th data-sort="num" style="cursor:pointer;text-align:right;white-space:nowrap">{{ label }}</th>{% endfor %}
+        <th data-sort="num" style="cursor:pointer;white-space:nowrap">Last used</th>
+        <th style="white-space:nowrap">Set up</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      {% set u = r.u or {} %}
+      {% set company = u.company_name or r.name %}
+      <tr data-kind="{{ r.kind }}" data-search="{{ [r.slug, company]|select|join(' ')|lower }}">
+        <td data-v="{{ r.slug }}" style="white-space:nowrap">
+          <a href="{{ r.href }}"><strong>{{ r.slug }}</strong></a>
+          <span class="badge {{ r.badge[1] }}">{{ 'customer · ' if r.kind == 'customer' }}{{ r.badge[0] }}</span>
+          {% if company %}<div class="muted">{{ company }}</div>{% endif %}
+          {% if r.error %}<div style="color:var(--bad);white-space:normal;max-width:280px">{{ r.error }}</div>{% endif %}
+        </td>
+        {% for k, label in cols %}
+          {% set v = u.get(k) %}
+          <td data-v="{{ v if v is not none else -1 }}" style="text-align:right">
+            {%- if v is none %}<span class="muted">–</span>
+            {%- elif k == 'users' %}{{ v }}{% if u.staff %} <span class="muted">({{ u.admins }}+{{ u.staff }})</span>{% endif %}
+            {%- elif v == 0 %}<span class="muted">0</span>
+            {%- else %}<strong>{{ v }}</strong>{% endif -%}
+          </td>
+        {% endfor %}
+        <td data-v="{{ u.last_seen_at.timestamp()|int if u.last_seen_at else 0 }}" style="white-space:nowrap">
+          {{ u.last_seen_at|ago if u.last_seen_at else 'never' }}</td>
+        <td style="white-space:nowrap">
+          {{ 'company' if u.company_set else '<span class="muted">no company</span>'|safe }}{{ ' · logo' if u.logo_set }}
+          {% if u.setup_tour %}<div class="muted">{{ u.setup_tour }}</div>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="{{ cols|length + 3 }}" class="muted">No running trials or customers.</td></tr>
+    {% endfor %}
+    </tbody>
+    {% if rows %}
+    <tfoot>
+      <tr>
+        <th>Total</th>
+        {% for k, label in cols %}<th style="text-align:right">{{ totals[k] }}</th>{% endfor %}
+        <th></th><th></th>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+<p class="muted small">Users: everyone who can sign in (admins + staff). Links sent: online quotation links; Customer
+  replies: accepted or asked for changes on a link. Payments: payments they recorded from their own customers. Saved
+  lines / Fittings: their own BOQ lines and price list. – : not in their app's version yet.</p>
+
+<script>
+(() => {
+  const table = document.getElementById('usageTable');
+  if (!table) return;
+  const body = table.tBodies[0];
+  const search = document.getElementById('uSearch');
+  let kind = '';
+  const filter = () => {
+    const q = (search.value || '').trim().toLowerCase();
+    [...body.rows].forEach(tr => {
+      if (!tr.dataset.kind) return;
+      tr.hidden = (kind && tr.dataset.kind !== kind) || (q && !tr.dataset.search.includes(q));
+    });
+  };
+  search.addEventListener('input', filter);
+  document.querySelectorAll('[data-ukind]').forEach(b => b.addEventListener('click', () => {
+    kind = b.dataset.ukind;
+    document.querySelectorAll('[data-ukind]').forEach(x => x.classList.toggle('btn-primary', x === b));
+    filter();
+  }));
+  [...table.tHead.rows[0].cells].forEach((th, i) => {
+    if (!th.dataset.sort) return;
+    th.addEventListener('click', () => {
+      const num = th.dataset.sort === 'num';
+      const desc = th.dataset.dir ? th.dataset.dir === 'asc' : num;     // numbers: biggest first
+      [...table.tHead.rows[0].cells].forEach(x => { if (x !== th) delete x.dataset.dir; });
+      th.dataset.dir = desc ? 'desc' : 'asc';
+      const rows = [...body.rows].filter(r => r.dataset.kind);
+      rows.sort((a, b) => {
+        const x = a.cells[i].dataset.v, y = b.cells[i].dataset.v;
+        const c = num ? parseFloat(x) - parseFloat(y) : x.localeCompare(y);
+        return desc ? -c : c;
+      });
+      rows.forEach(r => body.appendChild(r));
+    });
+  });
+})();
+</script>
+{% endblock %}

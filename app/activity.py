@@ -87,3 +87,47 @@ def usage():
     out['last_seen_at'] = max(seen) if seen else None
     out['used'] = bool(out['quotations'] or out['company_set'] or out['logo_set'] or out['last_login_at'])
     return out
+
+
+# Tables counted on the console's Usage page: (key, model name in app.models). Missing in an older database: None.
+COUNTED = (('invoices', 'Invoice'), ('payments', 'Payment'), ('links', 'QuoteShare'), ('responses', 'QuoteResponse'),
+           ('revisions', 'QuoteRevision'), ('photos', 'ItemImage'), ('saved_lines', 'BoqItem'),
+           ('fittings', 'PriceListItem'), ('materials', 'Material'), ('material_lists', 'MaterialList'))
+WON_STAGES = ('confirmed', 'ongoing', 'completed')
+
+
+def details():
+    """Everything the console's Usage page shows for the current business (inside its app/tenant context):
+    usage() plus users by role, quotations (all time, last 7 and 30 days, drafts, confirmed or further), templates and
+    the counts in COUNTED. Through the models, so a trial's own schema is used."""
+    from datetime import timedelta
+    from sqlalchemy import func, inspect, select
+    from . import db, models, quote_templates, sample_quote, tenancy
+    from .models import Project, User
+    out = usage()
+    sample = sample_quote.untouched_id()
+    own = (lambda q: q.where(Project.id != sample)) if sample else (lambda q: q)
+    count = lambda q: db.session.scalar(q) or 0
+    now = datetime.utcnow()
+    done = Project.status == 'complete'
+    out.update(
+        admins=count(select(func.count(User.id)).where(User.role == 'admin')),
+        quotations=count(own(select(func.count(Project.id)).where(done))),
+        drafts=count(own(select(func.count(Project.id)).where(Project.status == 'draft'))),
+        quotes_7d=count(own(select(func.count(Project.id)).where(done, Project.created_at >= now - timedelta(days=7)))),
+        quotes_30d=count(own(select(func.count(Project.id)).where(done, Project.created_at >= now - timedelta(days=30)))),
+        won=count(own(select(func.count(Project.id)).where(done, Project.stage.in_(WON_STAGES)))),
+        templates=len(quote_templates._load()),
+    )
+    out['staff'] = max(out['users'] - out['admins'], 0)
+    try:
+        tables = set(inspect(db.session.connection()).get_table_names(schema=tenancy.current_schema()))
+    except Exception:
+        tables = None
+    for key, name in COUNTED:
+        model = getattr(models, name)
+        if tables is not None and model.__tablename__ not in tables:
+            out[key] = None
+            continue
+        out[key] = count(select(func.count()).select_from(model))
+    return out
