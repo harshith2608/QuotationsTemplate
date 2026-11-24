@@ -663,11 +663,18 @@ def save_as_template(project_id):
 @login_required
 @admin_required
 def manage_templates():
-    """Rename or delete quotation templates."""
+    """Admin → Templates: make (New template), clone, rename or delete quotation templates."""
     from . import quote_templates as QT
     if request.method == 'POST':
         tid = request.form.get('id', '')
         try:
+            if request.form.get('action') in ('new', 'clone'):
+                new_id = QT.create(request.form.get('name')) if request.form.get('action') == 'new' \
+                    else QT.clone(tid, request.form.get('name'))
+                db.session.commit()
+                flash('Template made. Add or change its rooms and lines, then Save template.'
+                      if request.form.get('action') == 'new' else 'Template cloned. Change what differs, then Save template.', 'success')
+                return redirect(url_for('projects.edit_template', template_id=new_id))
             if request.form.get('action') == 'delete':
                 QT.delete(tid)
                 flash('Template deleted.', 'success')

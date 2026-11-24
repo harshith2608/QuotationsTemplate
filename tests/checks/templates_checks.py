@@ -76,3 +76,33 @@ ok('staff can start from a template but not save or manage them', '3 BHK (' in s
    and staff.get('/templates').status_code == 403)
 r = staff.get('/projects/new?from=999999').text
 ok('Duplicate of an unknown quotation: just a blank one', 'Copied from' not in r)
+
+# Admin → Templates: New template and Clone (quote_templates.create / clone)
+from app import quote_templates as _QT
+ok('Templates is in the Admin menu', 'bi-bookmarks' in c.get('/projects').text and '>Templates<' in c.get('/projects').text)
+r = c.post('/templates', data={'action': 'new', 'name': 'From Scratch'})
+with app.app_context():
+    t_new = next(t for t in _QT._load() if t['name'] == 'From Scratch')
+ok('New template makes an empty one and opens it to add lines', r.status_code == 302 and t_new['rooms'] == []
+   and f'/templates/{t_new["id"]}/edit' in r.headers['Location'])
+ok('the empty template opens in the editor', c.get(f'/templates/{t_new["id"]}/edit').status_code == 200)
+ok('a name already used is refused', 'already exists' in c.post('/templates', data={'action': 'new', 'name': 'from scratch'},
+                                                                    follow_redirects=True).text)
+with app.app_context():
+    _QT.update(t_new['id'], [{'name': 'Kitchen', 'items': [{'type': 'fixed', 'name': 'Chimney', 'quantity': 1, 'unit_price': 15000}]}],
+               'percentage', 5)
+    from app import db as _db
+    _db.session.commit()
+page = c.get('/templates').text
+ok('Clone suggests "<name> (copy)"', 'value="From Scratch (copy)"' in page)
+r = c.post('/templates', data={'action': 'clone', 'id': t_new['id'], 'name': 'From Scratch Premium'})
+with app.app_context():
+    twin = next(t for t in _QT._load() if t['name'] == 'From Scratch Premium')
+    orig = _QT.get(t_new['id'])
+ok('Clone copies rooms, lines and discount under the new name', twin['id'] != orig['id'] and twin['rooms'] == orig['rooms']
+   and twin['discount_value'] == 5 and f'/templates/{twin["id"]}/edit' in r.headers['Location'])
+with app.app_context():
+    _QT.update(twin['id'], [{'name': 'Kitchen', 'items': [{'type': 'fixed', 'name': 'Chimney', 'quantity': 1, 'unit_price': 25000}]}])
+    _db.session.commit()
+    ok('changing the clone leaves the original as it was', _QT.get(t_new['id'])['rooms'][0]['items'][0]['unit_price'] == 15000)
+    ok('a second copy gets "(copy 2)"', _QT.copy_name('From Scratch', _QT._load() + [{'name': 'From Scratch (copy)'}]) == 'From Scratch (copy 2)')

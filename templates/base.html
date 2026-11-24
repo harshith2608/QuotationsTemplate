@@ -94,6 +94,7 @@
 <!-- ===== NAVBAR ===== -->
 {% set admin_links = [('admin.setup', 'signpost-2', 'Setup guide'), ('admin.dashboard', 'speedometer2', 'Dashboard'), ('admin.reports', 'bar-chart-line', 'Reports'),
                        ('admin.users', 'people', 'Users'), ('admin.rates', 'currency-rupee', 'Rates'),
+                       ('projects.manage_templates', 'bookmarks', 'Templates'),
                        ('admin.costs', 'graph-up-arrow', 'Costs & Profit'), ('admin.payment_settings', 'credit-card', 'Payment Settings'),
                        ('admin.settings', 'sliders', 'Settings'), ('admin.notifications', 'bell', 'Notifications')] %}
 {% if ai_import_on %}{% set admin_links = admin_links[:1] + [('admin.ai_import', 'magic', 'Import a quotation')] + admin_links[1:] %}{% endif %}
