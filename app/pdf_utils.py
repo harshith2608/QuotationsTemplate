@@ -435,6 +435,17 @@ def _boq_elements(project, page_width, palette, styles, snap=None):
     return [table] + _totals_elements(snap, page_width, palette)
 
 
+def _built_up_area(project):
+    """'1,185.25 sqft': the total of the BOM the quotation was made from (or of the earlier Room areas rows), for the
+    first page's customer details; '' when BOMs are off or there's none."""
+    try:
+        from . import boms, units
+        ref = boms.reference(project)
+    except Exception:
+        return ''
+    return units.area(ref['total']) if ref and ref['total'] > 0 else ''
+
+
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
     """
     Generate a professional PDF quotation and return a BytesIO buffer.
@@ -521,13 +532,13 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ['Customer Name', project.customer_name, 'Mobile', project.mobile],
         ['Email', project.email or '—', 'Prepared By', project.creator.display_name],
     ]
+    built = _built_up_area(project)
+    if built:                                      # the BOM's total (app/boms.py), with BOMs on
+        cust_data.append(['Built-up area', built, '', ''])
     if project.address:
         cust_data.append(['Address', Paragraph(project.address, normal_style), '', ''])
     cust_table = Table(cust_data, colWidths=['18%', '32%', '18%', '32%'])
-    span_cmds = []
-    if project.address:
-        last = len(cust_data) - 1
-        span_cmds = [('SPAN', (1, last), (3, last))]
+    span_cmds = [('SPAN', (1, i), (3, i)) for i in range(2, len(cust_data))]   # rows after the first two: one wide cell
     cust_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
         ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
@@ -978,13 +989,13 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
         ['Customer Name', cust['name'], 'Mobile', cust['mobile']],
         ['Email', cust['email'] or '—', 'Prepared By', project.creator.display_name],
     ]
+    built = _built_up_area(project)
+    if built:                                      # the BOM's total (app/boms.py), with BOMs on
+        cust_data.append(['Built-up area', built, '', ''])
     if cust['address']:
         cust_data.append(['Address', Paragraph(escape(cust['address']), normal_style), '', ''])
     cust_table = Table(cust_data, colWidths=['18%', '32%', '18%', '32%'])
-    span_cmds = []
-    if cust['address']:
-        last = len(cust_data) - 1
-        span_cmds = [('SPAN', (1, last), (3, last))]
+    span_cmds = [('SPAN', (1, i), (3, i)) for i in range(2, len(cust_data))]   # rows after the first two: one wide cell
     cust_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
         ('BACKGROUND', (2, 0), (2, -1), GREY_BG),

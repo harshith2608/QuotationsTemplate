@@ -4,11 +4,24 @@
 <div class="mt-3 mb-3" style="max-width:820px">
   <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-bookmarks me-2 text-primary"></i>Quotation templates</h4>
   <p class="text-muted">Start a new quotation from a template instead of from blank: every room, line, description and rate
-    is copied, then you change the customer and the quantities. Save any quotation as a template from its page
-    (<strong>Save as template</strong>); <strong>Edit lines</strong> changes a template's rooms, lines, descriptions and rates. Templates are not quotations: they don't appear in your lists or reports.</p>
+    is copied, then you change the customer and the quantities. Make one here (<strong>New template</strong>), copy one
+    that's close (<strong>Clone</strong>), or save any quotation as a template from its page (<strong>Save as template</strong>);
+    <strong>Edit lines</strong> changes a template's rooms, lines, descriptions and rates. Templates are not quotations:
+    they don't appear in your lists or reports.</p>
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body py-2">
+      <form method="post" class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="small fw-semibold text-nowrap" for="newTplName"><i class="bi bi-plus-circle me-1 text-primary"></i>New template</label>
+        <input type="text" id="newTplName" name="name" class="form-control form-control-sm" maxlength="60" required
+               placeholder="e.g. 3 BHK premium" style="max-width:280px">
+        <button class="btn btn-sm btn-primary ki-btn-primary" type="submit" name="action" value="new">Make and add lines</button>
+      </form>
+    </div>
+  </div>
   {% if not templates %}
-  <div class="alert alert-light border">No templates yet. Open a quotation you'd like to reuse, e.g. a typical 2 BHK, and click
-    <strong>Save as template</strong>.</div>
+  <div class="alert alert-light border">No templates yet. Make one above, or open a quotation you'd like to reuse, e.g. a
+    typical 2 BHK, and click <strong>Save as template</strong>.</div>
   {% endif %}
   {% for t in templates %}
   <div class="card shadow-sm border-0 mb-2">
@@ -21,6 +34,13 @@
         <button class="btn btn-sm btn-outline-primary" type="submit" name="action" value="rename">Rename</button>
       </form>
       <a class="btn btn-sm btn-outline-primary" href="{{ url_for('projects.edit_template', template_id=t.id) }}"><i class="bi bi-pencil me-1"></i>Edit lines</a>
+      <form method="post" data-of="{{ t.name }}"
+            onsubmit="const f = this.querySelector('[name=name]'); const n = prompt('Name for the copy of ' + this.dataset.of + ':', f.value); if (!n || !n.trim()) return false; f.value = n.trim(); return true;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="id" value="{{ t.id }}">
+        <input type="hidden" name="name" value="{{ t.copy_name }}">
+        <button class="btn btn-sm btn-outline-primary" type="submit" name="action" value="clone" title="A copy to change, instead of starting from scratch"><i class="bi bi-copy me-1"></i>Clone</button>
+      </form>
       <a class="btn btn-sm btn-primary ki-btn-primary" href="{{ url_for('projects.create_project', template=t.id) }}">New quotation from it</a>
       <form method="post" onsubmit="return confirm('Delete the template {{ t.name|e }}? Quotations made from it are not affected.')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

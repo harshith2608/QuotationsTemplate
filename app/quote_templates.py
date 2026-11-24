@@ -31,9 +31,10 @@ def _store(templates):
 
 def all_templates():
     """[{id, name, rooms, lines, saved_at}] (without the content), newest first."""
-    return [{'id': t['id'], 'name': t['name'], 'rooms': len(t.get('rooms') or []),
+    templates = _load()
+    return [{'id': t['id'], 'name': t['name'], 'rooms': len(t.get('rooms') or []), 'copy_name': copy_name(t['name'], templates),
              'lines': sum(len(r.get('items') or []) for r in t.get('rooms') or []), 'saved_at': t.get('saved_at', '')}
-            for t in sorted(_load(), key=lambda t: t.get('saved_at', ''), reverse=True)]
+            for t in sorted(templates, key=lambda t: t.get('saved_at', ''), reverse=True)]
 
 
 def get(template_id):
@@ -91,6 +92,59 @@ def put(name, rooms):
                       'plywood_thickness': '', 'plywood': None, 'saved_at': datetime.utcnow().isoformat(timespec='seconds')})
     _store(templates)
     return tid
+
+
+def _new_name(name, templates):
+    name = ' '.join((name or '').split())[:NAME_MAX]
+    if not name:
+        raise ValueError('Give the template a name, e.g. "2 BHK turnkey".')
+    if any(t['name'].lower() == name.lower() for t in templates):
+        raise ValueError(f'A template called "{name}" already exists. Choose another name.')
+    if len(templates) >= LIMIT:
+        raise ValueError(f'You have {LIMIT} templates already. Delete one first.')
+    return name
+
+
+def create(name):
+    """A new, empty template called `name` (Admin → Templates → New template): rooms and lines are added with Edit
+    lines. Returns its id."""
+    templates = _load()
+    name = _new_name(name, templates)
+    tid = secrets.token_hex(4)
+    templates.append({'id': tid, 'name': name, 'rooms': [], 'discount_type': 'none', 'discount_value': 0,
+                      'plywood_thickness': '', 'plywood': None, 'saved_at': datetime.utcnow().isoformat(timespec='seconds')})
+    _store(templates)
+    return tid
+
+
+def clone(template_id, name):
+    """A copy of a template under a new name: rooms, lines, rates, discount, plywood and its photo pages. Returns the
+    copy's id."""
+    import copy
+    templates = _load()
+    src = next((t for t in templates if t['id'] == template_id), None)
+    if not src:
+        raise ValueError('That template no longer exists.')
+    name = _new_name(name, templates)
+    twin = copy.deepcopy(src)
+    twin.update(id=secrets.token_hex(4), name=name, saved_at=datetime.utcnow().isoformat(timespec='seconds'))
+    if (src.get('package') or '') == src['name']:
+        twin.pop('package', None)              # a package named after the template follows the new name
+    templates.append(twin)
+    _store(templates)
+    return twin['id']
+
+
+def copy_name(name, templates=None):
+    """'2 BHK (copy)', or '2 BHK (copy 2)'… when that's taken: the name Clone suggests."""
+    names = {t['name'].lower() for t in (templates if templates is not None else _load())}
+    base = f'{name} (copy)'[:NAME_MAX]
+    n = 2
+    candidate = base
+    while candidate.lower() in names:
+        candidate = f'{name} (copy {n})'[:NAME_MAX]
+        n += 1
+    return candidate
 
 
 def rename(template_id, name):

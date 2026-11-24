@@ -771,18 +771,27 @@
     </div>
   </div>
   {% endif %}
-  <div class="card shadow-sm border-0 mb-3" id="room-areas">
-    <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>Room areas</div>
+  <div class="card shadow-sm border-0 mb-3" id="boms">
+    <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>BOMs (room-wise measurements)</div>
     <div class="card-body">
-      <input type="hidden" name="room_areas_shown" value="1">
+      <input type="hidden" name="boms_shown" value="1">
       <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" role="switch" name="room_areas_on" value="1" id="room_areas_on"
-               {{ 'checked' if pricing.room_areas }}>
-        <label class="form-check-label fw-semibold" for="room_areas_on">Room areas on the quotation form</label>
+        <input class="form-check-input" type="checkbox" role="switch" name="boms_on" value="1" id="boms_on"
+               {{ 'checked' if pricing.boms }}>
+        <label class="form-check-label fw-semibold" for="boms_on">BOMs</label>
       </div>
-      <div class="form-text">A table at the top of the quotation form for the home's measurements: each area's length ×
-        width, its {{ units.area_label() }} and the total (Foyer 5 × 4.5 = 22.5, Living room 6 × 5 = 30…). Saved with the
-        quotation for you and your team only; never on the PDF, the customer's link or WhatsApp.</div>
+      <div class="form-text mb-2">A <strong>BOMs</strong> page and <strong>New BOM</strong>: the customer and each area's
+        length × width, its {{ units.area_label() }} and the total (Foyer 5 × 4.5 = 22.5, Living room 6 × 5 = 30…), saved
+        before you quote. <strong>Create quotation</strong> on a BOM starts a quotation with its customer and the areas you
+        tick as rooms; one BOM can give several (a basic and a premium). The quotation PDF's first page shows the total as
+        <strong>Built-up area</strong>; the room-by-room measurements are never printed or sent.
+        {% if pricing.boms and not pricing.boms_ready %}<span class="text-danger">Needs the latest update of your app. Please contact support.</span>{% endif %}</div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" name="boms_staff" value="1" id="boms_staff"
+               {{ 'checked' if pricing.boms_staff }}>
+        <label class="form-check-label fw-semibold" for="boms_staff">Staff can use BOMs</label>
+      </div>
+      <div class="form-text">On: everyone in your team sees every BOM, makes new ones and quotations from them. Off: admins only.</div>
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3" id="hide-rates">

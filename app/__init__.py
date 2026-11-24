@@ -134,6 +134,8 @@ def create_app(config_name='default'):
     from .ai_tools_bp import ai_tools_bp
     app.register_blueprint(share_bp)
     app.register_blueprint(material_list_bp)
+    from .boms_bp import boms_bp
+    app.register_blueprint(boms_bp)
     app.register_blueprint(ai_tools_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(plan_bp)
@@ -218,8 +220,9 @@ def create_app(config_name='default'):
         except Exception:
             return False
 
-    from .room_areas import for_form as _room_areas_form
-    app.jinja_env.globals['room_areas_form'] = _room_areas_form   # the quotation form's Room areas sheet
+    from . import boms as _boms
+    app.jinja_env.globals['bom_reference'] = _boms.reference      # the quotation form: the BOM it was made from
+    app.jinja_env.globals['boms_for'] = _boms.can_use              # the BOMs menu item
 
     @app.context_processor
     def inject_globals():
