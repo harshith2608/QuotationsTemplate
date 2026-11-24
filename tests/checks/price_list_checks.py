@@ -210,7 +210,7 @@ c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', 'Board
                              'opt_name_0': ['Laminate', 'Acrylic', 'Membrane', '', ''], 'opt_val_0': ['0', '30', '25', '', ''],
                              'opt_kind_0': ['pct'] * 5,
                              'opt_name_1': ['16mm 8*4 Century Sainik 710', '16mm 8*4 Century Bond 710', '16mm 8*4 Gurjan'],
-                             'opt_val_1': ['0', '400', '-100'], 'opt_kind_1': ['pct', 'amt', 'amt']})
+                             'opt_val_1': ['0', '400', '-100'], 'opt_kind_1': ['pct', 'amt', 'amt'], 'sec_quote': ['1']})
 r = c.get('/admin/rates').text
 ok('a second section, Board, with ₹ per unit extras: its own tick column', 'value="Board"' in r and 'value="Board|' in r
    and '₹ per unit' in r and 'name="bq_new_1"' in r)
@@ -231,6 +231,10 @@ with app.app_context():
     form = finishes.for_form()
     ok('the form gets both sections with their bases', [s['name'] for s in form['sections']] == ['Finish', 'Board']
        and form['sections'][1]['base'] == '16mm 8*4 Century Sainik 710')
+    ok('Board is chosen per quotation, Finish per line', [s['quote'] for s in form['sections']] == [False, True])
+ok('…the quotation form has the "Item options for this quotation" card', 'id="quoteOptionsCard"' in c.get('/projects/new?blank=1').text
+   and 'function onQuoteOption' in c.get('/static/js/project_form.js').text)
+ok('…and Rates shows it ticked', 'name="sec_quote" value="1" checked' in c.get('/admin/rates').text)
 c.post('/projects/new', data={'customer_name': 'Board Home', 'mobile': '9000000903', 'discount_type': 'none',
                               'discount_value': '0', 'rooms_data': json.dumps([{'name': 'Bedroom', 'items': [
     {'name': 'Wardrobe', 'type': 'boq', 'quantity': 10, 'unit': 'sqft', 'unit_price': 2740,
@@ -254,10 +258,11 @@ with app.app_context():
     out = price_list.export()
     ok('the price list download has the sections and each line\'s', [s['name'] for s in out.get('choices') or []] == ['Finish', 'Board']
        and out['choices'][1]['options'][1] == {'name': '16mm 8*4 Century Bond 710', 'amount': 400}
+       and out['choices'][1].get('per_quotation') and not out['choices'][0].get('per_quotation')
        and next(l for l in out['lines'] if l['name'] == 'Wardrobe')['choices'] == ['Finish', 'Board'] and 'finishes' not in out)
     AppSetting.set(finishes.KEY, ''); db.session.commit()
     res = price_list.apply(price_list.parse(json.dumps(out).encode()), remove_starter=False)
-    ok('…and loads back as it was', [s['name'] for s in finishes.sections()] == ['Finish', 'Board']
+    ok('…and loads back as it was', [(s['name'], s['quote']) for s in finishes.sections()] == [('Finish', False), ('Board', True)]
        and finishes.rate_for(1800, '16mm 8*4 Gurjan') == 1700
        and {b['name']: b for b in boq.saved_lines()}['Wardrobe'].get('sections') == ['Finish', 'Board'])
     ok('a line naming a section the file doesn\'t have is refused', 'no "choices" section' in

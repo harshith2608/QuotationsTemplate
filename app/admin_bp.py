@@ -490,6 +490,7 @@ def _save_finishes():
     from . import finishes
     had = finishes.all_sections()
     drop_secs = set(request.form.getlist('sec_delete'))
+    per_quote = set(request.form.getlist('sec_quote'))
     secs = []
     for s, name in enumerate(request.form.getlist('sec_name')):
         if str(s) in drop_secs:
@@ -498,7 +499,8 @@ def _save_finishes():
         kinds = request.form.getlist(f'opt_kind_{s}')
         drop = set(request.form.getlist(f'opt_delete_{s}'))
         opts = [(n, v, k) for i, (n, v, k) in enumerate(zip(names, vals, kinds)) if str(i) not in drop]
-        secs.append({'name': name, 'options': opts, 'lines': had[s]['lines'] if s < len(had) else set()})
+        secs.append({'name': name, 'options': opts, 'lines': had[s]['lines'] if s < len(had) else set(),
+                     'quote': str(s) in per_quote})
     return finishes.save_sections(secs)
 
 

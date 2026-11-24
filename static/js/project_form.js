@@ -82,6 +82,54 @@ function sectionOptions(si, selected) {
   const sel = (selected || sec.base).toLowerCase();
   return sec.options.map(o => `<option value="${escHtml(o.name)}" ${o.name.toLowerCase() === sel ? 'selected' : ''}>${escHtml(o.name + _optTag(o))}</option>`).join('');
 }
+// Sections chosen per quotation (Admin → Rates: "Choose per quotation"): the quotation's default in each, at the top
+// of the form. New lines start on it; changing it moves every line still on the old default (lines changed on their
+// own keep theirs). Not stored: on editing, it's the choice most of the quotation's lines in that section have.
+const quoteDefault = {};
+function _quoteSecs() { return OPT_SECS.map((s, si) => ({ s, si })).filter(x => x.s.quote); }
+function _visibleOptSelects(si) {
+  return Array.from(document.querySelectorAll(`select[id^="item_opt_"][id$="_${si}"]`))
+    .filter(el => !document.getElementById(el.id.replace('item_opt_', 'item_optrow_'))?.classList.contains('d-none'));
+}
+function initQuoteOptions() {
+  const card = document.getElementById('quoteOptionsCard'), box = document.getElementById('quoteOptions');
+  const secs = _quoteSecs();
+  if (!card || !box || !secs.length) return;
+  secs.forEach(({ s, si }) => {
+    const counts = {};
+    _visibleOptSelects(si).forEach(el => { counts[el.value] = (counts[el.value] || 0) + 1; });
+    const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    quoteDefault[si] = top || s.base;
+  });
+  box.innerHTML = secs.map(({ s, si }) => `<label class="form-label small fw-medium mb-1" for="quote_opt_${si}">${escHtml(s.name)}</label>
+    <select class="form-select form-select-sm mb-2" id="quote_opt_${si}" onchange="onQuoteOption(${si})">${sectionOptions(si, quoteDefault[si])}</select>`).join('');
+  card.classList.remove('d-none');
+}
+function onQuoteOption(si) {
+  const el = document.getElementById('quote_opt_' + si);
+  if (!el) return;
+  const old = (quoteDefault[si] || OPT_SECS[si].base).toLowerCase();
+  quoteDefault[si] = el.value;
+  _visibleOptSelects(si).forEach(sel => {
+    if (sel.value.toLowerCase() !== old) return;              // changed on its own: keeps it
+    const m = sel.id.match(/^item_opt_(.+)_\d+$/), ik = m && m[1];
+    const rk = Object.keys(rooms).find(k => rooms[k].items[ik]);
+    if (!rk) return;
+    sel.value = el.value;
+    onBoqFinish(rk, ik);
+  });
+}
+// A line just added from a saved one: the quotation's defaults for the sections it comes in, the rate moved to match
+function applyQuoteDefaults(rk, ik) {
+  const saved = _findBoq(document.getElementById('item_name_' + ik)?.value);
+  if (!saved || !saved.sections) return;
+  let any = false;
+  _quoteSecs().forEach(({ s, si }) => {
+    const sel = document.getElementById(`item_opt_${ik}_${si}`);
+    if (sel && saved.sections.includes(s.name) && quoteDefault[si] && quoteDefault[si] !== s.base) { sel.value = quoteDefault[si]; any = true; }
+  });
+  if (any) onBoqFinish(rk, ik);
+}
 // The line's choices from its selects (non-base ones only), plus any kept from before (renamed or removed since)
 function _lineChoices(ik, saved) {
   const wrap = document.getElementById('item_finishwrap_' + ik);
@@ -1398,6 +1446,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
+  if (finish === undefined) applyQuoteDefaults(rk, ik);    // a new line (not one loaded from the quotation)
   addPhotoControl(rk, ik);
   addCostControl(rk, ik);
   return ik;
@@ -1417,6 +1466,7 @@ function onBoqField(rk, ik) {
     if (finWrapNew) {
       OPT_SECS.forEach((sec, si) => { const el = document.getElementById(`item_opt_${ik}_${si}`); if (el) el.innerHTML = sectionOptions(si, ''); });
       finWrapNew.dataset.prev = ''; finWrapNew.dataset.kept = '';
+      setTimeout(() => applyQuoteDefaults(rk, ik), 0);       // then the quotation's defaults (after this update)
     }
     // next: the length for a line measured by size, else the quantity (a lump sum: nothing more to type)
     const next = sizeMode(saved.unit) ? document.getElementById(`boq_${ik}_lft`)
@@ -2314,3 +2364,6 @@ const aiSteps = (() => {
   return { note, start, open, close, go };
 })();
 
+
+// Item options chosen per quotation: once the quotation's lines are on the form
+document.addEventListener('DOMContentLoaded', () => setTimeout(initQuoteOptions, 0));

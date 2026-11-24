@@ -404,7 +404,9 @@
           other option adds a % of that rate or a ₹ amount per unit (sqft, rft, nos…); a cheaper one can take off
           (−100). Tick each section on the items that come in it; on a quotation those items get one choice per
           section and the rate changes by itself. Base options aren't printed; others are
-          ("Wardrobe (Acrylic finish, Century Bond)").
+          ("Wardrobe (Acrylic finish, Century Bond)"). Tick <strong>Choose per quotation</strong> on a section to pick
+          it once at the top of each quotation (e.g. this home is on Century Bond): every line in it follows, and any
+          line can still be changed on its own.
         </p>
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -415,6 +417,7 @@
               <span class="small text-muted text-nowrap">Section</span>
               <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" value="{{ sec.name }}" maxlength="40"
                      placeholder="{{ 'e.g. Finish' if not option_sections else 'Add a section, e.g. Board' }}" aria-label="Section name">
+              <label class="small text-nowrap ms-2" title="The quotation form gets this choice at the top: the default for every line in it, on that quotation"><input class="form-check-input me-1" type="checkbox" name="sec_quote" value="{{ s }}" {{ 'checked' if sec.quote }}>Choose per quotation</label>
               {% if not is_new %}<label class="small text-muted ms-auto text-nowrap"><input class="form-check-input me-1" type="checkbox" name="sec_delete" value="{{ s }}">Remove section</label>{% endif %}
             </div>
             <table class="table table-bordered align-middle mb-0 bg-white">

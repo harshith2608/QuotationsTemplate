@@ -22,9 +22,10 @@ rates are for it); lines that come in them say "finish": true (app/finishes.py):
     {"finishes": [{"name": "Laminate"}, {"name": "Acrylic", "extra": 25}, {"name": "Veneer", "extra": 25}],
      "lines": [{"name": "Wardrobe", "unit": "sqft", "rate": 1800, "finish": true}, ...]}
 Item options in sections of your own (optional, by item; "finishes" above is a section named Finish): each option
-adds a % ("extra") or ₹ per unit ("amount", can be negative); lines name the sections they come in:
+adds a % ("extra") or ₹ per unit ("amount", can be negative); lines name the sections they come in; "per_quotation":
+the section is chosen once at the top of each quotation (each line can still differ):
     {"choices": [{"name": "Board", "options": [{"name": "Century Sainik 710"}, {"name": "Century Bond 710", "amount": 400},
-                                               {"name": "Gurjan", "amount": -100}]}],
+                                               {"name": "Gurjan", "amount": -100}], "per_quotation": true}],
      "lines": [{"name": "Wardrobe", "unit": "sqft", "rate": 1800, "choices": ["Board"]}, ...]}
 
 Quotations (optional): real quotations from the firm's own sheets, added as quotations (by their first admin);
@@ -138,7 +139,7 @@ def parse(raw):
             opts.append({'name': oname, 'extra': extra, 'amount': amount})
         if len(opts) < 2:
             raise PriceListError(f'{sname}: list the base option and at least one other.')
-        sections.append({'name': sname, 'options': opts})
+        sections.append({'name': sname, 'options': opts, 'quote': bool(s.get('per_quotation'))})
 
     from .catalog import WORK_TYPES
     materials = []
@@ -619,7 +620,7 @@ def export(label=''):
         elif secs:
             out['choices'] = [{'name': s['name'], 'options': [
                 {'name': o['name'], **({'amount': o['amount']} if o['amount'] else {'extra': o['extra']} if n else {})}
-                for n, o in enumerate(s['options'])]} for s in secs]
+                for n, o in enumerate(s['options'])], **({'per_quotation': True} if s['quote'] else {})} for s in secs]
     if lines:
         out['lines'] = lines
 

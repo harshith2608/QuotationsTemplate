@@ -2,7 +2,8 @@
 (a wardrobe at ₹1,800/sqft in laminate, +25% in acrylic; +₹400/sqft on Century Bond in place of Century Sainik).
 
 The business lists its options once (Admin → Rates → Item options), in sections it names itself (Finish, Board,
-Hardware…). In each section the first option is the base (the saved lines' rates are for it); every other one adds
+Hardware…). A section can be "chosen per quotation": the quotation form then has its choice at the top, as that
+quotation's default for every line in it (each line can still differ). In each section the first option is the base (the saved lines' rates are for it); every other one adds
 a % of the base rate or a ₹ amount per unit (either can be negative: a cheaper board). Each saved line is ticked for
 the sections it comes in. On a quotation such a line gets one choice per section; the rate is
     base rate × (1 + the chosen %s / 100) + the chosen ₹ amounts
@@ -60,7 +61,7 @@ def all_sections():
         if not isinstance(s, dict):
             continue
         opts = [o for o in s.get('options') or [] if isinstance(o, dict) and o.get('name')]
-        out.append({'name': str(s.get('name') or LEGACY_SECTION)[:NAME_MAX],
+        out.append({'name': str(s.get('name') or LEGACY_SECTION)[:NAME_MAX], 'quote': bool(s.get('quote')),
                     'options': [{'name': str(o['name'])[:NAME_MAX],
                                  'extra': 0.0 if n == 0 or o.get('amount') not in (None, '') else _num(o.get('extra')),
                                  'amount': 0.0 if n == 0 else _num(o.get('amount'))}
@@ -143,7 +144,8 @@ def save_sections(secs):
         sec_seen.add(sname.lower())
         if len(opts) > MAX_OPTIONS:
             errors.append(f'{sname}: up to {MAX_OPTIONS} options.')
-        clean.append({'name': sname, 'options': opts, 'lines': sorted(_ids(s.get('lines')))})
+        clean.append({'name': sname, 'options': opts, 'lines': sorted(_ids(s.get('lines'))),
+                      **({'quote': True} if s.get('quote') else {})})
     if len(clean) > MAX_SECTIONS:
         errors.append(f'Up to {MAX_SECTIONS} sections.')
     if errors:
@@ -161,7 +163,7 @@ def save(opts, ids):
 
 
 def _as_input(s, lines=None):
-    return {'name': s['name'], 'lines': s['lines'] if lines is None else lines,
+    return {'name': s['name'], 'lines': s['lines'] if lines is None else lines, 'quote': s.get('quote'),
             'options': [(o['name'], o['amount'] if o['amount'] else o['extra'], 'amt' if o['amount'] else 'pct')
                         for o in s['options']]}
 
@@ -274,9 +276,11 @@ def label(name, finish):
 
 
 def for_form():
-    """For the quotation form: {'sections': [{'name', 'options', 'base'}]} or None when there's nothing to choose."""
+    """For the quotation form: {'sections': [{'name', 'options', 'base', 'quote'}]} or None when there's nothing to
+    choose. quote: chosen once for the whole quotation at the top of the form (each line can still differ)."""
     secs = sections()
-    return {'sections': [{'name': s['name'], 'options': s['options'], 'base': s['options'][0]['name']} for s in secs]} \
+    return {'sections': [{'name': s['name'], 'options': s['options'], 'base': s['options'][0]['name'],
+                          'quote': s['quote']} for s in secs]} \
         if secs else None
 
 
@@ -303,6 +307,7 @@ def set_from_price_list(secs):
         ids = {b.id for b in db.session.query(BoqItem).filter(func.lower(BoqItem.name).in_(keys)).all()} if keys else set()
         had = current.get(s['name'].lower())
         out.append({'name': s['name'], 'lines': ids | (had['lines'] if had else set()),
+                    'quote': s.get('quote', had['quote'] if had else False),
                     'options': [(o['name'], o.get('amount') if o.get('amount') else o.get('extra', 0),
                                  'amt' if o.get('amount') else 'pct') for o in s['options']]})
     by_name = {o['name'].lower(): o for o in out}

@@ -340,6 +340,15 @@
     <div class="col-12 col-lg-4">
       <div class="summary-panel">
 
+      <!-- Item options chosen per quotation (priced by item, app/finishes.py): this quotation's default in each -->
+      <div class="card shadow-sm border-0 mb-3 d-none" id="quoteOptionsCard">
+        <div class="card-header ki-card-header"><i class="bi bi-sliders me-2"></i>Item options for this quotation</div>
+        <div class="card-body py-2">
+          <p class="small text-muted mb-2">Every line that comes in these follows the choice here; change any line on its own below.</p>
+          <div id="quoteOptions"></div>
+        </div>
+      </div>
+
       <!-- Plywood (pricing by material only) -->
       {% set ply = plywood_form %}
       <div class="card shadow-sm border-0 mb-3 {{ 'd-none' if boq_form.by_item }}">
