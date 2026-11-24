@@ -818,7 +818,8 @@ def reminder_message(project, amount, pay_link='', pay_settings=None):
 # ── Costs & profit (admins only) ─────────────────────────────────────────────
 
 def cost_rates():
-    """{('material', 'Wood|Work'): cost per sqft, ('fitting', name lower-case): cost per unit}"""
+    """{('material', 'Wood|Work'): cost per sqft, ('fitting' | 'line', name lower-case): cost per unit}
+    (line: one of your items when priced by item, on its base item options)"""
     from .models import CostRate
     if not ready():
         return {}
@@ -860,7 +861,12 @@ def profit(project, rooms=None, invoice=False, costs=None, settings=None, gst_re
             if i.own_cost is not None:                      # your cost typed on this line wins
                 total_cost += (i.quantity or 0) * i.own_cost if i.is_fixed else i.area * i.own_cost
             elif i.is_fixed:
-                c = costs.get(('fitting', i.name.lower()))
+                c = costs.get(('line', i.name.lower())) if i.is_boq else None
+                if c is not None and i.finish:              # Century Bond, Acrylic…: their extra cost
+                    from .finishes import cost_for
+                    c = cost_for(c, i.finish)
+                if c is None:
+                    c = costs.get(('fitting', i.name.lower()))
                 if c is None:
                     missing.append(f'{room.name}: {i.name}')
                 else:

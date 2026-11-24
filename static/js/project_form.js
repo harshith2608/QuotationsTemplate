@@ -194,10 +194,24 @@ function _lineAmount(item) {
 }
 function _defaultCost(item) {                // per unit / per area unit, or null
   if (!COSTS) return null;
+  const name = (item.name || '').toLowerCase();
+  if (item.type === 'boq' && COSTS.lines && COSTS.lines[name] !== undefined) return _optCost(COSTS.lines[name], item.finish);
   const v = (item.type === 'fixed' || item.type === 'boq')
-    ? COSTS.fittings[(item.name || '').toLowerCase()]
+    ? COSTS.fittings[name]
     : COSTS.materials[priceKey(item.wood_type, item.work_type, item.plywood)];
   return v === undefined ? null : v;
+}
+// Your item's cost in its item options: each option's extra cost (Costs & profit), else its price extra
+function _optCost(base, finish) {
+  let pct = 0, amt = 0;
+  _optParts(finish).forEach(p => {
+    const f = _optFind(p);
+    if (!f || f.base) return;
+    const c = f.opt.cost;
+    if (f.opt.amount) amt += (c === null || c === undefined) ? f.opt.amount : c;
+    else pct += (c === null || c === undefined) ? (f.opt.extra || 0) : c;
+  });
+  return Math.max(Math.round((base * (1 + pct / 100) + amt) * 100) / 100, 0);
 }
 function _lineCost(item, ik) {               // ₹ for the whole line, or null (no cost known)
   const typed = itemCosts[ik];

@@ -254,6 +254,24 @@ pdf = pdftext(f'/projects/{bid}/pdf/customer')
 ok('the PDF prints "Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)" at 2,740',
    'Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)' in pdf and '2,740' in pdf)
 ok('editing brings both choices back', '"finish": "Acrylic|16mm 8*4 Century Bond 710"' in c.get(f'/projects/{bid}/edit').text)
+# ── Costs & profit priced by item: your items' costs and each option's extra cost ──
+cp = c.get('/admin/costs').text
+ok('Costs & profit (priced by item): your items, and a card per item option section', 'id="item-costs"' in cp
+   and f'name="l_{wid}"' in cp and 'Board (extra cost vs 16mm 8*4 Century Sainik 710)' in cp and 'name="m_0"' not in cp)
+c.post('/admin/costs', data={f'l_{wid}': '1200', 'oc_Board|16mm 8*4 Century Bond 710': '300', 'oc_Finish|Acrylic': ''})
+with app.app_context():
+    from app import billing as _b
+    pr = _b.profit(Project.query.get(bid))
+    ok(f'the profit counts the line\'s options: 10 × (1,200 × 1.3 + 300) = 18,600 cost {pr and pr["cost"]}',
+       pr and pr['cost'] == 18600 and not pr['missing'])
+    ok('…an option with no cost of its own costs its price extra', finishes.cost_for(1200, '16mm 8*4 Gurjan') == 1100)
+c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', 'Board'],
+                             'opt_name_0': ['Laminate', 'Acrylic', 'Membrane', '', ''], 'opt_val_0': ['0', '30', '25', '', ''],
+                             'opt_kind_0': ['pct'] * 5,
+                             'opt_name_1': ['16mm 8*4 Century Sainik 710', '16mm 8*4 Century Bond 710', '16mm 8*4 Gurjan'],
+                             'opt_val_1': ['0', '400', '-100'], 'opt_kind_1': ['pct', 'amt', 'amt'], 'sec_quote': ['1']})
+with app.app_context():
+    ok('saving item options in Rates keeps their costs', finishes.cost_for(1000, '16mm 8*4 Century Bond 710') == 1300)
 with app.app_context():
     out = price_list.export()
     ok('the price list download has the sections and each line\'s', [s['name'] for s in out.get('choices') or []] == ['Finish', 'Board']

@@ -9,7 +9,7 @@
 
 <div class="alert alert-info py-2 small">
   <i class="bi bi-eye-slash me-1"></i>
-  Enter what each material and fitting <strong>costs you</strong> (materials, labour, everything). Each quotation then shows
+  Enter what each {{ 'item' if by_item else 'material and fitting' }} <strong>costs you</strong> (materials, labour, everything). Each quotation then shows
   its estimated profit. <strong>Only admins see this</strong>: it never appears in PDFs, WhatsApp messages or the customer's link.
   Leave a box empty if you don't want to track it.
 </div>
@@ -38,6 +38,68 @@
 
 <form method="POST" action="{{ url_for('admin.costs') }}" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if by_item %}
+  {# Priced by item: your items (saved lines) and item options; materials, fittings and plywood only on request #}
+  <div class="card shadow-sm border-0 mb-3" id="item-costs">
+    <div class="card-header ki-card-header"><i class="bi bi-list-ol me-2"></i>Your items (&#8377; per unit)</div>
+    <div class="card-body">
+      {% if not lines %}<p class="small text-muted mb-0">No items yet. Add them in <a href="{{ url_for('admin.rates') }}#boq-lines">Rates</a>.</p>{% else %}
+      <p class="small text-muted mb-2">What each item costs you per unit (sqft, rft, nos…), on your base options.</p>
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0 ki-materials-table">
+          <thead class="ki-table-head"><tr><th class="ps-3">Item</th><th class="text-end">You charge</th><th style="min-width:160px">Your cost</th><th class="text-end">Margin</th></tr></thead>
+          <tbody>
+          {% for b in lines %}{% set cost = costs.get(('line', b.name)) %}
+            {% if loop.first or b.category != loop.previtem.category %}<tr class="table-light"><td colspan="4" class="ps-3 small fw-semibold text-muted">{{ b.category or 'Other' }}</td></tr>{% endif %}
+            <tr>
+              <td class="ps-3 fw-semibold" data-label="Item">{{ b.name }}</td>
+              <td class="text-end text-nowrap" data-label="You charge">&#8377;{{ (b.rate or 0)|inr(0) }} / {{ b.unit or 'nos' }}</td>
+              <td data-label="Your cost"><div class="input-group input-group-sm"><span class="input-group-text">&#8377;</span>
+                <input type="number" name="l_{{ b.id }}" class="form-control" min="0" step="0.01" inputmode="decimal"
+                       value="{{ '%g'|format(cost) if cost is not none else '' }}" aria-label="Cost of {{ b.name }}"></div></td>
+              <td class="text-end small" data-label="Margin">
+                {% if cost is not none and b.rate %}<span class="{{ 'text-success' if b.rate > cost else 'text-danger' }} fw-semibold">{{ "{:.0f}".format((b.rate - cost) / b.rate * 100) }}%</span>{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% for s in opt_secs %}
+  <div class="card shadow-sm border-0 mb-3" id="option-costs-{{ loop.index }}">
+    <div class="card-header ki-card-header"><i class="bi bi-sliders me-2"></i>{{ s.name }} (extra cost vs {{ s.options[0].name }})</div>
+    <div class="card-body">
+      <p class="small text-muted">Your item costs above are on {{ s.options[0].name }}. What does each other {{ s.name|lower }} cost you
+        extra? Leave a box empty to use its price extra (from Rates), i.e. the same profit.</p>
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0 ki-materials-table">
+          <thead class="ki-table-head"><tr><th class="ps-3">{{ s.name }}</th><th class="text-end">You charge extra</th><th style="min-width:180px">It costs you extra</th></tr></thead>
+          <tbody>
+          {% for o in s.options[1:] %}{% set amt = o.amount != 0 %}
+            <tr>
+              <td class="ps-3 fw-semibold" data-label="{{ s.name }}">{{ o.name }}</td>
+              <td class="text-end text-nowrap" data-label="You charge extra">{% if amt %}{{ '+' if o.amount > 0 else '−' }}&#8377;{{ '%g'|format(o.amount|abs) }} per unit{% else %}{{ '%+g'|format(o.extra) }}%{% endif %}</td>
+              <td data-label="It costs you extra"><div class="input-group input-group-sm">{% if amt %}<span class="input-group-text">&#8377;</span>{% endif %}
+                <input type="text" name="oc_{{ s.name }}|{{ o.name }}" class="form-control" inputmode="decimal"
+                       value="{{ '%g'|format(o.cost) if o.cost is not none else '' }}"
+                       placeholder="{{ '%g'|format(o.amount if amt else o.extra) }}" aria-label="Extra cost of {{ o.name }}">
+                <span class="input-group-text">{{ 'per unit' if amt else '%' }}</span></div></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% if not request.args.get('all') %}
+  <p class="small mb-3"><a href="{{ url_for('admin.costs', all=1) }}">Show material, fitting and plywood costs</a> (for pricing by material)</p>
+  {% endif %}
+  {% endif %}
+  {% if not by_item or request.args.get('all') %}
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-header ki-card-header"><i class="bi bi-layers me-2"></i>Materials (&#8377;{{ units.rate_label() }})</div>
     <div class="card-body">
@@ -127,6 +189,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
   {% endif %}
   <div class="mb-5"><button type="submit" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save costs</button></div>
 </form>

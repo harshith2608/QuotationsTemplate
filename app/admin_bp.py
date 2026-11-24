@@ -491,6 +491,7 @@ def _save_finishes():
     had = finishes.all_sections()
     drop_secs = set(request.form.getlist('sec_delete'))
     per_quote = set(request.form.getlist('sec_quote'))
+    old_costs = {o['name'].lower(): o['cost'] for s in had for o in s['options']}   # set in Costs & profit: kept
     secs = []
     for s, name in enumerate(request.form.getlist('sec_name')):
         if str(s) in drop_secs:
@@ -498,7 +499,8 @@ def _save_finishes():
         names, vals = request.form.getlist(f'opt_name_{s}'), request.form.getlist(f'opt_val_{s}')
         kinds = request.form.getlist(f'opt_kind_{s}')
         drop = set(request.form.getlist(f'opt_delete_{s}'))
-        opts = [(n, v, k) for i, (n, v, k) in enumerate(zip(names, vals, kinds)) if str(i) not in drop]
+        opts = [(n, v, k, old_costs.get(' '.join(n.split()).lower())) for i, (n, v, k) in enumerate(zip(names, vals, kinds))
+                if str(i) not in drop]
         secs.append({'name': name, 'options': opts, 'lines': had[s]['lines'] if s < len(had) else set(),
                      'quote': str(s) in per_quote})
     return finishes.save_sections(secs)
@@ -918,6 +920,11 @@ def costs():
     existing = {(c.kind, c.name): c for c in CostRate.query.all()}
     combos = [(M.key(w, k), label) for w, k, label in M.combos(include_hidden=True)]
     fittings = PriceListItem.query.order_by(PriceListItem.name).all()
+    from . import boq, finishes
+    from .models import BoqItem
+    by_item = boq.enabled()                  # priced by item: your items (saved lines) and item options have costs
+    lines = BoqItem.query.order_by(BoqItem.category, BoqItem.name).all() if by_item else []
+    opt_secs = [s for s in finishes.sections() if len(s['options']) > 1] if by_item else []
     if request.method == 'POST':
         errors = []
 
@@ -937,14 +944,36 @@ def costs():
             else:
                 db.session.add(CostRate(kind=kind, name=name, cost=value))
         for i, (key, label) in enumerate(combos):
-            put('material', key, request.form.get(f'm_{i}'), label)
+            if f'm_{i}' in request.form:            # (priced by item, the materials card is shown only on request)
+                put('material', key, request.form.get(f'm_{i}'), label)
+        for b in lines:                             # your items: cost per unit
+            if f'l_{b.id}' in request.form:
+                put('line', b.name, request.form.get(f'l_{b.id}'), b.name)
+        opt_costs = {}
+        for s in opt_secs:                          # item options: what each costs you extra ('' = as its price)
+            for n, o in enumerate(s['options'][1:], 1):
+                field = f"oc_{s['name']}|{o['name']}"
+                if field not in request.form:
+                    continue
+                raw = (request.form.get(field) or '').strip().replace(',', '')
+                if raw == '':
+                    opt_costs[o['name'].lower()] = None
+                    continue
+                try:
+                    opt_costs[o['name'].lower()] = round(float(raw), 2)
+                except ValueError:
+                    errors.append(f'Enter the extra cost of {o["name"]} as a number, e.g. 300 or -80.')
+        if opt_costs and not errors:
+            errors += finishes.set_costs(opt_costs)
         listed = {f.name.lower() for f in fittings}
         for f in fittings:
-            put('fitting', f.name, request.form.get(f'f_{f.id}'), f.name)
+            if f'f_{f.id}' in request.form:
+                put('fitting', f.name, request.form.get(f'f_{f.id}'), f.name)
         # Fittings typed on quotations that aren't on the price list
         for (kind, name), row in existing.items():
             if kind == 'fitting' and name.lower() not in listed:
-                put('fitting', name, request.form.get(f'x_{row.id}'), name)
+                if f'x_{row.id}' in request.form:
+                    put('fitting', name, request.form.get(f'x_{row.id}'), name)
         # What each other plywood costs you extra per sqft ('' = same as its price difference)
         from . import plywood
         if plywood.table_ready():
@@ -989,7 +1018,8 @@ def costs():
                       'allowed': item_costs.staff_ids()}
     return render_template('admin/costs.html', title='Costs & profit', combos=combos, rates=rates,
                            fittings=fittings, extra=extra, plywood_rows=ply_rows, plywood_default=plywood.default_name(),
-                           costs={k: v.cost for k, v in existing.items()}, line_costs=line_costs)
+                           costs={k: v.cost for k, v in existing.items()}, line_costs=line_costs,
+                           by_item=by_item, lines=lines, opt_secs=opt_secs)
 
 
 @admin_bp.route('/costs/staff', methods=['POST'])

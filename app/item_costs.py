@@ -119,9 +119,10 @@ def form_data(item_rates):
         if c is not None:
             materials[key] = round(units.rate_value(c), 2)
     fittings = {name: c for (kind, name), c in costs.items() if kind == 'fitting'}
+    lines = {name: c for (kind, name), c in costs.items() if kind == 'line'}     # your items (priced by item)
     settings = billing.invoice_settings()
     rate = settings['gst_rate']
     inclusive = (bool(billing.business_state_code()) and settings['with_gst']
                  and settings['prices'] == billing.PRICES_INCLUSIVE and rate)
-    return {'materials': materials, 'fittings': fittings,
+    return {'materials': materials, 'fittings': fittings, 'lines': lines,
             'gstDivisor': (1 + rate / 100) if inclusive else 1}

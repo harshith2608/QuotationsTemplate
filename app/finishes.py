@@ -64,7 +64,8 @@ def all_sections():
         out.append({'name': str(s.get('name') or LEGACY_SECTION)[:NAME_MAX], 'quote': bool(s.get('quote')),
                     'options': [{'name': str(o['name'])[:NAME_MAX],
                                  'extra': 0.0 if n == 0 or o.get('amount') not in (None, '') else _num(o.get('extra')),
-                                 'amount': 0.0 if n == 0 else _num(o.get('amount'))}
+                                 'amount': 0.0 if n == 0 else _num(o.get('amount')),
+                                 'cost': None if n == 0 or o.get('cost') in (None, '') else _num(o.get('cost'))}
                                 for n, o in enumerate(opts)],
                     'lines': _ids(s.get('lines'))})
     return out
@@ -109,7 +110,9 @@ def save_sections(secs):
     for s in secs:
         sname = ' '.join(str(s.get('name') or '').replace(SEP, ' ').split())[:NAME_MAX]
         opts = []
-        for name, value, kind in s.get('options') or []:
+        for opt in s.get('options') or []:
+            name, value, kind = opt[:3]
+            cost = opt[3] if len(opt) > 3 else None          # what it costs you extra (Costs & profit), same kind
             name = ' '.join(str(name or '').replace(SEP, ' ').split())[:NAME_MAX]
             if not name:
                 continue
@@ -129,12 +132,12 @@ def save_sections(secs):
                 if not -1000000 <= value <= 1000000:
                     errors.append(f'"{name}": the ₹ extra is too large.')
                     continue
-                opts.append({'name': name, 'amount': round(value, 2)})
+                opts.append({'name': name, 'amount': round(value, 2), **({'cost': cost} if cost is not None else {})})
             else:
                 if value < -90 or value > 500:
                     errors.append(f'"{name}": the % extra should be between -90 and 500.')
                     continue
-                opts.append({'name': name, 'extra': round(value, 2)})
+                opts.append({'name': name, 'extra': round(value, 2), **({'cost': cost} if cost is not None else {})})
         if not opts and not sname:
             continue
         sname = sname or (LEGACY_SECTION if not clean else f'Option {len(clean) + 1}')
@@ -164,13 +167,39 @@ def save(opts, ids):
 
 def _as_input(s, lines=None):
     return {'name': s['name'], 'lines': s['lines'] if lines is None else lines, 'quote': s.get('quote'),
-            'options': [(o['name'], o['amount'] if o['amount'] else o['extra'], 'amt' if o['amount'] else 'pct')
+            'options': [(o['name'], o['amount'] if o['amount'] else o['extra'], 'amt' if o['amount'] else 'pct', o['cost'])
                         for o in s['options']]}
 
 
 def set_lines(ticks):
     """ticks: {section name: ids} from the items table; sections not in it keep their lines."""
     return save_sections([_as_input(s, ticks.get(s['name'], s['lines'])) for s in all_sections()])
+
+
+def set_costs(costs):
+    """From Admin → Costs & profit: {option name lower-case: extra cost (same kind as its price extra: % or ₹ per unit)
+    or None (= the same as its price extra)}. Returns error messages."""
+    secs = []
+    for s in all_sections():
+        inp = _as_input(s)
+        inp['options'] = [(n, v, k, costs.get(n.lower(), c)) for n, v, k, c in inp['options']]
+        secs.append(inp)
+    return save_sections(secs)
+
+
+def cost_for(base_cost, finish):
+    """Your cost of a line in these choices, from the base options' cost: each option's extra cost (Costs & profit),
+    or its price extra when none is set."""
+    pct = amt = 0.0
+    for p in parts(finish):
+        _, o, is_base = _find(p)
+        if o and not is_base:
+            c = o['cost']
+            if o['amount']:
+                amt += o['amount'] if c is None else c
+            else:
+                pct += o['extra'] if c is None else c
+    return round(max(base_cost * (1 + pct / 100) + amt, 0.0), 2)
 
 
 def base():
@@ -279,7 +308,10 @@ def for_form():
     """For the quotation form: {'sections': [{'name', 'options', 'base', 'quote'}]} or None when there's nothing to
     choose. quote: chosen once for the whole quotation at the top of the form (each line can still differ)."""
     secs = sections()
-    return {'sections': [{'name': s['name'], 'options': s['options'], 'base': s['options'][0]['name'],
+    from . import item_costs
+    can_cost = item_costs.can_edit()                    # option costs only for those who may see costs
+    return {'sections': [{'name': s['name'], 'options': [{k: v for k, v in o.items() if k != 'cost' or can_cost}
+                                                         for o in s['options']], 'base': s['options'][0]['name'],
                           'quote': s['quote']} for s in secs]} \
         if secs else None
 
@@ -301,6 +333,7 @@ def set_from_price_list(secs):
     from . import db
     from .models import BoqItem
     current = {s['name'].lower(): s for s in all_sections()}
+    old_costs = {o['name'].lower(): o['cost'] for s in current.values() for o in s['options']}
     out = []
     for s in secs:
         keys = [n.lower() for n in s.get('line_names') or []]
@@ -309,7 +342,8 @@ def set_from_price_list(secs):
         out.append({'name': s['name'], 'lines': ids | (had['lines'] if had else set()),
                     'quote': s.get('quote', had['quote'] if had else False),
                     'options': [(o['name'], o.get('amount') if o.get('amount') else o.get('extra', 0),
-                                 'amt' if o.get('amount') else 'pct') for o in s['options']]})
+                                 'amt' if o.get('amount') else 'pct', old_costs.get(o['name'].lower()))
+                                for o in s['options']]})
     by_name = {o['name'].lower(): o for o in out}
     return save_sections([by_name.get(s['name'].lower()) or _as_input(s) for s in all_sections()]
                          + [o for o in out if o['name'].lower() not in current])
