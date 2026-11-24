@@ -322,8 +322,12 @@ class Item(db.Model):
 
     @property
     def finish(self):
-        """A BOQ line's finish when not the base one ('Acrylic'), else '' (app/finishes.py; kept in wood_type)."""
-        return (self.wood_type or '') if self.is_boq else ''
+        """A BOQ line's item options when not the base ones ('Acrylic|Century Bond'), else '' (app/finishes.py;
+        kept in wood_type, running on into work_type)."""
+        if not self.is_boq:
+            return ''
+        from .finishes import stored
+        return stored(self)
 
     @property
     def display_name(self):

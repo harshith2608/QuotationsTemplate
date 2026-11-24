@@ -772,26 +772,26 @@
   </div>
   {% endif %}
   <div class="card shadow-sm border-0 mb-3" id="boms">
-    <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>BOMs (room-wise measurements)</div>
+    <div class="card-header ki-card-header"><i class="bi bi-rulers me-2"></i>Carpet Area (room-wise measurements)</div>
     <div class="card-body">
       <input type="hidden" name="boms_shown" value="1">
       <div class="form-check form-switch">
         <input class="form-check-input" type="checkbox" role="switch" name="boms_on" value="1" id="boms_on"
                {{ 'checked' if pricing.boms }}>
-        <label class="form-check-label fw-semibold" for="boms_on">BOMs</label>
+        <label class="form-check-label fw-semibold" for="boms_on">Carpet Areas</label>
       </div>
-      <div class="form-text mb-2">A <strong>BOMs</strong> page and <strong>New BOM</strong>: the customer and each area's
+      <div class="form-text mb-2">A <strong>Carpet Areas</strong> page and <strong>New Carpet Area</strong>: the customer and each area's
         length × width, its {{ units.area_label() }} and the total (Foyer 5 × 4.5 = 22.5, Living room 6 × 5 = 30…), saved
-        before you quote. <strong>Create quotation</strong> on a BOM starts a quotation with its customer and the areas you
-        tick as rooms; one BOM can give several (a basic and a premium). The quotation PDF's first page shows the total as
-        <strong>Built-up area</strong>; the room-by-room measurements are never printed or sent.
+        before you quote. <strong>Create quotation</strong> on a carpet area starts a quotation with its customer and the areas you
+        tick as rooms; one carpet area can give several (a basic and a premium). The quotation PDF's first page shows the total as
+        <strong>Carpet area</strong>; the room-by-room measurements are never printed or sent.
         {% if pricing.boms and not pricing.boms_ready %}<span class="text-danger">Needs the latest update of your app. Please contact support.</span>{% endif %}</div>
       <div class="form-check form-switch">
         <input class="form-check-input" type="checkbox" role="switch" name="boms_staff" value="1" id="boms_staff"
                {{ 'checked' if pricing.boms_staff }}>
-        <label class="form-check-label fw-semibold" for="boms_staff">Staff can use BOMs</label>
+        <label class="form-check-label fw-semibold" for="boms_staff">Staff can use Carpet Area</label>
       </div>
-      <div class="form-text">On: everyone in your team sees every BOM, makes new ones and quotations from them. Off: admins only.</div>
+      <div class="form-text">On: everyone in your team sees every carpet area, makes new ones and quotations from them. Off: admins only.</div>
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3" id="hide-rates">

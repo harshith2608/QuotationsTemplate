@@ -19,7 +19,7 @@ ok('off by default: no BOMs page or menu', c.get('/boms').status_code == 404 and
 c.post('/admin/settings', data={'section': 'pricing', 'pricing_mode': 'material', 'boms_shown': '1', 'boms_on': '1', 'boms_staff': '1'})
 with app.app_context():
     ok('Settings → Pricing turns BOMs on, staff allowed', boms.enabled() and boms.staff_allowed() and boms.ready())
-ok('the BOMs menu item and page', '>BOMs<' in c.get('/projects').text and c.get('/boms').status_code == 200)
+ok('the BOMs menu item and page', '>Carpet Areas<' in c.get('/projects').text and c.get('/boms').status_code == 200)
 
 r = c.post('/boms/new', data={'customer_name': 'Khushbu Shah', 'mobile': '9000000701', 'email': '', 'address': 'Flat 4B',
                               'areas': json.dumps(AREAS)})
@@ -44,7 +44,7 @@ form = c.get(f'/projects/new?bom={bid}&areas=0,2&blank=1').text
 existing = json.loads(re.search(r'id="existing-rooms-data" type="application/json">(.*?)</script>', form, re.S).group(1))
 ok('Create quotation: the customer and the ticked areas as rooms', 'Khushbu Shah' in form and '9000000701' in form
    and [r['name'] for r in existing] == ['Foyer Area', 'Kitchen'])
-ok('the form links the BOM and shows its measurements', f'name="bom_id" value="{bid}"' in form and f'Measurements from BOM #{bid}' in form)
+ok('the form links the BOM and shows its measurements', f'name="bom_id" value="{bid}"' in form and f'Carpet Area #{bid}' in form)
 
 rooms = [{'name': 'Kitchen', 'items': [{'type': 'fixed', 'name': 'Chimney', 'quantity': 1, 'unit_price': 15000}]}]
 c.post('/projects/new', data={'customer_name': 'Khushbu Shah', 'mobile': '9000000701', 'rooms_data': json.dumps(rooms),
@@ -53,11 +53,11 @@ with app.app_context():
     pid = Project.query.order_by(Project.id.desc()).first().id
     ok('saved: linked to the BOM', boms.linked_bom(pid).id == bid)
 ok('the BOM lists the quotation', f'/projects/{pid}' in c.get(f'/boms/{bid}').text)
-ok('the edit form shows the BOM for reference', f'Measurements from BOM #{bid}' in c.get(f'/projects/{pid}/edit').text)
+ok('the edit form shows the BOM for reference', f'Carpet Area #{bid}' in c.get(f'/projects/{pid}/edit').text)
 t = pdftext(f'/projects/{pid}/pdf/customer')
-ok('the PDF\'s first page shows the total as Built-up area, not the rooms', 'Built-up area 465.50 sqft' in t and 'Vestibule' not in t)
+ok('the PDF\'s first page shows the total as Carpet area, not the rooms', 'Carpet area 465.50 sqft' in t and 'Vestibule' not in t)
 t = pdftext(f'/projects/{pid}/pdf')
-ok('the full PDF too', 'Built-up area 465.50 sqft' in t)
+ok('the full PDF too', 'Carpet area 465.50 sqft' in t)
 
 dup = c.get(f'/projects/new?from={pid}').text
 ok('a copy of it (premium) stays linked to the BOM', f'name="bom_id" value="{bid}"' in dup)
@@ -74,7 +74,7 @@ c.post('/projects/new', data={'customer_name': 'Khushbu Shah', 'mobile': '900000
 lst = c.get('/boms').text
 ok('two quotations from one BOM', re.search(r'text-end">2</td>', lst) is not None)
 
-ok('staff use BOMs by default', staff.get('/boms').status_code == 200 and '>BOMs<' in staff.get('/projects').text)
+ok('staff use BOMs by default', staff.get('/boms').status_code == 200 and '>Carpet Areas<' in staff.get('/projects').text)
 ok('staff can\'t delete a BOM', staff.post(f'/boms/{bid}/delete').status_code == 403)
 c.post('/admin/settings', data={'section': 'pricing', 'pricing_mode': 'material', 'boms_shown': '1', 'boms_on': '1'})
 ok('Staff can use BOMs off: admins only', staff.get('/boms').status_code == 403 and '>BOMs<' not in staff.get('/projects').text
@@ -94,4 +94,4 @@ c.post(f'/projects/{pid}/delete')
 with app.app_context():
     ok('deleting a quotation removes its link and old rows', db.session.get(AppSetting, f'{boms.LINK_PREFIX}{pid}') is None
        and db.session.get(AppSetting, f'{boms.LEGACY_PREFIX}{pid}') is None)
-ok('Help has the BOM articles', 'New BOM' in c.get('/help').text)
+ok('Help has the BOM articles', 'New Carpet Area' in c.get('/help').text)

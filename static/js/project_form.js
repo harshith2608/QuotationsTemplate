@@ -53,23 +53,101 @@ function _findBoq(name) {
   const n = (name || '').trim().toLowerCase();
   return n ? BOQ_SAVED.find(b => b.name.toLowerCase() === n) : null;
 }
-// Finishes (Admin → Rates → Finishes): a line that comes in them gets a Finish choice; another finish's rate is the
-// base finish's rate + its % extra (Laminate ₹1,800 → Acrylic +25% ₹2,250)
-const FINISHES = (CATALOG.boqFinishes && CATALOG.boqFinishes.options && CATALOG.boqFinishes.options.length > 1)
-  ? CATALOG.boqFinishes : null;
-function _finishExtra(name) {
-  const f = FINISHES && FINISHES.options.find(o => o.name.toLowerCase() === (name || '').toLowerCase());
-  return f ? (f.extra || 0) : 0;
+// Item options (Admin → Rates → Item options): sections such as Finish and Board; a line that comes in a section gets
+// a choice from it. The rate is the base options' rate × (1 + the chosen %s) + the chosen ₹ per unit
+// (Laminate ₹1,800 → Acrylic +25% ₹2,250 → on Century Bond +₹400 ₹2,650). A line keeps its non-base choices as
+// "Acrylic|Century Bond" (option names are unique across sections).
+const OPT_SECS = (CATALOG.boqFinishes && CATALOG.boqFinishes.sections) || [];
+const FINISHES = OPT_SECS.length ? CATALOG.boqFinishes : null;
+function _optParts(str) { return String(str || '').split('|').map(s => s.trim()).filter(Boolean); }
+function _optFind(name) {
+  const key = (name || '').toLowerCase();
+  for (let si = 0; si < OPT_SECS.length; si++) {
+    const i = OPT_SECS[si].options.findIndex(o => o.name.toLowerCase() === key);
+    if (i >= 0) return { si, opt: OPT_SECS[si].options[i], base: i === 0 };
+  }
+  return null;
 }
-function finishOptions(selected) {
-  const list = FINISHES ? FINISHES.options.map(o => o.name) : [];
-  if (selected && !list.some(n => n.toLowerCase() === selected.toLowerCase())) list.push(selected);   // renamed since
-  const sel = (selected || (FINISHES ? FINISHES.base : '')).toLowerCase();
-  return list.map(n => {
-    const ex = _finishExtra(n);
-    const tag = ex ? ` (${ex > 0 ? '+' : ''}${ex}%)` : '';
-    return `<option value="${escHtml(n)}" ${n.toLowerCase() === sel ? 'selected' : ''}>${escHtml(n + tag)}</option>`;
-  }).join('');
+function _optExtras(str) {
+  let pct = 0, amt = 0;
+  _optParts(str).forEach(p => { const f = _optFind(p); if (f && !f.base) { pct += f.opt.extra || 0; amt += f.opt.amount || 0; } });
+  return { pct, amt };
+}
+function _optTag(o) {
+  if (o.amount) return ` (${o.amount > 0 ? '+' : '−'}₹${Math.abs(o.amount).toLocaleString('en-IN')})`;
+  return o.extra ? ` (${o.extra > 0 ? '+' : ''}${o.extra}%)` : '';
+}
+function sectionOptions(si, selected) {
+  const sec = OPT_SECS[si];
+  const sel = (selected || sec.base).toLowerCase();
+  return sec.options.map(o => `<option value="${escHtml(o.name)}" ${o.name.toLowerCase() === sel ? 'selected' : ''}>${escHtml(o.name + _optTag(o))}</option>`).join('');
+}
+// Sections chosen per quotation (Admin → Rates: "Choose per quotation"): the quotation's default in each, at the top
+// of the form. New lines start on it; changing it moves every line still on the old default (lines changed on their
+// own keep theirs). Not stored: on editing, it's the choice most of the quotation's lines in that section have.
+const quoteDefault = {};
+function _quoteSecs() { return OPT_SECS.map((s, si) => ({ s, si })).filter(x => x.s.quote); }
+function _visibleOptSelects(si) {
+  return Array.from(document.querySelectorAll(`select[id^="item_opt_"][id$="_${si}"]`))
+    .filter(el => !document.getElementById(el.id.replace('item_opt_', 'item_optrow_'))?.classList.contains('d-none'));
+}
+function initQuoteOptions() {
+  const card = document.getElementById('quoteOptionsCard'), box = document.getElementById('quoteOptions');
+  const secs = _quoteSecs();
+  if (!card || !box || !secs.length) return;
+  secs.forEach(({ s, si }) => {
+    const counts = {};
+    _visibleOptSelects(si).forEach(el => { counts[el.value] = (counts[el.value] || 0) + 1; });
+    const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    quoteDefault[si] = top || s.base;
+  });
+  box.innerHTML = secs.map(({ s, si }) => `<label class="form-label small fw-medium mb-1" for="quote_opt_${si}">${escHtml(s.name)}</label>
+    <select class="form-select form-select-sm mb-2" id="quote_opt_${si}" onchange="onQuoteOption(${si})">${sectionOptions(si, quoteDefault[si])}</select>`).join('');
+  card.classList.remove('d-none');
+}
+function onQuoteOption(si) {
+  const el = document.getElementById('quote_opt_' + si);
+  if (!el) return;
+  const old = (quoteDefault[si] || OPT_SECS[si].base).toLowerCase();
+  quoteDefault[si] = el.value;
+  _visibleOptSelects(si).forEach(sel => {
+    if (sel.value.toLowerCase() !== old) return;              // changed on its own: keeps it
+    const m = sel.id.match(/^item_opt_(.+)_\d+$/), ik = m && m[1];
+    const rk = Object.keys(rooms).find(k => rooms[k].items[ik]);
+    if (!rk) return;
+    sel.value = el.value;
+    onBoqFinish(rk, ik);
+  });
+}
+// A line just added from a saved one: the quotation's defaults for the sections it comes in, the rate moved to match
+function applyQuoteDefaults(rk, ik) {
+  const saved = _findBoq(document.getElementById('item_name_' + ik)?.value);
+  if (!saved || !saved.sections) return;
+  let any = false;
+  _quoteSecs().forEach(({ s, si }) => {
+    const sel = document.getElementById(`item_opt_${ik}_${si}`);
+    if (sel && saved.sections.includes(s.name) && quoteDefault[si] && quoteDefault[si] !== s.base) { sel.value = quoteDefault[si]; any = true; }
+  });
+  if (any) onBoqFinish(rk, ik);
+}
+// The line's choices from its selects (non-base ones only), plus any kept from before (renamed or removed since)
+function _lineChoices(ik, saved) {
+  const wrap = document.getElementById('item_finishwrap_' + ik);
+  if (!wrap) return '';
+  const out = [];
+  let any = false;
+  OPT_SECS.forEach((sec, si) => {
+    const el = document.getElementById(`item_opt_${ik}_${si}`), row = document.getElementById(`item_optrow_${ik}_${si}`);
+    if (!el || !row) return;
+    const chosen = el.value.toLowerCase() !== sec.base.toLowerCase() ? el.value : '';
+    const show = !!((saved && (saved.sections || (saved.finish && si === 0 ? [sec.name] : [])).includes(sec.name)) || chosen);
+    row.classList.toggle('d-none', !show);
+    row.classList.toggle('d-flex', show);
+    if (show) { any = true; if (chosen) out.push(chosen); }
+  });
+  const kept = _optParts(wrap.dataset.kept);
+  wrap.classList.toggle('d-none', !(any || kept.length));
+  return out.concat(kept).join('|');
 }
 // Photos on lines (turned on per business from the console): a small "Photo" button under the item's name; the photo
 // is made smaller in the browser (phone photos are several MB), uploaded at once, and the line keeps its id
@@ -116,10 +194,24 @@ function _lineAmount(item) {
 }
 function _defaultCost(item) {                // per unit / per area unit, or null
   if (!COSTS) return null;
+  const name = (item.name || '').toLowerCase();
+  if (item.type === 'boq' && COSTS.lines && COSTS.lines[name] !== undefined) return _optCost(COSTS.lines[name], item.finish);
   const v = (item.type === 'fixed' || item.type === 'boq')
-    ? COSTS.fittings[(item.name || '').toLowerCase()]
+    ? COSTS.fittings[name]
     : COSTS.materials[priceKey(item.wood_type, item.work_type, item.plywood)];
   return v === undefined ? null : v;
+}
+// Your item's cost in its item options: each option's extra cost (Costs & profit), else its price extra
+function _optCost(base, finish) {
+  let pct = 0, amt = 0;
+  _optParts(finish).forEach(p => {
+    const f = _optFind(p);
+    if (!f || f.base) return;
+    const c = f.opt.cost;
+    if (f.opt.amount) amt += (c === null || c === undefined) ? f.opt.amount : c;
+    else pct += (c === null || c === undefined) ? (f.opt.extra || 0) : c;
+  });
+  return Math.max(Math.round((base * (1 + pct / 100) + amt) * 100) / 100, 0);
 }
 function _lineCost(item, ik) {               // ₹ for the whole line, or null (no cost known)
   const typed = itemCosts[ik];
@@ -1347,10 +1439,15 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
     </td>`;
   tbody.appendChild(tr);
   const _nm = document.getElementById('item_name_' + ik); if (_nm) autoGrow(_nm);
-  const finishPick = (FINISHES || finish) ? `<div class="ki-finish align-items-center gap-1 mb-1 d-none" id="item_finishwrap_${ik}">
-        <span class="small text-muted">Finish</span>
-        <select class="form-select form-select-sm w-auto" id="item_finish_${ik}" data-prev="${escHtml(finish || (FINISHES ? FINISHES.base : ''))}"
-                onchange="onBoqFinish('${rk}','${ik}')" title="Another finish changes the rate by its % extra">${finishOptions(finish)}</select>
+  const picked = {}, kept = [];
+  _optParts(finish).forEach(p => { const f = _optFind(p); if (f) picked[f.si] = f.opt.name; else kept.push(p); });
+  const finishPick = (FINISHES || finish) ? `<div class="ki-finish mb-1 d-none" id="item_finishwrap_${ik}"
+        data-prev="${escHtml(finish || '')}" data-kept="${escHtml(kept.join('|'))}">
+        ${OPT_SECS.map((sec, si) => `<div class="align-items-center gap-1 mb-1 d-none" id="item_optrow_${ik}_${si}">
+          <span class="small text-muted">${escHtml(sec.name)}</span>
+          <select class="form-select form-select-sm w-auto" id="item_opt_${ik}_${si}" onchange="onBoqFinish('${rk}','${ik}')"
+                  title="Another ${escHtml(sec.name.toLowerCase())} changes the rate by its extra">${sectionOptions(si, picked[si])}</select></div>`).join('')}
+        ${kept.length ? `<div class="small text-muted">${escHtml(kept.join(', '))}</div>` : ''}
       </div>` : '';
   addDescRow(tr, ik, desc, `onBoqField('${rk}','${ik}')`,
              finishPick + sizeStrip('boq_' + ik, length, width, count, `onBoqField('${rk}','${ik}')`),
@@ -1363,6 +1460,7 @@ function _insertBoqRow(rk, name, quantity, unit, rate, desc, saveDefault, length
   const nameInput = document.getElementById('item_name_' + ik);
   if (nameInput && BOQ_SAVED.length) initAutocomplete(nameInput, () => BOQ_SAVED.map(b => b.name));
   onBoqField(rk, ik);
+  if (finish === undefined) applyQuoteDefaults(rk, ik);    // a new line (not one loaded from the quotation)
   addPhotoControl(rk, ik);
   addCostControl(rk, ik);
   return ik;
@@ -1378,8 +1476,12 @@ function onBoqField(rk, ik) {
     const unitEl = document.getElementById('item_unit_' + ik);
     if (unitEl) { unitEl.innerHTML = unitOptions(saved.unit || 'nos'); syncLumpSum(unitEl, document.getElementById('item_qty_' + ik)); }
     if (descEl) { descEl.value = saved.description || ''; autoGrow(descEl); }
-    const finEl = document.getElementById('item_finish_' + ik);          // a newly picked line starts in the base finish
-    if (finEl && FINISHES) { finEl.innerHTML = finishOptions(''); finEl.dataset.prev = FINISHES.base; }
+    const finWrapNew = document.getElementById('item_finishwrap_' + ik);   // a newly picked line starts on the base options
+    if (finWrapNew) {
+      OPT_SECS.forEach((sec, si) => { const el = document.getElementById(`item_opt_${ik}_${si}`); if (el) el.innerHTML = sectionOptions(si, ''); });
+      finWrapNew.dataset.prev = ''; finWrapNew.dataset.kept = '';
+      setTimeout(() => applyQuoteDefaults(rk, ik), 0);       // then the quotation's defaults (after this update)
+    }
     // next: the length for a line measured by size, else the quantity (a lump sum: nothing more to type)
     const next = sizeMode(saved.unit) ? document.getElementById(`boq_${ik}_lft`)
                : saved.unit !== 'lump sum' ? document.getElementById('item_qty_' + ik) : null;
@@ -1391,16 +1493,7 @@ function onBoqField(rk, ik) {
     priceEl.placeholder = tbc ? 'to follow' : '';
   }
   const keepDefault = rooms[rk].items[ik].save_default;
-  const finWrap = document.getElementById('item_finishwrap_' + ik), finEl = document.getElementById('item_finish_' + ik);
-  let finish = '';
-  if (finWrap && finEl) {
-    const base = FINISHES ? FINISHES.base.toLowerCase() : '';
-    const chosen = finEl.value.toLowerCase() !== base ? finEl.value : '';
-    const show = !!((saved && saved.finish && FINISHES) || chosen);
-    finWrap.classList.toggle('d-none', !show);
-    finWrap.classList.toggle('d-flex', show);
-    finish = show ? chosen : '';
-  }
+  const finish = _lineChoices(ik, saved);
   let pending = rooms[rk].items[ik].pending;          // added from "Add from my lines", quantity still to type
   const unitNow = document.getElementById('item_unit_' + ik)?.value || 'nos';
   const size = applySize('boq_' + ik, unitNow, document.getElementById('item_qty_' + ik));
@@ -1423,17 +1516,18 @@ function onBoqField(rk, ik) {
   recalcAll();
 }
 
-// Another finish picked: the rate moves from the old finish's % to the new one's (a rate typed by hand moves too)
+// Another option picked: the rate moves from the old choices' extras to the new ones' (a rate typed by hand moves too)
 function onBoqFinish(rk, ik) {
-  const finEl = document.getElementById('item_finish_' + ik), priceEl = document.getElementById('item_price_' + ik);
-  if (!finEl) return;
-  const prev = finEl.dataset.prev || (FINISHES ? FINISHES.base : '');
+  const wrap = document.getElementById('item_finishwrap_' + ik), priceEl = document.getElementById('item_price_' + ik);
+  if (!wrap) return;
+  const saved = _findBoq(document.getElementById('item_name_' + ik)?.value);
+  const prev = _optExtras(wrap.dataset.prev), now = _lineChoices(ik, saved), next = _optExtras(now);
   const rate = parseFloat(priceEl?.value);
-  if (priceEl && rate > 0) {
-    const base = rate / (1 + _finishExtra(prev) / 100);
-    priceEl.value = Math.round(base * (1 + _finishExtra(finEl.value) / 100) * 100) / 100;
+  if (priceEl && rate > 0 && prev.pct > -100) {
+    const base = (rate - prev.amt) / (1 + prev.pct / 100);
+    priceEl.value = Math.max(Math.round((base * (1 + next.pct / 100) + next.amt) * 100) / 100, 0);
   }
-  finEl.dataset.prev = finEl.value;
+  wrap.dataset.prev = now;
   onBoqField(rk, ik);
 }
 
@@ -2284,3 +2378,6 @@ const aiSteps = (() => {
   return { note, start, open, close, go };
 })();
 
+
+// Item options chosen per quotation: once the quotation's lines are on the form
+document.addEventListener('DOMContentLoaded', () => setTimeout(initQuoteOptions, 0));

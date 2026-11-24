@@ -418,7 +418,7 @@ def build(project, rooms=None):
                     continue
                 if i.name.lower() in by_line:            # its own rules, in place of the line
                     for r in by_line[i.name.lower()]:
-                        name = render_name(r.name, i.finish or '', plywood.item_plywood(i) or ply)
+                        name = render_name(r.name, (i.finish or '').replace('|', ', '), plywood.item_plywood(i) or ply)
                         unit = clean_text(r.unit, UNIT_MAX)
                         group = group_for(name, lower.get((r.category or '').lower(), fallback_group(names)))
                         if name and group:

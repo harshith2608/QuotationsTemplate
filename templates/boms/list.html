@@ -1,32 +1,32 @@
 {% extends "base.html" %}
-{% block title %}BOMs{% endblock %}
+{% block title %}Carpet Areas{% endblock %}
 {% block content %}
 <div class="mt-3 mb-3">
   <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-    <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-rulers me-2 text-primary"></i>BOMs</h4>
-    {% if ready %}<a class="btn btn-primary ki-btn-primary btn-sm ms-auto" href="{{ url_for('boms.new_bom') }}"><i class="bi bi-plus-circle me-1"></i>New BOM</a>{% endif %}
+    <h4 class="mb-0 fw-bold ki-page-title"><i class="bi bi-rulers me-2 text-primary"></i>Carpet Areas</h4>
+    {% if ready %}<a class="btn btn-primary ki-btn-primary btn-sm ms-auto" href="{{ url_for('boms.new_bom') }}"><i class="bi bi-plus-circle me-1"></i>New Carpet Area</a>{% endif %}
   </div>
   <p class="text-muted small">Room-wise measurements of a home, taken before you quote. Open one and tap <strong>Create
-    quotation</strong> to start a quotation with its customer and rooms; one BOM can give several (a basic and a premium).
-    The measurements are for you and your team only; a quotation made from a BOM shows just the total, as Built-up area on the
+    quotation</strong> to start a quotation with its customer and rooms; one carpet area can give several (a basic and a premium).
+    The measurements are for you and your team only; a quotation made from a carpet area shows just the total, as Carpet area on the
     first page of its PDF.</p>
   {% if not ready %}
-  <div class="alert alert-warning">BOMs need the latest update of your app. Please contact support.</div>
+  <div class="alert alert-warning">Carpet Areas need the latest update of your app. Please contact support.</div>
   {% else %}
   <form class="mb-3" method="get" style="max-width:420px">
     <div class="input-group input-group-sm">
       <span class="input-group-text"><i class="bi bi-search"></i></span>
-      <input type="search" class="form-control" name="q" value="{{ q }}" placeholder="Search name, mobile or BOM number" aria-label="Search BOMs">
+      <input type="search" class="form-control" name="q" value="{{ q }}" placeholder="Search name, mobile or carpet area number" aria-label="Search carpet areas">
     </div>
   </form>
   {% if not rows %}
-  <div class="alert alert-light border">{% if q %}No BOM matches "{{ q }}".{% else %}No BOMs yet. Tap <strong>New BOM</strong>
+  <div class="alert alert-light border">{% if q %}No carpet area matches "{{ q }}".{% else %}No carpet areas yet. Tap <strong>New Carpet Area</strong>
     and type each area's length and width.{% endif %}</div>
   {% else %}
   <div class="card shadow-sm border-0">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
-        <thead class="table-light"><tr><th>BOM</th><th>Customer</th><th class="text-end">Areas</th>
+        <thead class="table-light"><tr><th>No.</th><th>Customer</th><th class="text-end">Areas</th>
           <th class="text-end">Total</th><th class="text-end">Quotations</th><th>Updated</th></tr></thead>
         <tbody>
         {% for r in rows %}

@@ -139,7 +139,7 @@
         {% if boms_for(current_user) %}
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint and request.endpoint.startswith('boms.') %}active{% endif %}" href="{{ url_for('boms.list_boms') }}">
-            <i class="bi bi-rulers"></i><span>BOMs</span>
+            <i class="bi bi-rulers"></i><span>Carpet Areas</span>
           </a>
         </li>
         {% endif %}

@@ -21,6 +21,12 @@ Finishes (optional, by item): the same item in another finish costs a % more. Th
 rates are for it); lines that come in them say "finish": true (app/finishes.py):
     {"finishes": [{"name": "Laminate"}, {"name": "Acrylic", "extra": 25}, {"name": "Veneer", "extra": 25}],
      "lines": [{"name": "Wardrobe", "unit": "sqft", "rate": 1800, "finish": true}, ...]}
+Item options in sections of your own (optional, by item; "finishes" above is a section named Finish): each option
+adds a % ("extra") or ₹ per unit ("amount", can be negative); lines name the sections they come in; "per_quotation":
+the section is chosen once at the top of each quotation (each line can still differ):
+    {"choices": [{"name": "Board", "options": [{"name": "Century Sainik 710"}, {"name": "Century Bond 710", "amount": 400},
+                                               {"name": "Gurjan", "amount": -100}], "per_quotation": true}],
+     "lines": [{"name": "Wardrobe", "unit": "sqft", "rate": 1800, "choices": ["Board"]}, ...]}
 
 Quotations (optional): real quotations from the firm's own sheets, added as quotations (by their first admin);
 "total" (optional) is checked against the lines. Loading the file again skips ones already there:
@@ -100,7 +106,8 @@ def parse(raw):
             raise PriceListError(f'"{name}": the rate can\'t be negative.')
         lines.append({'name': name, 'description': boq.clean_description(row.get('description')),
                       'unit': boq.clean_unit(row.get('unit')), 'rate': round(rate, 2),
-                      'group': _text(row.get('group'), 60) or None, 'finish': bool(row.get('finish'))})
+                      'group': _text(row.get('group'), 60) or None, 'finish': bool(row.get('finish')),
+                      'choices': [_text(c, 40) for c in (row.get('choices') or []) if isinstance(c, str) and _text(c, 40)]})
 
     finishes = []
     for n, f in enumerate(data.get('finishes') or []):
@@ -114,6 +121,25 @@ def parse(raw):
         finishes.append({'name': name, 'extra': extra})
     if len(finishes) == 1:
         raise PriceListError('Finishes: list the base finish and at least one other (e.g. Laminate, Acrylic +25%).')
+    sections = [{'name': 'Finish', 'options': finishes}] if finishes else []
+    for s in data.get('choices') or []:                 # item options in sections: Board, Hardware…
+        sname = _text(s.get('name') if isinstance(s, dict) else '', 40)
+        if not sname:
+            raise PriceListError('Each "choices" section needs a name (e.g. Board).')
+        opts = []
+        for n, o in enumerate(s.get('options') or []):
+            oname = _text(o.get('name') if isinstance(o, dict) else '', 40)
+            if not oname:
+                raise PriceListError(f'{sname}: each option needs a name (the first one is the base).')
+            try:
+                extra = 0.0 if n == 0 else round(float(o.get('extra') or 0), 2)
+                amount = 0.0 if n == 0 else round(float(o.get('amount') or 0), 2)
+            except (TypeError, ValueError):
+                raise PriceListError(f'"{oname}": the extra should be a number.')
+            opts.append({'name': oname, 'extra': extra, 'amount': amount})
+        if len(opts) < 2:
+            raise PriceListError(f'{sname}: list the base option and at least one other.')
+        sections.append({'name': sname, 'options': opts, 'quote': bool(s.get('per_quotation'))})
 
     from .catalog import WORK_TYPES
     materials = []
@@ -260,6 +286,14 @@ def parse(raw):
             raise PriceListError(f'Quotation {n} ("{q["customer_name"]}") adds up to {inr(got)}, not {inr(float(expect))}.')
     if any(l['finish'] for l in lines) and not finishes:
         raise PriceListError('Some lines say "finish": true, but the file has no "finishes".')
+    known = {s['name'].lower() for s in sections}
+    for l in lines:
+        for c in l['choices']:
+            if c.lower() not in known:
+                raise PriceListError(f'"{l["name"]}" is in "{c}", but the file has no "choices" section by that name.')
+    for s in sections:
+        s['line_names'] = [l['name'] for l in lines if (l['finish'] and s['name'] == 'Finish' and finishes)
+                           or s['name'].lower() in {c.lower() for c in l['choices']}]
     if not lines and not templates and not materials and not fittings and not quotations and not options and not boards:
         raise PriceListError('The file has no lines.')
     if not data.get('pricing') and not lines and not materials and not fittings:
@@ -270,7 +304,7 @@ def parse(raw):
         if key in SETTINGS and isinstance(value, str):
             settings[key] = value.strip()[:5000]
     return {'pricing': pricing, 'lines': lines, 'materials': materials, 'fittings': fittings, 'finishes': finishes,
-            'boards': boards,
+            'sections': sections, 'boards': boards,
             'templates': templates, 'quotations': quotations, 'options': options,
             'settings': settings, '_by_name': by_name}
 
@@ -417,9 +451,9 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
                                                                            l['rate'], l['group'])
             updated += 1
     db.session.flush()
-    if parsed.get('finishes') and ready:                   # Laminate (base), Acrylic +25%… and the lines in them
+    if parsed.get('sections') and ready:            # Finish: Laminate (base), Acrylic +25%; Board…; and the lines in them
         from . import finishes
-        errors = finishes.set_from_price_list(parsed['finishes'], [l['name'] for l in parsed['lines'] if l['finish']])
+        errors = finishes.set_from_price_list(parsed['sections'])
         if errors:
             raise PriceListError(' '.join(errors))
 
@@ -471,7 +505,7 @@ def apply(parsed, remove_starter=True, replace_settings=False, hide_starter_rate
     made_quotes = _add_quotations(parsed.get('quotations') or [])
     db.session.commit()
     return {'added': added, 'updated': updated, 'removed': removed, 'templates': made, 'materials': mats,
-            'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'], 'finishes': len(parsed.get('finishes') or []),
+            'fittings': len(parsed['fittings']), 'pricing': parsed['pricing'], 'finishes': sum(len(s['options']) for s in parsed.get('sections') or []),
             'boards': len(parsed.get('boards') or []),
             'missing': sorted(set(missing)), 'settings': settings, 'quotations': made_quotes}
 
@@ -565,22 +599,28 @@ def export(label=''):
 
     lines = []
     if boq._columns_ready(tenancy.current_schema()):
-        in_finish = F.line_ids()
+        in_secs = F.line_sections()
+        secs = F.sections()
+        legacy = len(secs) == 1 and secs[0]['name'] == F.LEGACY_SECTION and not any(o['amount'] for o in secs[0]['options'])
         for b in BoqItem.query.order_by(BoqItem.category, BoqItem.name).all():
             row = {'name': b.name, 'unit': b.unit or 'nos', 'rate': num(b.rate)}
             if b.description:
                 row['description'] = b.description
             if b.category:
                 row['group'] = b.category
-            if b.id in in_finish:
-                row['finish'] = True
+            if b.id in in_secs:
+                if legacy:
+                    row['finish'] = True
+                else:
+                    row['choices'] = in_secs[b.id]
             lines.append(row)
-        opts = F.all_options()
-        if len(opts) >= 2:
-            out['finishes'] = [{'name': o['name'], **({'extra': o['extra']} if n else {})} for n, o in enumerate(opts)]
-        elif any(l.get('finish') for l in lines):
-            for l in lines:
-                l.pop('finish', None)
+        if legacy:                                  # one list of finishes, % only: the older, simpler format
+            out['finishes'] = [{'name': o['name'], **({'extra': o['extra']} if n else {})}
+                               for n, o in enumerate(secs[0]['options'])]
+        elif secs:
+            out['choices'] = [{'name': s['name'], 'options': [
+                {'name': o['name'], **({'amount': o['amount']} if o['amount'] else {'extra': o['extra']} if n else {})}
+                for n, o in enumerate(s['options'])], **({'per_quotation': True} if s['quote'] else {})} for s in secs]
     if lines:
         out['lines'] = lines
 
@@ -669,7 +709,7 @@ def summary_text(result):
     if result.get('boards'):
         parts.append(f"{result['boards']} boards")
     if result.get('finishes'):
-        parts.append(f"{result['finishes']} finishes")
+        parts.append(f"{result['finishes']} item options")
     if result.get('quotations'):
         parts.append('quotation' + ('s' if len(result['quotations']) > 1 else '') + ' added: '
                      + ', '.join(f'"{n}"' for n in result['quotations']))

@@ -34,7 +34,7 @@ with app.app_context():
 ok('the switch is on the Pricing tab', 'name="nos_on_rate"' in c.get('/admin/settings?tab=pricing').text)
 pid, qty, total = quote('Nos Factor', 1.25)
 ok('on: No\'s 1.25 multiplies the rate (900 sqft × ₹120 × 1.25 = ₹1,35,000)', qty == 1125 and total == 135000)
-v = c.get(f'/projects/{pid}').text
+v = re.sub(r'\d{8,}', '', c.get(f'/projects/{pid}').text)     # not the quotation number (today's date: 1125)
 ok('the quotation page shows the measured 900 sqft at ₹150', '>900<' in v.replace(' ', '') and '150' in v and '1125' not in v)
 t = pdftext(f'/projects/{pid}/pdf/customer')
 ok('the PDF: 900 at 150, no No\'s', '900' in t and '150' in t and '1,125' not in t and '1.25' not in t and 'Nos.' not in t.split('False Ceiling', 1)[1][:80])
