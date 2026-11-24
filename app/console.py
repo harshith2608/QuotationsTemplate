@@ -1887,16 +1887,20 @@ def tutorial_delete(tid):
     return redirect(url_for('console.tutorials'))
 
 
-@console_bp.route('/usage')
-@login_required
-def usage_page():
-    """How much each running trial and paying customer uses the app: users, quotations, templates, links, invoices…
-    (one row each; app/activity.py details()). Read-only: nothing in their apps changes."""
+USAGE_KEYS = ['users', 'quotations', 'quotes_7d', 'quotes_30d', 'drafts', 'won', 'templates', 'links', 'responses',
+              'invoices', 'payments', 'saved_lines', 'fittings', 'photos', 'material_lists']
+USAGE_DDL = ('CREATE TABLE IF NOT EXISTS public.console_usage (slug VARCHAR(40) PRIMARY KEY, kind VARCHAR(10) NOT NULL, '
+             'name TEXT, badge TEXT, data TEXT, error TEXT, taken_at TIMESTAMP NOT NULL)')
+
+
+def collect_usage():
+    """Read every running trial's and paying customer's app once (app/activity.py details()): [{kind, slug, name,
+    badge: [label, css], u: {…} or None, error}]. Wakes each database, so it runs from the daily job (cron_tick) and
+    the Usage page's Refresh now, never on just opening the page."""
     from . import activity
     rows = []
     for t in _with_badges([t for t in ops.list_trials() if t['status'] == 'active']):
-        row = {'kind': 'trial', 'slug': t['slug'], 'badge': t['badge'], 'url': t['url'],
-               'href': url_for('console.trial_detail', slug=t['slug']), 'u': None, 'error': t.get('error')}
+        row = {'kind': 'trial', 'slug': t['slug'], 'name': '', 'badge': list(t['badge']), 'u': None, 'error': t.get('error')}
         if not row['error']:
             try:
                 with tenancy.tenant_context(t['slug'], t['schema_name']):
@@ -1910,20 +1914,82 @@ def usage_page():
     except Exception:
         customers = []
     for r in customers:
-        row = {'kind': 'customer', 'slug': r['slug'], 'badge': c.plan_badge(r), 'url': c.app_url(r['slug']),
-               'href': url_for('console.customer_detail', slug=r['slug']), 'u': None, 'error': None,
-               'name': r.get('name') or ''}
+        row = {'kind': 'customer', 'slug': r['slug'], 'name': r.get('name') or '', 'badge': list(c.plan_badge(r)),
+               'u': None, 'error': None}
         try:
             with c.open_customer(r['slug']):
                 row['u'] = activity.details()
         except Exception as exc:
             row['error'] = str(exc)[:200]
         rows.append(row)
-    keys = ['users', 'quotations', 'quotes_7d', 'quotes_30d', 'drafts', 'won', 'templates', 'links', 'responses',
-            'invoices', 'payments', 'saved_lines', 'fittings', 'photos', 'material_lists']
-    totals = {k: sum((r['u'] or {}).get(k) or 0 for r in rows) for k in keys}
-    return render_template('console/usage.html', rows=rows, totals=totals,
-                           trials=sum(r['kind'] == 'trial' for r in rows), customers=len(customers))
+    return rows
+
+
+def save_usage(rows):
+    """Replace the stored snapshot with these rows (firms no longer running drop out)."""
+    import json
+    now = datetime.utcnow().replace(microsecond=0)
+    enc = lambda u: json.dumps({k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in u.items()
+                                if isinstance(v, (int, float, str, bool, type(None), datetime))}) if u else None
+    with db.engine.begin() as conn:
+        conn.execute(text(USAGE_DDL))
+        conn.execute(text('DELETE FROM public.console_usage'))
+        for r in rows:
+            conn.execute(text('INSERT INTO public.console_usage (slug, kind, name, badge, data, error, taken_at) '
+                              'VALUES (:slug, :kind, :name, :badge, :data, :error, :at)'),
+                         {'slug': r['slug'], 'kind': r['kind'], 'name': r.get('name') or '',
+                          'badge': json.dumps(r.get('badge') or ['', '']), 'data': enc(r.get('u')),
+                          'error': r.get('error'), 'at': now})
+    return now
+
+
+def load_usage():
+    """(rows, taken_at) from the stored snapshot; ([], None) before the first one. Only the console's own database."""
+    import json
+    with db.engine.begin() as conn:
+        conn.execute(text(USAGE_DDL))
+        found = conn.execute(text('SELECT slug, kind, name, badge, data, error, taken_at FROM public.console_usage '
+                                  'ORDER BY kind DESC, slug')).mappings().all()
+    rows, taken = [], None
+    for f in found:
+        u = json.loads(f['data']) if f['data'] else None
+        for k in ('last_seen_at', 'last_login_at', 'last_active_at', 'last_quotation_at'):
+            if u and u.get(k):
+                try:
+                    u[k] = datetime.fromisoformat(u[k])
+                except ValueError:
+                    u[k] = None
+        at = f['taken_at']
+        if isinstance(at, str):
+            at = datetime.fromisoformat(at)
+        taken = max(taken, at) if taken else at
+        rows.append({'kind': f['kind'], 'slug': f['slug'], 'name': f['name'] or '', 'badge': json.loads(f['badge'] or '["",""]'),
+                     'u': u, 'error': f['error']})
+    return rows, taken
+
+
+@console_bp.route('/usage')
+@login_required
+def usage_page():
+    """How much each running trial and paying customer uses the app, from the snapshot the daily job takes (and
+    Refresh now). Opening this page touches no one's database."""
+    rows, taken = load_usage()
+    for r in rows:
+        r['href'] = url_for('console.trial_detail' if r['kind'] == 'trial' else 'console.customer_detail', slug=r['slug'])
+    totals = {k: sum((r['u'] or {}).get(k) or 0 for r in rows) for k in USAGE_KEYS}
+    return render_template('console/usage.html', rows=rows, totals=totals, taken_at=taken,
+                           trials=sum(r['kind'] == 'trial' for r in rows),
+                           customers=sum(r['kind'] == 'customer' for r in rows))
+
+
+@console_bp.route('/usage/refresh', methods=['POST'])
+@login_required
+def usage_refresh():
+    rows = collect_usage()
+    save_usage(rows)
+    audit('usage_refresh', None, f'{len(rows)} firms')
+    flash(f'Usage read again from {len(rows)} trial{"" if len(rows) == 1 else "s"} and customers.', 'ok')
+    return redirect(url_for('console.usage_page'))
 
 
 @console_bp.route('/activity')
@@ -2484,6 +2550,12 @@ def cron_tick():
     for row in c.all_customers():
         if row['status'] == 'provisioning' and row.get('hosting') == 'shared':
             out[row['slug']] = (c.resume(row['slug']) or {}).get('status')
+    try:
+        rows = collect_usage()                        # the Usage page's daily snapshot
+        save_usage(rows)
+        out['usage'] = len(rows)
+    except Exception as exc:
+        out['usage'] = f'failed: {exc}'[:200]
     if out:
         audit('cron_tick', None, str(out)[:500])
     return jsonify({'ok': True, 'moved': out})

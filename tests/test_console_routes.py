@@ -46,8 +46,22 @@ rows = [dict(kind='trial', slug='sharma', badge=('running', 'b-active'), url='#'
              error='could not connect', name='Kundu Designs')]
 with app.test_request_context('/usage'):
     session['console_at'] = 1
-    html = render_template('console/usage.html', rows=rows, totals={k: 1 for k in u}, trials=1, customers=1)
-assert 'Sharma Interiors' in html and 'could not connect' in html and '(1+2)' in html and '>Usage<' in html, html[:500]
+    html = render_template('console/usage.html', rows=rows, totals={k: 1 for k in u}, trials=1, customers=1,
+                           taken_at=datetime.utcnow())
+    import os, tempfile
+    from sqlalchemy import event
+    from app import console, db
+    pub = os.path.join(tempfile.mkdtemp(), 'public.db')
+    event.listen(db.engine, 'connect', lambda c, r: c.execute(f"ATTACH DATABASE '{pub}' AS public"))
+    db.engine.dispose()                       # SQLite has no "public" schema: attach one, like the console's Postgres
+    console.save_usage(rows)
+    back, taken = console.load_usage()
+    assert taken and [r['slug'] for r in back] == ['sharma', 'kundu'], back
+    assert back[0]['u']['quotations'] == 12 and back[0]['u']['last_seen_at'].year >= 2026 and back[1]['u'] is None, back
+    assert back[1]['error'] == 'could not connect' and back[0]['badge'] == ['running', 'b-active'], back
+    console.save_usage(rows[:1])
+    assert [r['slug'] for r in console.load_usage()[0]] == ['sharma']
+assert 'Sharma Interiors' in html and 'could not connect' in html and '(1+2)' in html and '>Usage<' in html and 'Refresh now' in html, html[:500]
 print('OK')
 """
 
