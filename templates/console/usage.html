@@ -2,8 +2,17 @@
 {% block title %}Usage{% endblock %}
 {% block content %}
 <h1>Usage</h1>
-<p class="muted small">How much each running trial ({{ trials }}) and paying customer ({{ customers }}) uses QuoteRoom, read
-  live from their apps. Tap a column to sort. Quotations count saved ones (not drafts or the untouched sample);
+<div class="row" style="align-items:center;gap:10px;margin-bottom:6px">
+  <span class="small">{% if taken_at %}As of <strong>{{ taken_at|ist }}</strong> ({{ taken_at|ago }}){% else %}<strong>Not read yet.</strong>{% endif %}</span>
+  <form method="post" action="{{ url_for('console.usage_refresh') }}" style="margin:0"
+        onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Reading every app…'">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm" type="submit">Refresh now</button>
+  </form>
+</div>
+<p class="muted small">How much each running trial ({{ trials }}) and paying customer ({{ customers }}) uses QuoteRoom.
+  Read once a day by the morning job (8:30 IST) and when you tap Refresh now, which wakes every firm's database;
+  opening this page doesn't. Tap a column to sort. Quotations count saved ones (not drafts or the untouched sample);
   7d / 30d are quotations made in the last 7 / 30 days; Confirmed+ have reached Confirmed, Ongoing or Completed.</p>
 
 <div class="row" style="margin-bottom:10px;gap:8px;align-items:center">
