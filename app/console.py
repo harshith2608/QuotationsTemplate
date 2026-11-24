@@ -1887,6 +1887,45 @@ def tutorial_delete(tid):
     return redirect(url_for('console.tutorials'))
 
 
+@console_bp.route('/usage')
+@login_required
+def usage_page():
+    """How much each running trial and paying customer uses the app: users, quotations, templates, links, invoices…
+    (one row each; app/activity.py details()). Read-only: nothing in their apps changes."""
+    from . import activity
+    rows = []
+    for t in _with_badges([t for t in ops.list_trials() if t['status'] == 'active']):
+        row = {'kind': 'trial', 'slug': t['slug'], 'badge': t['badge'], 'url': t['url'],
+               'href': url_for('console.trial_detail', slug=t['slug']), 'u': None, 'error': t.get('error')}
+        if not row['error']:
+            try:
+                with tenancy.tenant_context(t['slug'], t['schema_name']):
+                    row['u'] = activity.details()
+            except Exception as exc:
+                row['error'] = str(exc)[:200]
+        rows.append(row)
+    c = _customers()
+    try:
+        customers = [r for r in c.all_customers() if r['status'] == 'active']
+    except Exception:
+        customers = []
+    for r in customers:
+        row = {'kind': 'customer', 'slug': r['slug'], 'badge': c.plan_badge(r), 'url': c.app_url(r['slug']),
+               'href': url_for('console.customer_detail', slug=r['slug']), 'u': None, 'error': None,
+               'name': r.get('name') or ''}
+        try:
+            with c.open_customer(r['slug']):
+                row['u'] = activity.details()
+        except Exception as exc:
+            row['error'] = str(exc)[:200]
+        rows.append(row)
+    keys = ['users', 'quotations', 'quotes_7d', 'quotes_30d', 'drafts', 'won', 'templates', 'links', 'responses',
+            'invoices', 'payments', 'saved_lines', 'fittings', 'photos', 'material_lists']
+    totals = {k: sum((r['u'] or {}).get(k) or 0 for r in rows) for k in keys}
+    return render_template('console/usage.html', rows=rows, totals=totals,
+                           trials=sum(r['kind'] == 'trial' for r in rows), customers=len(customers))
+
+
 @console_bp.route('/activity')
 @login_required
 def activity():
