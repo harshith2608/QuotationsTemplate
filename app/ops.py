@@ -538,6 +538,15 @@ def set_boq(slug, on):
         db.session.commit()
 
 
+def export_price_list(slug):
+    """This firm's current price list as a dict, in the format Load price list reads (app/price_list.export)."""
+    from . import branding, price_list
+    with tenancy.tenant_context(slug, schema_of(slug)):
+        from .models import AppSetting
+        name = (AppSetting.get(branding.FIELDS['name'][0]) or '').strip()
+        return price_list.export(name or slug)
+
+
 def load_price_list(slug, parsed, remove_starter, replace_settings):
     """Load a firm's own price list into this trial only (app/price_list.py). Returns the summary dict."""
     from . import price_list

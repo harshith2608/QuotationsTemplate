@@ -338,3 +338,27 @@ with app.app_context():
        i['False Ceiling'] == ('sqft', 120) and m['False Ceiling'] == ('sq m', 1290) and m['Paint Work'] == ('sq m', 480)
        and m['Fan Fitting'] == i['Fan Fitting'] and any(u == 'rmt' for u, _ in m.values()))
     AppSetting.set('area_unit', 'sqft'); db.session.commit(); units.clear_cache()
+
+# ── Download price list (console): the firm's rates as they are, in the same format, loads back unchanged ──
+with app.app_context():
+    price_list.apply(price_list.parse(json.dumps(FIN).encode()), remove_starter=False)   # finishes again (cleared above)
+    out = price_list.export('Test firm')
+    again = price_list.parse(json.dumps(out).encode())
+    ok('the export is a valid price list (parse accepts it)', again['pricing'] == out['pricing'])
+    lines = {l['name']: l for l in out.get('lines') or []}
+    ok('it has the saved lines with unit, rate, group and finish, and the finishes (base first)',
+       lines.get('Wardrobe', {}).get('finish') and lines['Wardrobe']['rate'] == BoqItem.query.filter_by(name='Wardrobe').first().rate
+       and [f['name'] for f in out.get('finishes') or []][:1] == ['Laminate'])
+    ok('it has the materials with their rates, the fittings and the templates',
+       all('rates' in m or 'rate' in m for m in out.get('materials') or [])
+       and any(m.get('rates') for m in out.get('materials') or []) and out.get('fittings')
+       and any(t['name'] == 'Firm 2 BHK' for t in out.get('templates') or []))
+    ok('its notes and PDF options', out['settings'].get('payment_terms') and 'layout' in out['options'] and 'gst' in out['options'])
+    strip = lambda d: {k: v for k, v in d.items() if k not in ('firm', 'templates')}
+    price_list.apply(price_list.parse(json.dumps(out).encode()), remove_starter=False)
+    back = price_list.export('Test firm')
+    ok('loading the export back changes nothing (rates, lines, boards, fittings, settings the same)', strip(back) == strip(out))
+    ok('…and the templates keep their rooms and items',
+       [(t['name'], [(r['name'], [i['name'] for i in r['items']]) for r in t['rooms']]) for t in back.get('templates') or []]
+       == [(t['name'], [(r['name'], [i['name'] for i in r['items']]) for r in t['rooms']]) for t in out.get('templates') or []]
+       or sorted(t['name'] for t in back['templates']) == sorted(t['name'] for t in out['templates']))

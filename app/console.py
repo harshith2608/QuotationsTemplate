@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import quote, urlencode
 
-from flask import (Blueprint, abort, current_app, flash, has_request_context, redirect, render_template, request, session,
+from flask import (Blueprint, Response, abort, current_app, flash, has_request_context, redirect, render_template, request, session,
                    url_for)
 from sqlalchemy import create_engine, text
 from werkzeug.security import check_password_hash
@@ -1746,6 +1746,26 @@ def trial_price_list(slug):
     return redirect(url_for('console.trial_detail', slug=slug) + '#features')
 
 
+@console_bp.route('/trials/<slug>/price-list.json')
+@login_required
+def trial_price_list_export(slug):
+    """Download their current price list (Load price list's format), to keep or change and load back."""
+    _trial_or_404(slug)
+    import json as _json
+    try:
+        data = ops.export_price_list(slug)
+    except Exception as exc:
+        flash(f'Could not read their price list: {exc}', 'error')
+        return redirect(url_for('console.trial_detail', slug=slug) + '#features')
+    audit('trial_price_list_export', slug, f"{len(data.get('materials') or [])} materials, "
+          f"{len(data.get('lines') or [])} lines, {len(data.get('fittings') or [])} fittings")
+    body = _json.dumps(data, ensure_ascii=False, indent=1)
+    stamp = datetime.utcnow().strftime('%Y-%m-%d')
+    return Response(body, mimetype='application/json', headers={
+        'Content-Disposition': f'attachment; filename="{slug}-price-list-{stamp}.json"',
+        'Cache-Control': 'no-store'})
+
+
 @console_bp.route('/trials/<slug>/delete', methods=['POST'])
 @login_required
 def delete_trial(slug):
@@ -2395,6 +2415,26 @@ def customer_price_list(slug):
         audit('customer_price_list', slug, f"{result['added']} added, {result['updated']} updated")
         flash(f'Price list loaded for "{slug}": ' + price_list.summary_text(result), 'ok')
     return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+
+
+@console_bp.route('/customers/<slug>/price-list.json')
+@login_required
+def customer_price_list_export(slug):
+    """Download their current price list (Load price list's format), to keep or change and load back."""
+    _customer_or_404(slug)
+    import json as _json
+    try:
+        data = _customers().export_price_list(slug)
+    except Exception as exc:
+        flash(f'Could not read their price list: {exc}', 'error')
+        return redirect(url_for('console.customer_detail', slug=slug) + '#features')
+    audit('customer_price_list_export', slug, f"{len(data.get('materials') or [])} materials, "
+          f"{len(data.get('lines') or [])} lines, {len(data.get('fittings') or [])} fittings")
+    body = _json.dumps(data, ensure_ascii=False, indent=1)
+    stamp = datetime.utcnow().strftime('%Y-%m-%d')
+    return Response(body, mimetype='application/json', headers={
+        'Content-Disposition': f'attachment; filename="{slug}-price-list-{stamp}.json"',
+        'Cache-Control': 'no-store'})
 
 
 @console_bp.route('/customers/<slug>/delete', methods=['POST'])

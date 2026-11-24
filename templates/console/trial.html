@@ -276,6 +276,11 @@
     <label class="small"><input type="checkbox" name="replace_settings" value="1"> Replace their notes &amp; payment terms (otherwise only filled in where never saved)</label>
     <div><button class="btn btn-primary" type="submit" {% if not boq.ready %}disabled{% endif %}>Load price list</button></div>
   </form>
+  <div style="border-top:1px solid var(--line);padding-top:12px"><strong>Download price list</strong></div>
+  <p class="muted small" style="margin:0">Their rates as they are now (materials, boards, fittings, saved lines, finishes,
+    templates, notes and PDF options), in the same .json format: keep it as a backup, change it, and load it back above.
+    Contains their business data: keep it outside the repository.</p>
+  <div><a class="btn" href="{{ url_for('console.trial_price_list_export', slug=t.slug) }}">Download price list (.json)</a></div>
   {% else %}<p class="muted small" style="margin:0">Available once the business is running.</p>{% endif %}
 </div>
 
