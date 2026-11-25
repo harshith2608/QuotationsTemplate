@@ -257,6 +257,16 @@
         at a time; turn on autopay in your app if you like (cancel any time).{% endif %}{% if longer %} Plans paid once don't
         renew automatically, and we remind you before they end.{% endif %}{% if call_url %}
         Not sure which plan? <a href="{{ call_url }}" data-call>Book a call with us</a>.{% endif %}</p>
+      <div class="custom-build" id="custom">
+        <div>
+          <h3>Need something built just for your business?</h3>
+          <p>If {{ product }} doesn't fit the way you work, we also build custom websites and apps. Tell us what you need.</p>
+        </div>
+        <div class="custom-build-actions">
+          {% if contact_email %}<a class="btn btn-ghost" href="mailto:{{ contact_email }}?subject={{ 'Custom website / app enquiry'|urlencode }}" data-cta>Email us</a>{% endif %}
+          <a class="btn btn-ghost" href="https://wa.me/{{ wa_number }}?text={{ 'Hi! I\'d like to talk about a custom website or app for my business.'|urlencode }}" target="_blank" rel="noopener" data-cta>WhatsApp us</a>
+        </div>
+      </div>
     </div>
   </section>
 
