@@ -180,6 +180,17 @@ r = c.get('/admin/rates').text
 ok('Admin → Rates: each line\'s unit is a list (sqft, sqm, rft, rmt, no\'s, lump sum), not typed',
    'name="bq_unit" class="form-select' in r and '>sqm</option>' in r and 'no&#39;s</option>' in r
    and 'name="bq_unit" class="form-control' not in r)
+with app.app_context():
+    from app import boq as _boq
+    used = _boq.own_units()
+ok(f'…an Edit units dialog, starting with the units the items already use {used}', 'id="unitsModal"' in r
+   and all(f'name="unit_name" class="form-control" value="{u}"' in r for u in used))
+c.post('/admin/rates', data={'units_submit': '1', 'unit_name': used + ['Kg', 'Sq.m', 'kg', ''], 'unit_delete': ['0'] if used else []})
+with app.app_context():
+    now = _boq.own_units()
+ok(f'…they add (kg; Sq.m is the standard sqm, typed twice once) and remove units {now}', now == used[1:] + ['Kg'])
+r = c.get('/admin/rates').text
+ok('…and every item\'s list has them', '<option value="Kg" >Kg</option>' in r)
 ok('Admin → Rates: an Item options card (section Finish, base rate, % extra) and a Finish tick per item', 'id="finishes"' in r
    and 'Item options' in r and 'value="Finish"' in r and 'Base rate' in r and 'name="bq_opt"' in r and 'value="25"' in r)
 c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', ''],

@@ -471,11 +471,10 @@
         </p>
         <datalist id="boq-cats">{% for c in boq_lines|map(attribute='category')|select|unique %}<option value="{{ c }}">{% endfor %}</datalist>
         {# The units to pick from (value saved, label shown); a line on another unit (e.g. point, set) keeps it #}
-        {% macro unit_select(current, label) %}
-          {% set unit_choices = [('sqft', 'sqft'), ('sq m', 'sqm'), ('rft', 'rft'), ('rmt', 'rmt'), ('nos', "no's"), ('lump sum', 'lump sum')] %}
+        {% macro unit_select(current, label, choices) %}
           <select name="bq_unit" class="form-select form-select-sm" aria-label="{{ label }}">
-            {% for v, l in unit_choices %}<option value="{{ v }}" {{ 'selected' if v == current }}>{{ l }}</option>{% endfor %}
-            {% if current not in unit_choices|map('first')|list %}<option value="{{ current }}" selected>{{ current }}</option>{% endif %}
+            {% for v, l in choices %}<option value="{{ v }}" {{ 'selected' if v == current }}>{{ l }}</option>{% endfor %}
+            {% if current not in choices|map('first')|list %}<option value="{{ current }}" selected>{{ current }}</option>{% endif %}
           </select>
         {% endmacro %}
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
@@ -486,7 +485,9 @@
                 <tr>
                   <th class="ps-3" style="min-width:260px; width:48%">Line &amp; description</th>
                   <th style="min-width:130px; width:18%">Group</th>
-                  <th style="min-width:100px; width:12%">Unit</th>
+                  <th style="min-width:100px; width:12%">Unit
+                    {% if unit_choices %}<button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-reset" data-bs-toggle="modal"
+                            data-bs-target="#unitsModal" title="Add or remove units in this list"><i class="bi bi-pencil-square"></i> Edit</button>{% endif %}</th>
                   <th style="min-width:130px; width:14%">Rate</th>
                   {% for sec in tick_sections or [] %}<th class="text-center" style="width:80px" title="Comes in your {{ sec.name }} options: a {{ sec.name }} choice on the quotation">{{ sec.name }}</th>{% endfor %}
                   <th class="text-center" style="width:80px">Remove</th>
@@ -501,7 +502,7 @@
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="{{ [((b.description or '').count('\n') + 1), 6]|min }}" maxlength="2000" placeholder="Description (optional)" aria-label="Description">{{ b.description or '' }}</textarea>
                   </td>
                   <td><input type="text" name="bq_cat" class="form-control form-control-sm" value="{{ b.category or '' }}" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="Group"></td>
-                  <td>{{ unit_select(b.unit or 'nos', 'Unit') }}</td>
+                  <td>{{ unit_select(b.unit or 'nos', 'Unit', unit_choices) }}</td>
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
@@ -524,7 +525,7 @@
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="1" maxlength="2000" placeholder="Description (optional)" aria-label="New line description"></textarea>
                   </td>
                   <td><input type="text" name="bq_cat" class="form-control form-control-sm" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="New line group"></td>
-                  <td>{{ unit_select('sqft', 'New line unit') }}</td>
+                  <td>{{ unit_select('sqft', 'New line unit', unit_choices) }}</td>
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
@@ -546,6 +547,40 @@
             <i class="bi bi-check-circle me-2"></i>Save BOQ Lines
           </button>
         </form>
+        {% if unit_choices %}
+        <div class="modal fade" id="unitsModal" tabindex="-1" aria-labelledby="unitsModalTitle" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-scrollable">
+            <form method="POST" action="{{ url_for('admin.rates') }}" class="modal-content" novalidate>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="modal-header">
+                <h5 class="modal-title" id="unitsModalTitle"><i class="bi bi-rulers me-2"></i>Units</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p class="small text-muted">The units your items can be in. These are always there (sizes are worked out from them):</p>
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                  {% for v, l in unit_choices[:6] %}<span class="badge bg-light text-dark border"><i class="bi bi-lock me-1 text-muted"></i>{{ l }}</span>{% endfor %}
+                </div>
+                <p class="small text-muted mb-2">Your own units (e.g. point, set, kg, running metre). The ones your items use already are here.</p>
+                {% for u in own_units %}
+                <div class="input-group input-group-sm mb-2">
+                  <input type="text" name="unit_name" class="form-control" value="{{ u }}" maxlength="20" aria-label="Unit">
+                  <label class="input-group-text small"><input class="form-check-input me-1 mt-0" type="checkbox" name="unit_delete" value="{{ loop.index0 }}">Remove</label>
+                </div>
+                {% endfor %}
+                {% for _ in range(3) %}
+                <input type="text" name="unit_name" class="form-control form-control-sm mb-2" maxlength="20" placeholder="Add a unit, e.g. {{ ['point', 'set', 'kg'][loop.index0] }}" aria-label="New unit">
+                {% endfor %}
+                <div class="form-text">An item already on a unit you remove keeps it. Save any changes to your items first: this saves the units only.</div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" name="units_submit" value="1" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save units</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

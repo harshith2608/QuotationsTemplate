@@ -109,6 +109,55 @@ def units_for_business():
     return first + [u for u in UNITS if u not in first]
 
 
+# Admin → Rates: each item's unit is picked from a list. The standard units (sizes are worked out from them) are
+# always there; a business adds its own (point, set, kg…) with "Edit units". Until it does, its own list is the units
+# its items already use.
+BASE_UNITS = ['sqft', 'sq m', 'rft', 'rmt', 'nos', LUMP_SUM]
+UNIT_LABELS = {'sq m': 'sqm', 'nos': "no's"}
+OWN_UNITS_KEY = 'boq_unit_list'
+OWN_UNITS_MAX = 30
+
+
+def own_units():
+    """The business's own units (besides the standard ones), in its order."""
+    import json
+    from .models import AppSetting, BoqItem
+    raw = AppSetting.get(OWN_UNITS_KEY, '')
+    if raw:
+        try:
+            saved = json.loads(raw)
+            if isinstance(saved, list):
+                return [str(u) for u in saved if u][:OWN_UNITS_MAX]
+        except ValueError:
+            pass
+    out = []
+    for (u,) in BoqItem.query.with_entities(BoqItem.unit).order_by(BoqItem.id).all():
+        u = clean_unit(u) if u else ''
+        if u and u not in BASE_UNITS and u not in out:
+            out.append(u)
+    return out[:OWN_UNITS_MAX]
+
+
+def save_own_units(values):
+    """From "Edit units": the units typed (cleaned like any unit: 'Sq.m' is the standard sqm). Returns errors."""
+    import json
+    from .models import AppSetting
+    out = []
+    for v in values:
+        u = clean_unit(v) if str(v or '').strip() else ''
+        if u and u not in BASE_UNITS and u.lower() not in {o.lower() for o in out}:
+            out.append(u)
+    if len(out) > OWN_UNITS_MAX:
+        return [f'Up to {OWN_UNITS_MAX} units of your own.']
+    AppSetting.set(OWN_UNITS_KEY, json.dumps(out) if out else '[]')
+    return []
+
+
+def unit_choices():
+    """[(unit, label)] for the Rates page: the standard units, then the business's own."""
+    return [(u, UNIT_LABELS.get(u, u)) for u in BASE_UNITS] + [(u, u) for u in own_units()]
+
+
 def size_mode(unit):
     """'area' (length × width), 'length' (running length) or None (a count, a point, a lump sum…)."""
     return 'area' if unit in AREA_UNITS else 'length' if unit in LENGTH_UNITS else None
