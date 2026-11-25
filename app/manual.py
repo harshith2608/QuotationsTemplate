@@ -101,11 +101,11 @@ ARTICLES = [
 
     # ── Sending ─────────────────────────────────────────────────────────────
     dict(id='pdf', title='Get the quotation PDF', link='projects.list_projects',
-         summary='Open the quotation and tap its PDF button.',
+         summary='Tap the PDF button on the quotation, or beside it in your Quotations list.',
          tags='pdf download print save share file quotation pdf initial full',
          steps=['Open the quotation.',
                 'Tap Quotation PDF (or Full Quotation / Initial Quotation, depending on how you price).',
-                'It opens in a new tab: download, print or share it from there.']),
+                'It opens in a new tab: download, print or share it from there. The PDF button in the Quotations list opens it the same way.']),
     dict(id='pdf-choices', title='Choose what the PDF shows', link='projects.list_projects', needs='pdf_choices',
          summary='Tick-boxes before the PDF: description, material, size, quantity, rate, amounts, room totals, photos.',
          tags='pdf choose show hide columns rate amount size description tick boxes customer sees',
