@@ -410,22 +410,20 @@
         </p>
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% set blank = [] if option_sections|length >= max_sections else [{'name': '', 'options': []}] %}
-          {% for sec in option_sections + blank %}{% set s = loop.index0 %}{% set is_new = not sec.options %}
-          <div class="border rounded p-2 mb-3 {{ 'bg-light' if is_new }}">
+          {% for sec in option_sections %}{% set s = loop.index0 %}
+          <div class="border rounded p-2 mb-3">
             <div class="d-flex align-items-center gap-2 mb-2">
               <span class="small text-muted text-nowrap">Section</span>
-              <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" value="{{ sec.name }}" maxlength="40"
-                     placeholder="{{ 'e.g. Finish' if not option_sections else 'Add a section, e.g. Board' }}" aria-label="Section name">
+              <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" value="{{ sec.name }}" maxlength="40" aria-label="Section name">
               <label class="small text-nowrap ms-2" title="The quotation form gets this choice at the top: the default for every line in it, on that quotation"><input class="form-check-input me-1" type="checkbox" name="sec_quote" value="{{ s }}" {{ 'checked' if sec.quote }}>Choose per quotation</label>
-              {% if not is_new %}<label class="small text-muted ms-auto text-nowrap"><input class="form-check-input me-1" type="checkbox" name="sec_delete" value="{{ s }}">Remove section</label>{% endif %}
+              <label class="small text-muted ms-auto text-nowrap"><input class="form-check-input me-1" type="checkbox" name="sec_delete" value="{{ s }}">Remove section</label>
             </div>
-            <table class="table table-bordered align-middle mb-0 bg-white">
+            <table class="table table-bordered align-middle mb-2 bg-white">
               <thead class="ki-table-head">
                 <tr><th class="ps-3">Option</th><th style="width:260px">Extra on the base rate</th>
                     <th class="text-center" style="width:80px">Remove</th></tr>
               </thead>
-              <tbody>
+              <tbody id="optRows_{{ s }}">
                 {% for o in sec.options %}
                 <tr>
                   <td><input type="text" name="opt_name_{{ s }}" class="form-control form-control-sm" value="{{ o.name }}" maxlength="40" aria-label="Option name"></td>
@@ -435,19 +433,90 @@
                   <td class="text-center">{% if not loop.first %}<input class="form-check-input" type="checkbox" name="opt_delete_{{ s }}" value="{{ loop.index0 }}" aria-label="Remove {{ o.name }}">{% endif %}</td>
                 </tr>
                 {% endfor %}
-                {% for _ in range(2 if sec.options else 3) %}
-                <tr class="table-light" data-grow>
-                  <td><input type="text" name="opt_name_{{ s }}" class="form-control form-control-sm" maxlength="40"
-                             placeholder="{{ ('e.g. Laminate (your base)' if loop.first else 'e.g. Acrylic') if is_new else 'Add an option' }}" aria-label="New option name"></td>
-                  <td>{% if is_new and loop.first %}<input type="hidden" name="opt_val_{{ s }}" value="0"><input type="hidden" name="opt_kind_{{ s }}" value="pct"><span class="small text-muted">Base rate</span>
-                      {% else %}{{ opt_extra(s, '', 'pct', 'New option') }}{% endif %}</td>
+                {% if not sec.options %}{# a section saved with no options yet: its base first #}
+                <tr>
+                  <td><input type="text" name="opt_name_{{ s }}" class="form-control form-control-sm" maxlength="40" placeholder="e.g. Laminate (your base)" aria-label="Base option name"></td>
+                  <td><input type="hidden" name="opt_val_{{ s }}" value="0"><input type="hidden" name="opt_kind_{{ s }}" value="pct"><span class="small text-muted">Base rate</span></td>
                   <td></td>
                 </tr>
-                {% endfor %}
+                {% endif %}
               </tbody>
             </table>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addOption({{ s }})"><i class="bi bi-plus-lg me-1"></i>Add option</button>
           </div>
           {% endfor %}
+          <div id="newSections" data-first="{{ option_sections|length }}" data-max="{{ max_sections }}"></div>
+          <div class="mb-3">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="addSectionBtn" onclick="addSection()"
+                    {{ 'hidden' if option_sections|length >= max_sections }}><i class="bi bi-plus-lg me-1"></i>Add section</button>
+            {% if option_sections|length >= max_sections %}<span class="small text-muted">Up to {{ max_sections }} sections.</span>{% endif %}
+          </div>
+          <template id="optRowTpl">
+            <tr>
+              <td><input type="text" name="opt_name___S__" class="form-control form-control-sm" maxlength="40" placeholder="e.g. Acrylic" aria-label="New option name"></td>
+              <td>{{ opt_extra('__S__', '', 'pct', 'New option') }}</td>
+              <td class="text-center"><button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="this.closest('tr').remove()" aria-label="Remove this new option"><i class="bi bi-x-lg"></i></button></td>
+            </tr>
+          </template>
+          <template id="secTpl">
+            <div class="border rounded p-2 mb-3 bg-light" data-new-section>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="small text-muted text-nowrap">Section</span>
+                <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" maxlength="40" placeholder="e.g. Board" aria-label="Section name">
+                <label class="small text-nowrap ms-2"><input class="form-check-input me-1" type="checkbox" name="sec_quote" value="__S__">Choose per quotation</label>
+                <button type="button" class="btn btn-link btn-sm text-danger ms-auto p-0" onclick="removeNewSection(this)"><i class="bi bi-x-lg me-1"></i>Remove</button>
+              </div>
+              <table class="table table-bordered align-middle mb-2 bg-white">
+                <thead class="ki-table-head">
+                  <tr><th class="ps-3">Option</th><th style="width:260px">Extra on the base rate</th>
+                      <th class="text-center" style="width:80px">Remove</th></tr>
+                </thead>
+                <tbody data-opt-rows>
+                  <tr>
+                    <td><input type="text" name="opt_name___S__" class="form-control form-control-sm" maxlength="40" placeholder="e.g. Laminate (your base)" aria-label="Base option name"></td>
+                    <td><input type="hidden" name="opt_val___S__" value="0"><input type="hidden" name="opt_kind___S__" value="pct"><span class="small text-muted">Base rate</span></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button type="button" class="btn btn-sm btn-outline-primary" data-add-option><i class="bi bi-plus-lg me-1"></i>Add option</button>
+            </div>
+          </template>
+          <script>
+            // Item options: "Add option" adds a row to a section, "Add section" a new section (its base first, then an
+            // option). New sections are numbered after the saved ones, in order (renumbered when one is removed).
+            function _optRow(s) {
+              const tr = document.getElementById('optRowTpl').content.firstElementChild.cloneNode(true);
+              tr.querySelectorAll('[name]').forEach(el => { el.name = el.name.replace('__S__', s); });
+              return tr;
+            }
+            function addOption(s, tbody) {
+              const body = tbody || document.getElementById('optRows_' + s);
+              const tr = _optRow(s);
+              body.appendChild(tr);
+              tr.querySelector('input[type=text]').focus();
+            }
+            function _renumberNew() {
+              const box = document.getElementById('newSections'), first = +box.dataset.first;
+              box.querySelectorAll('[data-new-section]').forEach((sec, i) => {
+                const s = first + i;
+                sec.querySelectorAll('[name^="opt_"]').forEach(el => { el.name = el.name.replace(/_(\d+|__S__)$/, '_' + s); });
+                sec.querySelector('[name=sec_quote]').value = s;
+                sec.querySelector('[data-add-option]').onclick = () => addOption(s, sec.querySelector('[data-opt-rows]'));
+              });
+              document.getElementById('addSectionBtn').hidden = first + box.children.length >= +box.dataset.max;
+            }
+            function addSection() {
+              const box = document.getElementById('newSections');
+              const sec = document.getElementById('secTpl').content.firstElementChild.cloneNode(true);
+              box.appendChild(sec);
+              _renumberNew();
+              const s = +box.dataset.first + box.children.length - 1;
+              addOption(s, sec.querySelector('[data-opt-rows]'));
+              sec.querySelector('[name=sec_name]').focus();
+            }
+            function removeNewSection(btn) { btn.closest('[data-new-section]').remove(); _renumberNew(); }
+          </script>
           <button type="submit" name="finish_submit" value="1" class="btn btn-primary ki-btn-primary">
             <i class="bi bi-check-circle me-2"></i>Save Item options
           </button>

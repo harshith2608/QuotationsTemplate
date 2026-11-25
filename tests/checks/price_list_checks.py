@@ -228,6 +228,8 @@ c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', 'Board
 r = c.get('/admin/rates').text
 ok('a second section, Board, with ₹ per unit extras: its own tick column', 'value="Board"' in r and 'value="Board|' in r
    and '₹ per unit' in r and 'name="bq_new_1"' in r)
+ok('…Add option and Add section buttons in place of empty rows', 'onclick="addOption(1)"' in r and 'id="addSectionBtn"' in r
+   and 'placeholder="Add an option"' not in r)
 c.post('/admin/rates', data={'boq_submit': '1', 'bq_secname': ['Finish', 'Board'], 'bq_id': [x[0] for x in rows],
                              'bq_name': [x[1] for x in rows], 'bq_desc': [x[2] for x in rows], 'bq_unit': [x[3] for x in rows],
                              'bq_rate': [x[4] for x in rows], 'bq_cat': [x[5] for x in rows],
