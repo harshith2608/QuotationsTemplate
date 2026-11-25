@@ -116,6 +116,8 @@ ok('privacy page explains the Meta Pixel, on by default and how to turn it off',
    and '_fbp' in t and 'trial form' in t and '12 months' in t)
 t = c.get('/').text
 ok('the footer note links to the cookies section', 'href="/privacy#cookies"' in t)
+ok('the home page offers custom websites and apps, with a WhatsApp link',
+   'custom websites and apps' in t and 'wa.me/919876543210?text=Hi%21%20I%27d%20like%20to%20talk%20about%20a%20custom' in t)
 
 
 # Right after a deploy, before the database update adds leads.company_name: the form still works
