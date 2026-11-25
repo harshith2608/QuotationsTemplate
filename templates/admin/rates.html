@@ -470,7 +470,14 @@
           change them there for that quotation only, or here (or with "Save as my default") for every new quotation.
         </p>
         <datalist id="boq-cats">{% for c in boq_lines|map(attribute='category')|select|unique %}<option value="{{ c }}">{% endfor %}</datalist>
-        <datalist id="boq-units-admin">{% for u in boq_units %}<option value="{{ u }}">{% endfor %}</datalist>
+        {# The units to pick from (value saved, label shown); a line on another unit (e.g. point, set) keeps it #}
+        {% macro unit_select(current, label) %}
+          {% set unit_choices = [('sqft', 'sqft'), ('sq m', 'sqm'), ('rft', 'rft'), ('rmt', 'rmt'), ('nos', "no's"), ('lump sum', 'lump sum')] %}
+          <select name="bq_unit" class="form-select form-select-sm" aria-label="{{ label }}">
+            {% for v, l in unit_choices %}<option value="{{ v }}" {{ 'selected' if v == current }}>{{ l }}</option>{% endfor %}
+            {% if current not in unit_choices|map('first')|list %}<option value="{{ current }}" selected>{{ current }}</option>{% endif %}
+          </select>
+        {% endmacro %}
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="table-responsive">
@@ -494,7 +501,7 @@
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="{{ [((b.description or '').count('\n') + 1), 6]|min }}" maxlength="2000" placeholder="Description (optional)" aria-label="Description">{{ b.description or '' }}</textarea>
                   </td>
                   <td><input type="text" name="bq_cat" class="form-control form-control-sm" value="{{ b.category or '' }}" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="Group"></td>
-                  <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="{{ b.unit or 'nos' }}" maxlength="20" list="boq-units-admin" aria-label="Unit"></td>
+                  <td>{{ unit_select(b.unit or 'nos', 'Unit') }}</td>
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
@@ -517,7 +524,7 @@
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="1" maxlength="2000" placeholder="Description (optional)" aria-label="New line description"></textarea>
                   </td>
                   <td><input type="text" name="bq_cat" class="form-control form-control-sm" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="New line group"></td>
-                  <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="sqft" maxlength="20" list="boq-units-admin" aria-label="New line unit"></td>
+                  <td>{{ unit_select('sqft', 'New line unit') }}</td>
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>

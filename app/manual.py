@@ -235,7 +235,7 @@ ARTICLES = [
     dict(id='add-line', title='Add a new item or line to your rates', link='admin.rates', admin=True,
          summary='Add it once to Rates, or type a new one on a quotation and keep it.',
          tags='add new item line rate save default my lines price list',
-         steps=['Open Admin → Rates and add the line with its unit, rate and description, or',
+         steps=['Open Admin → Rates and add the line with its rate and description, picking its unit (sqft, sqm, rft, rmt, no\'s or lump sum), or',
                 'on a quotation, type a new line and tick to keep it for next time.']),
     dict(id='remove-line', title='Remove items you don\'t use from Rates', link='admin.rates', admin=True,
          summary='Delete lines you never quote.',
