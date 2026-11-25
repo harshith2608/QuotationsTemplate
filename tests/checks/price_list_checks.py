@@ -184,6 +184,7 @@ with app.app_context():
     from app import boq as _boq
     used = _boq.own_units()
 ok(f'…an Edit units dialog, starting with the units the items already use {used}', 'id="unitsModal"' in r
+   and 'onclick="addUnit()"' in r and 'placeholder="Add a unit' not in r
    and all(f'name="unit_name" class="form-control" value="{u}"' in r for u in used))
 c.post('/admin/rates', data={'units_submit': '1', 'unit_name': used + ['Kg', 'Sq.m', 'kg', ''], 'unit_delete': ['0'] if used else []})
 with app.app_context():

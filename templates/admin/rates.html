@@ -630,16 +630,31 @@
                 <div class="d-flex flex-wrap gap-1 mb-3">
                   {% for v, l in unit_choices[:6] %}<span class="badge bg-light text-dark border"><i class="bi bi-lock me-1 text-muted"></i>{{ l }}</span>{% endfor %}
                 </div>
-                <p class="small text-muted mb-2">Your own units (e.g. point, set, kg, running metre). The ones your items use already are here.</p>
+                <p class="small text-muted mb-2">Your own units (e.g. point, set, kg). The ones your items use already are here.</p>
+                <div id="ownUnits">
                 {% for u in own_units %}
                 <div class="input-group input-group-sm mb-2">
                   <input type="text" name="unit_name" class="form-control" value="{{ u }}" maxlength="20" aria-label="Unit">
                   <label class="input-group-text small"><input class="form-check-input me-1 mt-0" type="checkbox" name="unit_delete" value="{{ loop.index0 }}">Remove</label>
                 </div>
                 {% endfor %}
-                {% for _ in range(3) %}
-                <input type="text" name="unit_name" class="form-control form-control-sm mb-2" maxlength="20" placeholder="Add a unit, e.g. {{ ['point', 'set', 'kg'][loop.index0] }}" aria-label="New unit">
-                {% endfor %}
+                </div>
+                {% if not own_units %}<p class="small text-muted fst-italic mb-2" id="noOwnUnits">None yet.</p>{% endif %}
+                <button type="button" class="btn btn-sm btn-outline-primary mb-2" onclick="addUnit()"><i class="bi bi-plus-lg me-1"></i>Add unit</button>
+                <template id="unitTpl">
+                  <div class="input-group input-group-sm mb-2">
+                    <input type="text" name="unit_name" class="form-control" maxlength="20" placeholder="e.g. point, set, kg" aria-label="New unit">
+                    <button type="button" class="btn btn-outline-secondary" onclick="this.parentElement.remove()" aria-label="Remove this new unit"><i class="bi bi-x-lg"></i></button>
+                  </div>
+                </template>
+                <script>
+                  function addUnit() {
+                    const row = document.getElementById('unitTpl').content.firstElementChild.cloneNode(true);
+                    document.getElementById('ownUnits').appendChild(row);
+                    document.getElementById('noOwnUnits')?.remove();
+                    row.querySelector('input').focus();
+                  }
+                </script>
                 <div class="form-text">An item already on a unit you remove keeps it. Save any changes to your items first: this saves the units only.</div>
               </div>
               <div class="modal-footer">
