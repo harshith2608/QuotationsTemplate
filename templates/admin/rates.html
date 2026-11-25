@@ -410,22 +410,20 @@
         </p>
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% set blank = [] if option_sections|length >= max_sections else [{'name': '', 'options': []}] %}
-          {% for sec in option_sections + blank %}{% set s = loop.index0 %}{% set is_new = not sec.options %}
-          <div class="border rounded p-2 mb-3 {{ 'bg-light' if is_new }}">
+          {% for sec in option_sections %}{% set s = loop.index0 %}
+          <div class="border rounded p-2 mb-3">
             <div class="d-flex align-items-center gap-2 mb-2">
               <span class="small text-muted text-nowrap">Section</span>
-              <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" value="{{ sec.name }}" maxlength="40"
-                     placeholder="{{ 'e.g. Finish' if not option_sections else 'Add a section, e.g. Board' }}" aria-label="Section name">
+              <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" value="{{ sec.name }}" maxlength="40" aria-label="Section name">
               <label class="small text-nowrap ms-2" title="The quotation form gets this choice at the top: the default for every line in it, on that quotation"><input class="form-check-input me-1" type="checkbox" name="sec_quote" value="{{ s }}" {{ 'checked' if sec.quote }}>Choose per quotation</label>
-              {% if not is_new %}<label class="small text-muted ms-auto text-nowrap"><input class="form-check-input me-1" type="checkbox" name="sec_delete" value="{{ s }}">Remove section</label>{% endif %}
+              <label class="small text-muted ms-auto text-nowrap"><input class="form-check-input me-1" type="checkbox" name="sec_delete" value="{{ s }}">Remove section</label>
             </div>
-            <table class="table table-bordered align-middle mb-0 bg-white">
+            <table class="table table-bordered align-middle mb-2 bg-white">
               <thead class="ki-table-head">
                 <tr><th class="ps-3">Option</th><th style="width:260px">Extra on the base rate</th>
                     <th class="text-center" style="width:80px">Remove</th></tr>
               </thead>
-              <tbody>
+              <tbody id="optRows_{{ s }}">
                 {% for o in sec.options %}
                 <tr>
                   <td><input type="text" name="opt_name_{{ s }}" class="form-control form-control-sm" value="{{ o.name }}" maxlength="40" aria-label="Option name"></td>
@@ -435,19 +433,90 @@
                   <td class="text-center">{% if not loop.first %}<input class="form-check-input" type="checkbox" name="opt_delete_{{ s }}" value="{{ loop.index0 }}" aria-label="Remove {{ o.name }}">{% endif %}</td>
                 </tr>
                 {% endfor %}
-                {% for _ in range(2 if sec.options else 3) %}
-                <tr class="table-light" data-grow>
-                  <td><input type="text" name="opt_name_{{ s }}" class="form-control form-control-sm" maxlength="40"
-                             placeholder="{{ ('e.g. Laminate (your base)' if loop.first else 'e.g. Acrylic') if is_new else 'Add an option' }}" aria-label="New option name"></td>
-                  <td>{% if is_new and loop.first %}<input type="hidden" name="opt_val_{{ s }}" value="0"><input type="hidden" name="opt_kind_{{ s }}" value="pct"><span class="small text-muted">Base rate</span>
-                      {% else %}{{ opt_extra(s, '', 'pct', 'New option') }}{% endif %}</td>
+                {% if not sec.options %}{# a section saved with no options yet: its base first #}
+                <tr>
+                  <td><input type="text" name="opt_name_{{ s }}" class="form-control form-control-sm" maxlength="40" placeholder="e.g. Laminate (your base)" aria-label="Base option name"></td>
+                  <td><input type="hidden" name="opt_val_{{ s }}" value="0"><input type="hidden" name="opt_kind_{{ s }}" value="pct"><span class="small text-muted">Base rate</span></td>
                   <td></td>
                 </tr>
-                {% endfor %}
+                {% endif %}
               </tbody>
             </table>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addOption({{ s }})"><i class="bi bi-plus-lg me-1"></i>Add option</button>
           </div>
           {% endfor %}
+          <div id="newSections" data-first="{{ option_sections|length }}" data-max="{{ max_sections }}"></div>
+          <div class="mb-3">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="addSectionBtn" onclick="addSection()"
+                    {{ 'hidden' if option_sections|length >= max_sections }}><i class="bi bi-plus-lg me-1"></i>Add section</button>
+            {% if option_sections|length >= max_sections %}<span class="small text-muted">Up to {{ max_sections }} sections.</span>{% endif %}
+          </div>
+          <template id="optRowTpl">
+            <tr>
+              <td><input type="text" name="opt_name___S__" class="form-control form-control-sm" maxlength="40" placeholder="e.g. Acrylic" aria-label="New option name"></td>
+              <td>{{ opt_extra('__S__', '', 'pct', 'New option') }}</td>
+              <td class="text-center"><button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="this.closest('tr').remove()" aria-label="Remove this new option"><i class="bi bi-x-lg"></i></button></td>
+            </tr>
+          </template>
+          <template id="secTpl">
+            <div class="border rounded p-2 mb-3 bg-light" data-new-section>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="small text-muted text-nowrap">Section</span>
+                <input type="text" name="sec_name" class="form-control form-control-sm fw-semibold" style="max-width:240px" maxlength="40" placeholder="e.g. Board" aria-label="Section name">
+                <label class="small text-nowrap ms-2"><input class="form-check-input me-1" type="checkbox" name="sec_quote" value="__S__">Choose per quotation</label>
+                <button type="button" class="btn btn-link btn-sm text-danger ms-auto p-0" onclick="removeNewSection(this)"><i class="bi bi-x-lg me-1"></i>Remove</button>
+              </div>
+              <table class="table table-bordered align-middle mb-2 bg-white">
+                <thead class="ki-table-head">
+                  <tr><th class="ps-3">Option</th><th style="width:260px">Extra on the base rate</th>
+                      <th class="text-center" style="width:80px">Remove</th></tr>
+                </thead>
+                <tbody data-opt-rows>
+                  <tr>
+                    <td><input type="text" name="opt_name___S__" class="form-control form-control-sm" maxlength="40" placeholder="e.g. Laminate (your base)" aria-label="Base option name"></td>
+                    <td><input type="hidden" name="opt_val___S__" value="0"><input type="hidden" name="opt_kind___S__" value="pct"><span class="small text-muted">Base rate</span></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              <button type="button" class="btn btn-sm btn-outline-primary" data-add-option><i class="bi bi-plus-lg me-1"></i>Add option</button>
+            </div>
+          </template>
+          <script>
+            // Item options: "Add option" adds a row to a section, "Add section" a new section (its base first, then an
+            // option). New sections are numbered after the saved ones, in order (renumbered when one is removed).
+            function _optRow(s) {
+              const tr = document.getElementById('optRowTpl').content.firstElementChild.cloneNode(true);
+              tr.querySelectorAll('[name]').forEach(el => { el.name = el.name.replace('__S__', s); });
+              return tr;
+            }
+            function addOption(s, tbody) {
+              const body = tbody || document.getElementById('optRows_' + s);
+              const tr = _optRow(s);
+              body.appendChild(tr);
+              tr.querySelector('input[type=text]').focus();
+            }
+            function _renumberNew() {
+              const box = document.getElementById('newSections'), first = +box.dataset.first;
+              box.querySelectorAll('[data-new-section]').forEach((sec, i) => {
+                const s = first + i;
+                sec.querySelectorAll('[name^="opt_"]').forEach(el => { el.name = el.name.replace(/_(\d+|__S__)$/, '_' + s); });
+                sec.querySelector('[name=sec_quote]').value = s;
+                sec.querySelector('[data-add-option]').onclick = () => addOption(s, sec.querySelector('[data-opt-rows]'));
+              });
+              document.getElementById('addSectionBtn').hidden = first + box.children.length >= +box.dataset.max;
+            }
+            function addSection() {
+              const box = document.getElementById('newSections');
+              const sec = document.getElementById('secTpl').content.firstElementChild.cloneNode(true);
+              box.appendChild(sec);
+              _renumberNew();
+              const s = +box.dataset.first + box.children.length - 1;
+              addOption(s, sec.querySelector('[data-opt-rows]'));
+              sec.querySelector('[name=sec_name]').focus();
+            }
+            function removeNewSection(btn) { btn.closest('[data-new-section]').remove(); _renumberNew(); }
+          </script>
           <button type="submit" name="finish_submit" value="1" class="btn btn-primary ki-btn-primary">
             <i class="bi bi-check-circle me-2"></i>Save Item options
           </button>
@@ -470,7 +539,13 @@
           change them there for that quotation only, or here (or with "Save as my default") for every new quotation.
         </p>
         <datalist id="boq-cats">{% for c in boq_lines|map(attribute='category')|select|unique %}<option value="{{ c }}">{% endfor %}</datalist>
-        <datalist id="boq-units-admin">{% for u in boq_units %}<option value="{{ u }}">{% endfor %}</datalist>
+        {# The units to pick from (value saved, label shown); a line on another unit (e.g. point, set) keeps it #}
+        {% macro unit_select(current, label, choices) %}
+          <select name="bq_unit" class="form-select form-select-sm" aria-label="{{ label }}">
+            {% for v, l in choices %}<option value="{{ v }}" {{ 'selected' if v == current }}>{{ l }}</option>{% endfor %}
+            {% if current not in choices|map('first')|list %}<option value="{{ current }}" selected>{{ current }}</option>{% endif %}
+          </select>
+        {% endmacro %}
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="table-responsive">
@@ -479,7 +554,9 @@
                 <tr>
                   <th class="ps-3" style="min-width:260px; width:48%">Line &amp; description</th>
                   <th style="min-width:130px; width:18%">Group</th>
-                  <th style="min-width:100px; width:12%">Unit</th>
+                  <th style="min-width:100px; width:12%">Unit
+                    {% if unit_choices %}<button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-reset" data-bs-toggle="modal"
+                            data-bs-target="#unitsModal" title="Add or remove units in this list"><i class="bi bi-pencil-square"></i> Edit</button>{% endif %}</th>
                   <th style="min-width:130px; width:14%">Rate</th>
                   {% for sec in tick_sections or [] %}<th class="text-center" style="width:80px" title="Comes in your {{ sec.name }} options: a {{ sec.name }} choice on the quotation">{{ sec.name }}</th>{% endfor %}
                   <th class="text-center" style="width:80px">Remove</th>
@@ -494,7 +571,7 @@
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="{{ [((b.description or '').count('\n') + 1), 6]|min }}" maxlength="2000" placeholder="Description (optional)" aria-label="Description">{{ b.description or '' }}</textarea>
                   </td>
                   <td><input type="text" name="bq_cat" class="form-control form-control-sm" value="{{ b.category or '' }}" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="Group"></td>
-                  <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="{{ b.unit or 'nos' }}" maxlength="20" list="boq-units-admin" aria-label="Unit"></td>
+                  <td>{{ unit_select(b.unit or 'nos', 'Unit', unit_choices) }}</td>
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
@@ -517,7 +594,7 @@
                     <textarea name="bq_desc" class="form-control form-control-sm" rows="1" maxlength="2000" placeholder="Description (optional)" aria-label="New line description"></textarea>
                   </td>
                   <td><input type="text" name="bq_cat" class="form-control form-control-sm" maxlength="60" list="boq-cats" placeholder="e.g. Kitchen" aria-label="New line group"></td>
-                  <td><input type="text" name="bq_unit" class="form-control form-control-sm" value="sqft" maxlength="20" list="boq-units-admin" aria-label="New line unit"></td>
+                  <td>{{ unit_select('sqft', 'New line unit', unit_choices) }}</td>
                   <td>
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">&#8377;</span>
@@ -539,6 +616,55 @@
             <i class="bi bi-check-circle me-2"></i>Save BOQ Lines
           </button>
         </form>
+        {% if unit_choices %}
+        <div class="modal fade" id="unitsModal" tabindex="-1" aria-labelledby="unitsModalTitle" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-scrollable">
+            <form method="POST" action="{{ url_for('admin.rates') }}" class="modal-content" novalidate>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="modal-header">
+                <h5 class="modal-title" id="unitsModalTitle"><i class="bi bi-rulers me-2"></i>Units</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p class="small text-muted">The units your items can be in. These are always there (sizes are worked out from them):</p>
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                  {% for v, l in unit_choices[:6] %}<span class="badge bg-light text-dark border"><i class="bi bi-lock me-1 text-muted"></i>{{ l }}</span>{% endfor %}
+                </div>
+                <p class="small text-muted mb-2">Your own units (e.g. point, set, kg). The ones your items use already are here.</p>
+                <div id="ownUnits">
+                {% for u in own_units %}
+                <div class="input-group input-group-sm mb-2">
+                  <input type="text" name="unit_name" class="form-control" value="{{ u }}" maxlength="20" aria-label="Unit">
+                  <label class="input-group-text small"><input class="form-check-input me-1 mt-0" type="checkbox" name="unit_delete" value="{{ loop.index0 }}">Remove</label>
+                </div>
+                {% endfor %}
+                </div>
+                {% if not own_units %}<p class="small text-muted fst-italic mb-2" id="noOwnUnits">None yet.</p>{% endif %}
+                <button type="button" class="btn btn-sm btn-outline-primary mb-2" onclick="addUnit()"><i class="bi bi-plus-lg me-1"></i>Add unit</button>
+                <template id="unitTpl">
+                  <div class="input-group input-group-sm mb-2">
+                    <input type="text" name="unit_name" class="form-control" maxlength="20" placeholder="e.g. point, set, kg" aria-label="New unit">
+                    <button type="button" class="btn btn-outline-secondary" onclick="this.parentElement.remove()" aria-label="Remove this new unit"><i class="bi bi-x-lg"></i></button>
+                  </div>
+                </template>
+                <script>
+                  function addUnit() {
+                    const row = document.getElementById('unitTpl').content.firstElementChild.cloneNode(true);
+                    document.getElementById('ownUnits').appendChild(row);
+                    document.getElementById('noOwnUnits')?.remove();
+                    row.querySelector('input').focus();
+                  }
+                </script>
+                <div class="form-text">An item already on a unit you remove keeps it. Save any changes to your items first: this saves the units only.</div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" name="units_submit" value="1" class="btn btn-primary ki-btn-primary"><i class="bi bi-check-circle me-1"></i>Save units</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

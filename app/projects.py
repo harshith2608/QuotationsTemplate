@@ -424,8 +424,9 @@ def list_projects():
                  if p.status != 'draft' and numbers.get(p.id)}
     from . import approvals as _ap
     approval_of = _ap.states()
+    held_ids = {p.id for p in projects.items if _ap.blocks(p)}     # their PDF opens marked Draft (not for admins)
     return render_template('projects/list.html', projects=projects, search=search, setup=setup, quote_nos=quote_nos,
-                           approval_of=approval_of, approval_labels=_ap.LABELS, approval_badges=_ap.BADGES,
+                           approval_of=approval_of, held_ids=held_ids, approval_labels=_ap.LABELS, approval_badges=_ap.BADGES,
                            stage=stage, stage_counts=stage_counts, all_count=all_count,
                            title='Quotations', employees=employees,
                            employees_json=employees_json,

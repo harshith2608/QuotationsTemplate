@@ -60,6 +60,10 @@ v = staff.get(f'/projects/{off_id}').text
 ok('older employee quotation: not sent, with Send for approval; its PDF opens marked Draft', 'Not sent for approval' in v
    and 'Send for approval' in v and draft(staff, f'/projects/{off_id}/pdf/customer')
    and staff.get(f'/projects/{off_id}/whatsapp').status_code == 302)
+lst = staff.get('/projects').text
+ok('…the Quotations list\'s PDF button opens it the same way: marked Draft, not downloadable',
+   f'href="/projects/{off_id}/pdf"' in lst and 'marked Draft until approved' in lst and draft(staff, f'/projects/{off_id}/pdf')
+   and draft(staff, f'/projects/{off_id}/pdf?download=1'))
 ok('… its customer\'s link still works', 'being updated' not in cust.get(f'/q/{old_tok}').text)
 v = admin.get(f'/projects/{off_id}').text
 ok('… the admin can approve it from the quotation', f'/admin/approvals/{off_id}' in v

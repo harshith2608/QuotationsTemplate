@@ -69,6 +69,9 @@ try:
        and app.test_client().get('/healthz?ts=1000&sig=' + hmac.new(key, b'healthz:1000', hashlib.sha256).hexdigest()).status_code == 404)
     t = c.get('/projects').text
     ok('cleared admin values fall back to env', 'Env Name Co' in t and 'Kitchens &amp; Wardrobes' in t)
+    ok('the Quotations list\'s PDF button opens the PDF in a new tab (no share sheet)',
+       re.search(r'<a class="btn[^>]*target="_blank"[^>]*\s+href="/projects/1/pdf"', t) is not None
+       and 'onclick="downloadOrSharePDF' not in t)
     txt = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(c.get('/projects/1/pdf').data)).pages)
     ok('PDF falls back to env name, no GSTIN', 'Env Name Co' in txt and 'GSTIN' not in txt)
 

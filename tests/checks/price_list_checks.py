@@ -177,6 +177,21 @@ ok('the quotation page and WhatsApp text too', 'Wardrobe (Acrylic finish)' in c.
 e = c.get(f'/projects/{fid}/edit').text
 ok('editing brings the finish back', '"finish": "Acrylic"' in e)
 r = c.get('/admin/rates').text
+ok('Admin → Rates: each line\'s unit is a list (sqft, sqm, rft, rmt, no\'s, lump sum), not typed',
+   'name="bq_unit" class="form-select' in r and '>sqm</option>' in r and 'no&#39;s</option>' in r
+   and 'name="bq_unit" class="form-control' not in r)
+with app.app_context():
+    from app import boq as _boq
+    used = _boq.own_units()
+ok(f'…an Edit units dialog, starting with the units the items already use {used}', 'id="unitsModal"' in r
+   and 'onclick="addUnit()"' in r and 'placeholder="Add a unit' not in r
+   and all(f'name="unit_name" class="form-control" value="{u}"' in r for u in used))
+c.post('/admin/rates', data={'units_submit': '1', 'unit_name': used + ['Kg', 'Sq.m', 'kg', ''], 'unit_delete': ['0'] if used else []})
+with app.app_context():
+    now = _boq.own_units()
+ok(f'…they add (kg; Sq.m is the standard sqm, typed twice once) and remove units {now}', now == used[1:] + ['Kg'])
+r = c.get('/admin/rates').text
+ok('…and every item\'s list has them', '<option value="Kg" >Kg</option>' in r)
 ok('Admin → Rates: an Item options card (section Finish, base rate, % extra) and a Finish tick per item', 'id="finishes"' in r
    and 'Item options' in r and 'value="Finish"' in r and 'Base rate' in r and 'name="bq_opt"' in r and 'value="25"' in r)
 c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', ''],
@@ -214,6 +229,8 @@ c.post('/admin/rates', data={'finish_submit': '1', 'sec_name': ['Finish', 'Board
 r = c.get('/admin/rates').text
 ok('a second section, Board, with ₹ per unit extras: its own tick column', 'value="Board"' in r and 'value="Board|' in r
    and '₹ per unit' in r and 'name="bq_new_1"' in r)
+ok('…Add option and Add section buttons in place of empty rows', 'onclick="addOption(1)"' in r and 'id="addSectionBtn"' in r
+   and 'placeholder="Add an option"' not in r)
 c.post('/admin/rates', data={'boq_submit': '1', 'bq_secname': ['Finish', 'Board'], 'bq_id': [x[0] for x in rows],
                              'bq_name': [x[1] for x in rows], 'bq_desc': [x[2] for x in rows], 'bq_unit': [x[3] for x in rows],
                              'bq_rate': [x[4] for x in rows], 'bq_cat': [x[5] for x in rows],

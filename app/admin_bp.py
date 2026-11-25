@@ -534,6 +534,17 @@ def rates():
                   'BOQ lines updated. New quotations use these as defaults.', 'success')
         return redirect(url_for('admin.rates') + ('#lump-sums' if lump else '#boq-lines'))
 
+    if request.method == 'POST' and 'units_submit' in request.form and (boq.enabled() or boq.ready()):
+        drop = set(request.form.getlist('unit_delete'))
+        errors = boq.save_own_units([u for i, u in enumerate(request.form.getlist('unit_name')) if str(i) not in drop])
+        if errors:
+            for err in errors:
+                flash(err, 'danger')
+        else:
+            db.session.commit()
+            flash('Units saved. Pick them for your items below.', 'success')
+        return redirect(url_for('admin.rates') + '#boq-lines')
+
     if request.method == 'POST' and 'finish_submit' in request.form and boq.enabled():
         errors = _save_finishes()
         if errors:
@@ -633,7 +644,8 @@ def rates():
                            price_list=PriceListItem.query.order_by(PriceListItem.name).all(),
                            work_types=WORK_TYPES, ply_ready=ply_ready, plywood_rows=ply_rows,
                            ply_details=ply_ready and plywood.details_ready(),
-                           boq_lines=_boq_lines() if boq.enabled() else None, boq_units=boq.UNITS,
+                           boq_lines=_boq_lines() if boq.enabled() else None, boq_units=boq.UNITS, unit_choices=boq.unit_choices() if boq.enabled() else [],
+                           own_units=boq.own_units() if boq.enabled() else [],
                            lump_lines=_lump_lines() if boq.ready() and not boq.enabled() else None,
                            **(_finish_context() if boq.enabled() else {}))
 
