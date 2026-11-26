@@ -19,6 +19,14 @@
     <h1>Link not valid</h1>
     <p class="lead">{{ problem }}</p>
     <a class="btn" href="{{ site }}">Go to the website</a>
+  {% elif existing %}
+    <h1>This {{ 'number' if matched == 'phone' else 'email' }} already has a QuoteRoom app</h1>
+    <p class="lead">The {{ 'phone number' if matched == 'phone' else 'email address' }} you gave is on
+      <strong>{% if existing_name %}{{ existing_name }} ({{ existing }}.{{ base }}){% else %}{{ existing }}.{{ base }}{% endif %}</strong>.
+      Is that your app? Then pay for it: your plan is added to it, with everything already in it.</p>
+    <a class="btn" href="{{ url_for('console.start_trial', t=token, plan=plan, existing=1) }}">Yes, pay for that app</a>
+    <p class="hint" style="text-align:center;margin-top:14px">Not yours, or you want a separate app?
+      <a href="{{ again }}">Use a different {{ 'number' if matched == 'phone' else 'email' }}</a>.</p>
   {% elif had_trial %}
     <h1>You've already had a free trial</h1>
     <p class="lead">Your app is at <strong>{{ had_trial }}.{{ base }}</strong>, with everything you made in it.

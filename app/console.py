@@ -3063,6 +3063,11 @@ def earlier_trial(lead_id, lead):
     """The app an earlier request with this phone number or email got, while it still counts, or None: one free
     trial per business, so a new request (another firm name, another link) doesn't start a second one. It stops
     counting once it's deleted or its deletion date (30 days after it ended) has passed: then they can start again."""
+    return earlier_trial_how(lead_id, lead)[0]
+
+
+def earlier_trial_how(lead_id, lead):
+    """(earlier_trial's app or None, 'phone' / 'email': what matched)."""
     from sqlalchemy import inspect, select
     from . import crypto
     from .marketing import normalise_phone
@@ -3077,17 +3082,18 @@ def earlier_trial(lead_id, lead):
     made = {r[0]: r[2] for r in links}
     engine = _leads_engine_or_none() if apps and (phone or email) else None
     if engine is None:
-        return None
+        return None, ''
     t = Lead.__table__
     with crypto.using_key(_env('LEADS_DATA_ENCRYPTION_KEY')), engine.connect() as conn:
         cols = [t.c.id, t.c.phone, t.c.created_at] + ([t.c.email] if 'email' in {c['name'] for c in inspect(conn).get_columns('leads')}
                                       else [])
         rows = conn.execute(select(*cols).where(t.c.id.in_(list(apps)))).mappings().all()
-    found = [apps[r['id']] for r in sorted(rows, key=lambda r: -r['id'])
+    found = [(apps[r['id']], 'phone' if phone and normalise_phone(r['phone'] or '') == phone else 'email')
+             for r in sorted(rows, key=lambda r: -r['id'])
              if (not made[r['id']] or made[r['id']] >= r['created_at'] - timedelta(minutes=10))   # not a stale link
              and ((phone and normalise_phone(r['phone'] or '') == phone)
                   or (email and (r.get('email') or '').strip().lower() == email))]
-    return next((s for s in found if _app_exists(s) and not _past_deletion(s)), None)
+    return next(((s, how) for s, how in found if _app_exists(s) and not _past_deletion(s)), (None, ''))
 
 
 def _past_deletion(slug):
@@ -3178,7 +3184,16 @@ def start_trial():
     if done:
         return render_template('console/start.html', ready=done, base=tenancy.base_domain(), site=_site_url(),
                                plan=plan, price=price, token=token, paid=_paid_plan(done), username=_admin_name(done))
-    earlier = earlier_trial(lead_id, lead)
+    earlier, matched = earlier_trial_how(lead_id, lead)
+    if earlier and plan and request.values.get('existing') != '1':   # say which app, before taking their money
+        from . import subscription as _sub
+        name = _sub._business_details(earlier)[0]
+        ref = lead_ref(lead_id)
+        again = f'{_site_url()}/free-trial?plan={plan}' + (f'&ref={ref}' if ref else '')
+        audit('website_buy_existing_asked', earlier, f'lead #{lead_id}, {plan}, same {matched}')
+        return render_template('console/start.html', existing=earlier, existing_name=name, matched=matched,
+                               base=tenancy.base_domain(), site=_site_url(), plan=plan, price=price, token=token,
+                               again=again)
     if earlier and plan:                          # buying: pay for the app they already have (their data is in it)
         with db.engine.begin() as conn:           # so /start/paid matches the payment to it
             conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s) ON CONFLICT (lead_id) DO UPDATE '
