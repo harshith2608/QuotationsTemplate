@@ -228,6 +228,25 @@ r = c.post('/partners/sharmaint/link', data={'business_slug': 'freshco'}, follow
 ok('console: …not twice', 'already linked' in r.text)
 with app.app_context():
     ok('why a code didn\'t count: the partner is stopped', 'who is stopped' in referrals.check_signup('QR7777', '9000000009')[1])
+# "Your app is ready": address, username and trial end (or the plan), never the password
+import tempfile, glob, email as _em
+from datetime import date as _d
+_box = tempfile.mkdtemp(); os.environ['MAIL_OUTBOX_DIR'] = _box
+from app.console import _app_ready_email
+with app.app_context(), app.test_request_context():
+    _app_ready_email({'name': 'Ravi Kumar', 'email': 'ravi@new.example'}, {'slug': 'newbiz', 'ends_on': _d(2026, 12, 10)},
+                     'New Biz Interiors', 'ravi', None, 5)
+    _app_ready_email({'name': 'Mohan', 'email': 'mohan@new.example'}, {'slug': 'freshco', 'ends_on': None},
+                     'Fresh Co', 'mohan', '1y', 6)
+_mails = [_em.message_from_bytes(open(f, 'rb').read()) for f in sorted(glob.glob(_box + '/*.eml'))]
+_txt = lambda m: next(p_ for p_ in m.walk() if p_.get_content_type() == 'text/plain').get_payload(decode=True).decode()
+_t1 = next(m for m in _mails if m['To'] == 'ravi@new.example')
+_t2 = next(m for m in _mails if m['To'] == 'mohan@new.example')
+ok('"Your app is ready" email: the app\'s sign-in link, the username and the trial end; no password',
+   'Your QuoteRoom app is ready' in _t1['Subject'] and 'newbiz.quote-room.test/login?u=ravi' in _txt(_t1)
+   and 'Username: ravi' in _txt(_t1) and '10 Dec 2026' in _txt(_t1) and 'the one you chose' in _txt(_t1))
+ok('…buying a plan: says which, and that the receipt follows', '12-month plan' in _txt(_t2) and 'receipt' in _txt(_t2))
+os.environ.pop('MAIL_OUTBOX_DIR')
 with app.app_context():
     ok('console: stopped (code stops working)', referrals.get('sharmaint')['status'] == 'stopped'
        and referrals.partner_for_signup('QR7777', '9000000003') is None)

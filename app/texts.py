@@ -145,6 +145,15 @@ TEXTS.update({
     'remind_paid_end': ('Automatic emails (daily)', 'Plan has ended', 'Email', 'Your QuoteRoom plan has ended',
                         _remind('Your {plan} ended on {end}. You can keep working until {grace}; after that your app '
                                 'becomes read-only. Renew to carry on.'), _REMIND_FIELDS),
+    'app_ready': ('Sign-up', 'Your app is ready (after setting it up)', 'Email, the moment they set up their app on the website',
+                  'Your QuoteRoom app is ready: {business}',
+                  "{hello},\n\nYour QuoteRoom app is ready. Keep this email: it has everything you need to sign in.\n\n"
+                  "Your app: {url}\nUsername: {username}\nPassword: the one you chose (forgot it? tap Forgot password on "
+                  "the sign-in page)\n\n{plan_line}\n\nOpen it on your phone or laptop: there's nothing to install. Add "
+                  "your company name and logo in Settings, then make your first quotation.\n\nQuestions? Just reply to this "
+                  "email or message us on WhatsApp.\n\nQuoteRoom\n",
+                  {'hello': '"Hello Ravi" (or "Hello")', 'business': 'business name', 'url': 'their app\'s sign-in page',
+                   'username': 'their username', 'plan_line': 'their free trial\'s end date, or the plan they\'re paying for'}),
     'pay_link': ('Payments', 'Payment link', 'WhatsApp and email, with a payment link', 'Your QuoteRoom payment link ({plan})',
                  "Hi! Here is the payment link for your QuoteRoom {plan} ({amount}, your whole team, all features):\n\n"
                  "{link}\n\nPay by UPI, card or net banking. {after} You'll get a receipt by email.\n\nThank you!",

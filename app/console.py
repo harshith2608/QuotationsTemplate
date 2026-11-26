@@ -447,6 +447,35 @@ def _link_referral(partner, slug, business, lead_id):
         pass
 
 
+def _app_ready_email(lead, t, company, username, plan, lead_id):
+    """"Your app is ready": the app's address, their username and the trial's end (or the plan they're buying), by
+    email the moment they set it up on the website. Never the password. Sent while the page waits (a serverless
+    function can't send after it answers); a failure is only logged."""
+    from . import emails, mailer, texts
+    to = ((lead or {}).get('email') or '').strip()
+    if not to or not mailer.enabled():
+        return False
+    try:
+        first = ((lead or {}).get('name') or '').split(' ')[0]
+        ends = t.get('ends_on')
+        if plan:
+            from . import plan as plan_mod
+            plan_line = (f'You chose the {plan_mod.PLANS.get(plan, plan)}. Your receipt comes in a separate email once '
+                         'your payment goes through.')
+        else:
+            plan_line = (f'Your free trial runs until {ends.strftime("%d %b %Y")}, with every feature.' if ends
+                         else 'Your free trial has every feature.')
+        subject, body = texts.render('app_ready', hello=f'Hello {first}' if first else 'Hello', business=company,
+                                     url=app_login_url(t['slug'], username), username=username, plan_line=plan_line)
+        ok = emails.send(to, subject, body, kind='app_ready', slug=t['slug'], lead_id=lead_id)
+        if ok:
+            audit('app_ready_email', t['slug'], mailer.mask(to))
+        return ok
+    except Exception:
+        current_app.logger.exception('The app-ready email could not be sent')
+        return False
+
+
 def _link_lead(lead_id, status, slug=None):
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.console_lead_links WHERE lead_id = :i'), {'i': lead_id})
@@ -3253,6 +3282,7 @@ def start_trial():
                              {'i': lead_id, 's': t['slug'], 'h': ip_hash})   # (replaces a link to an app since deleted)
             _link_lead(lead_id, 'trial', t['slug'])
             _link_referral(partner, t['slug'], form['company'], lead_id)
+            _app_ready_email(lead, t, form['company'], form['username'], plan, lead_id)
             audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}' + (f', buying {plan}' if plan else ''))
             from . import notify
             from .marketing import BUSINESS_TYPES
