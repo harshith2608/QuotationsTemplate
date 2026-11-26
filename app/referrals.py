@@ -7,8 +7,8 @@ How it works
   2. Approved, it gets a code (QR + 4 digits, e.g. QR2345; the operator can change it) and a link to the website's
      trial form with the code filled in. A business that signs up with the code gets a longer free trial
      (`trial_days`, 14) and is linked to the partner (public.partner_referrals).
-  3. Every payment a referred business makes (public.platform_payments) in its first `earn_months` months (from its
-     first payment; 0 = no limit) earns the partner `pct` % of it (the partner's own %, else the default 30), while
+  3. Every payment a referred business makes (public.platform_payments) for `earn_months` months from its first
+     payment (the partner's own, else the default; 0 = no limit) earns the partner `pct` % of it (the partner's own %, else the default 30), while
      the partner's own plan is active. sync() records each payment once (public.partner_earnings), with why one
      didn't count; the operator can leave any out (misuse) with a reason the partner sees.
   4. At the end of each month a partner owed at least `payout_min` (₹1,000) is paid by the operator (UPI / bank),
@@ -108,6 +108,7 @@ def ensure_tables():
         with db.engine.begin() as conn:
             for ddl in DDL:
                 conn.execute(text(ddl))
+            conn.execute(text('ALTER TABLE public.partners ADD COLUMN IF NOT EXISTS earn_months INTEGER'))   # their own period
         _ready = True
 
 
@@ -221,6 +222,22 @@ def all_partners():
 
 def pct_of(partner):
     return partner['pct'] if partner and partner.get('pct') is not None else settings()['pct']
+
+
+def months_of(partner):
+    """How many months (from a referred business's first payment) this partner earns from it: theirs, else the
+    default; 0 = no limit."""
+    return partner['earn_months'] if partner and partner.get('earn_months') is not None else settings()['earn_months']
+
+
+def earning_text(partner=None):
+    """'50% of every payment, for 12 months from the business's first payment' (or 'for as long as it pays')."""
+    pct = pct_of(partner) if partner else settings()['pct']
+    months = months_of(partner) if partner else settings()['earn_months']
+    p = f'{pct:g}%'
+    span = (f'for {months} month{"s" if months != 1 else ""} from its first payment' if months
+            else 'for as long as it keeps paying')
+    return p, span
 
 
 def _seal_keys():
@@ -414,8 +431,8 @@ def set_payout_details(slug, values):
         conn.execute(text('UPDATE public.partners SET payout = :p WHERE slug = :s'), {'p': payout, 's': slug})
 
 
-def approve(slug, code=None, pct=None):
-    """Approve: their code (given or a new QR####) and their % (None: the default)."""
+def approve(slug, code=None, pct=None, months=None):
+    """Approve: their code (given or a new QR####), their % and earning months (None: the defaults)."""
     p = get(slug)
     if not p:
         raise ReferralError('No application from this business.')
@@ -426,9 +443,9 @@ def approve(slug, code=None, pct=None):
     if other and other['slug'] != slug:
         raise ReferralError(f'{code} is already {other["business"] or other["slug"]}\'s code.')
     with db.engine.begin() as conn:
-        conn.execute(text("UPDATE public.partners SET status = 'approved', code = :c, pct = :p, note = NULL, "
-                          "decided_at = (now() AT TIME ZONE 'utc') WHERE slug = :s"),
-                     {'c': code, 'p': pct, 's': slug})
+        conn.execute(text("UPDATE public.partners SET status = 'approved', code = :c, pct = :p, earn_months = :m, "
+                          "note = NULL, decided_at = (now() AT TIME ZONE 'utc') WHERE slug = :s"),
+                     {'c': code, 'p': pct, 'm': months, 's': slug})
     return get(slug)
 
 
@@ -441,8 +458,8 @@ def decide(slug, status, note=''):
                           "WHERE slug = :s"), {'st': status, 'n': (note or '').strip()[:500] or None, 's': slug})
 
 
-def update(slug, code=None, pct=None):
-    """Change a partner's code or % (pct None: the default)."""
+def update(slug, code=None, pct=None, months=None):
+    """Change a partner's code, % or earning months (pct / months None: the default)."""
     if code is not None:
         code = clean_code(code)
         if not code:
@@ -453,7 +470,8 @@ def update(slug, code=None, pct=None):
     with db.engine.begin() as conn:
         if code is not None:
             conn.execute(text('UPDATE public.partners SET code = :c WHERE slug = :s'), {'c': code, 's': slug})
-        conn.execute(text('UPDATE public.partners SET pct = :p WHERE slug = :s'), {'p': pct, 's': slug})
+        conn.execute(text('UPDATE public.partners SET pct = :p, earn_months = :m WHERE slug = :s'),
+                     {'p': pct, 'm': months, 's': slug})
 
 
 # ── Signing up with a code ────────────────────────────────────────────────────
@@ -543,7 +561,8 @@ def sync():
         if not rows:
             continue
         first = min((r.paid_at for r in rows if r.paid_at), default=None)
-        until = _add_months(_ist(first), s['earn_months']) if first and s['earn_months'] else None
+        months = months_of(p)
+        until = _add_months(_ist(first), months) if first and months else None
         for r in rows:
             fully_refunded = r.refunded >= r.amount_paise
             if r.id in known:
@@ -558,7 +577,7 @@ def sync():
             if fully_refunded:
                 status, reason = 'refunded', 'The payment was refunded.'
             elif until and r.paid_at and _ist(r.paid_at) >= until:
-                status, reason = 'outside', f'Paid after the {s["earn_months"]} months you earn from this business.'
+                status, reason = 'outside', f'Paid after the {months} month{"s" if months != 1 else ""} you earn from this business.'
             elif not plan_active(p['slug'], _ist(r.paid_at) if r.paid_at else None):
                 status, reason = 'inactive', 'Your own plan wasn\'t active when they paid.'
             elif p['status'] != 'approved':

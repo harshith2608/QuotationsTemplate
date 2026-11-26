@@ -477,6 +477,14 @@ footer nav { display: flex; gap: 1.2rem; }
     form.utm_source.value = form.utm_source.value || (params.get('utm_source') || '').slice(0, 60);
     form.utm_campaign.value = form.utm_campaign.value || (params.get('utm_campaign') || '').slice(0, 60);
     form.page.value = form.page.value || location.pathname;
+    // Free trial, or buy a plan now: the choice sets the plan, the button and the small print
+    form.querySelectorAll('input[name=plan_choice]').forEach(r => r.addEventListener('change', () => {
+      form.plan.value = r.value;
+      const btn = form.querySelector('.trial-submit');
+      btn.textContent = r.value ? btn.dataset.labelBuy : btn.dataset.labelTrial;
+      form.querySelector('[data-fine-trial]').hidden = !!r.value;
+      form.querySelector('[data-fine-buy]').hidden = !r.value;
+    }));
     if (form.ref_code && !form.ref_code.value && params.get('ref')) form.ref_code.value = params.get('ref').slice(0, 12).toUpperCase();
 
     function clearError(name) {
@@ -564,6 +572,7 @@ footer nav { display: flex; gap: 1.2rem; }
       const plan = t.dataset.plan || '', form = dialog.querySelector('[data-trial-form]');
       const title = dialog.querySelector('#trialDialogTitle');
       form.plan.value = plan;
+      form.querySelectorAll('input[name=plan_choice]').forEach(r => { r.checked = r.value === plan; });
       title.textContent = plan ? 'Get the ' + t.dataset.planTitle : title.dataset.titleTrial;
       dialog.querySelector('[data-lede-trial]').hidden = !!plan;
       dialog.querySelector('[data-lede-buy]').hidden = !plan;

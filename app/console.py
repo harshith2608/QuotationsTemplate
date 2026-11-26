@@ -836,7 +836,7 @@ def partners_page():
             counts[slug] = n
     return render_template('console/partners.html', rules=rules, partners=everyone, counts=counts,
                            totals={p['slug']: referrals.totals(p['slug']) for p in everyone if p['status'] != 'applied'},
-                           due=referrals.due(), pct_of=referrals.pct_of, STATUSES=referrals.STATUSES, waivers=referrals.waivers(),
+                           due=referrals.due(), pct_of=referrals.pct_of, months_of=referrals.months_of, STATUSES=referrals.STATUSES, waivers=referrals.waivers(),
                            eligibility={p['slug']: referrals.eligibility(p['slug']) for p in everyone if p['status'] == 'applied'})
 
 
@@ -851,12 +851,21 @@ def partner_detail(slug):
         referrals.sync()
     except Exception:
         pass
-    return render_template('console/partner.html', p=p, pct=referrals.pct_of(p), rules=referrals.settings(),
+    return render_template('console/partner.html', p=p, pct=referrals.pct_of(p), months=referrals.months_of(p), rules=referrals.settings(),
                            payout=referrals.payout_details(p), refs=referrals.referrals(slug),
                            earnings=referrals.earnings(slug), payouts=referrals.payouts(slug),
                            totals=referrals.totals(slug), active=referrals.plan_active(slug),
                            eligible=referrals.eligibility(slug), link=referrals.signup_link(p['code']) if p.get('code') else '',
                            STATUSES=referrals.STATUSES, EARNING=referrals.EARNING, today=date.today().isoformat())
+
+
+def _months_field(raw):
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    if not raw.isdigit() or int(raw) > 120:
+        raise __import__('app.referrals', fromlist=['ReferralError']).ReferralError('Months: a whole number from 0 (no limit) to 120.')
+    return int(raw)
 
 
 def _pct_field(raw):
@@ -883,8 +892,8 @@ def partner_action(slug, action):
     f = request.form
     try:
         if action == 'approve':
-            p = referrals.approve(slug, f.get('code') or None, _pct_field(f.get('pct')))
-            audit('partner_approve', slug, f'{p["code"]}, {referrals.pct_of(p)}%')
+            p = referrals.approve(slug, f.get('code') or None, _pct_field(f.get('pct')), _months_field(f.get('months')))
+            audit('partner_approve', slug, f'{p["code"]}, {referrals.pct_of(p)}%, {referrals.months_of(p)} months')
             flash(f'Approved: {p["business"] or slug} is a partner with code {p["code"]}. Let them know: '
                   'their Refer & earn page now shows the code and link.', 'ok')
         elif action in ('reject', 'stop'):
@@ -897,9 +906,9 @@ def partner_action(slug, action):
             audit('partner_restart', slug)
             flash('Started again.', 'ok')
         elif action == 'update':
-            referrals.update(slug, f.get('code'), _pct_field(f.get('pct')))
-            audit('partner_update', slug, f'{f.get("code")}, {f.get("pct") or "default"}%')
-            flash('Saved. New payments earn at this %; ones already recorded keep theirs.', 'ok')
+            referrals.update(slug, f.get('code'), _pct_field(f.get('pct')), _months_field(f.get('months')))
+            audit('partner_update', slug, f'{f.get("code")}, {f.get("pct") or "default"}%, {f.get("months") or "default"} months')
+            flash('Saved. New payments earn at this % and period; ones already recorded keep theirs.', 'ok')
         elif action == 'paid':
             try:
                 paid_on = date.fromisoformat(f.get('paid_on') or date.today().isoformat())

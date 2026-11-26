@@ -3,7 +3,7 @@
 {% set terms_url = refer_site ~ '/terms#refer-earn' %}
 <div class="mt-3 mb-3">
   <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-gift me-2 text-primary"></i>Refer &amp; earn</h4>
-  <p class="text-muted small mb-0">Recommend {{ product_name }} to other businesses and earn {{ (pct if pct is defined else rules.pct)|round(1)|replace('.0', '') }}% of what they pay.</p>
+  <p class="text-muted small mb-0">Recommend {{ product_name }} to other businesses and earn {{ earning[0] }} of what they pay, {{ earning[1].replace('its', 'their').replace('it keeps', 'they keep') }}.</p>
 </div>
 
 {% if partner and partner.status == 'approved' %}
@@ -44,9 +44,8 @@
           <div class="col-4"><div class="small text-muted">To be paid</div><div class="fs-5 fw-bold text-success" id="referBalance">&#8377;{{ (totals.balance / 100)|inr(0) }}</div></div>
           <div class="col-4"><div class="small text-muted">Paid so far</div><div class="fs-5 fw-bold">&#8377;{{ (totals.paid / 100)|inr(0) }}</div></div>
         </div>
-        <p class="small text-muted mt-3 mb-0">You earn <strong>{{ pct|round(1)|replace('.0', '') }}%</strong> of every payment a business you
-          referred makes{% if rules.earn_months %} in its first {{ rules.earn_months }} months{% endif %}, while your own plan is
-          active. We pay at the end of each month once you're owed at least <strong>&#8377;{{ rules.payout_min|inr(0) }}</strong>;
+        <p class="small text-muted mt-3 mb-0">For each business you refer, you earn <strong>{{ earning[0] }}</strong> of every payment it makes,
+          <strong>{{ earning[1] }}</strong>, while your own plan is active. We pay at the end of each month once you're owed at least <strong>&#8377;{{ rules.payout_min|inr(0) }}</strong>;
           less than that carries over. <a href="{{ terms_url }}" target="_blank" rel="noopener">Refer &amp; earn terms</a></p>
       </div>
     </div>
@@ -124,7 +123,7 @@
       <li>Apply below. <strong>We review every application, and you can start only once it's approved.</strong></li>
       <li>Once approved, you get your own code (like <span class="font-monospace">QR2345</span>) and a sign-up link to share.</li>
       <li>Businesses that sign up with your code get a {{ rules.trial_days }}-day free trial. <strong>The trial earns nothing:</strong> you earn only once they buy a paid plan.</li>
-      <li>You earn <strong>{{ rules.pct|round(1)|replace('.0', '') }}%</strong> of every payment they make{% if rules.earn_months %} in their first {{ rules.earn_months }} months{% endif %}, while your own plan is active.</li>
+      <li>For each business you refer, you earn <strong>{{ earning[0] }}</strong> of every payment it makes, <strong>{{ earning[1] }}</strong>, while your own plan is active.</li>
       <li>We pay at the end of each month once you're owed at least &#8377;{{ rules.payout_min|inr(0) }}; less carries over to the next month.</li>
     </ol>
     <p class="mb-0 text-muted">Open to businesses on a paid plan for at least {{ rules.min_months }} month{{ 's' if rules.min_months != 1 }}.

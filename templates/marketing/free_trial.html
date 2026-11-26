@@ -14,7 +14,8 @@
         <h1>Get your own {{ product }} app</h1>
         <p class="trial-lede">Tell us a little about you. Next you choose your password and pay, and your app is ready.</p>
         {% else %}
-        <p class="eyebrow">7-day free trial · no payment</p>
+        {% set ref_days = refer.trial_days if refer and refer.on and (form or {}).get('ref_code') else 7 %}
+        <p class="eyebrow">{{ ref_days }}-day free trial · no payment{% if sells and plans_shown %} · or buy a plan now{% endif %}</p>
         <h1>Start your free trial</h1>
         <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
         {% endif %}

@@ -22,6 +22,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partners_page') }}">
         <input name="code" placeholder="Code (blank: QR####)" style="width:150px" aria-label="Code">
         <input name="pct" placeholder="{{ rules.pct|round(1)|replace('.0', '') }}% (default)" style="width:120px" aria-label="Their %">
+        <input name="months" value="" placeholder="{{ rules.earn_months }} months (default)" style="width:150px" aria-label="Months they earn from each business (0 = no limit)" title="Months they earn from each business they refer, from its first payment (0 = no limit)">
         <button class="btn btn-sm btn-primary" type="submit">Approve</button>
       </form>
       <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='reject') }}" onsubmit="return confirm('Not approve {{ p.business or p.slug }}?');">
@@ -57,10 +58,10 @@
 <h2 id="list">Partners ({{ others|length }})</h2>
 {% if others %}
 <div class="card"><table>
-  <thead><tr><th>Partner</th><th>Code</th><th>%</th><th>Referred</th><th>Earned</th><th>Paid</th><th>Owed</th><th>Status</th></tr></thead>
+  <thead><tr><th>Partner</th><th>Code</th><th>%</th><th>Months</th><th>Referred</th><th>Earned</th><th>Paid</th><th>Owed</th><th>Status</th></tr></thead>
   <tbody>{% for p in others %}{% set t = totals.get(p.slug, {}) %}
     <tr><td><a href="{{ url_for('console.partner_detail', slug=p.slug) }}">{{ p.business or p.slug }}</a><div class="muted small">{{ p.slug }}</div></td>
-      <td class="mono">{{ p.code or '—' }}</td><td>{{ pct_of(p)|round(1)|replace('.0', '') }}</td><td>{{ counts.get(p.slug, 0) }}</td>
+      <td class="mono">{{ p.code or '—' }}</td><td>{{ pct_of(p)|round(1)|replace('.0', '') }}</td><td>{{ months_of(p) or 'no limit' }}</td><td>{{ counts.get(p.slug, 0) }}</td>
       <td>₹{{ ((t.earned or 0) / 100)|inr(0) }}</td><td>₹{{ ((t.paid or 0) / 100)|inr(0) }}</td><td>₹{{ ((t.balance or 0) / 100)|inr(0) }}</td>
       <td><span class="badge {{ 'b-active' if p.status == 'approved' else 'b-other' }}">{{ STATUSES[p.status] }}</span></td></tr>
   {% endfor %}</tbody>
@@ -93,14 +94,14 @@
     (the Refer &amp; earn page in every app, and the Referral code box on the website's trial form)</label>
   <div class="row" style="margin-top:12px">
     <label class="small grow">Default share (%)<input name="pct" value="{{ rules.pct|round(2)|replace('.0', '') }}"></label>
-    <label class="small grow">Months a partner earns from each business (0 = no limit)<input name="earn_months" value="{{ rules.earn_months }}"></label>
+    <label class="small grow">Months a partner earns from each business, from its first payment (0 = no limit)<input name="earn_months" value="{{ rules.earn_months }}"></label>
     <label class="small grow">Months on a paid plan before they can apply<input name="min_months" value="{{ rules.min_months }}"></label>
     <label class="small grow">Smallest payout (₹)<input name="payout_min" value="{{ rules.payout_min }}"></label>
     <label class="small grow">Free trial days with a code<input name="trial_days" value="{{ rules.trial_days }}"></label>
   </div>
   <label class="small" style="display:block;margin-top:10px"><input type="checkbox" name="before_gst" value="1" {{ 'checked' if rules.before_gst }}>
     Work out the share on the amount <strong>before GST</strong> (for when you start charging GST; today no GST is charged, so this changes nothing yet)</label>
-  <p class="muted small">A partner's own % (on their page) replaces the default. A change counts for payments from now on;
+  <p class="muted small">A partner's own % and months (set when approving, or on their page) replace these defaults. A change counts for payments from now on;
     ones already recorded keep their amount.</p>
   <button class="btn btn-primary" type="submit">Save rules</button>
 </form>

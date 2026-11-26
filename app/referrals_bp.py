@@ -81,7 +81,8 @@ def refer():
         except Exception:
             pass
         return render_template('referrals/refer.html', title='Refer & earn', rules=rules, product_name=referrals.product(), refer_site=referrals.site_url(), partner=partner,
-                               pct=referrals.pct_of(partner), link=referrals.signup_link(partner['code']),
+                               pct=referrals.pct_of(partner), earning=referrals.earning_text(partner),
+                               link=referrals.signup_link(partner['code']),
                                refs=referrals.referrals(slug), earnings=referrals.earnings(slug),
                                totals=referrals.totals(slug), payouts=referrals.payouts(slug),
                                payout=referrals.payout_details(partner), active=referrals.plan_active(slug),
@@ -92,5 +93,5 @@ def refer():
     if partner:
         prefill.update({k: v for k, v in referrals.payout_details(partner).items() if v})
     return render_template('referrals/refer.html', title='Refer & earn', rules=rules, product_name=referrals.product(), refer_site=referrals.site_url(), partner=partner,
-                           can_apply=can_apply, why_not=why_not, show_form=show_form,
+                           earning=referrals.earning_text(), can_apply=can_apply, why_not=why_not, show_form=show_form,
                            form=form or prefill, errors=errors, STATUSES=referrals.STATUSES)

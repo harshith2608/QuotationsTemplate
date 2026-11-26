@@ -486,7 +486,8 @@ def trial_request():
     wants_json = request.accept_mimetypes.best == 'application/json'
     ctx = _context()
     data, errors = _validate_lead(request.form)
-    plan = request.form.get('plan') if _plan_ok(request.form.get('plan'), ctx) else None   # buying
+    chosen = request.form.get('plan_choice', request.form.get('plan'))   # Free trial, or buy now? (without JS too)
+    plan = chosen if _plan_ok(chosen, ctx) else None   # buying
 
     if request.form.get('website'):                      # honeypot filled in → a bot; pretend it worked
         errors = {}

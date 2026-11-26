@@ -10,7 +10,7 @@
 
 <div class="card">
   {% if p.status == 'approved' %}
-  <p>Code <span class="secret">{{ p.code }}</span> · {{ pct|round(1)|replace('.0', '') }}% · link <span class="mono small">{{ link }}</span></p>
+  <p>Code <span class="secret">{{ p.code }}</span> · {{ pct|round(1)|replace('.0', '') }}% for {{ (months ~ ' months') if months else 'no limit' }} from each business's first payment · link <span class="mono small">{{ link }}</span></p>
   {% endif %}
   <div class="item-actions">
     {% if p.status in ('applied', 'rejected') %}
@@ -18,6 +18,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input name="code" value="{{ p.code or '' }}" placeholder="Code (blank: QR####)" style="width:150px" aria-label="Code">
       <input name="pct" value="{{ p.pct if p.pct is not none else '' }}" placeholder="{{ rules.pct|round(1)|replace('.0', '') }}% (default)" style="width:120px" aria-label="Their %">
+      <input name="months" value="{{ p.earn_months if p.earn_months is not none else '' }}" placeholder="{{ rules.earn_months }} months (default)" style="width:150px" aria-label="Months they earn from each business (0 = no limit)" title="Months they earn from each business they refer, from its first payment (0 = no limit)">
       <button class="btn btn-sm btn-primary" type="submit">Approve</button>
     </form>
     {% endif %}
@@ -33,7 +34,8 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input name="code" value="{{ p.code }}" style="width:120px" aria-label="Code">
       <input name="pct" value="{{ p.pct if p.pct is not none else '' }}" placeholder="{{ rules.pct|round(1)|replace('.0', '') }}% (default)" style="width:120px" aria-label="Their %">
-      <button class="btn btn-sm" type="submit">Save code / %</button>
+      <input name="months" value="{{ p.earn_months if p.earn_months is not none else '' }}" placeholder="{{ rules.earn_months }} months (default)" style="width:150px" aria-label="Months they earn from each business (0 = no limit)" title="Months they earn from each business they refer, from its first payment (0 = no limit)">
+      <button class="btn btn-sm" type="submit">Save code / % / months</button>
     </form>
     <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='stop') }}" onsubmit="return confirm('Stop this partner? Their code stops taking sign-ups and their referrals\'s payments stop counting.');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

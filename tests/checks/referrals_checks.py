@@ -74,6 +74,8 @@ with app.app_context():
 t = cs.get('/refer', base_url=S).text
 ok('the approved page: code, link with the code, WhatsApp share, earnings', code in t
    and f'https://www.quote-room.test/free-trial?ref={code}' in t and 'wa.me' in t and 'Your earnings' in t)
+ok('…says plainly how long: 30% of every payment, for 12 months from its first payment', '30%' in t
+   and 'for 12 months from its first payment' in t)
 
 with app.app_context():
     ok('the code works for a sign-up (any case, spaces)', referrals.partner_for_signup(code.lower()[:2] + ' ' + code[2:], '9000000001'))
@@ -109,6 +111,16 @@ with app.app_context():
        and any(e['reason'] == 'Sign-up from the same office.' for e in referrals.earnings('sharmaint')))
     referrals.include(big['id'])
     ok('…count it again', referrals.totals('sharmaint')['balance'] == 120000)
+    # the partner's own earning period (here 1 month) replaces the default 12
+    referrals.update('sharmaint', None, None, 1)
+    pay('newbiz', 1500, first + timedelta(days=40), today, today + timedelta(days=60), 'n5')
+    db.session.commit()
+    referrals.sync()
+    late = next(e for e in referrals.earnings('sharmaint') if e['amount_paise'] == 150000)
+    ok('a partner\'s own months: a payment 40 days after the first is outside their 1 month (says so)',
+       late['status'] == 'outside' and 'the 1 month you earn' in (late['reason'] or '') and referrals.months_of(referrals.get('sharmaint')) == 1)
+    referrals.update('sharmaint', None, None, None)
+    ok('…back to the default', referrals.months_of(referrals.get('sharmaint')) == 12)
     referrals.mark_paid('sharmaint', '1,200', 'UTR123', today)
     t_ = referrals.totals('sharmaint')
     ok('payout recorded: nothing owed, ₹1,200 paid', t_['balance'] == 0 and t_['paid'] == 120000 and not referrals.due())
@@ -127,7 +139,7 @@ ok('partner page: paused banner, referrals, payments and payout listed', 'Earnin
    and 'UTR123' in t and 'After the earning period' in t)
 
 # The website: the Referral code box (from the console's copy of the rules), ?ref= fills it, a bad code is refused
-os.environ['MARKETING_SITE'] = '1'
+os.environ.update(MARKETING_SITE='1', AUTO_TRIALS='1', SIGNUP_URL='https://ops.quote-room.test', SIGNUP_SECRET='s3cret')
 os.environ.pop('TENANT_MODE')
 site = create_app('development'); site.config['WTF_CSRF_ENABLED'] = False
 with site.app_context():
@@ -150,6 +162,14 @@ with site.app_context():
     lead = Lead.query.order_by(Lead.id.desc()).first()
     ok('…a good one is kept with the request for the console', r.status_code == 200 and lead
        and AppSetting.get(referrals.LEAD_REF_KEY.format(lead.id)) == code)
+ok('website: free trial or buy a plan now, on the same form', 'name="plan_choice"' in ft and 'Free trial' in ft)
+r2 = sc.post('/trial-request', data={'name': 'Mohan', 'company_name': 'Mohan Interiors', 'phone': '9000022222', 'city': 'Pune',
+                                     'email': 'm@mohan.example', 'business_type': 'kitchens', 'ref_code': code, 'plan_choice': '1y'},
+             headers={'Accept': 'application/json'})
+with site.app_context():
+    lead2 = Lead.query.order_by(Lead.id.desc()).first()
+    ok('…choosing a plan goes on to pay, with the code kept', r2.status_code == 200 and 'plan=1y' in (r2.get_json().get('pay_url') or '')
+       and AppSetting.get(referrals.LEAD_REF_KEY.format(lead2.id)) == code)
 terms = sc.get('/terms').text
 ok('Terms: the Refer & earn section with the misuse clause', 'id="refer-earn"' in terms and 'leave out any payment' in terms)
 
@@ -182,10 +202,11 @@ ok('console: rules saved', s['pct'] == 25 and s['earn_months'] == 6 and s['min_m
 r = c.post('/partners', data={'on': '1', 'pct': '250', 'earn_months': '6', 'min_months': '3', 'payout_min': '500', 'trial_days': '21'},
            follow_redirects=True)
 ok('console: a % over 100 refused', 'from 0 to 100' in r.text)
-c.post('/partners/sharmaint/update', data={'code': 'QR7777', 'pct': '40'})
+c.post('/partners/sharmaint/update', data={'code': 'QR7777', 'pct': '40', 'months': '24'})
 with app.app_context():
     p = referrals.get('sharmaint')
-ok('console: code and % changed', p['code'] == 'QR7777' and p['pct'] == 40)
+ok('console: code, % and months changed', p['code'] == 'QR7777' and p['pct'] == 40 and p['earn_months'] == 24
+   and '24 months' in c.get('/partners/sharmaint').text)
 c.post('/partners/sharmaint/stop', data={'note': 'Spam messages.'})
 c.post('/partners/waiver', data={'slug': 'newbiz', 'on': '1'})
 c.post('/partners/waiver', data={'slug': 'nobody', 'on': '1'})

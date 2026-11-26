@@ -68,6 +68,18 @@
   <input type="hidden" name="utm_campaign" value="{{ form.get('utm_campaign', '') }}">
   <input type="hidden" name="page" value="{{ form.get('page', '') }}">
   <input type="hidden" name="plan" value="{{ form.get('plan', '') }}">
+  {% if sells and plans_shown %}
+  <fieldset class="field" data-plan-choice>
+    <legend>Free trial, or buy now?</legend>
+    <div class="chips">
+      <label class="chip"><input type="radio" name="plan_choice" value="" {% if not form.get('plan') %}checked{% endif %}><span>Free trial</span></label>
+      {% for k in plans_shown %}
+      <label class="chip"><input type="radio" name="plan_choice" value="{{ k }}" data-plan-title="{{ plan_names[k][0] }} · {{ plan_names[k][1] }}"
+             {% if form.get('plan') == k %}checked{% endif %}><span>{{ plan_names[k][0] }} · {{ plan_names[k][1] }}</span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  {% endif %}
   <p class="form-error" data-error-for="form" role="alert" {% if not errors.form %}hidden{% endif %}>{{ errors.form }}</p>
   {% set buying = form.get('plan') %}
   <button class="btn btn-primary trial-submit" type="submit" data-label-trial="Start my free trial →"
