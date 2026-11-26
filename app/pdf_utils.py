@@ -96,6 +96,11 @@ def _build(doc, elements, quote=None):
         image = None if approvals.blocks(quote) else pdf_look.logo_mark_image()
         if image is not None:
             base = pdf_look.logo_canvas_class(image, base)
+    if quote is not None and pdf_look.border() != pdf_look.NO_BORDER:
+        from reportlab.lib import colors as _c
+        from .branding import get_brand
+        base = pdf_look.border_canvas_class(pdf_look.border(), pdf_look.border_on() == pdf_look.EVERY,
+                                            _c.HexColor(_ink(get_brand()['primary'])), base)
     canvas = pdf_look.canvas_class(base)
     if canvas:
         doc.build(elements, canvasmaker=canvas)
