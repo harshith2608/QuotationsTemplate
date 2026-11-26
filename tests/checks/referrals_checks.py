@@ -47,7 +47,7 @@ cs.post('/login', base_url=S, data={'username': 'admin', 'password': 'pass-word-
 cf.post('/login', base_url=F, data={'username': 'admin', 'password': 'pass-word-123'})
 ok('Admin menu has Refer & earn', '/refer' in cs.get('/projects', base_url=S).text)
 t = cs.get('/refer', base_url=S).text
-ok('the page explains it and shows the application form', 'How it works' in t and 'only once it' in t
+ok('the page explains it (the trial earns nothing) and shows the application form', 'How it works' in t and 'only once it' in t and 'The trial earns nothing' in t
    and 'name="pan"' in t and 'action" value="apply"' in t)
 ok('…a business not eligible yet sees why, and no form', 'more month' in cf.get('/refer', base_url=F).text
    and 'value="apply"' not in cf.get('/refer', base_url=F).text)

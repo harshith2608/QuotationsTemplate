@@ -387,7 +387,7 @@ ARTICLES = [
          steps=['Open Admin → Refer & earn and read how it works (it opens once you\'ve been on a paid plan for the months shown).',
                 'Fill in the form: your name, number, city and business are filled in for you; add your UPI ID or bank account and PAN, and send it.',
                 'We review it. You can start only once it\'s approved: the page then shows your code (like QR2345) and a sign-up link.',
-                'Share the link or code (Share on WhatsApp). Businesses that sign up with it get a longer free trial.',
+                'Share the link or code (Share on WhatsApp). Businesses that sign up with it get a longer free trial; you earn only once they buy a paid plan, not for the trial.',
                 'Your page shows who signed up, every payment they make and what it earns you, and your payouts. We pay at the end of each month once you\'re owed the minimum shown; less carries over.']),
     dict(id='support', title='Get help from us', link='admin.support', admin=True,
          summary='WhatsApp or email support, or book a call.',

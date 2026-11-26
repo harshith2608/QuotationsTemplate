@@ -30,7 +30,8 @@
         {% set msg = 'I use ' ~ product_name ~ ' to make my quotations and it saves me a lot of time. Try it free for ' ~ rules.trial_days ~ ' days with my code ' ~ partner.code ~ ': ' ~ link %}
         <a class="btn btn-sm btn-success" target="_blank" rel="noopener" href="https://wa.me/?text={{ msg|urlencode }}"><i class="bi bi-whatsapp me-1"></i>Share on WhatsApp</a>
         <p class="small text-muted mt-3 mb-0">Businesses that sign up with your code get a <strong>{{ rules.trial_days }}-day free trial</strong>
-          (instead of 7). They can also type <strong>{{ partner.code }}</strong> in the Referral code box on the free trial form.</p>
+          (instead of 7). They can also type <strong>{{ partner.code }}</strong> in the Referral code box on the free trial form.
+          You earn only when they buy a paid plan, not for the trial.</p>
       </div>
     </div>
   </div>
@@ -122,7 +123,7 @@
     <ol class="mb-2">
       <li>Apply below. <strong>We review every application, and you can start only once it's approved.</strong></li>
       <li>Once approved, you get your own code (like <span class="font-monospace">QR2345</span>) and a sign-up link to share.</li>
-      <li>Businesses that sign up with your code get a {{ rules.trial_days }}-day free trial.</li>
+      <li>Businesses that sign up with your code get a {{ rules.trial_days }}-day free trial. <strong>The trial earns nothing:</strong> you earn only once they buy a paid plan.</li>
       <li>You earn <strong>{{ rules.pct|round(1)|replace('.0', '') }}%</strong> of every payment they make{% if rules.earn_months %} in their first {{ rules.earn_months }} months{% endif %}, while your own plan is active.</li>
       <li>We pay at the end of each month once you're owed at least &#8377;{{ rules.payout_min|inr(0) }}; less carries over to the next month.</li>
     </ol>
