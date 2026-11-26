@@ -162,9 +162,10 @@ with site.app_context():
     lead = Lead.query.order_by(Lead.id.desc()).first()
     ok('…a good one is kept with the request for the console', r.status_code == 200 and lead
        and AppSetting.get(referrals.LEAD_REF_KEY.format(lead.id)) == code)
-ok('website: free trial or buy a plan now, on the same form', 'name="plan_choice"' in ft and 'Free trial' in ft)
+ok('website: two buttons, Free trial / Buy a plan; the plans in a dialog', 'name="buy_mode"' in ft and '>Buy a plan<' in ft
+   and 'data-plan-dialog' in ft and 'data-pick-plan="1y"' in ft and 'Choose a plan' in ft)
 r2 = sc.post('/trial-request', data={'name': 'Mohan', 'company_name': 'Mohan Interiors', 'phone': '9000022222', 'city': 'Pune',
-                                     'email': 'm@mohan.example', 'business_type': 'kitchens', 'ref_code': code, 'plan_choice': '1y'},
+                                     'email': 'm@mohan.example', 'business_type': 'kitchens', 'ref_code': code, 'plan': '1y'},
              headers={'Accept': 'application/json'})
 with site.app_context():
     lead2 = Lead.query.order_by(Lead.id.desc()).first()

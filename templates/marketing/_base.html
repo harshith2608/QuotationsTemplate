@@ -310,6 +310,14 @@ footer nav { display: flex; gap: 1.2rem; }
   background: transparent; color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
 .dlg-close:hover { background: var(--pine-soft); color: var(--ink); }
 .trial-lede { color: var(--muted); margin: .5rem 0 1.1rem; }
+.plan-picked { margin: .6rem 0 0; display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+.plan-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.plan-option { display: grid; gap: 2px; text-align: left; padding: 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.plan-option:hover, .plan-option:focus-visible { border-color: var(--pine); background: var(--pine-soft); }
+.plan-option .po-name { font-weight: 600; }
+.plan-option .po-price { font-size: 1.25rem; font-weight: 700; }
+.plan-option .po-note { font-size: .8rem; color: var(--muted); }
 .trial-form { display: grid; gap: 14px; }
 .trial-form .field { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; min-width: 0; }
 .trial-form label, .trial-form legend { font-weight: 600; font-size: .92rem; padding: 0; }
@@ -477,14 +485,32 @@ footer nav { display: flex; gap: 1.2rem; }
     form.utm_source.value = form.utm_source.value || (params.get('utm_source') || '').slice(0, 60);
     form.utm_campaign.value = form.utm_campaign.value || (params.get('utm_campaign') || '').slice(0, 60);
     form.page.value = form.page.value || location.pathname;
-    // Free trial, or buy a plan now: the choice sets the plan, the button and the small print
-    form.querySelectorAll('input[name=plan_choice]').forEach(r => r.addEventListener('change', () => {
-      form.plan.value = r.value;
+    // Free trial, or buy a plan: Buy a plan opens the plans; the one picked sets the plan, the button and the small print
+    const setPlan = (plan, title) => {
+      form.plan.value = plan || '';
       const btn = form.querySelector('.trial-submit');
-      btn.textContent = r.value ? btn.dataset.labelBuy : btn.dataset.labelTrial;
-      form.querySelector('[data-fine-trial]').hidden = !!r.value;
-      form.querySelector('[data-fine-buy]').hidden = !r.value;
-    }));
+      btn.textContent = plan ? btn.dataset.labelBuy : btn.dataset.labelTrial;
+      form.querySelector('[data-fine-trial]').hidden = !!plan;
+      form.querySelector('[data-fine-buy]').hidden = !plan;
+      const picked = form.querySelector('[data-plan-picked]');
+      if (picked) { picked.hidden = !plan; picked.querySelector('[data-plan-picked-name]').textContent = title || ''; }
+      form.querySelectorAll('input[name=buy_mode]').forEach(r => { r.checked = r.value === (plan ? 'buy' : 'trial'); });
+    };
+    form._setPlan = setPlan;
+    const plans = form.querySelector('[data-plan-dialog]');
+    if (plans && typeof plans.showModal === 'function') {
+      const open = () => plans.showModal();
+      plans.addEventListener('close', () => { if (!form.plan.value) setPlan(''); });   // closed without picking: free trial
+      form.querySelectorAll('input[name=buy_mode]').forEach(r => r.addEventListener('change', () => {
+        if (r.value === 'buy' && r.checked) open(); else if (r.checked) setPlan('');
+      }));
+      form.querySelector('[data-plan-change]').addEventListener('click', open);
+      plans.querySelector('[data-plan-cancel]').addEventListener('click', () => plans.close());
+      plans.addEventListener('click', e => { if (e.target === plans) plans.close(); });
+      plans.querySelectorAll('[data-pick-plan]').forEach(b => b.addEventListener('click', () => {
+        setPlan(b.dataset.pickPlan, b.dataset.planTitle); plans.close();
+      }));
+    }
     if (form.ref_code && !form.ref_code.value && params.get('ref')) form.ref_code.value = params.get('ref').slice(0, 12).toUpperCase();
 
     function clearError(name) {
@@ -572,7 +598,7 @@ footer nav { display: flex; gap: 1.2rem; }
       const plan = t.dataset.plan || '', form = dialog.querySelector('[data-trial-form]');
       const title = dialog.querySelector('#trialDialogTitle');
       form.plan.value = plan;
-      form.querySelectorAll('input[name=plan_choice]').forEach(r => { r.checked = r.value === plan; });
+      if (form._setPlan) form._setPlan(plan, t.dataset.planTitle);
       title.textContent = plan ? 'Get the ' + t.dataset.planTitle : title.dataset.titleTrial;
       dialog.querySelector('[data-lede-trial]').hidden = !!plan;
       dialog.querySelector('[data-lede-buy]').hidden = !plan;
