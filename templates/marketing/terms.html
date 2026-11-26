@@ -88,7 +88,19 @@
   <h2>13. Governing law</h2>
   <p>These terms are governed by the laws of India. Any dispute will be handled by the courts of {{ jurisdiction if jurisdiction else 'India' }}{% if jurisdiction %}, India{% endif %}. Before going to court, we'll both try to resolve it by talking first.</p>
 
-  <h2>14. Contact</h2>
+  {% set r = refer or {'pct': 30, 'earn_months': 12, 'min_months': 2, 'payout_min': 1000, 'trial_days': 14} %}
+  <h2 id="refer-earn">14. Refer &amp; earn</h2>
+  <p>Paying customers can apply to recommend {{ product }} to other businesses and earn a share of what those businesses pay ("partners").</p>
+  <ul>
+    <li><strong>Who can apply:</strong> a business on a paid plan for at least {{ r.min_months }} month{{ 's' if r.min_months != 1 }}, from Admin → Refer &amp; earn in its app. We review every application and may approve or decline it at our discretion. <strong>You can start referring only once we've approved you.</strong></li>
+    <li><strong>Your code:</strong> once approved you get a code and a sign-up link. A business that signs up with them gets a {{ r.trial_days }}-day free trial and is linked to you. A business already linked to another partner, your own business, or a sign-up with your own phone number doesn't count.</li>
+    <li><strong>What you earn:</strong> {{ r.pct|round(1)|replace('.0', '') }}% (or the share agreed with you) of each payment a business you referred makes{% if r.earn_months %} in its first {{ r.earn_months }} months from its first payment{% endif %}, while you're an approved partner and your own plan is active. Refunded payments don't count. Your page shows every payment and what it earned.</li>
+    <li><strong>Payouts:</strong> at the end of each month, by UPI or bank transfer, once you're owed at least ₹{{ r.payout_min|inr(0) }}; less than that carries over to the next month. We need your PAN, and we deduct tax at source where the law requires.</li>
+    <li><strong>Misuse:</strong> we may leave out any payment, or stop a partnership, if we find misuse, for example fake or self-made sign-ups, misleading claims about {{ product }}, spam, or anything against these terms. Your page shows the reason for a payment left out.</li>
+    <li><strong>Changes:</strong> we may change or end Refer &amp; earn, including the share and the rules, with notice in the app; amounts already earned stay yours. You aren't our employee or agent and can't make promises on our behalf.</li>
+  </ul>
+
+  <h2>15. Contact</h2>
   <div class="contact">
     <p><strong>{{ legal_name }}</strong></p>
     {% if business_address %}<p>{{ business_address }}</p>{% endif %}

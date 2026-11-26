@@ -24,7 +24,7 @@ import os
 import re
 import struct
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 from urllib.parse import quote, urlencode
 
@@ -405,6 +405,41 @@ def _site_url():
     return _env('MARKETING_SITE_URL', 'https://www.quote-room.co.in').rstrip('/')
 
 
+def lead_ref(lead_id):
+    """The referral code typed on this website request (Refer & earn), or ''."""
+    from .referrals import LEAD_REF_KEY, clean_code
+    engine = _leads_engine_or_none()
+    if engine is None or not lead_id:
+        return ''
+    try:
+        with engine.connect() as conn:
+            return clean_code(conn.execute(text('SELECT value FROM app_settings WHERE key = :k'),
+                                           {'k': LEAD_REF_KEY.format(int(lead_id))}).scalar() or '')
+    except Exception:
+        return ''
+
+
+def _referral_for(lead_id, lead):
+    """The approved partner behind this request's code, or None (Refer & earn)."""
+    from . import referrals
+    try:
+        code = lead_ref(lead_id)
+        return referrals.partner_for_signup(code, (lead or {}).get('phone') or '') if code else None
+    except Exception:
+        return None
+
+
+def _link_referral(partner, slug, business, lead_id):
+    if not partner:
+        return
+    from . import referrals
+    try:
+        if referrals.link(slug, partner, business, lead_id):
+            audit('referral', slug, f'{partner["code"]} ({partner["slug"]})')
+    except Exception:
+        pass
+
+
 def _link_lead(lead_id, status, slug=None):
     with db.engine.begin() as conn:
         conn.execute(text('DELETE FROM public.console_lead_links WHERE lead_id = :i'), {'i': lead_id})
@@ -757,6 +792,157 @@ def dashboard():
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
 
 
+# ── Refer & earn (app/referrals.py) ──────────────────────────────────────────
+
+@console_bp.route('/partners', methods=['GET', 'POST'])
+@login_required
+def partners_page():
+    """Refer & earn: the rules, applications to approve, partners, and the payouts due this month."""
+    import json
+    from . import platform_switch, referrals
+    referrals.ensure_tables()
+    try:
+        rules = referrals.parse(json.loads(platform_switch.console_value(referrals.KEY, raw=True) or '{}'))
+    except Exception:
+        rules = referrals.parse({})
+    if request.method == 'POST':
+        rules, errors = referrals.validate(request.form)
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            return redirect(url_for('console.partners_page') + '#rules')
+        value = json.dumps(rules)
+        platform_switch.set_value(referrals.KEY, value)
+        note = ''
+        website = _leads_engine_or_none()
+        if website is not None:                   # the website's trial form shows the Referral code box from its copy
+            try:
+                with website.begin() as conn:
+                    conn.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': referrals.KEY})
+                    conn.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'), {'k': referrals.KEY, 'v': value})
+            except Exception:
+                note = ' The website could not be updated: save again.'
+        audit('referrals_rules', None, value)
+        flash('Saved. The apps follow within a minute, the website now.' + note, 'ok' if not note else 'error')
+        return redirect(url_for('console.partners_page') + '#rules')
+    try:
+        referrals.sync()
+    except Exception as exc:
+        flash(f'Could not bring earnings up to date: {exc}', 'error')
+    everyone = referrals.all_partners()
+    counts = {}
+    with db.engine.connect() as conn:
+        for slug, n in conn.execute(text('SELECT partner, COUNT(*) FROM public.partner_referrals GROUP BY partner')):
+            counts[slug] = n
+    return render_template('console/partners.html', rules=rules, partners=everyone, counts=counts,
+                           totals={p['slug']: referrals.totals(p['slug']) for p in everyone if p['status'] != 'applied'},
+                           due=referrals.due(), pct_of=referrals.pct_of, STATUSES=referrals.STATUSES,
+                           eligibility={p['slug']: referrals.eligibility(p['slug']) for p in everyone if p['status'] == 'applied'})
+
+
+@console_bp.route('/partners/<slug>', methods=['GET'])
+@login_required
+def partner_detail(slug):
+    from . import referrals
+    p = referrals.get(slug)
+    if not p:
+        abort(404)
+    try:
+        referrals.sync()
+    except Exception:
+        pass
+    return render_template('console/partner.html', p=p, pct=referrals.pct_of(p), rules=referrals.settings(),
+                           payout=referrals.payout_details(p), refs=referrals.referrals(slug),
+                           earnings=referrals.earnings(slug), payouts=referrals.payouts(slug),
+                           totals=referrals.totals(slug), active=referrals.plan_active(slug),
+                           eligible=referrals.eligibility(slug), link=referrals.signup_link(p['code']) if p.get('code') else '',
+                           STATUSES=referrals.STATUSES, EARNING=referrals.EARNING, today=date.today().isoformat())
+
+
+def _pct_field(raw):
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        v = float(raw)
+    except ValueError:
+        raise __import__('app.referrals', fromlist=['ReferralError']).ReferralError('The % is a number from 0 to 100.')
+    if not 0 <= v <= 100:
+        raise __import__('app.referrals', fromlist=['ReferralError']).ReferralError('The % is a number from 0 to 100.')
+    return v
+
+
+@console_bp.route('/partners/<slug>/<action>', methods=['POST'])
+@login_required
+def partner_action(slug, action):
+    """approve (code, pct) · reject (note) · stop (note) · restart · update (code, pct) · paid (amount, reference, date)."""
+    from . import referrals
+    p = referrals.get(slug)
+    if not p:
+        abort(404)
+    f = request.form
+    try:
+        if action == 'approve':
+            p = referrals.approve(slug, f.get('code') or None, _pct_field(f.get('pct')))
+            audit('partner_approve', slug, f'{p["code"]}, {referrals.pct_of(p)}%')
+            flash(f'Approved: {p["business"] or slug} is a partner with code {p["code"]}. Let them know: '
+                  'their Refer & earn page now shows the code and link.', 'ok')
+        elif action in ('reject', 'stop'):
+            referrals.decide(slug, 'rejected' if action == 'reject' else 'stopped', f.get('note'))
+            audit(f'partner_{action}', slug, f.get('note') or '')
+            flash('Not approved.' if action == 'reject' else 'Stopped: their code no longer takes sign-ups and their '
+                  'referrals\' payments don\'t count from now.', 'ok')
+        elif action == 'restart':
+            referrals.decide(slug, 'approved')
+            audit('partner_restart', slug)
+            flash('Started again.', 'ok')
+        elif action == 'update':
+            referrals.update(slug, f.get('code'), _pct_field(f.get('pct')))
+            audit('partner_update', slug, f'{f.get("code")}, {f.get("pct") or "default"}%')
+            flash('Saved. New payments earn at this %; ones already recorded keep theirs.', 'ok')
+        elif action == 'paid':
+            try:
+                paid_on = date.fromisoformat(f.get('paid_on') or date.today().isoformat())
+            except ValueError:
+                raise referrals.ReferralError('Choose the date it was paid.')
+            referrals.mark_paid(slug, f.get('amount'), f.get('reference'), paid_on, f.get('note'))
+            audit('partner_paid', slug, f'₹{f.get("amount")} {f.get("reference") or ""}')
+            flash('Payout recorded: it shows on their Refer & earn page.', 'ok')
+        else:
+            abort(404)
+    except referrals.ReferralError as exc:
+        flash(str(exc), 'error')
+    return redirect(request.form.get('next') or url_for('console.partner_detail', slug=slug))
+
+
+@console_bp.route('/partners/earnings/<int:earning_id>/<action>', methods=['POST'])
+@login_required
+def partner_earning(earning_id, action):
+    """Leave a payment out (with the reason the partner sees), or count it again."""
+    from . import referrals
+    if action == 'exclude':
+        referrals.exclude(earning_id, request.form.get('reason'))
+        audit('partner_exclude', str(earning_id), request.form.get('reason') or '')
+        flash('Left out. The partner sees the reason on their page.', 'ok')
+    elif action == 'include':
+        referrals.include(earning_id)
+        audit('partner_include', str(earning_id))
+        flash('Counted again.', 'ok')
+    else:
+        abort(404)
+    return redirect(request.form.get('next') or url_for('console.partners_page'))
+
+
+@console_bp.route('/partners/payouts/<int:payout_id>/delete', methods=['POST'])
+@login_required
+def partner_payout_delete(payout_id):
+    from . import referrals
+    referrals.delete_payout(payout_id)
+    audit('partner_payout_delete', str(payout_id))
+    flash('Payout removed (recorded by mistake).', 'ok')
+    return redirect(request.form.get('next') or url_for('console.partners_page'))
+
+
 @console_bp.route('/pricing', methods=['GET', 'POST'])
 @login_required
 def pricing_page():
@@ -1042,8 +1228,11 @@ def create_trial():
             flash(f'This request already has a trial: "{done}" (they may have set it up themselves from the email '
                   'link). Here it is.', 'ok')
             return redirect(url_for('console.trial_detail', slug=done))
+    partner = _referral_for(lead_id, {'phone': phone}) if lead_id else None    # Refer & earn
     try:
         days = int(days)
+        if partner and days == 7:                 # the referral's longer trial, unless you chose another length
+            days = __import__('app.referrals', fromlist=['settings']).settings()['trial_days']
         t = ops.create_trial(slug, username, None, days, company=company, phone=phone, city=city, email=email,
                              kind=request.form.get('business_type', '').strip()[:20] or None)
     except (ops.OpsError, ValueError) as exc:
@@ -1061,6 +1250,7 @@ def create_trial():
         return redirect(url_for('console.dashboard'))
     if lead_id:
         _link_lead(lead_id, 'trial', t['slug'])
+        _link_referral(partner, t['slug'], company, lead_id)
     audit('trial_create', t['slug'], f'{days} days' + (f', lead #{lead_id}' if lead_id else ''))
     message = _welcome_message(name, t['url'], t['username'], t['password'], t['ends_on'], company)
     return render_template('console/result.html', title=f'Trial "{t["slug"]}" is ready', trial=t,
@@ -2950,13 +3140,15 @@ def start_trial():
         if errors:          # why set-ups stop: in the activity log, and an alert to call them while they're keen
             _setup_failed(lead_id, lead, form, errors, _in_app_browser())
         t = None
+        partner = _referral_for(lead_id, lead) if not errors else None      # Refer & earn: a longer trial
+        trial_days = __import__('app.referrals', fromlist=['settings']).settings()['trial_days'] if partner else 7
         for _ in range(3) if not errors else ():   # the address comes from the firm's name (a number added if taken)
             slug = _free_address(form['company'])
             if not slug:
                 errors['company'] = 'Could not make a web address from this name. Add a word or two.'
                 break
             try:
-                t = ops.claim_trial(slug, form['username'], password, 7, company=form['company'],
+                t = ops.claim_trial(slug, form['username'], password, trial_days, company=form['company'],
                                     phone=lead.get('phone'), city=lead.get('city'), email=lead.get('email'),
                                     kind=lead.get('business_type'))
                 break
@@ -2970,6 +3162,7 @@ def start_trial():
                                   "(lead_id) DO UPDATE SET slug = :s, ip_hash = :h, created_at = (now() AT TIME ZONE 'utc')"),
                              {'i': lead_id, 's': t['slug'], 'h': ip_hash})   # (replaces a link to an app since deleted)
             _link_lead(lead_id, 'trial', t['slug'])
+            _link_referral(partner, t['slug'], form['company'], lead_id)
             audit('trial_self_start', t['slug'], f'lead #{lead_id}, {form["company"]}' + (f', buying {plan}' if plan else ''))
             from . import notify
             from .marketing import BUSINESS_TYPES

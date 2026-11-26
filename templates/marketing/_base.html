@@ -477,6 +477,7 @@ footer nav { display: flex; gap: 1.2rem; }
     form.utm_source.value = form.utm_source.value || (params.get('utm_source') || '').slice(0, 60);
     form.utm_campaign.value = form.utm_campaign.value || (params.get('utm_campaign') || '').slice(0, 60);
     form.page.value = form.page.value || location.pathname;
+    if (form.ref_code && !form.ref_code.value && params.get('ref')) form.ref_code.value = params.get('ref').slice(0, 12).toUpperCase();
 
     function clearError(name) {
       const p = form.querySelector(`[data-error-for="${name}"]`);

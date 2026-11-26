@@ -53,6 +53,15 @@
            {% if errors.business_other %}aria-invalid="true"{% endif %}>
     <p class="field-error" data-error-for="business_other" {% if not errors.business_other %}hidden{% endif %}>{{ errors.business_other }}</p>
   </div>
+  {% if refer and refer.on %}
+  <div class="field">
+    <label for="{{ prefix }}Ref">Referral code <span class="muted">(optional)</span></label>
+    <input id="{{ prefix }}Ref" name="ref_code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters"
+           placeholder="e.g. QR2345" value="{{ form.get('ref_code', '') }}" {% if errors.ref_code %}aria-invalid="true"{% endif %}>
+    <p class="muted small" style="margin:.25rem 0 0">Have a code from a {{ product }} user? You get a {{ refer.trial_days }}-day free trial.</p>
+    <p class="field-error" data-error-for="ref_code" {% if not errors.ref_code %}hidden{% endif %}>{{ errors.ref_code }}</p>
+  </div>
+  {% endif %}
   {# Honeypot: people never see or fill this; bots that fill every field are silently ignored #}
   <div class="hp" aria-hidden="true"><label>Website <input name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
   <input type="hidden" name="utm_source" value="{{ form.get('utm_source', '') }}">
