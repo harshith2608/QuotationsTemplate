@@ -1284,6 +1284,8 @@ def settings():
             if 'quote_number_format' in request.form:   # Quotation numbers: the business's own format
                 from . import quote_numbers
                 err = quote_numbers.set_format(request.form.get('quote_number_format'), request.form.get('quote_number_start'))
+                if 'quote_number_on_pdf_shown' in request.form:
+                    quote_numbers.set_on_pdf(request.form.get('quote_number_on_pdf') == '1')
                 if err:
                     errors.append(err)
             if 'cover_slogan' in request.form:      # the designed cover page (app/photo_pages.py)
@@ -1412,7 +1414,7 @@ def reports():
 def _numbering():
     from . import quote_numbers as QN
     return {'format': QN.fmt(), 'start': QN.start(), 'presets': QN.PRESETS, 'preview': QN.preview(),
-            'resets': QN.resets(QN.fmt())}
+            'resets': QN.resets(QN.fmt()), 'on_pdf': QN.on_pdf()}
 
 
 @admin_bp.route('/notifications')

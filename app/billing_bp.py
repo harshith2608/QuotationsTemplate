@@ -116,6 +116,23 @@ def cancel_invoice(project_id, invoice_id):
     return _back(project, '#invoice')
 
 
+@billing_bp.route('/projects/<int:project_id>/invoices/<int:invoice_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_invoice(project_id, invoice_id):
+    """Remove an invoice for good (admins): e.g. one made by mistake. Its customer link stops working. Deleting the
+    latest invoice of the financial year frees its number for the next one; an earlier one leaves a gap."""
+    project = _project_or_403(project_id)
+    if not billing.ready():
+        return _not_ready(project)
+    inv = _invoice_or_404(project, invoice_id)
+    number = inv.number
+    db.session.delete(inv)
+    db.session.commit()
+    flash(f'Invoice {number} deleted.', 'success')
+    return _back(project, '#invoice')
+
+
 @billing_bp.route('/projects/<int:project_id>/invoices/<int:invoice_id>/whatsapp')
 @login_required
 def invoice_whatsapp(project_id, invoice_id):

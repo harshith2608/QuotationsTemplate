@@ -200,12 +200,21 @@ def _thank_you_text():
 
 
 def _quote_ref(project):
-    """'Rev 3\nDate: …' for the PDF header (just the date before a second revision). The quotation's number is the
-    firm's own reference in the app; customers don't see it (firms asked for that)."""
+    """'Quotation No: QT-016/Rev3\nDate: …' for the PDF header; with the number off (Settings → Quotation PDFs →
+    Quotation numbers) or on a draft: 'Rev 3\nDate: …' (just the date before a second revision)."""
+    from . import quote_numbers
     from .billing import latest_revision_number
     rev = latest_revision_number(project)
-    return ((f'Rev {rev}\n' if rev and rev > 1 else '')
+    number = quote_numbers.for_pdf(project, rev) if quote_numbers.on_pdf() else ''
+    return ((f'Quotation No: {number}\n' if number else f'Rev {rev}\n' if rev and rev > 1 else '')
             + f'Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}' + _valid_line(project.created_at))
+
+
+def _revision_ref(project, number):
+    """'Quotation No: QT-016/Rev3\n' (or 'Rev 3\n' with the number off) for an earlier revision's PDF."""
+    from . import quote_numbers
+    label = quote_numbers.for_pdf(project, number) if quote_numbers.on_pdf() else ''
+    return f'Quotation No: {label}\n' if label else f'Rev {number}\n'
 
 
 def _valid_line(dated):
@@ -942,7 +951,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0, revisi
     )
 
     ref = _quote_ref(project) if rsnap is None else (
-        f'Rev {revision.number}\n'                          # an earlier version: always say which
+        _revision_ref(project, revision.number)            # an earlier version: always say which
         + f'Date: {(revision.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}' + _valid_line(revision.created_at))
     cust = rsnap['customer'] if rsnap else {'name': project.customer_name, 'mobile': project.mobile,
                                             'email': project.email or '', 'address': project.address or ''}

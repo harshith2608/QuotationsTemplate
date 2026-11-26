@@ -337,6 +337,15 @@ def option_values(project, rooms):
     return out
 
 
+def _number(project):
+    """{quotation_no}: the quotation's number with its revision (QT-016/Rev5), as on the Quotations page."""
+    try:
+        from . import quote_numbers
+        return quote_numbers.for_pdf(project) or str(project.id)
+    except Exception:
+        return str(project.id)
+
+
 def variables(project, rooms=None):
     """{placeholder: text} for a quotation. Plywood: the quotation's plywood(s) (items can use their own)."""
     from datetime import timedelta
@@ -358,7 +367,7 @@ def variables(project, rooms=None):
         options = {}
     return {**options, 'plywood': ', '.join(used), 'plywood_details': '; '.join(plywood.details_of(n) for n in used),
             'materials': ', '.join(materials), 'customer': project.customer_name or '', 'company': get_brand()['name'],
-            'quotation_no': str(project.id),
+            'quotation_no': _number(project),
             'date': (project.created_at + timedelta(hours=5, minutes=30)).strftime('%d %b %Y') if project.created_at else ''}
 
 

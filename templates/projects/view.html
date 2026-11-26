@@ -846,6 +846,13 @@
               <button class="btn btn-sm btn-outline-danger py-0" type="submit">Cancel</button>
             </form>
             {% endif %}
+            {% if current_user.is_admin %}
+            <form method="POST" action="{{ url_for('billing.delete_invoice', project_id=project.id, invoice_id=inv.id) }}" class="d-inline"
+                  onsubmit="return confirm('Delete invoice {{ inv.number }} for good? It can\'t be undone, and the customer\'s link to it stops working.{{ ' If it was already given to the customer or filed in GST returns, choose Cancel instead: that keeps it on record.' if inv.status == 'issued' else '' }}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger py-0" type="submit" title="Delete this invoice for good" aria-label="Delete invoice {{ inv.number }}"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
           </td>
         </tr>
       {% endfor %}

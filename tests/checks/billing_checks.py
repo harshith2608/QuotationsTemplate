@@ -55,12 +55,12 @@ t = c.get(f'/projects/{pid}/revisions/1').text
 ok('revision 1 still shows the old version', '10 ft × 5 ft' in t and '12 ft' not in t and 'older version' in t)
 t = c.get(f'/projects/{pid}/revisions/2').text
 ok('revision 2 lists what changed', 'Changes from revision 1' in t and 'Discount ₹0 → ₹1,000' in t)
-ok('PDFs show the revision number', 'Rev 2' in pdftext(c, f'/projects/{pid}/pdf') and 'Rev 2' in pdftext(c, f'/projects/{pid}/pdf/customer'))
+ok('PDFs show the revision number (with the quotation number: …/Rev2)', '/Rev2' in pdftext(c, f'/projects/{pid}/pdf') and '/Rev2' in pdftext(c, f'/projects/{pid}/pdf/customer'))
 t1 = c.get(f'/projects/{pid}/revisions/1').text
 ok('an old revision offers its PDF and Compare with the current one', f'/projects/{pid}/revisions/1/pdf' in t1
    and 'Compare with the current one (Rev 2)' in t1)
 r1pdf = pdftext(c, f'/projects/{pid}/revisions/1/pdf').replace('\n', ' ')
-ok('the PDF of revision 1 is the quotation as it was (its total, no Shoe Rack, "Rev 1")', 'Rev 1' in r1pdf
+ok('the PDF of revision 1 is the quotation as it was (its total, no Shoe Rack, "/Rev1")', '/Rev1' in r1pdf
    and '50,000.00' in r1pdf and 'Shoe Rack' not in r1pdf and 'Billing Test' in r1pdf)
 cmp_ = c.get(f'/projects/{pid}/revisions/1/compare').text
 ok('Compare: revision 1 and the current one side by side, what changed highlighted', 'Revision 1 vs revision 2' in cmp_
@@ -531,6 +531,22 @@ ok('demo invoice PDF: DEMO notice, real amounts with the amount in words', 'DEMO
    and f'{inr(rahul_inv.total)}' in dtxt)
 ok('demo cannot save costs', 'disabled in the demo' in dc.post('/admin/costs', data={}, follow_redirects=True).text)
 os.environ.pop('DEMO_MODE')
+
+# Admins can delete an invoice for good (staff can't); deleting the latest frees its number
+with app.app_context():
+    last = Invoice.query.order_by(Invoice.fy.desc(), Invoice.seq.desc()).first()
+    lp, lid, lseq, lnum = last.project_id, last.id, last.seq, last.number
+ok('the quotation page has a delete button for admins', f'/projects/{lp}/invoices/{lid}/delete' in c.get(f'/projects/{lp}').text)
+r = staff.post(f'/projects/{lp}/invoices/{lid}/delete')
+with app.app_context():
+    ok('staff can\'t delete an invoice', db.session.get(Invoice, lid) is not None)
+r = c.post(f'/projects/{lp}/invoices/{lid}/delete', follow_redirects=True)
+with app.app_context():
+    ok('an admin deletes it', db.session.get(Invoice, lid) is None and f'Invoice {lnum} deleted' in r.text)
+c.post(f'/projects/{lp}/invoice', data={'gst_rate': '18'})
+with app.app_context():
+    again = Invoice.query.filter_by(project_id=lp).order_by(Invoice.id.desc()).first()
+    ok('the next invoice takes the freed number', again is not None and again.seq == lseq and again.number == lnum)
 
 # ── Right after a deploy, before the database update: everything else keeps working ──
 with app.app_context():
