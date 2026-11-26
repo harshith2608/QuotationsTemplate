@@ -420,12 +420,19 @@ def lead_ref(lead_id):
 
 
 def _referral_for(lead_id, lead):
-    """The approved partner behind this request's code, or None (Refer & earn)."""
+    """The approved partner behind this request's code, or None (Refer & earn). A code that doesn't count is noted
+    in Activity with why (same phone as the partner, the partner's plan lapsed…)."""
     from . import referrals
     try:
         code = lead_ref(lead_id)
-        return referrals.partner_for_signup(code, (lead or {}).get('phone') or '') if code else None
-    except Exception:
+        if not code:
+            return None
+        partner, why = referrals.check_signup(code, (lead or {}).get('phone') or '')
+        if not partner:
+            audit('referral_not_applied', None, f'request #{lead_id}, code {code}: {why}')
+        return partner
+    except Exception as exc:
+        audit('referral_not_applied', None, f'request #{lead_id}: {exc}')
         return None
 
 
@@ -922,6 +929,40 @@ def partner_action(slug, action):
     except referrals.ReferralError as exc:
         flash(str(exc), 'error')
     return redirect(request.form.get('next') or url_for('console.partner_detail', slug=slug))
+
+
+@console_bp.route('/partners/<slug>/link', methods=['POST'])
+@login_required
+def partner_link(slug):
+    """Attach a business to this partner by hand (it forgot the code, or the code didn't count): its payments count
+    from now, the ones it already made included (within the partner's earning period)."""
+    from . import referrals
+    p = referrals.get(slug)
+    if not p:
+        abort(404)
+    other = (request.form.get('business_slug') or '').strip().lower()
+    with db.engine.connect() as conn:
+        known = conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': other}).first()
+        if not known and conn.execute(text("SELECT to_regclass('public.customers')")).scalar():
+            known = conn.execute(text('SELECT 1 FROM public.customers WHERE slug = :s'), {'s': other}).first()
+        current = conn.execute(text('SELECT partner FROM public.partner_referrals WHERE slug = :s'), {'s': other}).scalar()
+    if not known:
+        flash(f'No app called "{other}".', 'error')
+    elif other == slug:
+        flash('A partner can\'t be its own referral.', 'error')
+    elif current:
+        flash(f'"{other}" is already linked to {current}.', 'error')
+    elif not p.get('code'):
+        flash('Approve the partner first (it needs a code).', 'error')
+    else:
+        referrals.link(other, p, request.form.get('business') or other)
+        audit('referral_linked_by_hand', other, f'{p["code"]} ({slug})')
+        try:
+            referrals.sync()
+        except Exception:
+            pass
+        flash(f'"{other}" is now linked to {p["business"] or slug}: its payments count (see below).', 'ok')
+    return redirect(url_for('console.partner_detail', slug=slug))
 
 
 @console_bp.route('/partners/waiver', methods=['POST'])

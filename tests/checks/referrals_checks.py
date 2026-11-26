@@ -79,7 +79,8 @@ ok('…says plainly how long: 30% of every payment, for 12 months from its first
 
 with app.app_context():
     ok('the code works for a sign-up (any case, spaces)', referrals.partner_for_signup(code.lower()[:2] + ' ' + code[2:], '9000000001'))
-    ok('…not with the partner\'s own number', referrals.partner_for_signup(code, '+91 98765 00001') is None)
+    ok('…not with the partner\'s own number (says why)', referrals.partner_for_signup(code, '+91 98765 00001') is None
+       and 'self-referral' in referrals.check_signup(code, '+91 98765 00001')[1])
     ok('…not an unknown code', referrals.partner_for_signup('QR0000', '9000000001') is None)
     p = referrals.get('sharmaint')
     ok('newbiz linked to the partner', referrals.link('newbiz', p, 'New Biz Interiors', 7))
@@ -218,6 +219,15 @@ with app.app_context():
 c.post('/partners/waiver', data={'slug': 'newbiz'})
 with app.app_context():
     ok('console: waiver removed', not referrals.waived('newbiz'))
+c.post('/partners/sharmaint/link', data={'business_slug': 'freshco', 'business': 'Fresh Co'})
+with app.app_context():
+    ok('console: a business linked by hand (its earlier payment counted at once)',
+       any(r['slug'] == 'freshco' for r in referrals.referrals('sharmaint'))
+       and any(e['slug'] == 'freshco' for e in referrals.earnings('sharmaint')))
+r = c.post('/partners/sharmaint/link', data={'business_slug': 'freshco'}, follow_redirects=True)
+ok('console: …not twice', 'already linked' in r.text)
+with app.app_context():
+    ok('why a code didn\'t count: the partner is stopped', 'who is stopped' in referrals.check_signup('QR7777', '9000000009')[1])
 with app.app_context():
     ok('console: stopped (code stops working)', referrals.get('sharmaint')['status'] == 'stopped'
        and referrals.partner_for_signup('QR7777', '9000000003') is None)

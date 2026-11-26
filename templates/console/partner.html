@@ -84,6 +84,16 @@
 </div>
 
 <h2>Businesses referred ({{ refs|length }})</h2>
+{% if p.status == 'approved' %}
+<form method="post" action="{{ url_for('console.partner_link', slug=p.slug) }}" class="row" style="margin-bottom:10px"
+      onsubmit="return confirm('Link ' + this.business_slug.value + ' to {{ p.business or p.slug }}? Its payments will count for them.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="small grow">Add a business they referred (its app name, e.g. ravi-kitchens)<input name="business_slug" required></label>
+  <label class="small grow">Business name (as they'll see it)<input name="business"></label>
+  <button class="btn btn-sm" type="submit">Link to this partner</button>
+</form>
+<p class="muted small">For a business that forgot the code, or whose code didn't count (Activity shows why: <em>referral_not_applied</em>).</p>
+{% endif %}
 {% if refs %}
 <div class="card"><table><thead><tr><th>Business</th><th>App</th><th>Joined</th><th>Now</th></tr></thead>
   <tbody>{% for r in refs %}<tr><td>{{ r.business }}</td><td class="mono small">{{ r.slug }}</td><td>{{ r.created_at.strftime('%d %b %Y') }}</td><td>{{ r.state }}</td></tr>{% endfor %}</tbody>

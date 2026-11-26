@@ -476,19 +476,27 @@ def update(slug, code=None, pct=None, months=None):
 
 # ── Signing up with a code ────────────────────────────────────────────────────
 
-def partner_for_signup(code, phone=''):
-    """The approved partner whose code this is, or None (unknown or stopped code; the partner's own number)."""
+def check_signup(code, phone=''):
+    """(the approved partner whose code this is, or None; why not)."""
     if not settings()['on']:
-        return None
+        return None, 'Refer & earn is switched off'
     p = by_code(code)
-    if not p or p['status'] != 'approved':
-        return None
+    if not p:
+        return None, f'no partner has the code {clean_code(code) or code}'
+    if p['status'] != 'approved':
+        return None, f'{p["code"]} belongs to {p["business"] or p["slug"]}, who is {STATUSES[p["status"]].lower()}'
     from .marketing import normalise_phone
     if phone and p.get('phone') and normalise_phone(phone) == normalise_phone(p['phone']):
-        return None                                      # signing themselves up
+        return None, f'the same phone number as the partner {p["business"] or p["slug"]} (a self-referral)'
     if not plan_active(p['slug']):
-        return None                                      # their own plan has lapsed: no new referrals
-    return p
+        return None, f'the partner {p["business"] or p["slug"]}\'s own plan isn\'t active'
+    return p, ''
+
+
+def partner_for_signup(code, phone=''):
+    """The approved partner whose code this is, or None (unknown or stopped code; the partner's own number; their
+    own plan lapsed)."""
+    return check_signup(code, phone)[0]
 
 
 def link(slug, partner, business='', lead_id=None):
