@@ -603,7 +603,7 @@
       <p class="small text-muted mb-3">
         Appears in every quotation PDF, first of the sections below. Bold, colours, headings and lists print as you see
         them here. Leave blank to omit the section. Use <strong>Insert</strong> to add details that change per quotation,
-        e.g. <code>{plywood_details} for all the carcass and shutters</code>.
+        e.g. <code>{{ '{' ~ var_example ~ '}' }} for all the carcass and shutters</code>.
       </p>
       <div class="ki-rich ki-rich-section mb-1" data-for="sec_material_specs"
            data-placeholder="{{ 'e.g. Plywood: Gurjan 18mm BWP…' if biz.interiors else 'e.g. ' ~ biz.item_example ~ ': ' ~ biz.description_example }}"></div>

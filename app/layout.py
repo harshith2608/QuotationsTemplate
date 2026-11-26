@@ -283,7 +283,58 @@ def section_lines(text):
 # Placeholders the business can put in any section (Settings → Quotation PDFs offers them as buttons)
 VARIABLES = [('plywood', 'Plywood'), ('plywood_details', 'Plywood details'), ('materials', 'Materials used'),
              ('customer', 'Customer name'), ('company', 'Your company'), ('quotation_no', 'Quotation no.'), ('date', 'Date')]
-_VAR = re.compile(r'\{\s*(' + '|'.join(k for k, _ in VARIABLES) + r')\s*\}')
+BY_MATERIAL_VARIABLES = {'plywood', 'plywood_details', 'materials'}
+_VAR = re.compile(r'\{\s*([^{}<>\n]{1,60}?)\s*\}')        # {plywood}, {Board}: known names are filled in
+
+
+def variable_buttons():
+    """The Insert buttons (Settings → Quotation PDFs): the fixed placeholders, then one per item options section
+    (Admin → Rates), e.g. {Board}: the board(s) chosen on each quotation."""
+    out = list(VARIABLES)
+    try:
+        from . import boq, finishes
+        if boq.pricing_mode() == boq.ITEM:           # priced by item: no plywood or materials on its quotations
+            out = [v for v in out if v[0] not in BY_MATERIAL_VARIABLES]
+        taken = {k for k, _ in VARIABLES} | {label.lower() for _, label in VARIABLES}
+        out += [(s['name'], s['name']) for s in finishes.sections() if s['name'].lower() not in taken]
+    except Exception:
+        pass
+    return out
+
+
+def example_variable():
+    """The placeholder shown in Settings' example: {plywood_details}, or by item the first item options section."""
+    keys = [k for k, _ in variable_buttons()]
+    if 'plywood_details' in keys:
+        return 'plywood_details'
+    fixed = {k for k, _ in VARIABLES}
+    return next((k for k in keys if k not in fixed), 'customer')
+
+
+def option_values(project, rooms):
+    """{section name lower-case: the options chosen in it on this quotation, joined}: for each line in an item
+    options section, its choice in that section (or the section's base), in the section's own order."""
+    from . import finishes
+    from .models import BoqItem
+    secs = finishes.sections()
+    if not secs:
+        return {}
+    lines = [i for room in rooms for i in room.item_list if i.is_boq]
+    ids = {}
+    if lines:
+        names = {(i.name or '').strip().lower() for i in lines}
+        ids = {b.name.strip().lower(): b.id for b in BoqItem.query.all() if b.name and b.name.strip().lower() in names}
+    out = {}
+    for s in secs:
+        names = {o['name'].lower(): o['name'] for o in s['options']}
+        used = set()
+        for i in lines:
+            if ids.get((i.name or '').strip().lower()) not in s['lines']:
+                continue
+            picked = [p for p in finishes.parts(finishes.stored(i)) if p.lower() in names]
+            used.add(picked[0].lower() if picked else s['options'][0]['name'].lower())
+        out[s['name'].lower()] = ', '.join(o['name'] for o in s['options'] if o['name'].lower() in used)
+    return out
 
 
 def variables(project, rooms=None):
@@ -301,21 +352,34 @@ def variables(project, rooms=None):
                 label = M.label(i.wood_type, i.work_type)
                 if label not in materials:
                     materials.append(label)
-    return {'plywood': ', '.join(used), 'plywood_details': '; '.join(plywood.details_of(n) for n in used),
+    try:
+        options = option_values(project, rooms)
+    except Exception:
+        options = {}
+    return {**options, 'plywood': ', '.join(used), 'plywood_details': '; '.join(plywood.details_of(n) for n in used),
             'materials': ', '.join(materials), 'customer': project.customer_name or '', 'company': get_brand()['name'],
             'quotation_no': str(project.id),
             'date': (project.created_at + timedelta(hours=5, minutes=30)).strftime('%d %b %Y') if project.created_at else ''}
 
 
+def _value(m, values, wrap=str):
+    key = ' '.join(m.group(1).split()).lower()
+    return wrap(values[key]) if key in values else m.group(0)
+
+
 def fill(text, values):
-    """Replace {placeholders} with the quotation's values; unknown {words} are left as typed."""
-    return _VAR.sub(lambda m: values.get(m.group(1), ''), text or '') if values else (text or '')
+    """Replace {placeholders} with the quotation's values (an item options section by its name, any case); unknown
+    {words} are left as typed."""
+    return _VAR.sub(lambda m: _value(m, values), text or '') if values else (text or '')
 
 
 def fill_html(html, values):
     """fill() for formatted text: the values are escaped (a plywood name with & or < stays text)."""
-    from html import escape
-    return _VAR.sub(lambda m: escape(values.get(m.group(1), '')), html or '') if values else (html or '')
+    from html import escape, unescape
+    if not values:
+        return html or ''
+    return _VAR.sub(lambda m: escape(values[k]) if (k := ' '.join(unescape(m.group(1)).split()).lower()) in values
+                    else m.group(0), html or '')
 
 
 def sections(settings, terms_text, values=None):
