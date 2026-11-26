@@ -472,7 +472,7 @@
       <div class="form-check form-switch">
         <input type="hidden" name="pdf_logo_mark" value="0">
         <input class="form-check-input" type="checkbox" role="switch" name="pdf_logo_mark" id="pdf_logo_mark" value="1" {{ 'checked' if logo_mark }}>
-        <label class="form-check-label" for="pdf_logo_mark">Your <strong>logo as a watermark</strong>, faint, in the middle of every page</label>
+        <label class="form-check-label" for="pdf_logo_mark">Your <strong>logo as a watermark</strong>, faint, in the middle of every page{{ ' (not the title, About us and Next steps pages)' if presentation }}</label>
         <div class="form-text">On your quotation PDFs (not invoices), using the logo from Company.{% if approvals_on %} An
           employee's quotation gets it once you approve it; before that it shows "Draft – not approved".{% endif %}</div>
       </div>

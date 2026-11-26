@@ -216,6 +216,17 @@ ok('… not on an employee\'s draft (waiting for approval)', images(staff, f'/pr
 staff.post(f'/projects/{emp}/approval/submit')
 admin.post(f'/admin/approvals/{emp}', data={'action': 'approve'})
 ok('… on the employee\'s once approved', all(a == b + 1 for a, b in zip(images(staff, f'/projects/{emp}/pdf/customer'), before_staff)))
+from app import presentation as _pres
+with app.app_context():
+    _pres.set_enabled(True); db.session.commit()
+pres_off = images(admin, f'/projects/{mine}/pdf/customer')
+admin.post('/admin/settings', data={'section': 'documents', 'pdf_logo_mark': ['0']})
+pres_plain = images(admin, f'/projects/{mine}/pdf/customer')
+admin.post('/admin/settings', data={'section': 'documents', 'pdf_logo_mark': ['0', '1']})
+with app.app_context():
+    _pres.set_enabled(False); db.session.commit()
+ok('… not on the title page (presentation pages keep clean), on the pages after it',
+   len(pres_off) == len(pres_plain) and pres_off[0] == pres_plain[0] and all(a == b + 1 for a, b in zip(pres_off[1:-1], pres_plain[1:-1])))
 admin.post('/admin/settings', data={'section': 'documents', 'pdf_logo_mark': ['0']})
 ok('… off again: none', images(admin, f'/projects/{mine}/pdf/customer') == before_admin)
 with app.app_context():
