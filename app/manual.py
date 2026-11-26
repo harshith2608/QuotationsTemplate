@@ -161,7 +161,7 @@ ARTICLES = [
          steps=['Open Admin → Settings → Quotation PDFs.',
                 'Change How your PDF looks (and the cover page, if you have it).',
                 'Page border: pick no border, a thin, thick or double line, or rounded corners (in your brand colour), and whether it goes on the front page only or on every page of your quotation PDFs.',
-                'Turn on Your logo as a watermark to put your logo, faint, in the middle of every page of your quotation PDFs. '
+                'Turn on Your logo as a watermark to put your logo, faint, in the middle of every page of your quotation PDFs (not the title, About us and Next steps pages). '
                 'An employee\'s quotation gets it once you approve it.',
                 'Save and open a quotation PDF to see it.']),
     dict(id='tick-several', title='Add several items to a room at once', link='projects.create_project', needs='tick_several',

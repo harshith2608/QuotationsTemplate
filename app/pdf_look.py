@@ -5,7 +5,8 @@ Page border: none (the default), a thin, thick or double line, or a thin line wi
 20 pt in from the paper's edge, on the front page only (the title page when there is one, else page 1) or on every
 page of the quotation PDFs (not invoices, not the designed photo cover or gallery, which are pictures of their own).
 
-Logo watermark: the logo, faint, in the middle of every page of the quotation PDFs (not invoices). An employee's
+Logo watermark: the logo, faint, in the middle of every page of the quotation PDFs (not invoices), except the
+presentation pages (title, About us, Next steps), which carry the logo already. An employee's
 quotation gets it once the admin approves it (before that it opens marked Draft instead); an admin's always.
 
 Font: modern (Helvetica, as before) or classic (Times, a serif). The PDF code asks for its fonts here when it builds
@@ -156,6 +157,21 @@ def logo_mark_image():
         return None
 
 
+def no_logo_mark():
+    """A flowable that takes nothing and keeps the logo watermark off the page it's on (the title, About us and Next
+    steps pages: they carry the logo already)."""
+    from reportlab.platypus import Flowable
+
+    class NoLogoMark(Flowable):
+        def wrap(self, *args):
+            return 0, 0
+
+        def draw(self):
+            self.canv._no_logo_mark = True
+
+    return NoLogoMark()
+
+
 def logo_canvas_class(image, base=None):
     """A canvas that puts `image` (logo_mark_image) in the middle of each finished page, over the content (faint
     enough to read through, and seen over shaded tables too)."""
@@ -165,6 +181,10 @@ def logo_canvas_class(image, base=None):
 
     class LogoMarkCanvas(base):
         def showPage(self):
+            if getattr(self, '_no_logo_mark', False):       # a presentation page (NoLogoMark on it): left clean
+                self._no_logo_mark = False
+                super().showPage()
+                return
             w, h = self._pagesize
             scale = min(0.6 * w / iw, 0.35 * h / ih)
             dw, dh = iw * scale, ih * scale

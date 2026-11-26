@@ -1364,7 +1364,8 @@ def _title_page(project, cust, ref, page_width, palette, styles):
     center = lambda name, size, color=BRAND_DARK, bold=False, space=6, leading=None: ParagraphStyle(
         name, parent=styles['Normal'], fontSize=size, leading=leading or size * 1.25, textColor=color, alignment=TA_CENTER,
         fontName=_F.b if bold else _F.r, spaceAfter=space)
-    out = [Spacer(1, 2.2 * cm)]
+    from . import pdf_look
+    out = [pdf_look.no_logo_mark(), Spacer(1, 2.2 * cm)]
     logo = _logo_flowable(brand, max_height=3.2 * cm, max_width=8 * cm)
     if logo:
         logo.hAlign = 'CENTER'
@@ -1474,7 +1475,8 @@ def _about_page(page_width, palette, styles):
     body = ParagraphStyle('AbB', parent=styles['Normal'], fontSize=10.5, leading=16, textColor=colors.HexColor('#263238'),
                           spaceAfter=10)
     bullet = ParagraphStyle('AbL', parent=body, leftIndent=14, firstLineIndent=-10, spaceAfter=4)
-    out = [Spacer(1, 1 * cm), Paragraph(f'About {escape(brand["name"])}', head),
+    from . import pdf_look
+    out = [pdf_look.no_logo_mark(), Spacer(1, 1 * cm), Paragraph(f'About {escape(brand["name"])}', head),
            HRFlowable(width='20%', thickness=2, color=palette[1], hAlign='LEFT', spaceAfter=14)]
     if content['about_html']:
         out += _rich_flowables(content['about_html'], dark, styles)
@@ -1515,7 +1517,8 @@ def _closing_page(page_width, palette, styles):
     small = ParagraphStyle('NxS', parent=styles['Normal'], fontSize=9, leading=13, textColor=colors.HexColor('#546e7a'),
                            alignment=TA_CENTER)
     contact = '  |  '.join(x for x in [brand['phone'] and f"Ph: {brand['phone']}", brand['email']] if x)
-    return [PageBreak(), Spacer(1, 1 * cm), Paragraph('Next steps', head),
+    from . import pdf_look
+    return [PageBreak(), pdf_look.no_logo_mark(), Spacer(1, 1 * cm), Paragraph('Next steps', head),
             HRFlowable(width='20%', thickness=2, color=BRAND_ACCENT, hAlign='LEFT', spaceAfter=16), *t,
             Spacer(1, 2.4 * cm), HRFlowable(width='40%', thickness=1, color=BRAND_ACCENT, hAlign='CENTER', spaceAfter=18),
             Paragraph(_thank_you_text(), thanks), Spacer(1, 8),
