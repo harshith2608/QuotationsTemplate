@@ -67,6 +67,25 @@
 </table></div>
 {% else %}<p class="muted small">No partners yet.</p>{% endif %}
 
+<h2 id="waivers">Let a business apply early</h2>
+<div class="card">
+  <p class="muted small">Skip the {{ rules.min_months }} month{{ 's' if rules.min_months != 1 }} on a paid plan for one business
+    (it still needs an active paid plan). Its Refer &amp; earn page then shows the application form; you still approve it.</p>
+  <form method="post" action="{{ url_for('console.partner_waiver') }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="on" value="1">
+    <label class="small grow">App name (web address, e.g. sharma-interiors)<input name="slug" required></label>
+    <button class="btn btn-primary btn-sm" type="submit">Let it apply now</button>
+  </form>
+  {% if waivers %}
+  <table style="margin-top:10px"><tbody>{% for w in waivers %}
+    <tr><td class="mono">{{ w.slug }}</td><td class="muted small">since {{ w.created_at.strftime('%d %b %Y') }}</td>
+      <td><form method="post" action="{{ url_for('console.partner_waiver') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="slug" value="{{ w.slug }}">
+        <button class="btn btn-sm btn-danger" type="submit">Remove</button></form></td></tr>
+  {% endfor %}</tbody></table>
+  {% endif %}
+</div>
+
 <h2 id="rules">Rules</h2>
 <form method="post" class="card">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

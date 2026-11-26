@@ -80,6 +80,10 @@ DDL = [
         reason        TEXT,
         created_at    TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
     )""",
+    """CREATE TABLE IF NOT EXISTS public.partner_waivers (
+        slug        VARCHAR(40)  PRIMARY KEY,
+        created_at  TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+    )""",
     """CREATE TABLE IF NOT EXISTS public.partner_payouts (
         id            SERIAL       PRIMARY KEY,
         partner       VARCHAR(40)  NOT NULL,
@@ -265,11 +269,36 @@ def _months_between(a, b):
     return (b.year - a.year) * 12 + (b.month - a.month) - (1 if b.day < a.day else 0)
 
 
+def waived(slug):
+    """The operator let this business apply before its months on a paid plan are up."""
+    ensure_tables()
+    with db.engine.connect() as conn:
+        return conn.execute(text('SELECT 1 FROM public.partner_waivers WHERE slug = :s'), {'s': slug}).first() is not None
+
+
+def waivers():
+    ensure_tables()
+    with db.engine.connect() as conn:
+        return [dict(r._mapping) for r in conn.execute(text('SELECT * FROM public.partner_waivers ORDER BY created_at DESC'))]
+
+
+def set_waiver(slug, on):
+    ensure_tables()
+    with db.engine.begin() as conn:
+        if on:
+            conn.execute(text('INSERT INTO public.partner_waivers (slug) VALUES (:s) ON CONFLICT (slug) DO NOTHING'),
+                         {'s': slug})
+        else:
+            conn.execute(text('DELETE FROM public.partner_waivers WHERE slug = :s'), {'s': slug})
+
+
 def eligibility(slug, today=None):
-    """(can apply, why not)."""
+    """(can apply, why not). A waived business needs only an active paid plan, not the months."""
     today = today or date.today()
     need = settings()['min_months']
     since = paid_since(slug)
+    if since and plan_active(slug, today) and waived(slug):
+        return True, ''
     if not since:
         return False, f'Refer & earn opens once you\'ve been on a paid plan for {need} month{"s" if need != 1 else ""}.'
     if not plan_active(slug, today):

@@ -186,6 +186,15 @@ with app.app_context():
     p = referrals.get('sharmaint')
 ok('console: code and % changed', p['code'] == 'QR7777' and p['pct'] == 40)
 c.post('/partners/sharmaint/stop', data={'note': 'Spam messages.'})
+c.post('/partners/waiver', data={'slug': 'newbiz', 'on': '1'})
+c.post('/partners/waiver', data={'slug': 'nobody', 'on': '1'})
+with app.app_context():
+    ok('console: waive the months for a paying business (it can apply now); an unknown app refused',
+       referrals.waived('newbiz') and referrals.eligibility('newbiz')[0] and not referrals.waived('nobody')
+       and 'newbiz' in c.get('/partners').text)
+c.post('/partners/waiver', data={'slug': 'newbiz'})
+with app.app_context():
+    ok('console: waiver removed', not referrals.waived('newbiz'))
 with app.app_context():
     ok('console: stopped (code stops working)', referrals.get('sharmaint')['status'] == 'stopped'
        and referrals.partner_for_signup('QR7777', '9000000003') is None)

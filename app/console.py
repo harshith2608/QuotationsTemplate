@@ -836,7 +836,7 @@ def partners_page():
             counts[slug] = n
     return render_template('console/partners.html', rules=rules, partners=everyone, counts=counts,
                            totals={p['slug']: referrals.totals(p['slug']) for p in everyone if p['status'] != 'applied'},
-                           due=referrals.due(), pct_of=referrals.pct_of, STATUSES=referrals.STATUSES,
+                           due=referrals.due(), pct_of=referrals.pct_of, STATUSES=referrals.STATUSES, waivers=referrals.waivers(),
                            eligibility={p['slug']: referrals.eligibility(p['slug']) for p in everyone if p['status'] == 'applied'})
 
 
@@ -913,6 +913,30 @@ def partner_action(slug, action):
     except referrals.ReferralError as exc:
         flash(str(exc), 'error')
     return redirect(request.form.get('next') or url_for('console.partner_detail', slug=slug))
+
+
+@console_bp.route('/partners/waiver', methods=['POST'])
+@login_required
+def partner_waiver():
+    """Let one paying business apply before its months on a paid plan are up (or take that back)."""
+    from . import referrals
+    slug = (request.form.get('slug') or '').strip().lower()
+    on = request.form.get('on') == '1'
+    if on:
+        with db.engine.connect() as conn:
+            known = conn.execute(text('SELECT 1 FROM public.tenants WHERE slug = :s'), {'s': slug}).first()
+            if not known and conn.execute(text("SELECT to_regclass('public.customers')")).scalar():
+                known = conn.execute(text('SELECT 1 FROM public.customers WHERE slug = :s'), {'s': slug}).first()
+        if not known:
+            flash(f'No app called "{slug}".', 'error')
+            return redirect(url_for('console.partners_page') + '#waivers')
+        if not referrals.paid_since(slug) or not referrals.plan_active(slug):
+            flash(f'"{slug}" isn\'t on an active paid plan: it can apply once it is (the waiver only skips the months).', 'error')
+            return redirect(url_for('console.partners_page') + '#waivers')
+    referrals.set_waiver(slug, on)
+    audit('partner_waiver', slug, 'on' if on else 'off')
+    flash(f'"{slug}" can apply now (its Refer & earn page shows the form).' if on else f'Waiver removed for "{slug}".', 'ok')
+    return redirect(url_for('console.partners_page') + '#waivers')
 
 
 @console_bp.route('/partners/earnings/<int:earning_id>/<action>', methods=['POST'])
