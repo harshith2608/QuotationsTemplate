@@ -300,7 +300,7 @@ def revision(project_id, number):
     if current_user.is_admin and rev.number != latest:
         restore = dict(billing.restore_preview(project, snap), blocker=billing.restore_blocker(project),
                        current_total=project.final_total)
-    return render_template('billing/revision.html', title=f'Quotation #{project.id} – Rev {number}', project=project,
+    return render_template('billing/revision.html', title=f'Quotation #{project.id} – Rev {billing.shown_rev(number)}', project=project,
                            rev=rev, snap=snap, changes=changes, latest=latest, restore=restore)
 
 
@@ -318,7 +318,7 @@ def revision_pdf(project_id, number):
     buf = generate_customer_pdf(project, revision=rev)
     name = ''.join(ch if ch.isalnum() else '_' for ch in (json.loads(rev.snapshot)['customer']['name'] or 'Quotation'))
     from .projects import _send_quote_pdf
-    return _send_quote_pdf(project, buf, f'Quotation_{name}_Rev{rev.number}.pdf')
+    return _send_quote_pdf(project, buf, f'Quotation_{name}_Rev{billing.shown_rev(rev.number)}.pdf')
 
 
 @billing_bp.route('/projects/<int:project_id>/revisions/<int:number>/compare')
@@ -339,7 +339,7 @@ def revision_compare(project_id, number):
     cmp = billing.compare_snapshots(json.loads(older.snapshot), json.loads(newer.snapshot))
     numbers = [n for (n,) in QuoteRevision.query.with_entities(QuoteRevision.number)
                .filter_by(project_id=project.id).order_by(QuoteRevision.number).all()]
-    return render_template('billing/compare.html', title=f'Quotation #{project.id} – Rev {older.number} vs {newer.number}',
+    return render_template('billing/compare.html', title=f'Quotation #{project.id} – Rev {billing.shown_rev(older.number)} vs {billing.shown_rev(newer.number)}',
                            project=project, older=older, newer=newer, cmp=cmp, latest=latest, numbers=numbers,
                            number=number, other=other)
 
@@ -390,7 +390,7 @@ def restore_revision(project_id, number):
     from .projects import _approval_changed
     _approval_changed(project)
     if new and new.number > latest:
-        flash(f'Restored revision {number}: it is now the current quotation, saved as revision {new.number}. '
+        flash(f'Restored revision {billing.shown_rev(number)}: it is now the current quotation, saved as revision {billing.shown_rev(new.number)}. '
               'If you shared an approval link, your customer will see this version.', 'success')
     else:
         flash('The quotation already matched this version, so nothing changed.', 'info')

@@ -21,10 +21,10 @@ with app.app_context():
     ok('every saved quotation has a number, all different', len(set(nums.values())) == len(nums)
        == Project.query.filter(Project.status != 'draft').count())
 lst = c.get('/projects').text
-ok('Quotations page: the number with its latest revision', 'Quotation No.' in lst and '2026111801/Rev' in lst)
-ok('the quotation\'s page shows it too', '2026111802/Rev' in c.get(f'/projects/{ids[1]}').text)
-ok('search by number', '2026111803/Rev' in c.get('/projects?q=2026111803').text
-   and '2026111801/Rev' not in c.get('/projects?q=2026111803').text)
+ok('Quotations page: the number with its latest revision', 'Quotation No.' in lst and '>2026111801' in lst)
+ok('the quotation\'s page shows it too', '2026111802' in c.get(f'/projects/{ids[1]}').text)
+ok('search by number', '2026111803' in c.get('/projects?q=2026111803').text
+   and '2026111801' not in c.get('/projects?q=2026111803').text)
 c.post(f'/projects/{ids[1]}/share')                         # (a revision is kept when the link is made)
 with app.app_context():
     from app import billing
@@ -32,7 +32,8 @@ with app.app_context():
     billing.record_revision(p, p.creator); p.customer_name = p.customer_name + ' X'; db.session.commit()
     billing.record_revision(p, p.creator); db.session.commit()
     rev = billing.latest_revision_number(p)
-ok(f'the latest revision is shown (Rev{rev})', f'2026111801/Rev{rev}' in c.get('/projects').text and rev and rev >= 2)
+ok(f'the latest revision is shown (stored {rev} → /Rev{rev - 1}; the original has no /Rev)', f'2026111801/Rev{rev - 1}' in c.get('/projects').text and rev and rev >= 2
+   and QN.label('X', 1) == 'X' and QN.label('X', 2) == 'X/Rev1')
 c.post(f'/projects/{ids[0]}/delete')
 with app.app_context():
     n2 = QN.assign()
@@ -61,7 +62,7 @@ with app.app_context():
     nums = QN.known()
 ok('running number from 245, all numbered again in the order made', nums[order[0]] == 'QT-245' and nums[order[1]] == 'QT-246'
    and sorted(nums.values()) == [f'QT-{245 + i}' for i in range(len(order))])
-ok('… shown on the Quotations page', 'QT-245/Rev' in lst)
+ok('… shown on the Quotations page', 'QT-245' in lst)
 c.post('/admin/settings', data={'section': 'documents', 'quote_number_format': 'SP/{FY}/{NN}', 'quote_number_start': '1'})
 with app.app_context():
     nums = QN.assign()
@@ -84,7 +85,7 @@ pdftext = lambda u: _re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in Pd
 with app.app_context():
     want = QN.for_pdf(db.session.get(Project, ids[1]))
 t = pdftext(f'/projects/{ids[1]}/pdf/customer')
-ok(f'the customer PDF prints "Quotation No: {want}"', want.startswith('2026111801/Rev') and f'Quotation No: {want}' in t)
+ok(f'the customer PDF prints "Quotation No: {want}"', want.startswith('2026111801') and f'Quotation No: {want}' in t)
 ok('…the internal PDF too', f'Quotation No: {want}' in pdftext(f'/projects/{ids[1]}/pdf'))
 with app.app_context():
     from app import layout

@@ -44,26 +44,26 @@ rooms2 = [{'name': 'Hall', 'items': [
     {'name': 'Magic Corner', 'type': 'fixed', 'quantity': 1, 'unit_price': 7500},
     {'name': 'Shoe Rack', 'length': 4, 'width': 3, 'wood_type': 'Acrylic', 'work_type': 'Box Work'}]}]
 r = edit(rooms2, ('fixed', '1000'))
-ok('edit → "Saved as revision 2"', 'Saved as revision 2' in r.text)
+ok('edit → "Saved as revision 1" (the first version is Rev 0)', 'Saved as revision 1' in r.text)
 edit(rooms2, ('fixed', '1000'))
 with app.app_context():
     ok('saving without changes adds no revision', QuoteRevision.query.filter_by(project_id=pid).count() == 2)
 t = c.get(f'/projects/{pid}').text
-ok('quotation page: Rev 2 badge and revision list with changes', ('Rev 2</a>' in t or '/Rev2</a>' in t) and 'id="revisions"' in t
+ok('quotation page: Rev 1 badge and revision list with changes', ('Rev 1</a>' in t or '/Rev1</a>' in t) and '<strong>Rev 0</strong>' in t and 'id="revisions"' in t
    and 'TV Unit changed from 10 ft × 5 ft' in t and 'added Shoe Rack' in t)
 t = c.get(f'/projects/{pid}/revisions/1').text
 ok('revision 1 still shows the old version', '10 ft × 5 ft' in t and '12 ft' not in t and 'older version' in t)
 t = c.get(f'/projects/{pid}/revisions/2').text
-ok('revision 2 lists what changed', 'Changes from revision 1' in t and 'Discount ₹0 → ₹1,000' in t)
-ok('PDFs show the revision number (with the quotation number: …/Rev2)', '/Rev2' in pdftext(c, f'/projects/{pid}/pdf') and '/Rev2' in pdftext(c, f'/projects/{pid}/pdf/customer'))
+ok('revision 2 (shown as 1) lists what changed', 'Changes from revision 0' in t and 'Discount ₹0 → ₹1,000' in t)
+ok('PDFs show the revision number (with the quotation number: …/Rev1)', '/Rev1' in pdftext(c, f'/projects/{pid}/pdf') and '/Rev1' in pdftext(c, f'/projects/{pid}/pdf/customer'))
 t1 = c.get(f'/projects/{pid}/revisions/1').text
 ok('an old revision offers its PDF and Compare with the current one', f'/projects/{pid}/revisions/1/pdf' in t1
-   and 'Compare with the current one (Rev 2)' in t1)
+   and 'Compare with the current one (Rev 1)' in t1)
 r1pdf = pdftext(c, f'/projects/{pid}/revisions/1/pdf').replace('\n', ' ')
-ok('the PDF of revision 1 is the quotation as it was (its total, no Shoe Rack, "/Rev1")', '/Rev1' in r1pdf
+ok('the PDF of the original is the quotation as it was (its total, no Shoe Rack, its number without /Rev)', 'Quotation No:' in r1pdf and '/Rev' not in r1pdf
    and '50,000.00' in r1pdf and 'Shoe Rack' not in r1pdf and 'Billing Test' in r1pdf)
 cmp_ = c.get(f'/projects/{pid}/revisions/1/compare').text
-ok('Compare: revision 1 and the current one side by side, what changed highlighted', 'Revision 1 vs revision 2' in cmp_
+ok('Compare: revision 1 and the current one side by side, what changed highlighted', 'Revision 0 vs revision 1' in cmp_
    and 'ki-cmp-changed' in cmp_ and 'ki-cmp-added' in cmp_ and 'Shoe Rack' in cmp_ and '10 ft × 5 ft' in cmp_
    and '12 ft × 5 ft' in cmp_ and '1 added · 0 removed · 1 changed' in cmp_ and 'size' in cmp_ and 'Discount' in cmp_)
 with app.app_context():
@@ -143,7 +143,7 @@ c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile':
 t = c.get(f'/projects/{rid}').text
 ok('quotation page says revisions can be downloaded, compared and restored', 'compare it side by side' in t and 'or restore it' in t)
 t = c.get(f'/projects/{rid}/revisions/1').text
-ok('older revision offers Restore, saved as a new revision, with both totals', 'Restore revision 1' in t and '(Rev 3)' in t
+ok('older revision offers Restore, saved as a new revision, with both totals', 'Restore revision 0' in t and '(Rev 2)' in t
    and 'After restoring' in t and '50,000.00' in t and 'rates have changed' not in t)
 ok('the current revision has no Restore button', 'Restore revision' not in c.get(f'/projects/{rid}/revisions/2').text)
 ok('staff can\'t restore', 'Restore revision' not in staff.get(f'/projects/{rid}/revisions/1').text
@@ -163,8 +163,8 @@ ok('removing an item completely is listed as removed', billing.diff_snapshots(
                                              {'name': 'Loft', 'type': 'fixed', 'quantity': 1, 'unit_price': 3}]}], 'total': 8},
     {'rooms': [{'name': 'Bedroom', 'items': [{'name': 'Wardrobe', 'type': 'fixed', 'quantity': 1, 'unit_price': 5}]}], 'total': 5})
    [:1] == ['Bedroom: removed Loft'])
-ok('flash says which revision it is now', 'saved as revision 3' in r.text and 'restored from Rev 1' in r.text)
-ok('revision page shows where it came from', 'restored from Rev 1' in c.get(f'/projects/{rid}/revisions/3').text)
+ok('flash says which revision it is now', 'saved as revision 2' in r.text and 'restored from Rev 0' in r.text)
+ok('revision page shows where it came from', 'restored from Rev 0' in c.get(f'/projects/{rid}/revisions/3').text)
 r = c.post(f'/projects/{rid}/revisions/3/restore', follow_redirects=True)
 ok('restoring the current version does nothing', 'already the current version' in r.text)
 c.post(f'/projects/{rid}/edit', data={'customer_name': 'Restore Test', 'mobile': '9000000222', 'rooms_data': c.get(f'/projects/{rid}/edit').text
@@ -403,7 +403,7 @@ c.post(f'/projects/{mid}/edit', data={'customer_name': 'Approval Customer', 'mob
        'discount_value': '1500', 'rooms_data': json.dumps([{'name': 'Hall', 'items': [
            {'name': 'TV Unit', 'length': 10, 'width': 5, 'wood_type': 'Laminates', 'work_type': 'Box Work'}]}])})
 r = anon.get(f'/q/{token}')
-ok('after an edit the customer can accept the new version', 'name="agree"' in r.text and 'Rev 2' in r.text)
+ok('after an edit the customer can accept the new version', 'name="agree"' in r.text and 'Rev 1' in r.text)
 r = anon.post(f'/q/{token}/respond', data={'kind': 'changes', 'note': 'Please add a loft.'}, follow_redirects=True)
 with app.app_context():
     ok('change request recorded and notified', Notification.query.filter(Notification.project_id == mid).count() == 2)

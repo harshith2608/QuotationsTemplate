@@ -47,7 +47,7 @@
         <div class="fs-5 fw-semibold">{{ snap.customer.name }}</div>
         {% if snap.customer.address %}<div class="small q-muted">{{ snap.customer.address }}</div>{% endif %}
       </div>
-      <div class="text-end small q-muted">{% if status.current_revision and status.current_revision > 1 %}Rev {{ status.current_revision }}<br>{% endif %}
+      <div class="text-end small q-muted">{% if status.current_revision and status.current_revision > 1 %}Rev {{ status.current_revision|rev }}<br>{% endif %}
         {{ project.created_at|ist_time('%d %b %Y') }}</div>
     </div>
     {% set l = status.latest %}

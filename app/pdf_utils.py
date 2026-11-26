@@ -206,7 +206,7 @@ def _quote_ref(project):
     from .billing import latest_revision_number
     rev = latest_revision_number(project)
     number = quote_numbers.for_pdf(project, rev) if quote_numbers.on_pdf() else ''
-    return ((f'Quotation No: {number}\n' if number else f'Rev {rev}\n' if rev and rev > 1 else '')
+    return ((f'Quotation No: {number}\n' if number else f'Rev {rev - 1}\n' if rev and rev > 1 else '')
             + f'Date: {(project.created_at + timedelta(hours=5, minutes=30)).strftime("%d %B %Y")}' + _valid_line(project.created_at))
 
 
@@ -214,7 +214,7 @@ def _revision_ref(project, number):
     """'Quotation No: QT-016/Rev3\n' (or 'Rev 3\n' with the number off) for an earlier revision's PDF."""
     from . import quote_numbers
     label = quote_numbers.for_pdf(project, number) if quote_numbers.on_pdf() else ''
-    return f'Quotation No: {label}\n' if label else f'Rev {number}\n'
+    return f'Quotation No: {label}\n' if label else f'Rev {max(number - 1, 0)}\n'
 
 
 def _valid_line(dated):
@@ -1252,7 +1252,7 @@ def generate_invoice_pdf(invoice, data, total_paid=0.0):
         bill.append(Paragraph(escape(f"GSTIN: {buyer['gstin']}"), small))
     supply = [Paragraph('<b>Details</b>', small_b)]
     if (data.get('revision') or 0) > 1:
-        supply.append(Paragraph(escape(f"As per quotation Rev {data['revision']}"), small))
+        supply.append(Paragraph(escape(f"As per quotation Rev {max(data['revision'] - 1, 0)}"), small))
     if data['place_of_supply']['state']:
         supply.append(Paragraph(escape(f"Place of supply: {data['place_of_supply']['state']} ({data['place_of_supply']['code']})"), small))
     if data['gst_rate']:
