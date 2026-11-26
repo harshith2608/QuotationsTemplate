@@ -271,6 +271,16 @@ pdf = pdftext(f'/projects/{bid}/pdf/customer')
 ok('the PDF prints "Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)" at 2,740',
    'Wardrobe (Acrylic finish, 16mm 8*4 Century Bond 710)' in pdf and '2,740' in pdf)
 ok('editing brings both choices back', '"finish": "Acrylic|16mm 8*4 Century Bond 710"' in c.get(f'/projects/{bid}/edit').text)
+# ── {Board} in the Material Specifications: the board(s) chosen on the quotation ──
+st = c.get('/admin/settings?tab=documents').text
+ok('Settings → Quotation PDFs offers an Insert button per item options section', '["Board", "Board"]' in st and '["Finish", "Finish"]' in st)
+with app.app_context():
+    from app import layout
+    v = layout.variables(Project.query.get(bid))
+    ok('{Board} / {finish} fill in the quotation\'s choices; unknown words stay as typed',
+       layout.fill('{Board} for all carcass, { finish } outside, {nothing}', v)
+       == '16mm 8*4 Century Bond 710 for all carcass, Acrylic outside, {nothing}'
+       and layout.fill_html('<p>{Board} &amp; {plywood}</p>', v) == '<p>16mm 8*4 Century Bond 710 &amp; ' + v['plywood'] + '</p>')
 # ── Costs & profit priced by item: your items' costs and each option's extra cost ──
 cp = c.get('/admin/costs').text
 ok('Costs & profit (priced by item): your items, and a card per item option section', 'id="item-costs"' in cp
