@@ -145,6 +145,12 @@ def revisions(project):
             .order_by(QuoteRevision.number.desc()).all())
 
 
+def shown_rev(number):
+    """The revision number people see: the first saved version is Rev 0 (the original), the first change Rev 1…
+    (stored numbers start at 1; URLs and records keep them)."""
+    return max((number or 1) - 1, 0)
+
+
 def latest_revision_number(project):
     from .models import QuoteRevision
     if not ready():

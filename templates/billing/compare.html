@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Quotation #{{ project.id }} – Rev {{ older.number }} vs Rev {{ newer.number }}{% endblock %}
+{% block title %}Quotation #{{ project.id }} – Rev {{ older.number|rev }} vs Rev {{ newer.number|rev }}{% endblock %}
 
 {% macro money(v) %}&#8377;{{ (v or 0)|inr }}{% endmacro %}
 {% macro diff(a, b) -%}
@@ -12,14 +12,14 @@
   <nav aria-label="breadcrumb"><ol class="breadcrumb mb-1">
     <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">Quotations</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="text-decoration-none">Quotation #{{ project.id }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('billing.revision', project_id=project.id, number=number) }}" class="text-decoration-none">Revision {{ number }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('billing.revision', project_id=project.id, number=number) }}" class="text-decoration-none">Revision {{ number|rev }}</a></li>
     <li class="breadcrumb-item active">Compare</li>
   </ol></nav>
-  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-layout-split me-2 text-primary"></i>Revision {{ older.number }} vs revision {{ newer.number }}{% if newer.number == latest %} (current){% endif %}</h4>
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-layout-split me-2 text-primary"></i>Revision {{ older.number|rev }} vs revision {{ newer.number|rev }}{% if newer.number == latest %} (current){% endif %}</h4>
   <form method="get" class="d-flex flex-wrap align-items-center gap-2 small">
-    <span class="text-muted">Compare revision {{ number }} with</span>
+    <span class="text-muted">Compare revision {{ number|rev }} with</span>
     <select name="with" class="form-select form-select-sm w-auto" onchange="this.form.submit()" aria-label="Revision to compare with">
-      {% for n in numbers if n != number %}<option value="{{ n }}" {{ 'selected' if n == other }}>Rev {{ n }}{{ ' (current)' if n == latest }}</option>{% endfor %}
+      {% for n in numbers if n != number %}<option value="{{ n }}" {{ 'selected' if n == other }}>Rev {{ n|rev }}{{ ' (current)' if n == latest }}</option>{% endfor %}
     </select>
     <span class="ms-md-2"><span class="ki-cmp-key ki-cmp-added"></span> added
       <span class="ki-cmp-key ki-cmp-removed ms-2"></span> removed <span class="ki-cmp-key ki-cmp-changed ms-2"></span> changed</span>
@@ -78,8 +78,8 @@
   </div>
 </div>
 <div class="d-flex flex-wrap gap-2 mb-4">
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('billing.revision_pdf', project_id=project.id, number=older.number) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>PDF of revision {{ older.number }}</a>
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('billing.revision_pdf', project_id=project.id, number=newer.number) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>PDF of revision {{ newer.number }}</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('billing.revision_pdf', project_id=project.id, number=older.number) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>PDF of revision {{ older.number|rev }}</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('billing.revision_pdf', project_id=project.id, number=newer.number) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>PDF of revision {{ newer.number|rev }}</a>
 </div>
 <p class="small text-muted">Amounts are as they were saved in each revision. Items are matched by name within each section.</p>
 {% endblock %}

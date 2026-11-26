@@ -528,11 +528,11 @@
         <code>{NN}</code>, <code>{NNN}</code> or <code>{NNNN}</code> (that many digits at least). Add your own letters, e.g.
         <code>SPI-{FY2}-{NNN}</code>. The count starts again each day with {DD}, each month with {MM}, each financial year with
         {FY}, each year with {YYYY}; otherwise it keeps running from the number you start it at (e.g. to carry on your
-        paper series). Shown on the Quotations page, each quotation's page and its PDF, with its latest revision (/Rev2).
+        paper series). Shown on the Quotations page, each quotation's page and its PDF, with its revision once it's been changed (/Rev1, /Rev2…).
         Changing the format numbers all your quotations again, in the order they were made.</div>
       <input type="hidden" name="quote_number_on_pdf_shown" value="1">
       <label class="form-check mt-2 mb-0 small"><input class="form-check-input" type="checkbox" name="quote_number_on_pdf" value="1" {{ 'checked' if numbering.on_pdf }}>
-        Print the number on the quotation PDF (<span class="font-monospace">Quotation No: {{ numbering.preview[0] }}/Rev1</span>, beside the date)</label>
+        Print the number on the quotation PDF (<span class="font-monospace">Quotation No: {{ numbering.preview[0] }}</span>, then <span class="font-monospace">{{ numbering.preview[0] }}/Rev1</span> after a change, beside the date)</label>
     </div>
   </div>
   <script>

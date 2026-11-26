@@ -9,7 +9,7 @@ each year with {YYYY}/{YY}, else it keeps running (from the "start from" number,
 
 Given once, when a saved quotation is first listed or opened (drafts have none), in the order they were made, and
 kept: deleting one never renumbers the others. Changing the format (or start) renumbers them all in the new format.
-Shown with its latest revision: 2026111801/Rev2. Kept in app_settings (no database update):
+Shown with its latest revision: 2026111801 (the original), 2026111801/Rev1 after the first change… Kept in app_settings (no database update):
   quote_numbers        JSON {project_id: number, '_format': 'format|start', '_last': {period: count}}
   quote_number_format  the format ('' = the default)
   quote_number_start   where a running count starts ('' = 1)
@@ -179,8 +179,12 @@ def revisions(project_ids):
 
 
 def label(number, revision):
-    """'2026111801/Rev2' ('' without a number)."""
-    return f'{number}/Rev{max(revision or 1, 1)}' if number else ''
+    """'2026111801' for the original (stored revision 1), '2026111801/Rev1' after the first change… ('' without a
+    number)."""
+    if not number:
+        return ''
+    shown = max((revision or 1) - 1, 0)
+    return f'{number}/Rev{shown}' if shown else number
 
 
 def labels(projects):

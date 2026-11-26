@@ -280,7 +280,7 @@ def respond(token):
         if project.stage == 'pending':
             project.set_stage('confirmed', None, note=f'Accepted online by {who}')
         title = f'Quotation #{project.id} accepted'
-        message = f'{who} accepted the quotation for ₹{inr(project.total_payable)} online' + (f' (revision {rev})' if rev else '') + '.'
+        message = f'{who} accepted the quotation for ₹{inr(project.total_payable)} online' + (f' (revision {billing.shown_rev(rev)})' if rev and rev > 1 else '') + '.'
     else:
         title = f'Changes requested on quotation #{project.id}'
         message = f'{who} asked for changes: {note}'

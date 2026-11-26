@@ -1,4 +1,9 @@
-"""How the business's PDFs look (Settings → Quotation PDFs → How your PDF looks): colours, font, header and logo watermark.
+"""How the business's PDFs look (Settings → Quotation PDFs → How your PDF looks): colours, font, header, page border and
+logo watermark.
+
+Page border: none (the default), a thin, thick or double line, or a thin line with rounded corners, in the brand colour,
+20 pt in from the paper's edge, on the front page only (the title page when there is one, else page 1) or on every
+page of the quotation PDFs (not invoices, not the designed photo cover or gallery, which are pictures of their own).
 
 Logo watermark: the logo, faint, in the middle of every page of the quotation PDFs (not invoices). An employee's
 quotation gets it once the admin approves it (before that it opens marked Draft instead); an admin's always.
@@ -59,6 +64,59 @@ def header():
     from .models import AppSetting
     value = AppSetting.get(HEADER_KEY, '')
     return value if value in HEADERS else CENTRE
+
+
+BORDER_KEY = 'pdf_border'
+NO_BORDER, THIN, THICK, DOUBLE, ROUNDED = 'none', 'thin', 'thick', 'double', 'rounded'
+BORDERS = {NO_BORDER: 'No border', THIN: 'Thin line', THICK: 'Thick line', DOUBLE: 'Double line',
+           ROUNDED: 'Thin line with rounded corners'}
+BORDER_ON_KEY = 'pdf_border_on'
+FRONT, EVERY = 'front', 'every'
+BORDERS_ON = {FRONT: 'Border on the front page only (your title page, or page 1)', EVERY: 'Border on every page'}
+BORDER_INSET = 20         # points from the paper's edge (the text starts 1.5 cm in)
+
+
+def border():
+    from .models import AppSetting
+    value = AppSetting.get(BORDER_KEY, '')
+    return value if value in BORDERS else NO_BORDER
+
+
+def border_on():
+    from .models import AppSetting
+    value = AppSetting.get(BORDER_ON_KEY, '')
+    return value if value in BORDERS_ON else FRONT
+
+
+def draw_border(c, style, colour, page_size):
+    """The page border, in the brand colour (grey in black & white: the canvas turns it)."""
+    w, h = page_size
+    x = y = BORDER_INSET
+    bw, bh = w - 2 * BORDER_INSET, h - 2 * BORDER_INSET
+    c.saveState()
+    c.setStrokeColor(colour)
+    if style == DOUBLE:
+        c.setLineWidth(1.4); c.rect(x, y, bw, bh, stroke=1, fill=0)
+        c.setLineWidth(0.5); c.rect(x + 4, y + 4, bw - 8, bh - 8, stroke=1, fill=0)
+    elif style == ROUNDED:
+        c.setLineWidth(0.9); c.roundRect(x, y, bw, bh, 12, stroke=1, fill=0)
+    else:
+        c.setLineWidth(2.4 if style == THICK else 0.9); c.rect(x, y, bw, bh, stroke=1, fill=0)
+    c.restoreState()
+
+
+def border_canvas_class(style, every, colour, base=None):
+    """A canvas that draws the border on each finished page (every) or the first one only."""
+    if base is None:
+        from reportlab.pdfgen.canvas import Canvas as base
+
+    class BorderCanvas(base):
+        def showPage(self):
+            if every or self.getPageNumber() == 1:
+                draw_border(self, style, colour, self._pagesize)
+            super().showPage()
+
+    return BorderCanvas
 
 
 LOGO_MARK_KEY = 'pdf_logo_mark'   # '1': the firm's logo, faint, in the middle of every quotation page
@@ -124,7 +182,8 @@ def save(form):
     if 'pdf_logo_mark' in form:
         AppSetting.set(LOGO_MARK_KEY, '1' if '1' in form.getlist('pdf_logo_mark') else '')
     for field, key, choices, default in (('pdf_colours', COLOURS_KEY, COLOURS, BRAND), ('pdf_font', FONT_KEY, FONTS, MODERN),
-                                         ('pdf_header', HEADER_KEY, HEADERS, CENTRE)):
+                                         ('pdf_header', HEADER_KEY, HEADERS, CENTRE), ('pdf_border', BORDER_KEY, BORDERS, NO_BORDER),
+                                         ('pdf_border_on', BORDER_ON_KEY, BORDERS_ON, FRONT)):
         if form.get(field) in choices:
             AppSetting.set(key, '' if form[field] == default else form[field])
 
@@ -132,7 +191,8 @@ def save(form):
 def choices():
     """For the Settings card: [(field, title, {key: label}, chosen)]."""
     return [('pdf_colours', 'Colours', COLOURS, colours()), ('pdf_font', 'Font', FONTS, font()),
-            ('pdf_header', 'Header', HEADERS, header())]
+            ('pdf_header', 'Header', HEADERS, header()), ('pdf_border', 'Page border', BORDERS, border()),
+            ('pdf_border_on', 'Where the border goes', BORDERS_ON, border_on())]
 
 
 def grey(colour):

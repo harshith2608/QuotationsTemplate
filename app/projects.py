@@ -1136,7 +1136,7 @@ def edit_project(project_id):
         rev = billing.record_revision(project, current_user)
         db.session.commit()
         if rev and rev.number > 1 and not was_draft:
-            flash(f'Saved as revision {rev.number}.', 'info')
+            flash(f'Saved as revision {rev.number - 1}.', 'info')
         _approval_changed(project)
 
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')

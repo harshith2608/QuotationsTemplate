@@ -83,6 +83,8 @@ def create_app(config_name='default'):
     from .plan import short as plan_short
     app.add_template_filter(plan_short, 'plan_short')   # '12 months with AI', '40 AI uses' (the app and the console)
     from .numbers import inr
+    from .billing import shown_rev
+    app.add_template_filter(shown_rev, 'rev')            # stored revision 1 → shown as Rev 0 (the original)
     app.add_template_filter(inr, 'inr')                  # 15,50,000.00: numbers the Indian way, on every page
     from .materials import customer_label
     app.add_template_filter(customer_label, 'customer_material')   # "Laminate Finish", not "Laminates – Box Work"

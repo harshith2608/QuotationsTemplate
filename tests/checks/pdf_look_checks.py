@@ -102,3 +102,22 @@ ok('every choice can go back to the default', c.post('/admin/settings', data={'s
 with app.app_context():
     from app.models import AppSetting
     ok('defaults are stored as empty', [AppSetting.get(k, '') for k in (pdf_look.COLOURS_KEY, pdf_look.FONT_KEY, pdf_look.HEADER_KEY)] == ['', '', ''])
+
+# Page border (Settings → Quotation PDFs → How your PDF looks): off by default; front page only or every page
+from app import pdf_look as _PL
+ok('Settings offers Page border and where it goes', 'name="pdf_border"' in c.get('/admin/settings?tab=documents').text
+   and 'value="double"' in c.get('/admin/settings?tab=documents').text and 'name="pdf_border_on"' in c.get('/admin/settings?tab=documents').text)
+with app.app_context():
+    ok('no border by default', _PL.border() == _PL.NO_BORDER and _PL.border_on() == _PL.FRONT)
+_plain = c.get(f'/projects/{pid}/pdf/customer').data
+for style in ('thin', 'thick', 'double', 'rounded'):
+    c.post('/admin/settings', data={'section': 'documents', 'pdf_border': style, 'pdf_border_on': 'every'})
+    r = c.get(f'/projects/{pid}/pdf/customer')
+    ok(f'{style} border on every page: the PDF still builds', r.status_code == 200 and r.data[:4] == b'%PDF' and r.data != _plain)
+with app.app_context():
+    ok('…saved', _PL.border() == 'rounded' and _PL.border_on() == _PL.EVERY)
+c.post('/admin/settings', data={'section': 'documents', 'pdf_border': 'thin', 'pdf_border_on': 'front'})
+ok('front page only builds too', c.get(f'/projects/{pid}/pdf').status_code == 200)
+c.post('/admin/settings', data={'section': 'documents', 'pdf_border': 'none', 'pdf_border_on': 'front'})
+with app.app_context():
+    ok('back to no border', _PL.border() == _PL.NO_BORDER)
