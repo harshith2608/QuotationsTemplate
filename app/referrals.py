@@ -662,11 +662,13 @@ def product():
 
 
 def site_url():
-    """The website (MARKETING_SITE_URL, else www. + the trials' base domain)."""
+    """The website (MARKETING_SITE_URL, else www. + the trials' base domain; on QA the base domain itself:
+    qa.quote-room.co.in)."""
     import os
-    from . import tenancy
+    from . import qa, tenancy
     base = tenancy.base_domain() if tenancy.tenant_mode() else ''
-    site = os.environ.get('MARKETING_SITE_URL') or (f'https://www.{base}' if base else 'https://www.quote-room.co.in')
+    www = '' if qa.enabled() else 'www.'
+    site = os.environ.get('MARKETING_SITE_URL') or (f'https://{www}{base}' if base else 'https://www.quote-room.co.in')
     return site.strip().rstrip('/')
 
 
