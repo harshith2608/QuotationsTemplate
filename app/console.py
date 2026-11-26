@@ -3184,6 +3184,7 @@ def start_trial():
             conn.execute(text('INSERT INTO public.signups (lead_id, slug) VALUES (:i, :s) ON CONFLICT (lead_id) DO UPDATE '
                               "SET slug = :s, created_at = (now() AT TIME ZONE 'utc')"), {'i': lead_id, 's': earlier})
         audit('website_buy_existing', earlier, f'lead #{lead_id}, {plan}')
+        _link_referral(_referral_for(lead_id, lead), earlier, lead.get('company_name') or '', lead_id)   # (unless linked already)
         return _go_pay(earlier, plan, lead, token)
     if earlier:                                   # one free trial per business: open the one they have
         audit('trial_again_blocked', earlier, f'lead #{lead_id}')
