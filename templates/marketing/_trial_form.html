@@ -53,12 +53,56 @@
            {% if errors.business_other %}aria-invalid="true"{% endif %}>
     <p class="field-error" data-error-for="business_other" {% if not errors.business_other %}hidden{% endif %}>{{ errors.business_other }}</p>
   </div>
+  {% if refer and refer.on %}
+  <div class="field">
+    <label for="{{ prefix }}Ref">Referral code <span class="muted">(optional)</span></label>
+    <input id="{{ prefix }}Ref" name="ref_code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters"
+           placeholder="e.g. QR2345" value="{{ form.get('ref_code', '') }}" {% if errors.ref_code %}aria-invalid="true"{% endif %}>
+    <p class="muted small" style="margin:.25rem 0 0">Have a code from a {{ product }} user? You get a {{ refer.trial_days }}-day free trial.</p>
+    <p class="field-error" data-error-for="ref_code" {% if not errors.ref_code %}hidden{% endif %}>{{ errors.ref_code }}</p>
+  </div>
+  {% endif %}
   {# Honeypot: people never see or fill this; bots that fill every field are silently ignored #}
   <div class="hp" aria-hidden="true"><label>Website <input name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
   <input type="hidden" name="utm_source" value="{{ form.get('utm_source', '') }}">
   <input type="hidden" name="utm_campaign" value="{{ form.get('utm_campaign', '') }}">
   <input type="hidden" name="page" value="{{ form.get('page', '') }}">
   <input type="hidden" name="plan" value="{{ form.get('plan', '') }}">
+  {% if sells and plans_shown %}
+  {# Free trial, or buy a plan: two buttons; Buy a plan opens the plans in a dialog, the one picked goes on to payment #}
+  <fieldset class="field" data-plan-choice>
+    <legend>Free trial, or buy a plan?</legend>
+    <div class="chips">
+      <label class="chip"><input type="radio" name="buy_mode" value="trial" {% if not form.get('plan') %}checked{% endif %}><span>Free trial</span></label>
+      <label class="chip"><input type="radio" name="buy_mode" value="buy" {% if form.get('plan') %}checked{% endif %}><span>Buy a plan</span></label>
+    </div>
+    <p class="plan-picked" data-plan-picked {% if not form.get('plan') in plan_names %}hidden{% endif %}>
+      <strong data-plan-picked-name>{% if form.get('plan') in plan_names %}{{ plan_names[form.get('plan')][0] }} · {{ plan_names[form.get('plan')][1] }}{% endif %}</strong>
+      <button type="button" class="linklike" data-plan-change>Change</button></p>
+  </fieldset>
+  <dialog class="trial-dialog plan-dialog" data-plan-dialog aria-label="Choose a plan">
+    <div class="inner">
+      <button class="dlg-close" type="button" data-plan-cancel aria-label="Close">×</button>
+      <h2>Choose a plan</h2>
+      <p class="trial-lede">One price for your whole team. Next you choose your password and pay; your app is ready the moment you pay.</p>
+      {% set std, ai = [], [] %}{% for k in plans_shown %}{% if k.endswith('_ai') %}{% set _ = ai.append(k) %}{% else %}{% set _ = std.append(k) %}{% endif %}{% endfor %}
+      {% set groups = [('', std), ('With AI', ai)] %}
+      {% for head, keys in groups if keys %}
+      {% if head and groups[0][1] %}<p class="eyebrow" style="margin:1rem 0 .4rem">{{ head }}</p>{% endif %}
+      <div class="plan-options">
+        {% for k in keys %}
+        <button type="button" class="plan-option" data-pick-plan="{{ k }}" data-plan-title="{{ plan_names[k][0] }} · {{ plan_names[k][1] }}">
+          <span class="po-name">{{ plan_names[k][0] }}</span>
+          <span class="po-price">{{ plan_names[k][1] }}</span>
+          {% if not pricing.is_monthly(k) %}<span class="po-note">about ₹{{ pricing.per_month(k, price_data)|inr(0) }} a month</span>
+          {% else %}<span class="po-note">a month · cancel any time</span>{% endif %}
+        </button>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </dialog>
+  {% endif %}
   <p class="form-error" data-error-for="form" role="alert" {% if not errors.form %}hidden{% endif %}>{{ errors.form }}</p>
   {% set buying = form.get('plan') %}
   <button class="btn btn-primary trial-submit" type="submit" data-label-trial="Start my free trial →"

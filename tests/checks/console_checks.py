@@ -626,8 +626,13 @@ with app.app_context(), db.engine.connect() as conn:
     _fresh_slug = conn.execute(text('SELECT slug FROM public.signups WHERE lead_id = :i'), {'i': fresh_id}).scalar()
 ok('…and creating it replaces the old link (no error)', _r3.status_code == 200 and 'Your app is ready' in _r3.text
    and _fresh_slug and _fresh_slug != 'gone-app')
+_n = len(_calls)
 r = anon.get(f'/start?t={_su.make_token(again_id)}&plan=1y')
-ok('…buying a plan from the website with it: they pay for the app they already have (not a new trial)',
+ok('…buying a plan from the website with it: first asked which app (named, and why: the same number), nothing charged yet',
+   'already has a QuoteRoom app' in _h.unescape(r.text) and 'shah-studio' in r.text and 'existing=1' in r.text
+   and 'Use a different number' in r.text and len(_calls) == _n)
+r = anon.get(f'/start?t={_su.make_token(again_id)}&plan=1y&existing=1')
+ok('…"Yes, pay for that app": they pay for the app they already have (not a new trial)',
    r.status_code == 200 and _calls[-1]['notes']['slug'] == 'shah-studio' and _checkout(r.text).get('order_id'))
 _sub._api = _real_api
 for k in ('PLATFORM_RAZORPAY_KEY_ID', 'PLATFORM_RAZORPAY_KEY_SECRET'):

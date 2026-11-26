@@ -92,7 +92,16 @@ def _context():
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
         ai_plans=ai_plans(), plan_names=plan_names(price_data), plan_values=pricing.prices(price_data),
         pricing=pricing, price_data=price_data, **_shown_plans(price_data),
+        refer=_refer_settings(),           # the console's Refer & earn: the Referral code box on the trial form
     )
+
+
+def _refer_settings():
+    try:
+        from . import referrals
+        return referrals.settings()
+    except Exception:
+        return None
 
 
 def _shown_plans(data):
@@ -308,8 +317,12 @@ def _validate_lead(form):
         errors['business_type'] = 'Please choose your type of business.'
     elif btype == 'other' and len(other) < 2:
         errors['business_other'] = 'Please tell us what your business does.'
+    from . import referrals
+    ref = (form.get('ref_code') or '').strip()
+    if ref and not referrals.clean_code(ref):
+        errors['ref_code'] = 'Check the referral code (like QR2345), or leave it empty.'
     return dict(name=name, company_name=company, city=city, email=email or None, phone=phone, business_type=btype,
-                business_other=other if btype == 'other' else None), errors
+                business_other=other if btype == 'other' else None, ref_code=referrals.clean_code(ref)), errors
 
 
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$')
@@ -389,6 +402,7 @@ def free_trial():
     if not marketing_enabled():
         abort(404)
     form = {k: request.args.get(k, '')[:60] for k in ('utm_source', 'utm_campaign')}
+    form['ref_code'] = (request.args.get('ref') or '')[:12].upper()
     form['page'] = '/free-trial'
     ctx = _context()
     form['plan'] = request.args.get('plan') if _plan_ok(request.args.get('plan'), ctx) else ''
@@ -513,6 +527,10 @@ def trial_request():
                 if lead_has(col):
                     values[col] = data[col]
             lead_id = db.session.execute(Lead.__table__.insert().values(**values)).inserted_primary_key[0]
+        if data.get('ref_code') and lead_id:      # Refer & earn: the console reads it when the app is set up
+            from .models import AppSetting
+            from .referrals import LEAD_REF_KEY
+            AppSetting.set(LEAD_REF_KEY.format(lead_id), data['ref_code'])
         Lead.query.filter(Lead.created_at < now - timedelta(days=KEEP_LEADS_DAYS)).delete()
         db.session.commit()
     from . import signup

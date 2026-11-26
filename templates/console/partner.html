@@ -1,0 +1,122 @@
+{% extends "console/_layout.html" %}
+{% block title %}{{ p.business or p.slug }} · Refer & earn{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('console.partners_page') }}">← Refer &amp; earn</a></p>
+<h1>{{ p.business or p.slug }} <span class="badge {{ 'b-active' if p.status == 'approved' else 'b-other' }}">{{ STATUSES[p.status] }}</span></h1>
+<p class="muted small"><span class="mono">{{ p.slug }}</span> · {{ p.name }} · {{ p.city }} · <span class="mono">{{ p.phone }}</span>{% if p.email %} · {{ p.email }}{% endif %}
+  · applied {{ p.applied_at.strftime('%d %b %Y') }}{% if p.decided_at %} · decided {{ p.decided_at.strftime('%d %b %Y') }}{% endif %}
+  · own plan {{ 'active' if active else 'NOT active' }}{% if not eligible[0] %} · <span class="badge b-due">{{ eligible[1] }}</span>{% endif %}</p>
+{% if p.note %}<p class="small">Note they see: {{ p.note }}</p>{% endif %}
+
+<div class="card">
+  {% if p.status == 'approved' %}
+  <p>Code <span class="secret">{{ p.code }}</span> · {{ pct|round(1)|replace('.0', '') }}% for {{ (months ~ ' months') if months else 'no limit' }} from each business's first payment · link <span class="mono small">{{ link }}</span></p>
+  {% endif %}
+  <div class="item-actions">
+    {% if p.status in ('applied', 'rejected') %}
+    <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='approve') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="code" value="{{ p.code or '' }}" placeholder="Code (blank: QR####)" style="width:150px" aria-label="Code">
+      <input name="pct" value="{{ p.pct if p.pct is not none else '' }}" placeholder="{{ rules.pct|round(1)|replace('.0', '') }}% (default)" style="width:120px" aria-label="Their %">
+      <input name="months" value="{{ p.earn_months if p.earn_months is not none else '' }}" placeholder="{{ rules.earn_months }} months (default)" style="width:150px" aria-label="Months they earn from each business (0 = no limit)" title="Months they earn from each business they refer, from its first payment (0 = no limit)">
+      <button class="btn btn-sm btn-primary" type="submit">Approve</button>
+    </form>
+    {% endif %}
+    {% if p.status == 'applied' %}
+    <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='reject') }}" onsubmit="return confirm('Not approve?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="note" placeholder="Note they see (optional)" style="width:220px" aria-label="Note">
+      <button class="btn btn-sm btn-danger" type="submit">Don't approve</button>
+    </form>
+    {% endif %}
+    {% if p.status == 'approved' %}
+    <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='update') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="code" value="{{ p.code }}" style="width:120px" aria-label="Code">
+      <input name="pct" value="{{ p.pct if p.pct is not none else '' }}" placeholder="{{ rules.pct|round(1)|replace('.0', '') }}% (default)" style="width:120px" aria-label="Their %">
+      <input name="months" value="{{ p.earn_months if p.earn_months is not none else '' }}" placeholder="{{ rules.earn_months }} months (default)" style="width:150px" aria-label="Months they earn from each business (0 = no limit)" title="Months they earn from each business they refer, from its first payment (0 = no limit)">
+      <button class="btn btn-sm" type="submit">Save code / % / months</button>
+    </form>
+    <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='stop') }}" onsubmit="return confirm('Stop this partner? Their code stops taking sign-ups and their referrals\'s payments stop counting.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="note" placeholder="Reason they see (optional)" style="width:200px" aria-label="Reason">
+      <button class="btn btn-sm btn-danger" type="submit">Stop</button>
+    </form>
+    {% elif p.status == 'stopped' %}
+    <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='restart') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Start again</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<h2 id="pay">Pay to</h2>
+<div class="card small">
+  {% if payout %}
+  {% if payout.upi %}<div>UPI: <span class="mono">{{ payout.upi }}</span></div>{% endif %}
+  {% if payout.account_number %}<div>Bank: {{ payout.bank_name }} · {{ payout.account_name }} · <span class="mono">{{ payout.account_number }}</span> · IFSC <span class="mono">{{ payout.ifsc }}</span></div>{% endif %}
+  <div>PAN: <span class="mono">{{ payout.pan }}</span></div>
+  {% else %}<span class="muted">No payout details (or they can't be opened: CONSOLE_VAULT_KEY / DATA_ENCRYPTION_KEY differ from the app's).</span>{% endif %}
+</div>
+
+<h2>Money</h2>
+<div class="card">
+  <p>Earned <strong>₹{{ (totals.earned / 100)|inr(0) }}</strong> · paid <strong>₹{{ (totals.paid / 100)|inr(0) }}</strong> ·
+    owed <strong>₹{{ (totals.balance / 100)|inr(0) }}</strong> (this month ₹{{ (totals.this_month / 100)|inr(0) }})</p>
+  <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='paid') }}" class="row"
+        onsubmit="return confirm('Record ₹' + this.amount.value + ' paid?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="small">Amount paid (₹)<input name="amount" value="{{ '%.0f'|format(totals.balance / 100) if totals.balance > 0 else '' }}" style="width:110px"></label>
+    <label class="small">Paid on<input type="date" name="paid_on" value="{{ today }}"></label>
+    <label class="small grow">UTR / reference<input name="reference"></label>
+    <label class="small grow">Note (e.g. TDS deducted)<input name="note"></label>
+    <button class="btn btn-primary btn-sm" type="submit">Record payout</button>
+  </form>
+  {% if payouts %}
+  <table style="margin-top:12px"><thead><tr><th>Paid on</th><th>Amount</th><th>Reference</th><th>Note</th><th></th></tr></thead>
+    <tbody>{% for po in payouts %}
+      <tr><td>{{ po.paid_on.strftime('%d %b %Y') }}</td><td>₹{{ (po.amount_paise / 100)|inr(0) }}</td><td class="mono small">{{ po.reference }}</td><td class="small">{{ po.note or '' }}</td>
+        <td><form method="post" action="{{ url_for('console.partner_payout_delete', payout_id=po.id) }}" onsubmit="return confirm('Remove this payout (recorded by mistake)?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partner_detail', slug=p.slug) }}">
+          <button class="btn btn-sm btn-danger" type="submit">Remove</button></form></td></tr>
+    {% endfor %}</tbody></table>
+  {% endif %}
+</div>
+
+<h2>Businesses referred ({{ refs|length }})</h2>
+{% if p.status == 'approved' %}
+<form method="post" action="{{ url_for('console.partner_link', slug=p.slug) }}" class="row" style="margin-bottom:10px"
+      onsubmit="return confirm('Link ' + this.business_slug.value + ' to {{ p.business or p.slug }}? Its payments will count for them.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="small grow">Add a business they referred (its app name, e.g. ravi-kitchens)<input name="business_slug" required></label>
+  <label class="small grow">Business name (as they'll see it)<input name="business"></label>
+  <button class="btn btn-sm" type="submit">Link to this partner</button>
+</form>
+<p class="muted small">For a business that forgot the code, or whose code didn't count (Activity shows why: <em>referral_not_applied</em>).</p>
+{% endif %}
+{% if refs %}
+<div class="card"><table><thead><tr><th>Business</th><th>App</th><th>Joined</th><th>Now</th></tr></thead>
+  <tbody>{% for r in refs %}<tr><td>{{ r.business }}</td><td class="mono small">{{ r.slug }}</td><td>{{ r.created_at.strftime('%d %b %Y') }}</td><td>{{ r.state }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% else %}<p class="muted small">None yet.</p>{% endif %}
+
+<h2>Payments by their referrals</h2>
+{% if earnings %}
+<div class="card"><table><thead><tr><th>Paid</th><th>Business</th><th>Amount</th><th>%</th><th>Earns</th><th>Status</th><th></th></tr></thead>
+  <tbody>{% for e in earnings %}
+    <tr><td>{{ e.paid_at.strftime('%d %b %Y') if e.paid_at else '' }}</td><td>{{ e.business or e.slug }}</td><td>₹{{ (e.amount_paise / 100)|inr(0) }}</td>
+      <td>{{ e.pct|round(1)|replace('.0', '') }}</td><td>₹{{ (e.earned_paise / 100)|inr(0) }}</td>
+      <td class="small">{{ EARNING[e.status] }}{% if e.reason %}<div class="muted">{{ e.reason }}</div>{% endif %}</td>
+      <td>{% if e.status == 'earned' %}
+        <form method="post" action="{{ url_for('console.partner_earning', earning_id=e.id, action='exclude') }}" class="row" style="gap:6px"
+              onsubmit="return confirm('Leave this payment out? The partner sees the reason.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partner_detail', slug=p.slug) }}">
+          <input name="reason" placeholder="Reason they see" style="width:160px" aria-label="Reason"><button class="btn btn-sm btn-danger" type="submit">Leave out</button></form>
+        {% elif e.status == 'excluded' %}
+        <form method="post" action="{{ url_for('console.partner_earning', earning_id=e.id, action='include') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partner_detail', slug=p.slug) }}">
+          <button class="btn btn-sm" type="submit">Count again</button></form>{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="muted small">No payments yet.</p>{% endif %}
+{% endblock %}

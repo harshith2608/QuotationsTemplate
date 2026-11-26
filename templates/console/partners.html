@@ -1,0 +1,108 @@
+{% extends "console/_layout.html" %}
+{% block title %}Refer & earn{% endblock %}
+{% block content %}
+<h1>Refer &amp; earn</h1>
+<p class="muted small">Paying businesses apply from <em>Admin → Refer &amp; earn</em> in their app. Approve them here: they get
+  a code (QR + 4 digits) and a sign-up link; businesses that sign up with it get a longer trial, and the partner earns a
+  share of what those businesses pay. Pay partners at the end of each month and mark it paid below.</p>
+
+{% set applied = partners|selectattr('status', 'equalto', 'applied')|list %}
+<h2 id="applications">Applications ({{ applied|length }})</h2>
+{% if applied %}
+<div class="list">
+  {% for p in applied %}{% set ok_, why = eligibility[p.slug] %}
+  <div class="item">
+    <div class="item-head"><strong>{{ p.business or p.slug }}</strong>
+      <span class="muted small">{{ p.name }} · {{ p.city }} · <span class="mono">{{ p.phone }}</span>{% if p.email %} · {{ p.email }}{% endif %}</span>
+      <a class="small" href="{{ url_for('console.partner_detail', slug=p.slug) }}">{{ p.slug }} →</a></div>
+    <div class="small muted">Applied {{ p.applied_at.strftime('%d %b %Y') }}.
+      {% if ok_ %}<span class="badge b-active">Eligible</span>{% else %}<span class="badge b-due">Not eligible now</span> {{ why }}{% endif %}</div>
+    <div class="item-actions">
+      <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='approve') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partners_page') }}">
+        <input name="code" placeholder="Code (blank: QR####)" style="width:150px" aria-label="Code">
+        <input name="pct" placeholder="{{ rules.pct|round(1)|replace('.0', '') }}% (default)" style="width:120px" aria-label="Their %">
+        <input name="months" value="" placeholder="{{ rules.earn_months }} months (default)" style="width:150px" aria-label="Months they earn from each business (0 = no limit)" title="Months they earn from each business they refer, from its first payment (0 = no limit)">
+        <button class="btn btn-sm btn-primary" type="submit">Approve</button>
+      </form>
+      <form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='reject') }}" onsubmit="return confirm('Not approve {{ p.business or p.slug }}?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partners_page') }}">
+        <input name="note" placeholder="Note they see (optional)" style="width:220px" aria-label="Note">
+        <button class="btn btn-sm btn-danger" type="submit">Don't approve</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}<p class="muted small">No applications waiting.</p>{% endif %}
+
+<h2 id="due">Payouts due ({{ due|length }})</h2>
+{% if due %}
+<div class="card"><table>
+  <thead><tr><th>Partner</th><th>Owed</th><th>Pay to</th><th></th></tr></thead>
+  <tbody>{% for p, t in due %}
+    <tr><td><a href="{{ url_for('console.partner_detail', slug=p.slug) }}">{{ p.business or p.slug }}</a> <span class="mono small">{{ p.code }}</span></td>
+      <td><strong>₹{{ (t.balance / 100)|inr(0) }}</strong></td>
+      <td class="small"><a href="{{ url_for('console.partner_detail', slug=p.slug) }}#pay">UPI / bank details →</a></td>
+      <td><form method="post" action="{{ url_for('console.partner_action', slug=p.slug, action='paid') }}" class="row" style="gap:6px"
+                onsubmit="return confirm('Record ₹' + this.amount.value + ' paid to {{ p.business or p.slug }}?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('console.partners_page') }}#due">
+        <input name="amount" value="{{ '%.0f'|format(t.balance / 100) }}" style="width:100px" aria-label="Amount paid">
+        <input name="reference" placeholder="UTR / reference" style="width:150px" aria-label="Reference">
+        <button class="btn btn-sm btn-primary" type="submit">Mark paid</button></form></td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="muted small">Nobody is owed ₹{{ rules.payout_min|inr(0) }} or more right now.</p>{% endif %}
+
+{% set others = partners|rejectattr('status', 'equalto', 'applied')|list %}
+<h2 id="list">Partners ({{ others|length }})</h2>
+{% if others %}
+<div class="card"><table>
+  <thead><tr><th>Partner</th><th>Code</th><th>%</th><th>Months</th><th>Referred</th><th>Earned</th><th>Paid</th><th>Owed</th><th>Status</th></tr></thead>
+  <tbody>{% for p in others %}{% set t = totals.get(p.slug, {}) %}
+    <tr><td><a href="{{ url_for('console.partner_detail', slug=p.slug) }}">{{ p.business or p.slug }}</a><div class="muted small">{{ p.slug }}</div></td>
+      <td class="mono">{{ p.code or '—' }}</td><td>{{ pct_of(p)|round(1)|replace('.0', '') }}</td><td>{{ months_of(p) or 'no limit' }}</td><td>{{ counts.get(p.slug, 0) }}</td>
+      <td>₹{{ ((t.earned or 0) / 100)|inr(0) }}</td><td>₹{{ ((t.paid or 0) / 100)|inr(0) }}</td><td>₹{{ ((t.balance or 0) / 100)|inr(0) }}</td>
+      <td><span class="badge {{ 'b-active' if p.status == 'approved' else 'b-other' }}">{{ STATUSES[p.status] }}</span></td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="muted small">No partners yet.</p>{% endif %}
+
+<h2 id="waivers">Let a business apply early</h2>
+<div class="card">
+  <p class="muted small">Skip the {{ rules.min_months }} month{{ 's' if rules.min_months != 1 }} on a paid plan for one business
+    (it still needs an active paid plan). Its Refer &amp; earn page then shows the application form; you still approve it.</p>
+  <form method="post" action="{{ url_for('console.partner_waiver') }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="on" value="1">
+    <label class="small grow">App name (web address, e.g. sharma-interiors)<input name="slug" required></label>
+    <button class="btn btn-primary btn-sm" type="submit">Let it apply now</button>
+  </form>
+  {% if waivers %}
+  <table style="margin-top:10px"><tbody>{% for w in waivers %}
+    <tr><td class="mono">{{ w.slug }}</td><td class="muted small">since {{ w.created_at.strftime('%d %b %Y') }}</td>
+      <td><form method="post" action="{{ url_for('console.partner_waiver') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="slug" value="{{ w.slug }}">
+        <button class="btn btn-sm btn-danger" type="submit">Remove</button></form></td></tr>
+  {% endfor %}</tbody></table>
+  {% endif %}
+</div>
+
+<h2 id="rules">Rules</h2>
+<form method="post" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="small"><input type="checkbox" name="on" value="1" {{ 'checked' if rules.on }}> <strong>Refer &amp; earn is on</strong>
+    (the Refer &amp; earn page in every app, and the Referral code box on the website's trial form)</label>
+  <div class="row" style="margin-top:12px">
+    <label class="small grow">Default share (%)<input name="pct" value="{{ rules.pct|round(2)|replace('.0', '') }}"></label>
+    <label class="small grow">Months a partner earns from each business, from its first payment (0 = no limit)<input name="earn_months" value="{{ rules.earn_months }}"></label>
+    <label class="small grow">Months on a paid plan before they can apply<input name="min_months" value="{{ rules.min_months }}"></label>
+    <label class="small grow">Smallest payout (₹)<input name="payout_min" value="{{ rules.payout_min }}"></label>
+    <label class="small grow">Free trial days with a code<input name="trial_days" value="{{ rules.trial_days }}"></label>
+  </div>
+  <label class="small" style="display:block;margin-top:10px"><input type="checkbox" name="before_gst" value="1" {{ 'checked' if rules.before_gst }}>
+    Work out the share on the amount <strong>before GST</strong> (for when you start charging GST; today no GST is charged, so this changes nothing yet)</label>
+  <p class="muted small">A partner's own % and months (set when approving, or on their page) replace these defaults. A change counts for payments from now on;
+    ones already recorded keep their amount.</p>
+  <button class="btn btn-primary" type="submit">Save rules</button>
+</form>
+{% endblock %}

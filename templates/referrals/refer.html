@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block content %}
+{% set terms_url = refer_site ~ '/terms#refer-earn' %}
+<div class="mt-3 mb-3">
+  <h4 class="mb-1 fw-bold ki-page-title"><i class="bi bi-gift me-2 text-primary"></i>Refer &amp; earn</h4>
+  <p class="text-muted small mb-0">Recommend {{ product_name }} to other businesses and earn {{ earning[0] }} of what they pay, {{ earning[1].replace('its', 'their').replace('it keeps', 'they keep') }}.</p>
+</div>
+
+{% if partner and partner.status == 'approved' %}
+{# ── An approved partner ── #}
+{% if not active %}
+<div class="alert alert-warning small"><i class="bi bi-pause-circle me-1"></i><strong>Earning is paused:</strong> your own plan
+  isn't active. Payments your referrals make while it's paused don't count, and your code doesn't take new sign-ups.
+  <a href="{{ url_for('plan.plan_page') }}">Renew your plan</a> to start again.</div>
+{% endif %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header ki-card-header"><i class="bi bi-ticket-perforated me-2"></i>Your code and link</div>
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="fs-3 fw-bold font-monospace" id="referCode">{{ partner.code }}</span>
+          <button class="btn btn-sm btn-outline-secondary" type="button" onclick="copyText('{{ partner.code }}', this)"><i class="bi bi-clipboard me-1"></i>Copy code</button>
+        </div>
+        <label class="form-label small text-muted mb-1" for="referLink">Sign-up link (your code is filled in)</label>
+        <div class="input-group input-group-sm mb-2">
+          <input class="form-control font-monospace" id="referLink" value="{{ link }}" readonly>
+          <button class="btn btn-outline-secondary" type="button" onclick="copyText('{{ link }}', this)"><i class="bi bi-clipboard"></i></button>
+        </div>
+        {% set msg = 'I use ' ~ product_name ~ ' to make my quotations and it saves me a lot of time. Try it free for ' ~ rules.trial_days ~ ' days with my code ' ~ partner.code ~ ': ' ~ link %}
+        <a class="btn btn-sm btn-success" target="_blank" rel="noopener" href="https://wa.me/?text={{ msg|urlencode }}"><i class="bi bi-whatsapp me-1"></i>Share on WhatsApp</a>
+        <p class="small text-muted mt-3 mb-0">Businesses that sign up with your code get a <strong>{{ rules.trial_days }}-day free trial</strong>
+          (instead of 7). They can also type <strong>{{ partner.code }}</strong> in the Referral code box on the free trial form.
+          You earn only when they buy a paid plan, not for the trial.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header ki-card-header"><i class="bi bi-wallet2 me-2"></i>Your earnings</div>
+      <div class="card-body">
+        <div class="row text-center g-2">
+          <div class="col-4"><div class="small text-muted">This month</div><div class="fs-5 fw-bold">&#8377;{{ (totals.this_month / 100)|inr(0) }}</div></div>
+          <div class="col-4"><div class="small text-muted">To be paid</div><div class="fs-5 fw-bold text-success" id="referBalance">&#8377;{{ (totals.balance / 100)|inr(0) }}</div></div>
+          <div class="col-4"><div class="small text-muted">Paid so far</div><div class="fs-5 fw-bold">&#8377;{{ (totals.paid / 100)|inr(0) }}</div></div>
+        </div>
+        <p class="small text-muted mt-3 mb-0">For each business you refer, you earn <strong>{{ earning[0] }}</strong> of every payment it makes,
+          <strong>{{ earning[1] }}</strong>, while your own plan is active. We pay at the end of each month once you're owed at least <strong>&#8377;{{ rules.payout_min|inr(0) }}</strong>;
+          less than that carries over. <a href="{{ terms_url }}" target="_blank" rel="noopener">Refer &amp; earn terms</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-people me-2"></i>Businesses you referred ({{ refs|length }})</div>
+  <div class="card-body">
+    {% if refs %}
+    <div class="table-responsive"><table class="table table-sm align-middle small mb-0">
+      <thead class="table-light"><tr><th>Business</th><th>Joined</th><th>Status</th></tr></thead>
+      <tbody>{% for r in refs %}
+        <tr><td>{{ r.business or 'A business' }}</td><td>{{ r.created_at.strftime('%d %b %Y') }}</td>
+          <td>{% if r.state == 'paying' %}<span class="badge bg-success">Paying</span>{% elif r.state == 'trial' %}<span class="badge bg-info text-dark">On free trial</span>
+              {% elif r.state == 'ended' %}<span class="badge bg-secondary">Plan ended</span>{% else %}<span class="badge bg-light text-muted border">Trial ended</span>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <p class="small text-muted mb-0">No sign-ups with your code yet. Share your link with businesses you know.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if earnings %}
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-cash-coin me-2"></i>Payments that earned you</div>
+  <div class="card-body">
+    <div class="table-responsive"><table class="table table-sm align-middle small mb-0">
+      <thead class="table-light"><tr><th>Date</th><th>Business</th><th class="text-end">They paid</th><th class="text-end">You earn</th><th></th></tr></thead>
+      <tbody>{% for e in earnings %}
+        <tr class="{{ 'text-muted' if e.status != 'earned' }}">
+          <td>{{ e.paid_at.strftime('%d %b %Y') if e.paid_at else '' }}</td><td>{{ e.business or 'A business' }}</td>
+          <td class="text-end">&#8377;{{ (e.amount_paise / 100)|inr(0) }}</td>
+          <td class="text-end fw-semibold">{% if e.status == 'earned' %}&#8377;{{ (e.earned_paise / 100)|inr(0) }}{% else %}—{% endif %}</td>
+          <td>{% if e.status != 'earned' %}<span class="badge bg-light text-muted border" title="{{ e.reason or '' }}">{{ EARNING[e.status] }}</span>
+              {% if e.reason %}<div class="small">{{ e.reason }}</div>{% endif %}{% endif %}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm border-0 mb-3" id="payout">
+  <div class="card-header ki-card-header"><i class="bi bi-bank me-2"></i>Payouts</div>
+  <div class="card-body">
+    {% if payouts %}
+    <div class="table-responsive"><table class="table table-sm align-middle small">
+      <thead class="table-light"><tr><th>Paid on</th><th class="text-end">Amount</th><th>Reference</th></tr></thead>
+      <tbody>{% for p in payouts %}<tr><td>{{ p.paid_on.strftime('%d %b %Y') }}</td><td class="text-end">&#8377;{{ (p.amount_paise / 100)|inr(0) }}</td><td>{{ p.reference }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    <p class="small text-muted">Where we pay you. PAN is needed for payouts (tax may be deducted as the law requires).</p>
+    <form method="post" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="payout">
+      {% set f = form or payout %}
+      {% for key, label, ph in [('upi', 'UPI ID', 'name@okbank'), ('pan', 'PAN', 'ABCDE1234F'), ('bank_name', 'Bank', ''), ('account_name', 'Account holder', ''),
+                                ('account_number', 'Account number', ''), ('ifsc', 'IFSC', 'HDFC0001234')] %}
+      <div class="col-sm-6"><label class="form-label small mb-1" for="po_{{ key }}">{{ label }}</label>
+        <input class="form-control form-control-sm{{ ' is-invalid' if errors.get(key) }}" id="po_{{ key }}" name="{{ key }}" value="{{ f.get(key, '') }}" placeholder="{{ ph }}" autocomplete="off">
+        {% if errors.get(key) %}<div class="invalid-feedback">{{ errors[key] }}</div>{% endif %}</div>
+      {% endfor %}
+      <div class="col-12 text-end"><button class="btn btn-sm btn-primary ki-btn-primary" type="submit"><i class="bi bi-check-circle me-1"></i>Save payout details</button></div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+{# ── Not a partner yet: how it works, then the application ── #}
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-info-circle me-2"></i>How it works</div>
+  <div class="card-body small">
+    <ol class="mb-2">
+      <li>Apply below. <strong>We review every application, and you can start only once it's approved.</strong></li>
+      <li>Once approved, you get your own code (like <span class="font-monospace">QR2345</span>) and a sign-up link to share.</li>
+      <li>Businesses that sign up with your code get a {{ rules.trial_days }}-day free trial. <strong>The trial earns nothing:</strong> you earn only once they buy a paid plan.</li>
+      <li>For each business you refer, you earn <strong>{{ earning[0] }}</strong> of every payment it makes, <strong>{{ earning[1] }}</strong>, while your own plan is active.</li>
+      <li>We pay at the end of each month once you're owed at least &#8377;{{ rules.payout_min|inr(0) }}; less carries over to the next month.</li>
+    </ol>
+    <p class="mb-0 text-muted">Open to businesses on a paid plan for at least {{ rules.min_months }} month{{ 's' if rules.min_months != 1 }}.
+      We may leave out any payment if we find misuse. <a href="{{ terms_url }}" target="_blank" rel="noopener">Refer &amp; earn terms</a></p>
+  </div>
+</div>
+
+{% if partner and partner.status == 'applied' and not show_form %}
+<div class="alert alert-info"><i class="bi bi-hourglass-split me-1"></i><strong>Application received</strong> on
+  {{ partner.applied_at.strftime('%d %b %Y') }}. We're reviewing it and will let you know. You can start referring once it's approved.</div>
+{% elif partner and partner.status in ('rejected', 'stopped') %}
+<div class="alert alert-secondary small"><strong>{{ STATUSES[partner.status] }}.</strong>{% if partner.note %} {{ partner.note }}{% endif %}
+  {% if can_apply %} You can apply again below.{% endif %}</div>
+{% endif %}
+
+{% if not can_apply and not (partner and partner.status == 'applied') %}
+<div class="alert alert-light border small"><i class="bi bi-lock me-1"></i>{{ why_not }}</div>
+{% endif %}
+
+{% if show_form %}
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header ki-card-header"><i class="bi bi-pencil-square me-2"></i>Apply</div>
+  <div class="card-body">
+    <form method="post" class="row g-2" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="apply">
+      {% for key, label, ph, req in [('name', 'Your name', '', true), ('phone', 'Mobile (WhatsApp)', '', true), ('business', 'Business name', '', true),
+                                     ('city', 'City', '', true), ('email', 'Email', '', false), ('upi', 'UPI ID (for payouts)', 'name@okbank', false),
+                                     ('pan', 'PAN', 'ABCDE1234F', true), ('bank_name', 'Bank (or use UPI)', '', false), ('account_name', 'Account holder', '', false),
+                                     ('account_number', 'Account number', '', false), ('ifsc', 'IFSC', 'HDFC0001234', false)] %}
+      <div class="col-sm-6"><label class="form-label small mb-1" for="ap_{{ key }}">{{ label }}{% if req %} <span class="text-danger">*</span>{% endif %}</label>
+        <input class="form-control form-control-sm{{ ' is-invalid' if errors.get(key) }}" id="ap_{{ key }}" name="{{ key }}" value="{{ form.get(key, '') }}" placeholder="{{ ph }}" autocomplete="off">
+        {% if errors.get(key) %}<div class="invalid-feedback">{{ errors[key] }}</div>{% endif %}</div>
+      {% endfor %}
+      <div class="col-12">
+        <div class="form-check"><input class="form-check-input{{ ' is-invalid' if errors.get('agree') }}" type="checkbox" name="agree" value="1" id="ap_agree">
+          <label class="form-check-label small" for="ap_agree">I've read the <a href="{{ terms_url }}" target="_blank" rel="noopener">Refer &amp; earn terms</a>,
+            including that I can start only once approved and that a payment may be left out if misuse is found.</label>
+          {% if errors.get('agree') %}<div class="invalid-feedback">{{ errors.agree }}</div>{% endif %}</div>
+      </div>
+      <div class="col-12 text-end"><button class="btn btn-primary ki-btn-primary" type="submit"><i class="bi bi-send me-1"></i>Send application</button></div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

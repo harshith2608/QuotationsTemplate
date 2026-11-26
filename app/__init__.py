@@ -145,6 +145,8 @@ def create_app(config_name='default'):
     app.register_blueprint(welcome_bp)
     from .help_bp import help_bp
     app.register_blueprint(help_bp)
+    from .referrals_bp import referrals_bp
+    app.register_blueprint(referrals_bp)
     app.before_request(block_demo_writes)
     from .demo import count_demo_use, count_site_visit
     app.after_request(count_demo_use)
@@ -272,7 +274,17 @@ def create_app(config_name='default'):
         return {'biz': business.profile(), 'help_card': help_card, 'call_url': call_url(), 'demo_guide': demo_guide, 'ai_import_on': ai_import_on, 'material_list_on': material_list_on, 'now': datetime.utcnow(), 'unread_notifications_count': unread_count, 'units': units,
                 'setup_banner': setup_banner, 'welcome_bar': welcome_bar,
                 'companies_on': _companies_on(current_user), 'no_rates': g.get('no_rates', False), 'hide_unit_rates': _hide_unit_rates(), 'nos_on_rate': __import__('app.boq', fromlist=['nos_on_rate']).nos_on_rate(), 'brand': get_brand(), 'app_brand': g.get('app_brand') or get_brand(), 'catalog': catalog, 'demo_mode': demo_enabled(),
-                'marketing_mode': marketing_enabled(), **_plan_context(current_user)}
+                'marketing_mode': marketing_enabled(), 'refer_on': _refer_on(current_user), **_plan_context(current_user)}
+
+    def _refer_on(user):
+        """Admin → Refer & earn: the shared app, switched on in the console (admins)."""
+        if not (getattr(user, 'is_authenticated', False) and user.is_admin):
+            return False
+        try:
+            from . import referrals
+            return referrals.available()
+        except Exception:
+            return False
 
     def _hide_unit_rates():
         """Settings → Pricing → Hide rates while making quotations (app/rate_access.py), for signed-in pages."""
