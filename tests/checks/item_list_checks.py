@@ -393,6 +393,10 @@ with app.app_context():
     _who, _by = _p.customer_name, _p.creator.display_name
 ok('…and who it\'s for, who prepared it and its date (no Valid until: Validity empty)', 'PREPARED FOR' in first
    and _who in first and 'PREPARED BY' in first and _by in first and 'DATE' in first and 'VALID UNTIL' not in first)
+with app.app_context():
+    from app import quote_numbers as _QN
+    _no = _QN.for_pdf(db.session.get(Project, pid))
+ok(f'…and its quotation number ({_no})', bool(_no) and 'QUOTATION NO' in first and _no in first)
 c.post('/admin/settings', data={'section': 'documents', 'quote_valid_days': '30'})
 with app.app_context():
     from app import layout as _lay

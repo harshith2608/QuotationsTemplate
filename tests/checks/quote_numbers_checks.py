@@ -76,3 +76,22 @@ ok('a new quotation gets the next number in that format', n4[newer_id] != n4[new
 c.post('/admin/settings', data={'section': 'documents', 'quote_number_format': '{YYYY}{MM}{DD}{NN}', 'quote_number_start': '1'})
 with app.app_context():
     ok('back to the default: date + count again', QN.assign()[ids[1]] == '2026111801')
+
+# On the PDF: "Quotation No: 2026111801/Rev2" beside the date; the Settings tick takes it off again
+import io, re as _re
+from pypdf import PdfReader
+pdftext = lambda u: _re.sub(r'\s+', ' ', ' '.join(pg.extract_text() for pg in PdfReader(io.BytesIO(c.get(u).data)).pages))
+with app.app_context():
+    want = QN.for_pdf(db.session.get(Project, ids[1]))
+t = pdftext(f'/projects/{ids[1]}/pdf/customer')
+ok(f'the customer PDF prints "Quotation No: {want}"', want.startswith('2026111801/Rev') and f'Quotation No: {want}' in t)
+ok('…the internal PDF too', f'Quotation No: {want}' in pdftext(f'/projects/{ids[1]}/pdf'))
+with app.app_context():
+    from app import layout
+    ok('{quotation_no} in the PDF sections is the same number', layout.variables(db.session.get(Project, ids[1]))['quotation_no'] == want)
+ok('Settings has the tick, on by default', 'name="quote_number_on_pdf" value="1" checked' in c.get('/admin/settings?tab=documents').text)
+c.post('/admin/settings', data={'section': 'documents', 'quote_number_format': '{YYYY}{MM}{DD}{NN}', 'quote_number_start': '1',
+                                'quote_number_on_pdf_shown': '1'})
+ok('…untick it: the PDF has no number again', 'Quotation No' not in pdftext(f'/projects/{ids[1]}/pdf/customer'))
+c.post('/admin/settings', data={'section': 'documents', 'quote_number_format': '{YYYY}{MM}{DD}{NN}', 'quote_number_start': '1',
+                                'quote_number_on_pdf_shown': '1', 'quote_number_on_pdf': '1'})

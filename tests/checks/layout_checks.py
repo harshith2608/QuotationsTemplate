@@ -107,9 +107,12 @@ c.post('/admin/settings', data={'section': 'documents', 'initial_layout': 'rooms
        'material_specs': '{plywood_details} for all the carcass and shutters\nMaterials: {materials}\nPrepared for {customer} by {company}, quotation #{quotation_no}\nKeep {this} as typed',
        'terms_conditions': 'GST extra as applicable'})
 cust = pdftext(f'/projects/{pid}/pdf/customer')
+with app.app_context():
+    from app import quote_numbers as _QN
+    qno = _QN.for_pdf(db.session.get(Project, pid))
 ok('placeholders filled: plywood details, materials, customer, company, quotation no.',
    '12 Years Brand warranty Century Sainik 710 grade BWP ply of 16mm thickness for all the carcass and shutters' in cust
-   and 'Laminates – Box Work' in cust and f'Prepared for Layout Test by Demo Interiors, quotation #{pid}' in cust)
+   and 'Laminates – Box Work' in cust and f'Prepared for Layout Test by Demo Interiors, quotation #{qno}' in cust)
 ok('unknown {words} are left as typed', 'Keep {this} as typed' in cust)
 ok('the Full Quotation fills them too', '16mm thickness for all the carcass' in pdftext(f'/projects/{pid}/pdf'))
 t = c.get('/admin/settings?tab=documents').text

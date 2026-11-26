@@ -100,12 +100,16 @@ def gallery_shown(project):
 
 
 def details(project):
-    """[(label, value)] for the cover: who it's for, who made it, its date and (Settings → Quotation PDFs → Validity)
+    """[(label, value)] for the cover: who it's for, its number (QT-016/Rev5, unless the business keeps it off the PDF),
+    who made it, its date and (Settings → Quotation PDFs → Validity)
     how long it's valid; Valid until left out when that's empty."""
     from datetime import timedelta
     from . import layout
     dated = project.created_at
+    from . import quote_numbers
+    number = quote_numbers.for_pdf(project) if quote_numbers.on_pdf() else ''
     rows = [('Prepared for', project.customer_name or ''),
+            ('Quotation No', number),
             ('Prepared by', project.creator.display_name if project.creator else ''),
             ('Date', (dated + timedelta(hours=5, minutes=30)).strftime('%d %B %Y') if dated else '')]
     until = layout.valid_until(dated)

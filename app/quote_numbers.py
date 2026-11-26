@@ -19,6 +19,7 @@ import re
 from datetime import timedelta
 
 KEY, FORMAT_KEY, START_KEY = 'quote_numbers', 'quote_number_format', 'quote_number_start'
+ON_PDF_KEY = 'quote_number_on_pdf'                # '0': keep the number off the PDF (default: printed)
 DEFAULT = '{YYYY}{MM}{DD}{NN}'
 PRESETS = [(DEFAULT, 'Date + that day\'s count'), ('QT-{NNN}', 'Running number'),
            ('QT/{FY}/{NNN}', 'Financial year + count'), ('Q{YY}{MM}-{NNN}', 'Month + count')]
@@ -187,3 +188,27 @@ def labels(projects):
     nums = assign()
     revs = revisions([p.id for p in projects if p.status != 'draft'])
     return {p.id: label(nums.get(p.id), revs.get(p.id)) for p in projects if p.status != 'draft' and nums.get(p.id)}
+
+
+def on_pdf():
+    """Print the quotation's number (with its revision) on the PDF? On unless the business turned it off."""
+    from .models import AppSetting
+    return AppSetting.get(ON_PDF_KEY, '1') != '0'
+
+
+def set_on_pdf(on):
+    from .models import AppSetting
+    AppSetting.set(ON_PDF_KEY, '1' if on else '0')
+
+
+def for_pdf(project, revision=None):
+    """'QT-016/Rev5' for this quotation's PDF (revision: an earlier one's number), '' for a draft or when it's off."""
+    if project is None or getattr(project, 'status', '') == 'draft' or not getattr(project, 'id', None):
+        return ''
+    number = assign().get(project.id)
+    if not number:
+        return ''
+    if revision is None:
+        from .billing import latest_revision_number
+        revision = latest_revision_number(project)
+    return label(number, revision)
