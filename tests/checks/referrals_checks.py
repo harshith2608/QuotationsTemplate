@@ -4,7 +4,8 @@ import os, re, subprocess, sys
 from datetime import date, datetime, timedelta
 from cryptography.fernet import Fernet
 from sqlalchemy import text
-os.environ.update(TENANT_MODE='1', TENANT_BASE_DOMAIN='quote-room.test', CONSOLE_VAULT_KEY=Fernet.generate_key().decode(),
+os.environ.pop('CONSOLE_VAULT_KEY', None)          # as on QA: payout details sealed with DATA_ENCRYPTION_KEY
+os.environ.update(TENANT_MODE='1', TENANT_BASE_DOMAIN='quote-room.test',
                   MARKETING_SITE_URL='https://www.quote-room.test')
 for k in ['DEMO_MODE', 'MARKETING_SITE', 'CONSOLE_MODE']: os.environ.pop(k, None)
 from app import create_app, db, referrals, platform_switch, subscription

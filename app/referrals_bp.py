@@ -51,6 +51,8 @@ def refer():
                 flash(str(exc), 'danger')
                 return redirect(url_for('referrals.refer'))
             except Exception:
+                from flask import current_app
+                current_app.logger.exception('Refer & earn application could not be saved')
                 flash('Your application couldn\'t be saved right now. Please try again in a while.', 'danger')
                 return redirect(url_for('referrals.refer'))
             try:

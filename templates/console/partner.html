@@ -54,7 +54,7 @@
   {% if payout.upi %}<div>UPI: <span class="mono">{{ payout.upi }}</span></div>{% endif %}
   {% if payout.account_number %}<div>Bank: {{ payout.bank_name }} · {{ payout.account_name }} · <span class="mono">{{ payout.account_number }}</span> · IFSC <span class="mono">{{ payout.ifsc }}</span></div>{% endif %}
   <div>PAN: <span class="mono">{{ payout.pan }}</span></div>
-  {% else %}<span class="muted">No payout details (or they can't be opened: CONSOLE_VAULT_KEY).</span>{% endif %}
+  {% else %}<span class="muted">No payout details (or they can't be opened: CONSOLE_VAULT_KEY / DATA_ENCRYPTION_KEY differ from the app's).</span>{% endif %}
 </div>
 
 <h2>Money</h2>

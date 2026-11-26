@@ -223,11 +223,38 @@ def pct_of(partner):
     return partner['pct'] if partner and partner.get('pct') is not None else settings()['pct']
 
 
+def _seal_keys():
+    """Keys that seal payout details, first used to seal: the console's vault key, else the trials database's own
+    key (DATA_ENCRYPTION_KEY; the console and the trials app share both, and QA has no vault key)."""
+    import os
+    return [k for k in ((os.environ.get('CONSOLE_VAULT_KEY') or '').strip(),
+                        (os.environ.get('DATA_ENCRYPTION_KEY') or '').strip()) if k]
+
+
+def seal(data):
+    from . import crypto
+    keys = _seal_keys()
+    if not keys:
+        raise ReferralError('Payout details can\'t be stored here (no encryption key).')
+    with crypto.using_key(keys[0]):
+        return crypto.encrypt(json.dumps(data))
+
+
+def unseal(blob):
+    from . import crypto
+    for key in _seal_keys():
+        try:
+            with crypto.using_key(key):
+                return json.loads(crypto.decrypt(blob))
+        except Exception:
+            continue
+    return {}
+
+
 def payout_details(partner):
-    """{'upi', 'bank_name', 'account_name', 'account_number', 'ifsc', 'pan'} (sealed with the console's vault key)."""
-    from . import customers
+    """{'upi', 'bank_name', 'account_name', 'account_number', 'ifsc', 'pan'} (sealed: seal())."""
     try:
-        return customers.unseal(partner.get('payout')) if partner and partner.get('payout') else {}
+        return unseal(partner.get('payout')) if partner and partner.get('payout') else {}
     except Exception:
         return {}
 
@@ -242,7 +269,7 @@ def _paid_rows(conn, slug):
 def plan_active(slug, on=None):
     """Is this business's own plan paid up today (or on `on`)? From its payments' plan dates, and the console's
     customer record (a plan renewed by hand)."""
-    on = on or date.today()
+    on = on or _today()
     with db.engine.connect() as conn:
         rows = _paid_rows(conn, slug) if _has('platform_payments', conn) else []
         end = max([r.plan_end for r in rows if r.plan_end and r.plan != 'ai40' and r.refunded < r.amount_paise]
@@ -263,6 +290,12 @@ def paid_since(slug):
     starts = [r.plan_start or (r.paid_at.date() if r.paid_at else None) for r in rows]
     starts = [s for s in starts if s]
     return min(starts) if starts else None
+
+
+def _today():
+    """Today in India."""
+    from datetime import timedelta
+    return (datetime.utcnow() + timedelta(hours=5, minutes=30)).date()
 
 
 def _months_between(a, b):
@@ -294,7 +327,7 @@ def set_waiver(slug, on):
 
 def eligibility(slug, today=None):
     """(can apply, why not). A waived business needs only an active paid plan, not the months."""
-    today = today or date.today()
+    today = today or _today()
     need = settings()['min_months']
     since = paid_since(slug)
     if since and plan_active(slug, today) and waived(slug):
@@ -356,13 +389,12 @@ def clean_application(form):
 
 def apply(slug, values):
     """Save (or update, while waiting) an application. A rejected or stopped partner can apply again."""
-    from . import customers
     ensure_tables()
     current = get(slug)
     if current and current['status'] == 'approved':
         raise ReferralError('You\'re already a partner.')
-    payout = customers.seal({k: values.get(k, '') for k in ('upi', 'bank_name', 'account_name', 'account_number',
-                                                             'ifsc', 'pan')})
+    payout = seal({k: values.get(k, '') for k in ('upi', 'bank_name', 'account_name', 'account_number',
+                                                   'ifsc', 'pan')})
     params = {'s': slug, 'n': values['name'], 'p': values['phone'], 'c': values['city'], 'b': values['business'],
               'e': values.get('email') or '', 'pay': payout}
     with db.engine.begin() as conn:
@@ -376,9 +408,8 @@ def apply(slug, values):
 
 def set_payout_details(slug, values):
     """An approved partner updates where they're paid (UPI / bank, PAN)."""
-    from . import customers
-    payout = customers.seal({k: values.get(k, '') for k in ('upi', 'bank_name', 'account_name', 'account_number',
-                                                             'ifsc', 'pan')})
+    payout = seal({k: values.get(k, '') for k in ('upi', 'bank_name', 'account_name', 'account_number',
+                                                   'ifsc', 'pan')})
     with db.engine.begin() as conn:
         conn.execute(text('UPDATE public.partners SET payout = :p WHERE slug = :s'), {'p': payout, 's': slug})
 
@@ -485,6 +516,12 @@ def _add_months(d, months):
     return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
 
 
+def _ist(when):
+    """A stored UTC time's date in India (plan dates are India dates)."""
+    from datetime import timedelta
+    return (when + timedelta(hours=5, minutes=30)).date()
+
+
 def sync():
     """Record every new paid payment by a referred business, once: what it earns the partner, or why it doesn't
     count. A refund since is noted on the earning (it no longer counts). Returns how many were added."""
@@ -506,7 +543,7 @@ def sync():
         if not rows:
             continue
         first = min((r.paid_at for r in rows if r.paid_at), default=None)
-        until = _add_months(first.date(), s['earn_months']) if first and s['earn_months'] else None
+        until = _add_months(_ist(first), s['earn_months']) if first and s['earn_months'] else None
         for r in rows:
             fully_refunded = r.refunded >= r.amount_paise
             if r.id in known:
@@ -520,9 +557,9 @@ def sync():
             status, reason = 'earned', None
             if fully_refunded:
                 status, reason = 'refunded', 'The payment was refunded.'
-            elif until and r.paid_at and r.paid_at.date() >= until:
+            elif until and r.paid_at and _ist(r.paid_at) >= until:
                 status, reason = 'outside', f'Paid after the {s["earn_months"]} months you earn from this business.'
-            elif not plan_active(p['slug'], r.paid_at.date() if r.paid_at else None):
+            elif not plan_active(p['slug'], _ist(r.paid_at) if r.paid_at else None):
                 status, reason = 'inactive', 'Your own plan wasn\'t active when they paid.'
             elif p['status'] != 'approved':
                 status, reason = 'inactive', 'You weren\'t an active partner when they paid.'
@@ -572,15 +609,16 @@ def payouts(partner_slug=None):
 
 
 def totals(partner_slug, today=None):
-    """{'earned', 'paid', 'balance', 'this_month'} in paise."""
-    today = today or date.today()
+    """{'earned', 'paid', 'balance', 'this_month'} in paise (this month: India's calendar month)."""
+    from datetime import timedelta
+    today = today or _today()
     ensure_tables()
     with db.engine.connect() as conn:
         earned = conn.execute(text("SELECT COALESCE(SUM(earned_paise), 0) FROM public.partner_earnings "
                                    "WHERE partner = :p AND status = 'earned'"), {'p': partner_slug}).scalar()
         month = conn.execute(text("SELECT COALESCE(SUM(earned_paise), 0) FROM public.partner_earnings WHERE partner = :p "
                                   "AND status = 'earned' AND paid_at >= :m"),
-                             {'p': partner_slug, 'm': datetime(today.year, today.month, 1)}).scalar()
+                             {'p': partner_slug, 'm': datetime(today.year, today.month, 1) - timedelta(hours=5, minutes=30)}).scalar()
         paid = conn.execute(text('SELECT COALESCE(SUM(amount_paise), 0) FROM public.partner_payouts WHERE partner = :p'),
                             {'p': partner_slug}).scalar()
     return {'earned': int(earned), 'paid': int(paid), 'balance': int(earned) - int(paid), 'this_month': int(month)}
@@ -609,7 +647,7 @@ def mark_paid(partner_slug, amount_rupees, reference='', paid_on=None, note=''):
     with db.engine.begin() as conn:
         conn.execute(text('INSERT INTO public.partner_payouts (partner, amount_paise, paid_on, reference, note) '
                           'VALUES (:p, :a, :d, :r, :n)'),
-                     {'p': partner_slug, 'a': paise, 'd': paid_on or date.today(), 'r': (reference or '')[:80],
+                     {'p': partner_slug, 'a': paise, 'd': paid_on or _today(), 'r': (reference or '')[:80],
                       'n': (note or '').strip()[:300] or None})
 
 
