@@ -1385,6 +1385,7 @@ def settings():
                            preview_pid=db.session.query(db.func.max(Project.id)).scalar() if tab == 'documents' else None,
                            presentation=_presentation_texts() if tab == 'documents' else None,
                            section_variables=layout.variable_buttons() if tab == 'documents' else layout.VARIABLES,
+                           var_example=layout.example_variable() if tab == 'documents' else 'plywood_details',
                            saved=saved, defaults=defaults, options=branding.ui_options(),
                            locked=branding.locked_fields(), lock_enabled=branding.lock_enabled(),
                            support_display=support_display, support_url=support_url,

@@ -275,6 +275,10 @@ ok('editing brings both choices back', '"finish": "Acrylic|16mm 8*4 Century Bond
 st = c.get('/admin/settings?tab=documents').text
 ok('Settings → Quotation PDFs offers an Insert button per item options section', '["Board", "Board"]' in st and '["Finish", "Finish"]' in st)
 with app.app_context():
+    by_item = boq.pricing_mode() == boq.ITEM
+ok('…priced by item: no Plywood / Plywood details / Materials used buttons, and the example uses a section',
+   not by_item or ('["plywood_details",' not in st and '["materials",' not in st and '<code>{Finish} for all' in st))
+with app.app_context():
     from app import layout
     v = layout.variables(Project.query.get(bid))
     ok('{Board} / {finish} fill in the quotation\'s choices; unknown words stay as typed',

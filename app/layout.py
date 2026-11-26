@@ -283,6 +283,7 @@ def section_lines(text):
 # Placeholders the business can put in any section (Settings → Quotation PDFs offers them as buttons)
 VARIABLES = [('plywood', 'Plywood'), ('plywood_details', 'Plywood details'), ('materials', 'Materials used'),
              ('customer', 'Customer name'), ('company', 'Your company'), ('quotation_no', 'Quotation no.'), ('date', 'Date')]
+BY_MATERIAL_VARIABLES = {'plywood', 'plywood_details', 'materials'}
 _VAR = re.compile(r'\{\s*([^{}<>\n]{1,60}?)\s*\}')        # {plywood}, {Board}: known names are filled in
 
 
@@ -291,12 +292,23 @@ def variable_buttons():
     (Admin → Rates), e.g. {Board}: the board(s) chosen on each quotation."""
     out = list(VARIABLES)
     try:
-        from . import finishes
+        from . import boq, finishes
+        if boq.pricing_mode() == boq.ITEM:           # priced by item: no plywood or materials on its quotations
+            out = [v for v in out if v[0] not in BY_MATERIAL_VARIABLES]
         taken = {k for k, _ in VARIABLES} | {label.lower() for _, label in VARIABLES}
         out += [(s['name'], s['name']) for s in finishes.sections() if s['name'].lower() not in taken]
     except Exception:
         pass
     return out
+
+
+def example_variable():
+    """The placeholder shown in Settings' example: {plywood_details}, or by item the first item options section."""
+    keys = [k for k, _ in variable_buttons()]
+    if 'plywood_details' in keys:
+        return 'plywood_details'
+    fixed = {k for k, _ in VARIABLES}
+    return next((k for k in keys if k not in fixed), 'customer')
 
 
 def option_values(project, rooms):

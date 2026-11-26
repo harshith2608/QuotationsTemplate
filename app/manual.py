@@ -146,7 +146,7 @@ ARTICLES = [
          tags='terms conditions payment terms delivery notes specifications warranty pdf text sections placeholder insert board option variable',
          steps=['Open Admin → Settings → Quotation PDFs.',
                 'Type in each section (bold, lists and tables print as you see them). Leave one empty to leave it out.',
-                'Use Insert to add details that change per quotation, like {customer} or {plywood_details}. Each item options section (Admin → Rates) has its own button too: {Board} prints the board(s) chosen on that quotation, e.g. "{Board} for all carcass units" → "16mm Century Bond 710 for all carcass units".',
+                'Use Insert to add details that change per quotation, like {customer} or {plywood_details}. Each item options section (Admin → Rates) has its own button too: {Board} prints the board(s) chosen on that quotation, e.g. "{Board} for all carcass units" → "16mm Century Bond 710 for all carcass units". Priced by item, the Plywood and Materials used buttons aren\'t shown (those come from pricing by material).',
                 'Save. Every quotation PDF prints them at the end.']),
     dict(id='page-breaks', title='Page breaks in the PDF', link='admin.settings', admin=True, tab='documents',
          summary='Start a section (e.g. Terms & Conditions) on a new page, or let them follow on with no gap.',
