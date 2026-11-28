@@ -58,9 +58,23 @@ def read_token(token, now=None):
         return None
 
 
+SELF_SERVE_KEY = 'website_self_serve'   # the console's Features → Website sign-ups (a copy in the website's app_settings)
+
+
+def self_serve_on():
+    """The console's switch: businesses set up their own trial or buy a plan on the website. Off (the default): the
+    website only takes their details and says we'll reach out; we call, demo, then set up a trial or a plan."""
+    try:
+        from .models import AppSetting
+        return AppSetting.get(SELF_SERVE_KEY) == '1'
+    except Exception:
+        return False
+
+
 def website_sells():
     """True when the website's plan buttons set up the app and take the payment (else they open WhatsApp)."""
-    return _env('AUTO_TRIALS') in ('1', 'true', 'yes', 'on') and bool(_env('SIGNUP_URL')) and bool(_env('SIGNUP_SECRET'))
+    return (_env('AUTO_TRIALS') in ('1', 'true', 'yes', 'on') and bool(_env('SIGNUP_URL')) and bool(_env('SIGNUP_SECRET'))
+            and self_serve_on())
 
 
 def website_offers(business_type):

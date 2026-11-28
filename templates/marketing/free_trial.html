@@ -17,7 +17,7 @@
         {% set ref_days = refer.trial_days if refer and refer.on and (form or {}).get('ref_code') else 7 %}
         <p class="eyebrow">{{ ref_days }}-day free trial · no payment{% if sells and plans_shown %} · or buy a plan now{% endif %}</p>
         <h1>Start your free trial</h1>
-        <p class="trial-lede">Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+        <p class="trial-lede">{% if call_back %}Tell us a little about you. We'll call you within a few hours to show you {{ product }} and get you started.{% else %}Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.{% endif %}</p>
         {% endif %}
         {{ trial_form('page', errors or {}, form or {}) }}
       </div>

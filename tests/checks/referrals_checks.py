@@ -146,7 +146,7 @@ site = create_app('development'); site.config['WTF_CSRF_ENABLED'] = False
 with site.app_context():
     from app.models import AppSetting
     db.create_all()
-    AppSetting.set(referrals.KEY, json.dumps({'on': True, 'trial_days': 14})); db.session.commit()
+    AppSetting.set(referrals.KEY, json.dumps({'on': True, 'trial_days': 14})); AppSetting.set('website_self_serve', '1'); db.session.commit()
 sc = site.test_client()
 ft = sc.get(f'/free-trial?ref={code}').text
 ok('website: the trial form has the Partner code box, filled from ?ref=', 'name="ref_code"' in ft and f'value="{code}"' in ft

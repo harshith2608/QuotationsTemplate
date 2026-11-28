@@ -407,7 +407,7 @@ footer nav { display: flex; gap: 1.2rem; }
     <button class="dlg-close" type="button" data-close-dialog aria-label="Close">×</button>
     <div data-trial-start>
       <h2 id="trialDialogTitle" data-title-trial="Start your 7&#8209;day free trial">Start your 7&#8209;day free trial</h2>
-      <p class="trial-lede" data-lede-trial>Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.</p>
+      <p class="trial-lede" data-lede-trial>{% if call_back %}Tell us a little about you. We'll call you within a few hours to show you {{ product }} and get you started.{% else %}Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.{% endif %}</p>
       <p class="trial-lede" data-lede-buy hidden>Tell us a little about you. Next you choose your password and pay, and your
         own {{ product }} app is ready.</p>
       {{ trial_form('dlg') }}

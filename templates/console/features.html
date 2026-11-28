@@ -79,6 +79,20 @@
   </div>
 </div>
 
+<h2 id="self-serve">Website sign-ups</h2>
+<div class="card">
+  <p class="small" style="margin-top:0">
+    {% if self_serve %}<strong>Self-serve is on:</strong> businesses set up their own free trial, or buy a plan, straight from the website's form.
+    {% else %}<strong>We call them (self-serve is off):</strong> the website's form only takes their details and says
+    <em>We'll reach out to you in a few hours</em>. You get the request (Telegram and the request's page here); call, demo,
+    then create their trial or send the set-up link (with a plan to buy, if they want one).{% endif %}
+    {% if not kinds.website %}<br><span class="muted">The website isn't connected (<span class="mono">LEADS_DATABASE_URL</span>), so this switch can't reach it.</span>{% endif %}</p>
+  <form method="post" action="{{ url_for('console.self_serve_switch') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="on" value="{{ '0' if self_serve else '1' }}">
+    <button class="btn btn-sm {{ '' if self_serve else 'btn-primary' }}" type="submit">{{ 'Switch off: we call them' if self_serve else 'Switch on: let them sign up themselves' }}</button>
+  </form>
+</div>
+
 <h2 id="kinds">Kinds of business</h2>
 <div class="card">
   <p class="small" style="margin-top:0">Which businesses can sign up: the choices on the website's trial form (and its

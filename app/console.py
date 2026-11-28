@@ -1172,10 +1172,15 @@ def features_page():
         call_hours, call_next, call_blocks = callbook.hours(), callbook.slots()[:2], callbook.blocks()
     except Exception:
         call_hours, call_next, call_blocks = dict(callbook.DEFAULT_HOURS), [], []
-    from . import notify
+    from . import notify, signup
+    try:
+        self_serve = platform_switch.console_value(signup.SELF_SERVE_KEY, raw=True) == '1'
+    except Exception:
+        self_serve = False
     telegram = {'token': bool(os.environ.get('TELEGRAM_BOT_TOKEN')), 'on': notify.enabled(),
                 'console': bool(os.environ.get('CONSOLE_URL'))}
     return render_template('console/features.html', ai=ai, mat_on=mat_on, helpers=helpers, kinds=kinds, telegram=telegram,
+                           self_serve=self_serve,
                            call_hours=call_hours, call_days=callbook.DAYS, call_next=call_next, call_blocks=call_blocks,
                            today_ist=(datetime.utcnow() + callbook.IST).date().isoformat(),
                            allowance={k: ai_tools.allowance(k) for k in ai_tools.ALLOWANCE},
@@ -1281,6 +1286,33 @@ def business_kinds():
     flash(f'Saved: {len(on)} kinds of business offered (the guided setup within a minute, the website now).' + note,
           'ok' if not note else 'error')
     return redirect(url_for('console.features_page') + '#kinds')
+
+
+@console_bp.route('/features/self-serve', methods=['POST'])
+@login_required
+def self_serve_switch():
+    """Website sign-ups (app/signup.py): on, businesses set up their own trial or buy a plan on the website; off (the
+    default), the website takes their details and says we'll reach out in a few hours, and we call them."""
+    from . import platform_switch, signup
+    on = request.form.get('on') == '1'
+    value = '1' if on else '0'
+    platform_switch.set_value(signup.SELF_SERVE_KEY, value)
+    website = _leads_engine_or_none()
+    note = ''
+    if website is not None:                       # the website reads its own copy
+        try:
+            with website.begin() as conn:
+                conn.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': signup.SELF_SERVE_KEY})
+                conn.execute(text('INSERT INTO app_settings (key, value) VALUES (:k, :v)'), {'k': signup.SELF_SERVE_KEY, 'v': value})
+        except Exception:
+            note = ' The website could not be updated: try again.'
+    else:
+        note = ' The website isn\'t connected (LEADS_DATABASE_URL), so it was not changed.'
+    audit('website_self_serve', None, 'on' if on else 'off')
+    flash(('Website sign-ups: businesses set up their own trial or buy a plan.' if on else
+           'Website sign-ups: businesses leave their details and are told we\'ll reach out in a few hours.') + note,
+          'ok' if not note else 'error')
+    return redirect(url_for('console.features_page') + '#self-serve')
 
 
 @console_bp.route('/features/ai-<feature>', methods=['POST'])

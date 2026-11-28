@@ -141,6 +141,16 @@ ok('before the update: /leads and CSV still work', r.status_code == 200 and 'Rav
 os.environ.update(AUTO_TRIALS='1', SIGNUP_URL='https://ops.quote-room.test', SIGNUP_SECRET='signup-secret')
 from app import signup as _su
 c5 = create_app('development').test_client()
+# The console's Website sign-ups switch off (the default): no set-up link, just "we'll reach out in a few hours"
+r = c5.post('/trial-request', data=dict(good, phone='9811100040', company_name='Call Me Interiors'), headers=J,
+            environ_base={'REMOTE_ADDR': '10.9.0.9'}); d = r.get_json()
+ft = c5.get('/free-trial').text
+ok('self-serve switched off in the console: the request is taken, no set-up link, "we\'ll reach out in a few hours"',
+   d['ok'] and not d.get('setup_url') and not d.get('pay_url') and "reach out to you in a few hours" in ft
+   and 'Send my details' in ft and 'name="buy_mode"' not in ft)
+with app.app_context():
+    from app.models import AppSetting as _AS
+    _AS.set(_su.SELF_SERVE_KEY, '1'); db.session.commit()
 r = c5.post('/trial-request', data=dict(good, phone='9811100044', company_name='Kiran Interiors'), headers=J,
             environ_base={'REMOTE_ADDR': '10.9.0.1'}); d = r.get_json()
 ok('self-serve on: an interior designer gets "set up my app now" (a signed link with only the request id)',

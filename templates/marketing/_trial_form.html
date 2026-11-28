@@ -105,6 +105,14 @@
   {% endif %}
   <p class="form-error" data-error-for="form" role="alert" {% if not errors.form %}hidden{% endif %}>{{ errors.form }}</p>
   {% set buying = form.get('plan') %}
+  {% if call_back %}
+  <button class="btn btn-primary trial-submit" type="submit" data-label-trial="Send my details →"
+          data-label-buy="Send my details →">Send my details →</button>
+  <p class="fine" data-fine-buy hidden></p>
+  <p class="fine" data-fine-trial>No payment needed. We'll call you within a few hours to show you {{ product }}, then set you up with a free
+    trial or a plan, whichever you prefer. We'll use these details to contact you on phone, WhatsApp and email.
+    <a href="{{ privacy_url }}">Privacy policy</a></p>
+  {% else %}
   <button class="btn btn-primary trial-submit" type="submit" data-label-trial="Start my free trial →"
           data-label-buy="Continue to payment">{{ 'Continue to payment' if buying else 'Start my free trial →' }}</button>
   <p class="fine" data-fine-trial {% if buying %}hidden{% endif %}>No payment needed. We'll use these details to set up your trial and to message you about it on
@@ -112,6 +120,7 @@
   <p class="fine" data-fine-buy {% if not buying %}hidden{% endif %}>Next you choose your password, then pay securely through
     Razorpay (UPI, cards, net banking). Your app is ready the moment you pay. We'll use these details for your app, your
     receipt and to message you on WhatsApp and email. <a href="{{ privacy_url }}">Privacy policy</a></p>
+  {% endif %}
 </form>
 {%- endmacro %}
 
@@ -125,7 +134,8 @@
   </div>
   <p class="small" data-emailed {% if not emailed_to %}hidden{% endif %}>We've also emailed this link to
     <strong data-emailed-to>{{ emailed_to or '' }}</strong>, so you can come back to it later.</p>
-  <p data-wait {% if setup_url or emailed_to %}hidden{% endif %}>We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.</p>
+  <p data-wait {% if setup_url or emailed_to %}hidden{% endif %}>{% if call_back %}<strong>We'll reach out to you in a few hours.</strong>
+    We'll call to show you {{ product }} and help you get started, with a free trial or a plan, whichever suits you.{% else %}We'll set up your free {{ product }} app and message you on WhatsApp with your login, usually within a day.{% endif %}</p>
   {# the demo only for those who wait for us: the rest set up their own app now (one clear button) #}
   <div data-demo-wait {% if setup_url %}hidden{% endif %}>
     <p class="done-skip"><strong>While you wait, have a look around:</strong></p>
