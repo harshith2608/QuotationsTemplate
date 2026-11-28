@@ -92,7 +92,7 @@ def _context():
         sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
         ai_plans=ai_plans(), plan_names=plan_names(price_data), plan_values=pricing.prices(price_data),
         pricing=pricing, price_data=price_data, **_shown_plans(price_data),
-        refer=_refer_settings(),           # the console's Refer & earn: the Referral code box on the trial form
+        refer=_refer_settings(),           # the console's Partner program: the Partner code box on the trial form
     )
 
 
@@ -527,7 +527,7 @@ def trial_request():
                 if lead_has(col):
                     values[col] = data[col]
             lead_id = db.session.execute(Lead.__table__.insert().values(**values)).inserted_primary_key[0]
-        if data.get('ref_code') and lead_id:      # Refer & earn: the console reads it when the app is set up
+        if data.get('ref_code') and lead_id:      # Partner program: the console reads it when the app is set up
             from .models import AppSetting
             from .referrals import LEAD_REF_KEY
             AppSetting.set(LEAD_REF_KEY.format(lead_id), data['ref_code'])

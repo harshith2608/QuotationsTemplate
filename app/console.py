@@ -406,7 +406,7 @@ def _site_url():
 
 
 def lead_ref(lead_id):
-    """The referral code typed on this website request (Refer & earn), or ''."""
+    """The referral code typed on this website request (Partner program), or ''."""
     from .referrals import LEAD_REF_KEY, clean_code
     engine = _leads_engine_or_none()
     if engine is None or not lead_id:
@@ -420,7 +420,7 @@ def lead_ref(lead_id):
 
 
 def _referral_for(lead_id, lead):
-    """The approved partner behind this request's code, or None (Refer & earn). A code that doesn't count is noted
+    """The approved partner behind this request's code, or None (Partner program). A code that doesn't count is noted
     in Activity with why (same phone as the partner, the partner's plan lapsed…)."""
     from . import referrals
     try:
@@ -828,12 +828,12 @@ def dashboard():
                            spares=ops.spare_count(), self_serve=bool(signup._env('SIGNUP_SECRET')))
 
 
-# ── Refer & earn (app/referrals.py) ──────────────────────────────────────────
+# ── Partner program (app/referrals.py) ──────────────────────────────────────────
 
 @console_bp.route('/partners', methods=['GET', 'POST'])
 @login_required
 def partners_page():
-    """Refer & earn: the rules, applications to approve, partners, and the payouts due this month."""
+    """Partner program: the rules, applications to approve, partners, and the payouts due this month."""
     import json
     from . import platform_switch, referrals
     referrals.ensure_tables()
@@ -851,7 +851,7 @@ def partners_page():
         platform_switch.set_value(referrals.KEY, value)
         note = ''
         website = _leads_engine_or_none()
-        if website is not None:                   # the website's trial form shows the Referral code box from its copy
+        if website is not None:                   # the website's trial form shows the Partner code box from its copy
             try:
                 with website.begin() as conn:
                     conn.execute(text('DELETE FROM app_settings WHERE key = :k'), {'k': referrals.KEY})
@@ -931,7 +931,7 @@ def partner_action(slug, action):
             p = referrals.approve(slug, f.get('code') or None, _pct_field(f.get('pct')), _months_field(f.get('months')))
             audit('partner_approve', slug, f'{p["code"]}, {referrals.pct_of(p)}%, {referrals.months_of(p)} months')
             flash(f'Approved: {p["business"] or slug} is a partner with code {p["code"]}. Let them know: '
-                  'their Refer & earn page now shows the code and link.', 'ok')
+                  'their Partner program page now shows the code and link.', 'ok')
         elif action in ('reject', 'stop'):
             referrals.decide(slug, 'rejected' if action == 'reject' else 'stopped', f.get('note'))
             audit(f'partner_{action}', slug, f.get('note') or '')
@@ -952,7 +952,7 @@ def partner_action(slug, action):
                 raise referrals.ReferralError('Choose the date it was paid.')
             referrals.mark_paid(slug, f.get('amount'), f.get('reference'), paid_on, f.get('note'))
             audit('partner_paid', slug, f'₹{f.get("amount")} {f.get("reference") or ""}')
-            flash('Payout recorded: it shows on their Refer & earn page.', 'ok')
+            flash('Payout recorded: it shows on their Partner program page.', 'ok')
         else:
             abort(404)
     except referrals.ReferralError as exc:
@@ -1014,7 +1014,7 @@ def partner_waiver():
             return redirect(url_for('console.partners_page') + '#waivers')
     referrals.set_waiver(slug, on)
     audit('partner_waiver', slug, 'on' if on else 'off')
-    flash(f'"{slug}" can apply now (its Refer & earn page shows the form).' if on else f'Waiver removed for "{slug}".', 'ok')
+    flash(f'"{slug}" can apply now (its Partner program page shows the form).' if on else f'Waiver removed for "{slug}".', 'ok')
     return redirect(url_for('console.partners_page') + '#waivers')
 
 
@@ -1331,7 +1331,7 @@ def create_trial():
             flash(f'This request already has a trial: "{done}" (they may have set it up themselves from the email '
                   'link). Here it is.', 'ok')
             return redirect(url_for('console.trial_detail', slug=done))
-    partner = _referral_for(lead_id, {'phone': phone}) if lead_id else None    # Refer & earn
+    partner = _referral_for(lead_id, {'phone': phone}) if lead_id else None    # Partner program
     try:
         days = int(days)
         if partner and days == 7:                 # the referral's longer trial, unless you chose another length
@@ -3259,7 +3259,7 @@ def start_trial():
         if errors:          # why set-ups stop: in the activity log, and an alert to call them while they're keen
             _setup_failed(lead_id, lead, form, errors, _in_app_browser())
         t = None
-        partner = _referral_for(lead_id, lead) if not errors else None      # Refer & earn: a longer trial
+        partner = _referral_for(lead_id, lead) if not errors else None      # Partner program: a longer trial
         trial_days = __import__('app.referrals', fromlist=['settings']).settings()['trial_days'] if partner else 7
         for _ in range(3) if not errors else ():   # the address comes from the firm's name (a number added if taken)
             slug = _free_address(form['company'])

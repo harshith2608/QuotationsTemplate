@@ -277,7 +277,7 @@ def create_app(config_name='default'):
                 'marketing_mode': marketing_enabled(), 'refer_on': _refer_on(current_user), **_plan_context(current_user)}
 
     def _refer_on(user):
-        """Admin → Refer & earn: the shared app, switched on in the console (admins)."""
+        """Admin → Partner program: the shared app, switched on in the console (admins)."""
         if not (getattr(user, 'is_authenticated', False) and user.is_admin):
             return False
         try:

@@ -1,7 +1,7 @@
 {% extends "console/_layout.html" %}
-{% block title %}{{ p.business or p.slug }} · Refer & earn{% endblock %}
+{% block title %}{{ p.business or p.slug }} · Partner program{% endblock %}
 {% block content %}
-<p class="small"><a href="{{ url_for('console.partners_page') }}">← Refer &amp; earn</a></p>
+<p class="small"><a href="{{ url_for('console.partners_page') }}">← Partner program</a></p>
 <h1>{{ p.business or p.slug }} <span class="badge {{ 'b-active' if p.status == 'approved' else 'b-other' }}">{{ STATUSES[p.status] }}</span></h1>
 <p class="muted small"><span class="mono">{{ p.slug }}</span> · {{ p.name }} · {{ p.city }} · <span class="mono">{{ p.phone }}</span>{% if p.email %} · {{ p.email }}{% endif %}
   · applied {{ p.applied_at.strftime('%d %b %Y') }}{% if p.decided_at %} · decided {{ p.decided_at.strftime('%d %b %Y') }}{% endif %}

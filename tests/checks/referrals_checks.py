@@ -1,4 +1,4 @@
-"""Refer & earn (app/referrals.py): applying from the app, approval and codes, signing up with a code, earnings from
+"""Partner program (app/referrals.py): applying from the app, approval and codes, signing up with a code, earnings from
 the referred business's payments, leaving one out, payouts; the console's pages (run as the console)."""
 import os, re, subprocess, sys
 from datetime import date, datetime, timedelta
@@ -46,7 +46,7 @@ S, F = 'http://sharmaint.quote-room.test', 'http://freshco.quote-room.test'
 cs, cf = app.test_client(), app.test_client()
 cs.post('/login', base_url=S, data={'username': 'admin', 'password': 'pass-word-123'})
 cf.post('/login', base_url=F, data={'username': 'admin', 'password': 'pass-word-123'})
-ok('Admin menu has Refer & earn', '/refer' in cs.get('/projects', base_url=S).text)
+ok('Admin menu has Partner program', '/refer' in cs.get('/projects', base_url=S).text)
 t = cs.get('/refer', base_url=S).text
 ok('the page explains it (the trial earns nothing) and shows the application form', 'How it works' in t and 'only once it' in t and 'The trial earns nothing' in t
    and 'name="pan"' in t and 'action" value="apply"' in t)
@@ -139,7 +139,7 @@ t = cs.get('/refer', base_url=S).text
 ok('partner page: paused banner, referrals, payments and payout listed', 'Earning is paused' in t and 'New Biz Interiors' in t
    and 'UTR123' in t and 'After the earning period' in t)
 
-# The website: the Referral code box (from the console's copy of the rules), ?ref= fills it, a bad code is refused
+# The website: the Partner code box (from the console's copy of the rules), ?ref= fills it, a bad code is refused
 os.environ.update(MARKETING_SITE='1', AUTO_TRIALS='1', SIGNUP_URL='https://ops.quote-room.test', SIGNUP_SECRET='s3cret')
 os.environ.pop('TENANT_MODE')
 site = create_app('development'); site.config['WTF_CSRF_ENABLED'] = False
@@ -149,7 +149,7 @@ with site.app_context():
     AppSetting.set(referrals.KEY, json.dumps({'on': True, 'trial_days': 14})); db.session.commit()
 sc = site.test_client()
 ft = sc.get(f'/free-trial?ref={code}').text
-ok('website: the trial form has the Referral code box, filled from ?ref=', 'name="ref_code"' in ft and f'value="{code}"' in ft
+ok('website: the trial form has the Partner code box, filled from ?ref=', 'name="ref_code"' in ft and f'value="{code}"' in ft
    and '14-day free trial' in ft)
 r = sc.post('/trial-request', data={'name': 'Ravi', 'company_name': 'Ravi Kitchens', 'phone': '9000011111', 'city': 'Pune',
                                     'email': 'r@ravi.example', 'business_type': 'kitchens', 'ref_code': 'no!'},
@@ -173,7 +173,7 @@ with site.app_context():
     ok('…choosing a plan goes on to pay, with the code kept', r2.status_code == 200 and 'plan=1y' in (r2.get_json().get('pay_url') or '')
        and AppSetting.get(referrals.LEAD_REF_KEY.format(lead2.id)) == code)
 terms = sc.get('/terms').text
-ok('Terms: the Refer & earn section with the misuse clause', 'id="refer-earn"' in terms and 'leave out any payment' in terms)
+ok('Terms: the Partner program section with the misuse clause', 'id="refer-earn"' in terms and 'leave out any payment' in terms)
 
 # The console (its own app): rules, applications, partner page, actions
 code_ = r'''
@@ -189,8 +189,8 @@ c = app.test_client()
 c.post('/login', data={'password': 'console-pass-123', 'code': totp_code('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', int(time.time() // 30))})
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 t = c.get('/partners').text
-ok('console: Refer & earn page with partners and the rules', 'Sharma Interiors' in t and 'name="earn_months"' in t
-   and 'name="before_gst"' in t and 'Refer &amp; earn' in c.get('/').text)
+ok('console: Partner program page with partners and the rules', 'Sharma Interiors' in t and 'name="earn_months"' in t
+   and 'name="before_gst"' in t and 'Partner program' in c.get('/').text)
 d = c.get('/partners/sharmaint').text
 ok('console: partner page shows UPI, PAN, payments, payouts and Leave out', 'suresh@okhdfc' in d and 'ABCDE1234F' in d
    and 'UTR123' in d and 'Leave out' in d)
