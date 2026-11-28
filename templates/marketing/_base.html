@@ -377,7 +377,7 @@ footer nav { display: flex; gap: 1.2rem; }
       <a class="btn btn-primary" href="{{ url_for('marketing.free_trial', plan='1m') }}" data-trial data-plan="1m"
          data-plan-title="{{ plan_names['1m'][0] }} · {{ plan_names['1m'][1] }}">Start for {{ plan_names['1m'][1] }}</a>
       {% else %}
-      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial><span class="hide-sm">Start free trial</span><span class="show-sm">Free trial</span></a>
+      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial><span class="hide-sm">{{ 'Book a free demo' if call_back else 'Start free trial' }}</span><span class="show-sm">{{ 'Free demo' if call_back else 'Free trial' }}</span></a>
       {% endif %}
       {% endif %}
     </nav>
@@ -406,7 +406,8 @@ footer nav { display: flex; gap: 1.2rem; }
   <div class="inner" data-trial-root>
     <button class="dlg-close" type="button" data-close-dialog aria-label="Close">×</button>
     <div data-trial-start>
-      <h2 id="trialDialogTitle" data-title-trial="Start your 7&#8209;day free trial">Start your 7&#8209;day free trial</h2>
+      {% set dlg_title = 'Book a free demo' if call_back else 'Start your 7&#8209;day free trial'|safe %}
+      <h2 id="trialDialogTitle" data-title-trial="{{ dlg_title }}">{{ dlg_title }}</h2>
       <p class="trial-lede" data-lede-trial>{% if call_back %}Tell us a little about you. We'll call you within a few hours to show you {{ product }} and get you started.{% else %}Tell us a little about you. We'll set up your own {{ product }} app and message you on WhatsApp.{% endif %}</p>
       <p class="trial-lede" data-lede-buy hidden>Tell us a little about you. Next you choose your password and pay, and your
         own {{ product }} app is ready.</p>

@@ -48,7 +48,7 @@
     </div>
 
     <div class="tut-cta">
-      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start your 7-day free trial</a>
+      <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>{{ 'Book a free demo' if call_back else 'Start your 7-day free trial' }}</a>
       <span style="color:var(--muted)">Questions? <a href="https://wa.me/{{ wa_number }}" target="_blank" rel="noopener">Message us on WhatsApp</a>.</span>
     </div>
   </div>

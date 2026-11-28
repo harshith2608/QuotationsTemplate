@@ -89,8 +89,8 @@ def _context():
         demo_video=youtube_id(_env('MARKETING_DEMO_VIDEO', 'cJgZoWVaB80')) or 'cJgZoWVaB80',
         has_tutorials=bool(tutorials()),
         business_types=[(k, 'Others' if k == 'other' else v) for k, v in BUSINESS_TYPES.items() if k in offered],
-        sells=website_sells(),
-        call_back=not website_sells(),     # self-serve off (console → Features → Website sign-ups): we call them             # the plan buttons set up the app and take the payment (else WhatsApp)
+        sells=website_sells(),             # the plan buttons set up the app and take the payment (else WhatsApp)
+        call_back=not website_sells(),     # self-serve off (console → Features → Website sign-ups): we call them
         ai_plans=ai_plans(), plan_names=plan_names(price_data), plan_values=pricing.prices(price_data),
         pricing=pricing, price_data=price_data, **_shown_plans(price_data),
         refer=_refer_settings(),           # the console's Partner program: the Partner code box on the trial form

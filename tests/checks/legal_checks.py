@@ -45,7 +45,7 @@ ok('signed-in user: / still shows landing, with Open app', r.status_code == 200 
    and 'href="/projects">Open app</a>' in r.text and 'data-cta>Start free trial</a>\n    </nav>' not in r.text)
 r = c.get('/logout')
 ok('logout → landing page', r.status_code == 302 and r.headers['Location'].endswith('/'))
-ok('signed-out landing shows Start free trial', '>Start free trial</a>' in c.get('/').text)
+ok('signed-out landing shows Book a free demo (we call them: self-serve off)', '>Book a free demo</a>' in c.get('/').text)
 r = c.post('/login?next=https://evil.example.com/x', data={'username': 'demo-admin', 'password': 'demo1234'})
 ok('external ?next blocked', r.headers['Location'].endswith('/projects'))
 c.get('/logout')

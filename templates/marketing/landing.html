@@ -16,7 +16,7 @@
           <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo{{ ' (no signup)' if demo_mode }}</a>
           {% else %}
           <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>
-            Start your 7-day free trial
+            {{ 'Book a free demo' if call_back else 'Start your 7-day free trial' }}
           </a>
           <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo{{ ' — no signup' if demo_mode }}</a>
           {% endif %}
@@ -221,7 +221,7 @@
           <div class="price"><span class="amount">₹0</span><span class="per">for 7 days</span></div>
           <p class="sub">Your own app at <strong>yourname.{{ request.host.split(':')[0].removeprefix('www.') }}</strong>, with every feature. No payment to start.</p>
           <ul><li>Full app, all features</li><li>Use it on real jobs</li><li>Keep everything if you subscribe</li></ul>
-          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>Start free trial</a>
+          <a class="btn btn-ghost" href="{{ url_for('marketing.free_trial') }}" data-trial>{{ 'Book a free demo' if call_back else 'Start free trial' }}</a>
         </div>
         {% for length in lengths %}
         {% set keys = [length, length ~ '_ai']|select('in', shown)|list %}
@@ -276,7 +276,7 @@
       <div class="faq">
         <details><summary>Do I need a computer?</summary><p>No. {{ product }} runs in the browser on any smartphone, tablet or laptop. There is nothing to install.</p></details>
         <details><summary>Do my customers need to install anything?</summary><p>No. They receive a PDF on WhatsApp or email, or a link to view and accept the quotation in their browser.</p></details>
-        <details><summary>How does the free trial work?</summary><p>Request a free trial and we'll set up your own {{ product }} within a day, at your own web address. Use it on real jobs for 7 days, with every feature. No payment details needed. If you subscribe, everything you've set up stays exactly where it is.</p></details>
+        <details><summary>How does the free trial work?</summary><p>{% if call_back %}Book a free demo: we call you within a few hours and show you {{ product }} on a real job. Then we set up your own {{ product }} at your own web address, to use on real jobs for 7 days, with every feature. No payment details needed. If you subscribe, everything you've set up stays exactly where it is.{% else %}Request a free trial and we'll set up your own {{ product }} within a day, at your own web address. Use it on real jobs for 7 days, with every feature. No payment details needed. If you subscribe, everything you've set up stays exactly where it is.{% endif %}</p></details>
         <details><summary>How is this different from getting a website made?</summary><p>A custom quotation website usually costs ₹30,000–40,000 up front, and hosting, fixes and new features cost extra. {{ product }} costs less per year and includes hosting, updates, new features and support, and you can try it free before paying anything.</p></details>
         <details><summary>Is my data private?</summary><p>Yes. Paying customers get their own app and their own separate database, and trials are kept in their own separate space. Other {{ product }} customers never see your quotations or customers.</p></details>
         <details><summary>Can my staff use it?</summary><p>Yes, as many as you need, at no extra cost: the price is for your whole business, not per user. Staff see the quotations you give them access to; admins see everything, including costs and profit.</p></details>
@@ -301,7 +301,7 @@
           <a class="btn btn-ghost" href="{{ url_for('demo.start') if demo_mode else url_for('auth.login') }}" data-demo>Try the live demo</a>
           <a class="small" href="{{ url_for('marketing.free_trial') }}" data-trial style="color:inherit">Or start a free 7-day trial (with the AI features) →</a>
           {% else %}
-          <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>Start your free trial</a>
+          <a class="btn btn-primary" href="{{ url_for('marketing.free_trial') }}" data-trial>{{ 'Book a free demo' if call_back else 'Start your free trial' }}</a>
           {% endif %}
           <div class="contact-line">
             <span>Or message us:</span><code id="waNumber">{{ wa_display }}</code>
