@@ -89,7 +89,7 @@
   <p>These terms are governed by the laws of India. Any dispute will be handled by the courts of {{ jurisdiction if jurisdiction else 'India' }}{% if jurisdiction %}, India{% endif %}. Before going to court, we'll both try to resolve it by talking first.</p>
 
   {% set r = refer or {'pct': 30, 'earn_months': 12, 'min_months': 2, 'payout_min': 1000, 'trial_days': 14} %}
-  <h2 id="refer-earn">14. Partner program</h2>
+  <h2 id="partner-program">14. Partner program</h2>
   <p>Paying customers can apply to recommend {{ product }} to other businesses and earn a share of what those businesses pay ("partners").</p>
   <ul>
     <li><strong>Who can apply:</strong> a business on a paid plan for at least {{ r.min_months }} month{{ 's' if r.min_months != 1 }}, from Admin → Partner program in its app. We review every application and may approve or decline it at our discretion. <strong>You can start referring only once we've approved you.</strong></li>

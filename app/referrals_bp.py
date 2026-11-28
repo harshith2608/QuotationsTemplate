@@ -29,7 +29,7 @@ def _prefill():
             'city': city[:60]}
 
 
-@referrals_bp.route('/refer', methods=['GET', 'POST'])
+@referrals_bp.route('/partner', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def refer():

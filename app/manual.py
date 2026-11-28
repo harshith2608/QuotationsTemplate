@@ -381,7 +381,7 @@ ARTICLES = [
          tags='password change reset forgot login',
          steps=['Employees: ask your admin. They set a new one on Admin → Users (Change password on your row).',
                 'Admins: on the sign-in page tap Forgot password: a reset link goes to the business email.']),
-    dict(id='refer-earn', title='Partner program: earn by recommending us', link='referrals.refer', admin=True, needs='refer',
+    dict(id='partner-program', title='Partner program: earn by recommending us', link='referrals.refer', admin=True, needs='refer',
          summary='Partners are selected, not open to all: apply, and once we approve you, share your code and earn a share of what businesses you refer pay.',
          tags='partner program refer earn referral partner commission code link share money payout friend recommend',
          steps=['Open Admin → Partner program and read how it works (it opens once you\'ve been on a paid plan for the months shown, or sooner if we\'ve invited you).',
