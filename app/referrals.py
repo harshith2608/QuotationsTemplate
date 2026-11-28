@@ -1,9 +1,9 @@
-"""Refer & earn: paying customers bring in new businesses and earn a share of what those businesses pay.
+"""Partner program: paying customers bring in new businesses and earn a share of what those businesses pay.
 
 How it works
-  1. A paying business that has paid for at least `min_months` (console setting) applies from Admin → Refer & earn:
+  1. A paying business that has paid for at least `min_months` (console setting) applies from Admin → Partner program:
      name, phone, city, business (filled in from its app, editable), email, UPI or bank details and PAN. Nothing
-     starts until the operator approves it in the console (Refer & earn).
+     starts until the operator approves it in the console (Partner program).
   2. Approved, it gets a code (QR + 4 digits, e.g. QR2345; the operator can change it) and a link to the website's
      trial form with the code filled in. A business that signs up with the code gets a longer free trial
      (`trial_days`, 14) and is linked to the partner (public.partner_referrals).
@@ -112,7 +112,7 @@ def ensure_tables():
         _ready = True
 
 
-# ── Settings (the console's Refer & earn) ─────────────────────────────────────
+# ── Settings (the console's Partner program) ─────────────────────────────────────
 
 def _num(value, default, lo, hi, cast=float):
     try:
@@ -164,7 +164,7 @@ def validate(form):
 
 
 def available():
-    """Refer & earn is offered in this app: the shared app, switched on in the console."""
+    """Partner program is offered in this app: the shared app, switched on in the console."""
     from . import tenancy
     return tenancy.tenant_mode() and settings()['on']
 
@@ -350,9 +350,9 @@ def eligibility(slug, today=None):
     if since and plan_active(slug, today) and waived(slug):
         return True, ''
     if not since:
-        return False, f'Refer & earn opens once you\'ve been on a paid plan for {need} month{"s" if need != 1 else ""}.'
+        return False, f'The Partner program opens once you\'ve been on a paid plan for {need} month{"s" if need != 1 else ""}.'
     if not plan_active(slug, today):
-        return False, 'Refer & earn is for businesses on an active paid plan. Renew your plan to apply.'
+        return False, 'The Partner program is for businesses on an active paid plan. Renew your plan to apply.'
     done = _months_between(since, today)
     if done < need:
         left = need - done
@@ -398,7 +398,7 @@ def clean_application(form):
     if not PAN_RE.match(v['pan']):
         e['pan'] = 'Enter your PAN (like ABCDE1234F): needed for payouts.'
     if form.get('agree') != '1':
-        e['agree'] = 'Please accept the Refer & earn terms.'
+        e['agree'] = 'Please accept the Partner program terms.'
     for k, n in (('name', 80), ('city', 60), ('business', 120), ('email', 120), ('bank_name', 80), ('account_name', 80)):
         v[k] = v[k][:n]
     return v, e
@@ -479,7 +479,7 @@ def update(slug, code=None, pct=None, months=None):
 def check_signup(code, phone=''):
     """(the approved partner whose code this is, or None; why not)."""
     if not settings()['on']:
-        return None, 'Refer & earn is switched off'
+        return None, 'the Partner program is switched off'
     p = by_code(code)
     if not p:
         return None, f'no partner has the code {clean_code(code) or code}'

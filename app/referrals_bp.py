@@ -1,4 +1,4 @@
-"""Admin → Refer & earn (shared app, admins): apply to be a partner, then the code, link, referrals and earnings.
+"""Admin → Partner program (shared app, admins): apply to be a partner, then the code, link, referrals and earnings.
 See app/referrals.py."""
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -29,7 +29,7 @@ def _prefill():
             'city': city[:60]}
 
 
-@referrals_bp.route('/refer', methods=['GET', 'POST'])
+@referrals_bp.route('/partner', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def refer():
@@ -52,12 +52,12 @@ def refer():
                 return redirect(url_for('referrals.refer'))
             except Exception:
                 from flask import current_app
-                current_app.logger.exception('Refer & earn application could not be saved')
+                current_app.logger.exception('Partner program application could not be saved')
                 flash('Your application couldn\'t be saved right now. Please try again in a while.', 'danger')
                 return redirect(url_for('referrals.refer'))
             try:
                 from . import notify
-                notify.send(f'🤝 Refer & earn application: {values["business"]}',
+                notify.send(f'🤝 Partner program application: {values["business"]}',
                             [' · '.join(filter(None, (values['name'], values['city']))), slug],
                             phone=values['phone'], console_path='/partners')
             except Exception:
@@ -80,7 +80,7 @@ def refer():
             referrals.sync()
         except Exception:
             pass
-        return render_template('referrals/refer.html', title='Refer & earn', rules=rules, product_name=referrals.product(), refer_site=referrals.site_url(), partner=partner,
+        return render_template('referrals/refer.html', title='Partner program', rules=rules, product_name=referrals.product(), refer_site=referrals.site_url(), partner=partner,
                                pct=referrals.pct_of(partner), earning=referrals.earning_text(partner),
                                link=referrals.signup_link(partner['code']),
                                refs=referrals.referrals(slug), earnings=referrals.earnings(slug),
@@ -92,6 +92,6 @@ def refer():
                                   if partner else {}))
     if partner:
         prefill.update({k: v for k, v in referrals.payout_details(partner).items() if v})
-    return render_template('referrals/refer.html', title='Refer & earn', rules=rules, product_name=referrals.product(), refer_site=referrals.site_url(), partner=partner,
+    return render_template('referrals/refer.html', title='Partner program', rules=rules, product_name=referrals.product(), refer_site=referrals.site_url(), partner=partner,
                            earning=referrals.earning_text(), can_apply=can_apply, why_not=why_not, show_form=show_form,
                            form=form or prefill, errors=errors, STATUSES=referrals.STATUSES)

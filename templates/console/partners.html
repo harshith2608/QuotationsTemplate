@@ -1,8 +1,8 @@
 {% extends "console/_layout.html" %}
-{% block title %}Refer & earn{% endblock %}
+{% block title %}Partner program{% endblock %}
 {% block content %}
-<h1>Refer &amp; earn</h1>
-<p class="muted small">Paying businesses apply from <em>Admin → Refer &amp; earn</em> in their app. Approve them here: they get
+<h1>Partner program</h1>
+<p class="muted small">Paying businesses apply from <em>Admin → Partner program</em> in their app. Approve them here: they get
   a code (QR + 4 digits) and a sign-up link; businesses that sign up with it get a longer trial, and the partner earns a
   share of what those businesses pay. Pay partners at the end of each month and mark it paid below.</p>
 
@@ -71,7 +71,7 @@
 <h2 id="waivers">Let a business apply early</h2>
 <div class="card">
   <p class="muted small">Skip the {{ rules.min_months }} month{{ 's' if rules.min_months != 1 }} on a paid plan for one business
-    (it still needs an active paid plan). Its Refer &amp; earn page then shows the application form; you still approve it.</p>
+    (it still needs an active paid plan). Its Partner program page then shows the application form; you still approve it.</p>
   <form method="post" action="{{ url_for('console.partner_waiver') }}" class="row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="on" value="1">
     <label class="small grow">App name (web address, e.g. sharma-interiors)<input name="slug" required></label>
@@ -90,8 +90,8 @@
 <h2 id="rules">Rules</h2>
 <form method="post" class="card">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label class="small"><input type="checkbox" name="on" value="1" {{ 'checked' if rules.on }}> <strong>Refer &amp; earn is on</strong>
-    (the Refer &amp; earn page in every app, and the Referral code box on the website's trial form)</label>
+  <label class="small"><input type="checkbox" name="on" value="1" {{ 'checked' if rules.on }}> <strong>Partner program is on</strong>
+    (the Partner program page in every app, and the Partner code box on the website's trial form)</label>
   <div class="row" style="margin-top:12px">
     <label class="small grow">Default share (%)<input name="pct" value="{{ rules.pct|round(2)|replace('.0', '') }}"></label>
     <label class="small grow">Months a partner earns from each business, from its first payment (0 = no limit)<input name="earn_months" value="{{ rules.earn_months }}"></label>

@@ -1,4 +1,4 @@
-"""Refer & earn (app/referrals.py): applying from the app, approval and codes, signing up with a code, earnings from
+"""Partner program (app/referrals.py): applying from the app, approval and codes, signing up with a code, earnings from
 the referred business's payments, leaving one out, payouts; the console's pages (run as the console)."""
 import os, re, subprocess, sys
 from datetime import date, datetime, timedelta
@@ -46,17 +46,17 @@ S, F = 'http://sharmaint.quote-room.test', 'http://freshco.quote-room.test'
 cs, cf = app.test_client(), app.test_client()
 cs.post('/login', base_url=S, data={'username': 'admin', 'password': 'pass-word-123'})
 cf.post('/login', base_url=F, data={'username': 'admin', 'password': 'pass-word-123'})
-ok('Admin menu has Refer & earn', '/refer' in cs.get('/projects', base_url=S).text)
-t = cs.get('/refer', base_url=S).text
+ok('Admin menu has Partner program', '/partner' in cs.get('/projects', base_url=S).text)
+t = cs.get('/partner', base_url=S).text
 ok('the page explains it (the trial earns nothing) and shows the application form', 'How it works' in t and 'only once it' in t and 'The trial earns nothing' in t
    and 'name="pan"' in t and 'action" value="apply"' in t)
-ok('…a business not eligible yet sees why, and no form', 'more month' in cf.get('/refer', base_url=F).text
-   and 'value="apply"' not in cf.get('/refer', base_url=F).text)
+ok('…a business not eligible yet sees why, and no form', 'more month' in cf.get('/partner', base_url=F).text
+   and 'value="apply"' not in cf.get('/partner', base_url=F).text)
 form = {'action': 'apply', 'name': 'Suresh Sharma', 'phone': '9876500001', 'city': 'Hyderabad', 'business': 'Sharma Interiors',
         'email': 's@sharma.example', 'upi': 'suresh@okhdfc', 'pan': '', 'agree': '1'}
-r = cs.post('/refer', base_url=S, data=form)
+r = cs.post('/partner', base_url=S, data=form)
 ok('PAN is needed', 'Enter your PAN' in r.text)
-r = cs.post('/refer', base_url=S, data=dict(form, pan='abcde1234f'), follow_redirects=True)
+r = cs.post('/partner', base_url=S, data=dict(form, pan='abcde1234f'), follow_redirects=True)
 ok('applied: waiting for approval, can\'t start yet', 'Application received' in r.text and 'once it\'s approved' in r.text)
 with app.app_context():
     p = referrals.get('sharmaint')
@@ -71,7 +71,7 @@ with app.app_context():
     except referrals.ReferralError:
         taken = True
     ok('…another business can\'t take the same code', taken)
-t = cs.get('/refer', base_url=S).text
+t = cs.get('/partner', base_url=S).text
 ok('the approved page: code, link with the code, WhatsApp share, earnings', code in t
    and f'https://www.quote-room.test/free-trial?ref={code}' in t and 'wa.me' in t and 'Your earnings' in t)
 ok('…says plainly how long: 30% of every payment, for 12 months from its first payment', '30%' in t
@@ -135,11 +135,11 @@ with app.app_context():
     ok('partner\'s plan lapsed: the payment doesn\'t count (says why)',
        any(e['status'] == 'inactive' and e['amount_paise'] == 50000 for e in referrals.earnings('sharmaint'))
        and referrals.partner_for_signup(code, '9000000002') is None)
-t = cs.get('/refer', base_url=S).text
+t = cs.get('/partner', base_url=S).text
 ok('partner page: paused banner, referrals, payments and payout listed', 'Earning is paused' in t and 'New Biz Interiors' in t
    and 'UTR123' in t and 'After the earning period' in t)
 
-# The website: the Referral code box (from the console's copy of the rules), ?ref= fills it, a bad code is refused
+# The website: the Partner code box (from the console's copy of the rules), ?ref= fills it, a bad code is refused
 os.environ.update(MARKETING_SITE='1', AUTO_TRIALS='1', SIGNUP_URL='https://ops.quote-room.test', SIGNUP_SECRET='s3cret')
 os.environ.pop('TENANT_MODE')
 site = create_app('development'); site.config['WTF_CSRF_ENABLED'] = False
@@ -149,7 +149,7 @@ with site.app_context():
     AppSetting.set(referrals.KEY, json.dumps({'on': True, 'trial_days': 14})); db.session.commit()
 sc = site.test_client()
 ft = sc.get(f'/free-trial?ref={code}').text
-ok('website: the trial form has the Referral code box, filled from ?ref=', 'name="ref_code"' in ft and f'value="{code}"' in ft
+ok('website: the trial form has the Partner code box, filled from ?ref=', 'name="ref_code"' in ft and f'value="{code}"' in ft
    and '14-day free trial' in ft)
 r = sc.post('/trial-request', data={'name': 'Ravi', 'company_name': 'Ravi Kitchens', 'phone': '9000011111', 'city': 'Pune',
                                     'email': 'r@ravi.example', 'business_type': 'kitchens', 'ref_code': 'no!'},
@@ -173,7 +173,7 @@ with site.app_context():
     ok('…choosing a plan goes on to pay, with the code kept', r2.status_code == 200 and 'plan=1y' in (r2.get_json().get('pay_url') or '')
        and AppSetting.get(referrals.LEAD_REF_KEY.format(lead2.id)) == code)
 terms = sc.get('/terms').text
-ok('Terms: the Refer & earn section with the misuse clause', 'id="refer-earn"' in terms and 'leave out any payment' in terms)
+ok('Terms: the Partner program section with the misuse clause', 'id="partner-program"' in terms and 'leave out any payment' in terms)
 
 # The console (its own app): rules, applications, partner page, actions
 code_ = r'''
@@ -189,8 +189,8 @@ c = app.test_client()
 c.post('/login', data={'password': 'console-pass-123', 'code': totp_code('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', int(time.time() // 30))})
 ok = lambda label, cond: print(('PASS ' if cond else 'FAIL ') + label)
 t = c.get('/partners').text
-ok('console: Refer & earn page with partners and the rules', 'Sharma Interiors' in t and 'name="earn_months"' in t
-   and 'name="before_gst"' in t and 'Refer &amp; earn' in c.get('/').text)
+ok('console: Partner program page with partners and the rules', 'Sharma Interiors' in t and 'name="earn_months"' in t
+   and 'name="before_gst"' in t and 'Partner program' in c.get('/').text)
 d = c.get('/partners/sharmaint').text
 ok('console: partner page shows UPI, PAN, payments, payouts and Leave out', 'suresh@okhdfc' in d and 'ABCDE1234F' in d
    and 'UTR123' in d and 'Leave out' in d)
